@@ -1,0 +1,218 @@
+fullnameOverride: xcn
+
+images:
+  runtime:
+    repository: 192.168.10.35/xcn/xcn-runtime
+    tag: 26.05.20
+    pullPolicy: IfNotPresent
+  webui:
+    repository: 192.168.10.35/xcn/xcn-webui
+    tag: 26.05.20
+    pullPolicy: IfNotPresent
+  mongodb:
+    repository: 192.168.10.35/xcn/mongo
+    tag: latest
+    pullPolicy: IfNotPresent
+
+mongodb:
+  persistence:
+    enabled: false
+    size: 1Gi
+    storageClassName: "local-path"
+
+resources:
+  core:
+    nrf:
+      requests:
+        cpu: 200m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 256Mi
+    scp:
+      requests:
+        cpu: 200m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 256Mi
+  fivegc:
+    upf:
+      requests:
+        cpu: 500m
+        memory: 512Mi
+      limits:
+        cpu: 1500m
+        memory: 2Gi
+    smf:
+      requests:
+        cpu: 500m
+        memory: 256Mi
+      limits:
+        cpu: 1500m
+        memory: 512Mi
+    amf:
+      requests:
+        cpu: 500m
+        memory: 256Mi
+      limits:
+        cpu: 1500m
+        memory: 512Mi
+    ausf:
+      requests:
+        cpu: 200m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 256Mi
+    udm:
+      requests:
+        cpu: 200m
+        memory: 256Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+    udr:
+      requests:
+        cpu: 200m
+        memory: 256Mi
+      limits:
+        cpu: 750m
+        memory: 512Mi
+    nssf:
+      requests:
+        cpu: 200m
+        memory: 256Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+    pcf:
+      requests:
+        cpu: 300m
+        memory: 256Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+  webui:
+    waitForMongodb:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 200m
+        memory: 256Mi
+    mongoAdmin:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 200m
+        memory: 256Mi
+    webui:
+      requests:
+        cpu: 200m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 256Mi
+  mongodb:
+    mongodb:
+      requests:
+        cpu: 1500m
+        memory: 1Gi
+      limits:
+        cpu: 2500m
+        memory: 2Gi
+
+services:
+  amfNgap:
+    nodePort: 31412
+    externalTrafficPolicy: Local
+  upfN3:
+    nodePort: 32152
+    externalTrafficPolicy: Local
+
+fivegc:
+  hostNetwork:
+    enabled: false
+    dnsPolicy: ClusterFirstWithHostNet
+  wait:
+    timeout: 600
+    interval: 2
+  startupProbe:
+    periodSeconds: 5
+    failureThreshold: 120
+    timeoutSeconds: 3
+  healthProbe:
+    readinessPeriodSeconds: 5
+    livenessPeriodSeconds: 10
+    timeoutSeconds: 3
+
+hostPorts:
+  amfNgap:
+    enabled: true
+    port: 38412
+  upfGtpu:
+    enabled: true
+    port: 2152
+  webui:
+    enabled: true
+    port: 9999
+
+networking:
+  amf:
+    ngap:
+      serverAddress: 0.0.0.0
+  upf:
+    gtpu:
+      serverAddress: 0.0.0.0
+      advertiseAddress: ""
+  webui:
+    hostname: 0.0.0.0
+    port: 9999
+
+webui:
+  secretKey: change-this-open5gs-webui-secret
+  jwtSecretKey: change-this-open5gs-webui-jwt-secret
+
+udm:
+  hnet:
+    curve25519_1: |
+      -----BEGIN PRIVATE KEY-----
+      MC4CAQAwBQYDK2VuBCIEIBDJxn6GGlYloduPaEEjiW2bNQYZnT3xlo4HtshEi7FH
+      -----END PRIVATE KEY-----
+    secp256r1_2: |
+      -----BEGIN EC PARAMETERS-----
+      BggqhkjOPQMBBw==
+      -----END EC PARAMETERS-----
+      -----BEGIN EC PRIVATE KEY-----
+      MHcCAQEEIHSp+RhHH1bzvv2lxR1zij+U9aUtS8nbl5n1Il+8zd5BoAoGCCqGSM49
+      AwEHoUQDQgAEre/NExfRzoVi7CW5G0gAEg4SNtbiZh6kI1qE48hdokS8QqWUz1YS
+      9J6PvihX2OSZ+RMixzf8zxu9tuTUJKgKlQ==
+      -----END EC PRIVATE KEY-----
+    curve25519_3: |
+      -----BEGIN PRIVATE KEY-----
+      MC4CAQAwBQYDK2VuBCIEIFAK2WjCQjB8TU7COXwdIKVhKGjPa+SJuyOVObjfW9hM
+      -----END PRIVATE KEY-----
+    secp256r1_4: |
+      -----BEGIN EC PARAMETERS-----
+      BggqhkjOPQMBBw==
+      -----END EC PARAMETERS-----
+      -----BEGIN EC PRIVATE KEY-----
+      MHcCAQEEIAGZvsOAU0YMHhBK33hRkGMPkA3Xefq5b5hPQD6qnf5goAoGCCqGSM49
+      AwEHoUQDQgAEdXfTAGY+0ibQoO9bfmk7+M/l//BiMzO6lNIUEMSj1k3k9SQPygGY
+      jAuUHpVM4Uo6cWxuyurEn8pWn1vF3tVhbg==
+      -----END EC PRIVATE KEY-----
+    curve25519_5: |
+      -----BEGIN PRIVATE KEY-----
+      MC4CAQAwBQYDK2VuBCIEIHh8rsYF8otbnyb8bcrhD1AAV5C9iBtjTlYJY3k5k0dt
+      -----END PRIVATE KEY-----
+    secp256r1_6: |
+      -----BEGIN EC PARAMETERS-----
+      BggqhkjOPQMBBw==
+      -----END EC PARAMETERS-----
+      -----BEGIN EC PRIVATE KEY-----
+      MHcCAQEEIG3VKSXh/3WK0HzCkN1DgeUjF7TSLgAUyMn/WGHsxrZ3oAoGCCqGSM49
+      AwEHoUQDQgAENU1ibHe7oWu4m6M8P0XoA78ZNKtdIsJgVU0nCk/c5sC3V+/4GuxU
+      owtbASEXQZg4SGvts+1Yqz0p4WwCAAcwpQ==
+      -----END EC PRIVATE KEY-----

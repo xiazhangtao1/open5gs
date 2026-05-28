@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: open5gs-runtime-config
+data:
+  AMF_NGAP_SERVER_ADDRESS: "0.0.0.0"
+  UPF_GTPU_SERVER_ADDRESS: "0.0.0.0"
+  UPF_GTPU_ADVERTISE_ADDRESS: ""
+  WEBUI_HOSTNAME: "0.0.0.0"
+  WEBUI_PORT: "9999"

@@ -1,0 +1,125 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "xcn.componentName" (dict "root" . "component" "nrf") }}
+  labels:
+    {{- include "xcn.labels" . | nindent 4 }}
+spec:
+  selector:
+    app: {{ include "xcn.componentName" (dict "root" . "component" "core") }}
+  ports:
+    - name: sbi
+      port: 7777
+      targetPort: 7777
+      protocol: TCP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "xcn.componentName" (dict "root" . "component" "scp") }}
+  labels:
+    {{- include "xcn.labels" . | nindent 4 }}
+spec:
+  selector:
+    app: {{ include "xcn.componentName" (dict "root" . "component" "core") }}
+  ports:
+    - name: sbi
+      port: 7777
+      targetPort: 7778
+      protocol: TCP
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "xcn.componentName" (dict "root" . "component" "core") }}
+  labels:
+    {{- include "xcn.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: {{ include "xcn.componentName" (dict "root" . "component" "core") }}
+  template:
+    metadata:
+      labels:
+        app: {{ include "xcn.componentName" (dict "root" . "component" "core") }}
+    spec:
+      containers:
+        - name: nrf
+          image: {{ printf "%s:%s" .Values.images.runtime.repository .Values.images.runtime.tag }}
+          imagePullPolicy: {{ .Values.images.runtime.pullPolicy }}
+          command: ["open5gs-nrfd", "-c", "/etc/open5gs/nrf.yaml"]
+          ports:
+            - name: nrf-sbi
+              containerPort: 7777
+              protocol: TCP
+          startupProbe:
+            tcpSocket:
+              port: 7777
+            periodSeconds: 5
+            failureThreshold: 120
+            timeoutSeconds: 3
+          readinessProbe:
+            tcpSocket:
+              port: 7777
+            periodSeconds: 5
+            timeoutSeconds: 3
+          livenessProbe:
+            tcpSocket:
+              port: 7777
+            periodSeconds: 10
+            timeoutSeconds: 3
+          resources:
+{{ toYaml .Values.resources.core.nrf | indent 12 }}
+          volumeMounts:
+            - name: config
+              mountPath: /etc/open5gs
+            - name: logs
+              mountPath: /var/log/open5gs
+        - name: scp
+          image: {{ printf "%s:%s" .Values.images.runtime.repository .Values.images.runtime.tag }}
+          imagePullPolicy: {{ .Values.images.runtime.pullPolicy }}
+          env:
+            - name: WAIT_TIMEOUT
+              value: {{ .Values.fivegc.wait.timeout | quote }}
+            - name: WAIT_INTERVAL
+              value: {{ .Values.fivegc.wait.interval | quote }}
+          command:
+            - /bin/sh
+            - -ec
+            - |
+              /usr/local/bin/wait-for-tcp.sh 127.0.0.1:7777
+              exec open5gs-scpd -c /etc/open5gs/scp.yaml
+          ports:
+            - name: scp-sbi
+              containerPort: 7778
+              protocol: TCP
+          startupProbe:
+            tcpSocket:
+              port: 7778
+            periodSeconds: 5
+            failureThreshold: 120
+            timeoutSeconds: 3
+          readinessProbe:
+            tcpSocket:
+              port: 7778
+            periodSeconds: 5
+            timeoutSeconds: 3
+          livenessProbe:
+            tcpSocket:
+              port: 7778
+            periodSeconds: 10
+            timeoutSeconds: 3
+          resources:
+{{ toYaml .Values.resources.core.scp | indent 12 }}
+          volumeMounts:
+            - name: config
+              mountPath: /etc/open5gs
+            - name: logs
+              mountPath: /var/log/open5gs
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "xcn.componentName" (dict "root" . "component" "config") }}
+        - name: logs
+          emptyDir: {}

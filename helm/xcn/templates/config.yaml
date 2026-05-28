@@ -1,0 +1,385 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "xcn.componentName" (dict "root" . "component" "config") }}
+  labels:
+    {{- include "xcn.labels" . | nindent 4 }}
+data:
+  nrf.yaml: |
+    logger:
+      file:
+        path: /var/log/open5gs/nrf.log
+    global:
+      max:
+        ue: 1024
+    nrf:
+      serving:
+        - plmn_id:
+            mcc: 460
+            mnc: 11
+      sbi:
+        server:
+          - address: 0.0.0.0
+            port: 7777
+            advertise: {{ include "xcn.componentName" (dict "root" . "component" "nrf") | quote }}
+  scp.yaml: |
+    logger:
+      file:
+        path: /var/log/open5gs/scp.log
+    global:
+      max:
+        ue: 1024
+    scp:
+      sbi:
+        server:
+          - address: 0.0.0.0
+            port: 7778
+            advertise: {{ printf "%s:7777" (include "xcn.componentName" (dict "root" . "component" "scp")) | quote }}
+        client:
+          nrf:
+            - uri: {{ printf "http://127.0.0.1:7777" | quote }}
+  amf.yaml.tmpl: |
+    logger:
+      file:
+        path: /var/log/open5gs/amf.log
+    global:
+      max:
+        ue: 1024
+    amf:
+      sbi:
+        server:
+          - address: 0.0.0.0
+            port: 7779
+            advertise: {{ printf "%s:7777" (include "xcn.componentName" (dict "root" . "component" "amf")) | quote }}
+        client:
+          scp:
+            - uri: {{ printf "http://%s:7777" (include "xcn.componentName" (dict "root" . "component" "scp")) | quote }}
+      ngap:
+        server:
+          - address: __AMF_NGAP_SERVER_ADDRESS__
+      metrics:
+        server:
+          - address: 0.0.0.0
+            port: 9091
+      guami:
+        - plmn_id:
+            mcc: 460
+            mnc: 11
+          amf_id:
+            region: 2
+            set: 0
+      tai:
+        - plmn_id:
+            mcc: 460
+            mnc: 11
+          tac: 0
+      plmn_support:
+        - plmn_id:
+            mcc: 460
+            mnc: 11
+          s_nssai:
+            - sst: 1
+              sd: 010101
+      security:
+        integrity_order: [ NIA2, NIA1, NIA0 ]
+        ciphering_order: [ NEA0, NEA1, NEA2 ]
+      network_name:
+        full: Open5GS
+        short: Next
+      amf_name: open5gs-amf0
+      time:
+        t3512:
+          value: 540
+  smf.yaml: |
+    logger:
+      file:
+        path: /var/log/open5gs/smf.log
+    global:
+      max:
+        ue: 1024
+    smf:
+      sbi:
+        server:
+          - address: 127.0.0.4
+            port: 7780
+            advertise: {{ printf "%s:7777" (include "xcn.componentName" (dict "root" . "component" "smf")) | quote }}
+        client:
+          scp:
+            - uri: {{ printf "http://%s:7777" (include "xcn.componentName" (dict "root" . "component" "scp")) | quote }}
+      pfcp:
+        server:
+          - address: 127.0.0.4
+            port: 8805
+            advertise: "127.0.0.4"
+        client:
+          upf:
+            - address: 127.0.0.7
+              port: 8805
+      gtpc:
+        server:
+          - address: 0.0.0.0
+            port: 2124
+      gtpu:
+        server:
+          - address: 0.0.0.0
+            port: 2153
+      metrics:
+        server:
+          - address: 0.0.0.0
+            port: 9092
+      session:
+        - subnet: 10.45.0.0/16
+          gateway: 10.45.0.1
+        - subnet: 2001:db8:cafe::/48
+          gateway: 2001:db8:cafe::1
+      dns:
+        - 8.8.8.8
+        - 8.8.4.4
+        - 2001:4860:4860::8888
+        - 2001:4860:4860::8844
+      mtu: 1400
+  upf.yaml.tmpl: |
+    logger:
+      file:
+        path: /var/log/open5gs/upf.log
+    global:
+      max:
+        ue: 1024
+    upf:
+      pfcp:
+        server:
+          - address: 127.0.0.7
+            port: 8805
+            advertise: "127.0.0.7"
+      gtpu:
+        server:
+          - address: __UPF_GTPU_SERVER_ADDRESS__
+            advertise: __UPF_GTPU_ADVERTISE_ADDRESS__
+      session:
+        - subnet: 10.45.0.0/16
+          gateway: 10.45.0.1
+        - subnet: 2001:db8:cafe::/48
+          gateway: 2001:db8:cafe::1
+      metrics:
+        server:
+          - address: 0.0.0.0
+            port: 9093
+  ausf.yaml: |
+    logger:
+      file:
+        path: /var/log/open5gs/ausf.log
+    global:
+      max:
+        ue: 1024
+    ausf:
+      sbi:
+        server:
+          - address: 0.0.0.0
+            port: 7781
+            advertise: {{ printf "%s:7777" (include "xcn.componentName" (dict "root" . "component" "ausf")) | quote }}
+        client:
+          scp:
+            - uri: {{ printf "http://%s:7777" (include "xcn.componentName" (dict "root" . "component" "scp")) | quote }}
+  udm.yaml: |
+    logger:
+      file:
+        path: /var/log/open5gs/udm.log
+    global:
+      max:
+        ue: 1024
+    udm:
+      hnet:
+        - id: 1
+          scheme: 1
+          key: /etc/open5gs/hnet/curve25519-1.key
+        - id: 2
+          scheme: 2
+          key: /etc/open5gs/hnet/secp256r1-2.key
+        - id: 3
+          scheme: 1
+          key: /etc/open5gs/hnet/curve25519-3.key
+        - id: 4
+          scheme: 2
+          key: /etc/open5gs/hnet/secp256r1-4.key
+        - id: 5
+          scheme: 1
+          key: /etc/open5gs/hnet/curve25519-5.key
+        - id: 6
+          scheme: 2
+          key: /etc/open5gs/hnet/secp256r1-6.key
+      sbi:
+        server:
+          - address: 0.0.0.0
+            port: 7782
+            advertise: {{ printf "%s:7777" (include "xcn.componentName" (dict "root" . "component" "udm")) | quote }}
+        client:
+          scp:
+            - uri: {{ printf "http://%s:7777" (include "xcn.componentName" (dict "root" . "component" "scp")) | quote }}
+  udr.yaml: |
+    db_uri: {{ printf "mongodb://%s/open5gs" (include "xcn.componentName" (dict "root" . "component" "mongodb")) | quote }}
+    logger:
+      file:
+        path: /var/log/open5gs/udr.log
+    global:
+      max:
+        ue: 1024
+    udr:
+      sbi:
+        server:
+          - address: 0.0.0.0
+            port: 7783
+            advertise: {{ printf "%s:7777" (include "xcn.componentName" (dict "root" . "component" "udr")) | quote }}
+        client:
+          scp:
+            - uri: {{ printf "http://%s:7777" (include "xcn.componentName" (dict "root" . "component" "scp")) | quote }}
+  nssf.yaml: |
+    logger:
+      file:
+        path: /var/log/open5gs/nssf.log
+    global:
+      max:
+        ue: 1024
+    nssf:
+      sbi:
+        server:
+          - address: 0.0.0.0
+            port: 7784
+            advertise: {{ printf "%s:7777" (include "xcn.componentName" (dict "root" . "component" "nssf")) | quote }}
+        client:
+          scp:
+            - uri: {{ printf "http://%s:7777" (include "xcn.componentName" (dict "root" . "component" "scp")) | quote }}
+          nsi:
+            - uri: {{ printf "http://%s:7777" (include "xcn.componentName" (dict "root" . "component" "nrf")) | quote }}
+              s_nssai:
+                sst: 1
+                sd: 010101
+  pcf.yaml: |
+    db_uri: {{ printf "mongodb://%s/open5gs" (include "xcn.componentName" (dict "root" . "component" "mongodb")) | quote }}
+    logger:
+      file:
+        path: /var/log/open5gs/pcf.log
+    global:
+      max:
+        ue: 1024
+    pcf:
+      sbi:
+        server:
+          - address: 0.0.0.0
+            port: 7785
+            advertise: {{ printf "%s:7777" (include "xcn.componentName" (dict "root" . "component" "pcf")) | quote }}
+        client:
+          scp:
+            - uri: {{ printf "http://%s:7777" (include "xcn.componentName" (dict "root" . "component" "scp")) | quote }}
+      metrics:
+        server:
+          - address: 0.0.0.0
+            port: 9094
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ include "xcn.componentName" (dict "root" . "component" "udm-hnet") }}
+  labels:
+    {{- include "xcn.labels" . | nindent 4 }}
+type: Opaque
+stringData:
+  curve25519-1.key: |
+{{ .Values.udm.hnet.curve25519_1 | nindent 4 }}
+  secp256r1-2.key: |
+{{ .Values.udm.hnet.secp256r1_2 | nindent 4 }}
+  curve25519-3.key: |
+{{ .Values.udm.hnet.curve25519_3 | nindent 4 }}
+  secp256r1-4.key: |
+{{ .Values.udm.hnet.secp256r1_4 | nindent 4 }}
+  curve25519-5.key: |
+{{ .Values.udm.hnet.curve25519_5 | nindent 4 }}
+  secp256r1-6.key: |
+{{ .Values.udm.hnet.secp256r1_6 | nindent 4 }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "xcn.componentName" (dict "root" . "component" "mongo-init") }}
+  labels:
+    {{- include "xcn.labels" . | nindent 4 }}
+data:
+  mongo-init.js: |
+    db = db.getSiblingDB('open5gs');
+    if (db.accounts.countDocuments({}) === 0 ) {
+        db.accounts.insertOne({
+            salt: 'f5c15fa72622d62b6b790aa8569b9339729801ab8bda5d13997b5db6bfc1d997',
+            hash: '402223057db5194899d2e082aeb0802f6794622e1cbc47529c419e5a603f2cc592074b4f3323b239ffa594c8b756d5c70a4e1f6ecd3f9f0d2d7328c4cf8b1b766514effff0350a90b89e21eac54cd4497a169c0c7554a0e2cd9b672e5414c323f76b8559bc768cba11cad2ea3ae704fb36abc8abc2619231ff84ded60063c6e1554a9777a4a464ef9cfdfa90ecfdacc9844e0e3b2f91b59d9ff024aec4ea1f51b703a31cda9afb1cc2c719a09cee4f9852ba3cf9f07159b1ccf8133924f74df770b1a391c19e8d67ffdcbbef4084a3277e93f55ac60d80338172b2a7b3f29cfe8a36738681794f7ccbe9bc98f8cdeded02f8a4cd0d4b54e1d6ba3d11792ee0ae8801213691848e9c5338e39485816bb0f734b775ac89f454ef90992003511aa8cceed58a3ac2c3814f14afaaed39cbaf4e2719d7213f81665564eec02f60ede838212555873ef742f6666cc66883dcb8281715d5c762fb236d72b770257e7e8d86c122bb69028a34cf1ed93bb973b440fa89a23604cd3fefe85fbd7f55c9b71acf6ad167228c79513f5cfe899a2e2cc498feb6d2d2f07354a17ba74cecfbda3e87d57b147e17dcc7f4c52b802a8e77f28d255a6712dcdc1519e6ac9ec593270bfcf4c395e2531a271a841b1adefb8516a07136b0de47c7fd534601b16f0f7a98f1dbd31795feb97da59e1d23c08461cf37d6f2877d0f2e437f07e25015960f63',
+            username: 'admin',
+            roles: [ 'admin' ],
+            "__v": 0
+        });
+    }
+    for (var i = 1; i <= 800; i++) {
+        var imsi = '460110000000' + ('000' + i).slice(-3);
+        db.subscribers.updateOne(
+            { imsi: imsi },
+            {
+                $setOnInsert: {
+                  imsi: imsi,
+                  ambr: {
+                    downlink: { value: 1, unit: 3 },
+                    uplink: { value: 1, unit: 3 }
+                  },
+                  schema_version: 1,
+                  msisdn: [],
+                  imeisv: [],
+                  mme_host: [],
+                  mme_realm: [],
+                  purge_flag: [],
+                  access_restriction_data: 32,
+                  subscriber_status: 0,
+                  operator_determined_barring: 0,
+                  network_access_mode: 0,
+                  subscribed_rau_tau_timer: 12,
+                  security: {
+                    k: '12345600000000000000000000000000',
+                    amf: '8000',
+                    op: null,
+                    opc: '12345600000000000000000000000000'
+                  },
+                  slice: [{
+                    sst: 1,
+                    default_indicator: true,
+                    session: [{
+                      name: 'cmnet',
+                      type: 3,
+                      qos: {
+                        arp: {
+                          priority_level: 8,
+                          pre_emption_capability: 1,
+                          pre_emption_vulnerability: 1
+                        },
+                        index: 9
+                      },
+                      ambr: {
+                          downlink: { value: 1, unit: 3 },
+                          uplink: { value: 1, unit: 3 }
+                      },
+                      ue: { ipv4: '10.45.0.2' },
+                      pcc_rule: []
+                    }],
+                    sd: '010101'
+                  }],
+                  __v: 0
+                }
+            },
+            { upsert: true }
+        );    
+    }
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ include "xcn.componentName" (dict "root" . "component" "webui-env") }}
+  labels:
+    {{- include "xcn.labels" . | nindent 4 }}
+type: Opaque
+stringData:
+  .env: |
+    SECRET_KEY={{ .Values.webui.secretKey }}
+    JWT_SECRET_KEY={{ .Values.webui.jwtSecretKey }}

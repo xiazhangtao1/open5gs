@@ -1,7 +1,12 @@
 process.env.DB_URI = process.env.DB_URI || 'mongodb://127.0.0.1/open5gs';
 
-const _hostname = process.env.HOSTNAME || 'localhost';
-const port = process.env.PORT || 9999;
+const hostIp = process.env.HOST_IP;
+const _hostname =
+  process.env.WEBUI_HOSTNAME ||
+  hostIp ||
+  process.env.HOSTNAME ||
+  'localhost';
+const port = process.env.WEBUI_PORT || process.env.PORT || 9999;
 
 const co = require('co');
 const next = require('next');

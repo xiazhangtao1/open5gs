@@ -1,0 +1,344 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: open5gs-config
+data:
+  nrf.yaml: |
+    logger:
+      file:
+        path: /var/log/open5gs/nrf.log
+    global:
+      max:
+        ue: 1024
+    nrf:
+      serving:
+        - plmn_id:
+            mcc: 999
+            mnc: 70
+      sbi:
+        server:
+          - address: 0.0.0.0
+            port: 7777
+            advertise: open5gs-nrf
+  scp.yaml: |
+    logger:
+      file:
+        path: /var/log/open5gs/scp.log
+    global:
+      max:
+        ue: 1024
+    scp:
+      sbi:
+        server:
+          - address: 0.0.0.0
+            port: 7778
+            advertise: open5gs-scp:7777
+        client:
+          nrf:
+            - uri: http://127.0.0.1:7777
+  amf.yaml.tmpl: |
+    logger:
+      file:
+        path: /var/log/open5gs/amf.log
+    global:
+      max:
+        ue: 1024
+    amf:
+      sbi:
+        server:
+          - address: 0.0.0.0
+            port: 7779
+            advertise: open5gs-amf:7777
+        client:
+          scp:
+            - uri: http://open5gs-scp:7777
+      ngap:
+        server:
+          - address: __AMF_NGAP_SERVER_ADDRESS__
+      metrics:
+        server:
+          - address: 0.0.0.0
+            port: 9091
+      guami:
+        - plmn_id:
+            mcc: 999
+            mnc: 70
+          amf_id:
+            region: 2
+            set: 1
+      tai:
+        - plmn_id:
+            mcc: 999
+            mnc: 70
+          tac: 1
+      plmn_support:
+        - plmn_id:
+            mcc: 999
+            mnc: 70
+          s_nssai:
+            - sst: 1
+      security:
+        integrity_order: [ NIA2, NIA1, NIA0 ]
+        ciphering_order: [ NEA0, NEA1, NEA2 ]
+      network_name:
+        full: Open5GS
+        short: Next
+      amf_name: open5gs-amf0
+      time:
+        t3512:
+          value: 540
+  smf.yaml: |
+    logger:
+      file:
+        path: /var/log/open5gs/smf.log
+    global:
+      max:
+        ue: 1024
+    smf:
+      sbi:
+        server:
+          - address: 0.0.0.0
+            port: 7780
+            advertise: open5gs-smf:7777
+        client:
+          scp:
+            - uri: http://open5gs-scp:7777
+      pfcp:
+        server:
+          - address: 0.0.0.0
+            port: 8806
+            advertise: 127.0.0.1
+        client:
+          upf:
+            - address: 127.0.0.1
+      gtpc:
+        server:
+          - address: 0.0.0.0
+            port: 2124
+      gtpu:
+        server:
+          - address: 0.0.0.0
+            port: 2153
+      metrics:
+        server:
+          - address: 0.0.0.0
+            port: 9092
+      session:
+        - subnet: 10.45.0.0/16
+          gateway: 10.45.0.1
+        - subnet: 2001:db8:cafe::/48
+          gateway: 2001:db8:cafe::1
+      dns:
+        - 8.8.8.8
+        - 8.8.4.4
+        - 2001:4860:4860::8888
+        - 2001:4860:4860::8844
+      mtu: 1400
+  upf.yaml.tmpl: |
+    logger:
+      file:
+        path: /var/log/open5gs/upf.log
+    global:
+      max:
+        ue: 1024
+    upf:
+      pfcp:
+        server:
+          - address: 0.0.0.0
+            advertise: open5gs-upf
+      gtpu:
+        server:
+          - address: __UPF_GTPU_SERVER_ADDRESS__
+            advertise: __UPF_GTPU_ADVERTISE_ADDRESS__
+      session:
+        - subnet: 10.45.0.0/16
+          gateway: 10.45.0.1
+        - subnet: 2001:db8:cafe::/48
+          gateway: 2001:db8:cafe::1
+      metrics:
+        server:
+          - address: 0.0.0.0
+            port: 9093
+  ausf.yaml: |
+    logger:
+      file:
+        path: /var/log/open5gs/ausf.log
+    global:
+      max:
+        ue: 1024
+    ausf:
+      sbi:
+        server:
+          - address: 0.0.0.0
+            port: 7781
+            advertise: open5gs-ausf:7777
+        client:
+          scp:
+            - uri: http://open5gs-scp:7777
+  udm.yaml: |
+    logger:
+      file:
+        path: /var/log/open5gs/udm.log
+    global:
+      max:
+        ue: 1024
+    udm:
+      hnet:
+        - id: 1
+          scheme: 1
+          key: /etc/open5gs/hnet/curve25519-1.key
+        - id: 2
+          scheme: 2
+          key: /etc/open5gs/hnet/secp256r1-2.key
+        - id: 3
+          scheme: 1
+          key: /etc/open5gs/hnet/curve25519-3.key
+        - id: 4
+          scheme: 2
+          key: /etc/open5gs/hnet/secp256r1-4.key
+        - id: 5
+          scheme: 1
+          key: /etc/open5gs/hnet/curve25519-5.key
+        - id: 6
+          scheme: 2
+          key: /etc/open5gs/hnet/secp256r1-6.key
+      sbi:
+        server:
+          - address: 0.0.0.0
+            port: 7782
+            advertise: open5gs-udm:7777
+        client:
+          scp:
+            - uri: http://open5gs-scp:7777
+  udr.yaml: |
+    db_uri: mongodb://open5gs-mongodb/open5gs
+    logger:
+      file:
+        path: /var/log/open5gs/udr.log
+    global:
+      max:
+        ue: 1024
+    udr:
+      sbi:
+        server:
+          - address: 0.0.0.0
+            port: 7783
+            advertise: open5gs-udr:7777
+        client:
+          scp:
+            - uri: http://open5gs-scp:7777
+  nssf.yaml: |
+    logger:
+      file:
+        path: /var/log/open5gs/nssf.log
+    global:
+      max:
+        ue: 1024
+    nssf:
+      sbi:
+        server:
+          - address: 0.0.0.0
+            port: 7784
+            advertise: open5gs-nssf:7777
+        client:
+          scp:
+            - uri: http://open5gs-scp:7777
+          nsi:
+            - uri: http://open5gs-nrf:7777
+              s_nssai:
+                sst: 1
+  pcf.yaml: |
+    db_uri: mongodb://open5gs-mongodb/open5gs
+    logger:
+      file:
+        path: /var/log/open5gs/pcf.log
+    global:
+      max:
+        ue: 1024
+    pcf:
+      sbi:
+        server:
+          - address: 0.0.0.0
+            port: 7785
+            advertise: open5gs-pcf:7777
+        client:
+          scp:
+            - uri: http://open5gs-scp:7777
+      metrics:
+        server:
+          - address: 0.0.0.0
+            port: 9094
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: open5gs-udm-hnet
+type: Opaque
+stringData:
+  curve25519-1.key: |
+    -----BEGIN PRIVATE KEY-----
+    MC4CAQAwBQYDK2VuBCIEIBDJxn6GGlYloduPaEEjiW2bNQYZnT3xlo4HtshEi7FH
+    -----END PRIVATE KEY-----
+  secp256r1-2.key: |
+    -----BEGIN EC PARAMETERS-----
+    BggqhkjOPQMBBw==
+    -----END EC PARAMETERS-----
+    -----BEGIN EC PRIVATE KEY-----
+    MHcCAQEEIHSp+RhHH1bzvv2lxR1zij+U9aUtS8nbl5n1Il+8zd5BoAoGCCqGSM49
+    AwEHoUQDQgAEre/NExfRzoVi7CW5G0gAEg4SNtbiZh6kI1qE48hdokS8QqWUz1YS
+    9J6PvihX2OSZ+RMixzf8zxu9tuTUJKgKlQ==
+    -----END EC PRIVATE KEY-----
+  curve25519-3.key: |
+    -----BEGIN PRIVATE KEY-----
+    MC4CAQAwBQYDK2VuBCIEIFAK2WjCQjB8TU7COXwdIKVhKGjPa+SJuyOVObjfW9hM
+    -----END PRIVATE KEY-----
+  secp256r1-4.key: |
+    -----BEGIN EC PARAMETERS-----
+    BggqhkjOPQMBBw==
+    -----END EC PARAMETERS-----
+    -----BEGIN EC PRIVATE KEY-----
+    MHcCAQEEIAGZvsOAU0YMHhBK33hRkGMPkA3Xefq5b5hPQD6qnf5goAoGCCqGSM49
+    AwEHoUQDQgAEdXfTAGY+0ibQoO9bfmk7+M/l//BiMzO6lNIUEMSj1k3k9SQPygGY
+    jAuUHpVM4Uo6cWxuyurEn8pWn1vF3tVhbg==
+    -----END EC PRIVATE KEY-----
+  curve25519-5.key: |
+    -----BEGIN PRIVATE KEY-----
+    MC4CAQAwBQYDK2VuBCIEIHh8rsYF8otbnyb8bcrhD1AAV5C9iBtjTlYJY3k5k0dt
+    -----END PRIVATE KEY-----
+  secp256r1-6.key: |
+    -----BEGIN EC PARAMETERS-----
+    BggqhkjOPQMBBw==
+    -----END EC PARAMETERS-----
+    -----BEGIN EC PRIVATE KEY-----
+    MHcCAQEEIG3VKSXh/3WK0HzCkN1DgeUjF7TSLgAUyMn/WGHsxrZ3oAoGCCqGSM49
+    AwEHoUQDQgAENU1ibHe7oWu4m6M8P0XoA78ZNKtdIsJgVU0nCk/c5sC3V+/4GuxU
+    owtbASEXQZg4SGvts+1Yqz0p4WwCAAcwpQ==
+    -----END EC PRIVATE KEY-----
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: open5gs-mongo-init
+data:
+  mongo-init.js: |
+    db = db.getSiblingDB('open5gs')
+    cursor = db.accounts.find()
+    if (cursor.count() == 0) {
+        db.accounts.insertOne({
+            salt: 'f5c15fa72622d62b6b790aa8569b9339729801ab8bda5d13997b5db6bfc1d997',
+            hash: '402223057db5194899d2e082aeb0802f6794622e1cbc47529c419e5a603f2cc592074b4f3323b239ffa594c8b756d5c70a4e1f6ecd3f9f0d2d7328c4cf8b1b766514effff0350a90b89e21eac54cd4497a169c0c7554a0e2cd9b672e5414c323f76b8559bc768cba11cad2ea3ae704fb36abc8abc2619231ff84ded60063c6e1554a9777a4a464ef9cfdfa90ecfdacc9844e0e3b2f91b59d9ff024aec4ea1f51b703a31cda9afb1cc2c719a09cee4f9852ba3cf9f07159b1ccf8133924f74df770b1a391c19e8d67ffdcbbef4084a3277e93f55ac60d80338172b2a7b3f29cfe8a36738681794f7ccbe9bc98f8cdeded02f8a4cd0d4b54e1d6ba3d11792ee0ae8801213691848e9c5338e39485816bb0f734b775ac89f454ef90992003511aa8cceed58a3ac2c3814f14afaaed39cbaf4e2719d7213f81665564eec02f60ede838212555873ef742f6666cc66883dcb8281715d5c762fb236d72b770257e7e8d86c122bb69028a34cf1ed93bb973b440fa89a23604cd3fefe85fbd7f55c9b71acf6ad167228c79513f5cfe899a2e2cc498feb6d2d2f07354a17ba74cecfbda3e87d57b147e17dcc7f4c52b802a8e77f28d255a6712dcdc1519e6ac9ec593270bfcf4c395e2531a271a841b1adefb8516a07136b0de47c7fd534601b16f0f7a98f1dbd31795feb97da59e1d23c08461cf37d6f2877d0f2e437f07e25015960f63',
+            username: 'admin',
+            roles: [ 'admin' ],
+            "__v": 0
+        })
+    }
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: open5gs-webui-env
+type: Opaque
+stringData:
+  .env: |
+    SECRET_KEY=change-this-open5gs-webui-secret
+    JWT_SECRET_KEY=change-this-open5gs-webui-jwt-secret

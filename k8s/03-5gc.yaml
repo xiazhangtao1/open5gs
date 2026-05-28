@@ -1,0 +1,490 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: open5gs-upf
+spec:
+  selector:
+    app: open5gs-5gc
+  ports:
+    - name: pfcp
+      port: 8805
+      targetPort: upf-pfcp
+      protocol: UDP
+    - name: metrics
+      port: 9090
+      targetPort: upf-metrics
+      protocol: TCP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: open5gs-upf-n3
+spec:
+  type: NodePort
+  selector:
+    app: open5gs-5gc
+  ports:
+    - name: gtpu
+      port: 2152
+      targetPort: upf-gtpu
+      nodePort: 32152
+      protocol: UDP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: open5gs-smf
+spec:
+  selector:
+    app: open5gs-5gc
+  ports:
+    - name: sbi
+      port: 7777
+      targetPort: smf-sbi
+      protocol: TCP
+    - name: pfcp
+      port: 8805
+      targetPort: smf-pfcp
+      protocol: UDP
+    - name: metrics
+      port: 9090
+      targetPort: smf-metrics
+      protocol: TCP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: open5gs-amf
+spec:
+  selector:
+    app: open5gs-5gc
+  ports:
+    - name: sbi
+      port: 7777
+      targetPort: amf-sbi
+      protocol: TCP
+    - name: metrics
+      port: 9090
+      targetPort: amf-metrics
+      protocol: TCP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: open5gs-amf-ngap
+spec:
+  type: NodePort
+  selector:
+    app: open5gs-5gc
+  ports:
+    - name: ngap
+      port: 38412
+      targetPort: amf-ngap
+      nodePort: 31412
+      protocol: SCTP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: open5gs-ausf
+spec:
+  selector:
+    app: open5gs-5gc
+  ports:
+    - name: sbi
+      port: 7777
+      targetPort: ausf-sbi
+      protocol: TCP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: open5gs-udm
+spec:
+  selector:
+    app: open5gs-5gc
+  ports:
+    - name: sbi
+      port: 7777
+      targetPort: udm-sbi
+      protocol: TCP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: open5gs-udr
+spec:
+  selector:
+    app: open5gs-5gc
+  ports:
+    - name: sbi
+      port: 7777
+      targetPort: udr-sbi
+      protocol: TCP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: open5gs-nssf
+spec:
+  selector:
+    app: open5gs-5gc
+  ports:
+    - name: sbi
+      port: 7777
+      targetPort: nssf-sbi
+      protocol: TCP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: open5gs-pcf
+spec:
+  selector:
+    app: open5gs-5gc
+  ports:
+    - name: sbi
+      port: 7777
+      targetPort: pcf-sbi
+      protocol: TCP
+    - name: metrics
+      port: 9090
+      targetPort: pcf-metrics
+      protocol: TCP
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: open5gs-5gc
+spec:
+  strategy:
+    type: Recreate
+  replicas: 1
+  selector:
+    matchLabels:
+      app: open5gs-5gc
+  template:
+    metadata:
+      labels:
+        app: open5gs-5gc
+    spec:
+      containers:
+        - name: upf
+          image: open5gs-runtime:latest
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: HOST_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.hostIP
+            - name: UPF_GTPU_SERVER_ADDRESS
+              valueFrom:
+                configMapKeyRef:
+                  name: open5gs-runtime-config
+                  key: UPF_GTPU_SERVER_ADDRESS
+            - name: UPF_GTPU_ADVERTISE_ADDRESS
+              valueFrom:
+                configMapKeyRef:
+                  name: open5gs-runtime-config
+                  key: UPF_GTPU_ADVERTISE_ADDRESS
+          command:
+            - /bin/sh
+            - -ec
+            - |
+              UPF_GTPU_ADVERTISE_ADDRESS="${UPF_GTPU_ADVERTISE_ADDRESS:-$HOST_IP}"
+              sed \
+                -e "s|__UPF_GTPU_SERVER_ADDRESS__|${UPF_GTPU_SERVER_ADDRESS}|g" \
+                -e "s|__UPF_GTPU_ADVERTISE_ADDRESS__|${UPF_GTPU_ADVERTISE_ADDRESS}|g" \
+                /etc/open5gs/upf.yaml.tmpl > /tmp/upf.yaml
+              /usr/local/bin/open5gs-k8s-setup
+              exec open5gs-upfd -c /tmp/upf.yaml
+          securityContext:
+            privileged: true
+            capabilities:
+              add: ["NET_ADMIN"]
+          ports:
+            - name: upf-pfcp
+              containerPort: 8805
+              protocol: UDP
+            - name: upf-gtpu
+              containerPort: 2152
+              hostPort: 2152
+              protocol: UDP
+            - name: upf-metrics
+              containerPort: 9093
+              protocol: TCP
+          startupProbe:
+            tcpSocket:
+              port: upf-metrics
+            periodSeconds: 5
+            failureThreshold: 24
+          readinessProbe:
+            tcpSocket:
+              port: upf-metrics
+            periodSeconds: 5
+          livenessProbe:
+            tcpSocket:
+              port: upf-metrics
+            periodSeconds: 10
+          volumeMounts:
+            - name: config
+              mountPath: /etc/open5gs
+            - name: logs
+              mountPath: /var/log/open5gs
+            - name: dev-net-tun
+              mountPath: /dev/net/tun
+        - name: smf
+          image: open5gs-runtime:latest
+          imagePullPolicy: IfNotPresent
+          command:
+            - /bin/sh
+            - -ec
+            - |
+              /usr/local/bin/wait-for-tcp.sh open5gs-scp:7777 127.0.0.1:9093
+              exec open5gs-smfd -c /etc/open5gs/smf.yaml
+          ports:
+            - name: smf-sbi
+              containerPort: 7780
+              protocol: TCP
+            - name: smf-pfcp
+              containerPort: 8806
+              protocol: UDP
+            - name: smf-metrics
+              containerPort: 9092
+              protocol: TCP
+          startupProbe:
+            tcpSocket:
+              port: smf-sbi
+            periodSeconds: 5
+            failureThreshold: 24
+          readinessProbe:
+            tcpSocket:
+              port: smf-sbi
+            periodSeconds: 5
+          livenessProbe:
+            tcpSocket:
+              port: smf-sbi
+            periodSeconds: 10
+          volumeMounts:
+            - name: config
+              mountPath: /etc/open5gs
+            - name: logs
+              mountPath: /var/log/open5gs
+        - name: amf
+          image: open5gs-runtime:latest
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: AMF_NGAP_SERVER_ADDRESS
+              valueFrom:
+                configMapKeyRef:
+                  name: open5gs-runtime-config
+                  key: AMF_NGAP_SERVER_ADDRESS
+          command:
+            - /bin/sh
+            - -ec
+            - |
+              /usr/local/bin/wait-for-tcp.sh open5gs-scp:7777
+              sed "s|__AMF_NGAP_SERVER_ADDRESS__|${AMF_NGAP_SERVER_ADDRESS}|g" /etc/open5gs/amf.yaml.tmpl > /tmp/amf.yaml
+              exec open5gs-amfd -c /tmp/amf.yaml
+          ports:
+            - name: amf-sbi
+              containerPort: 7779
+              protocol: TCP
+            - name: amf-ngap
+              containerPort: 38412
+              hostPort: 38412
+              protocol: SCTP
+            - name: amf-metrics
+              containerPort: 9091
+              protocol: TCP
+          startupProbe:
+            tcpSocket:
+              port: amf-sbi
+            periodSeconds: 5
+            failureThreshold: 24
+          readinessProbe:
+            tcpSocket:
+              port: amf-sbi
+            periodSeconds: 5
+          livenessProbe:
+            tcpSocket:
+              port: amf-sbi
+            periodSeconds: 10
+          volumeMounts:
+            - name: config
+              mountPath: /etc/open5gs
+            - name: logs
+              mountPath: /var/log/open5gs
+        - name: ausf
+          image: open5gs-runtime:latest
+          imagePullPolicy: IfNotPresent
+          command:
+            - /bin/sh
+            - -ec
+            - |
+              /usr/local/bin/wait-for-tcp.sh open5gs-scp:7777
+              exec open5gs-ausfd -c /etc/open5gs/ausf.yaml
+          ports:
+            - name: ausf-sbi
+              containerPort: 7781
+              protocol: TCP
+          startupProbe:
+            tcpSocket:
+              port: ausf-sbi
+            periodSeconds: 5
+            failureThreshold: 24
+          readinessProbe:
+            tcpSocket:
+              port: ausf-sbi
+            periodSeconds: 5
+          livenessProbe:
+            tcpSocket:
+              port: ausf-sbi
+            periodSeconds: 10
+          volumeMounts:
+            - name: config
+              mountPath: /etc/open5gs
+            - name: logs
+              mountPath: /var/log/open5gs
+        - name: udm
+          image: open5gs-runtime:latest
+          imagePullPolicy: IfNotPresent
+          command:
+            - /bin/sh
+            - -ec
+            - |
+              /usr/local/bin/wait-for-tcp.sh open5gs-scp:7777
+              exec open5gs-udmd -c /etc/open5gs/udm.yaml
+          ports:
+            - name: udm-sbi
+              containerPort: 7782
+              protocol: TCP
+          startupProbe:
+            tcpSocket:
+              port: udm-sbi
+            periodSeconds: 5
+            failureThreshold: 24
+          readinessProbe:
+            tcpSocket:
+              port: udm-sbi
+            periodSeconds: 5
+          livenessProbe:
+            tcpSocket:
+              port: udm-sbi
+            periodSeconds: 10
+          volumeMounts:
+            - name: config
+              mountPath: /etc/open5gs
+            - name: logs
+              mountPath: /var/log/open5gs
+            - name: hnet
+              mountPath: /etc/open5gs/hnet
+        - name: udr
+          image: open5gs-runtime:latest
+          imagePullPolicy: IfNotPresent
+          command:
+            - /bin/sh
+            - -ec
+            - |
+              /usr/local/bin/wait-for-tcp.sh open5gs-mongodb:27017 open5gs-scp:7777
+              exec open5gs-udrd -c /etc/open5gs/udr.yaml
+          ports:
+            - name: udr-sbi
+              containerPort: 7783
+              protocol: TCP
+          startupProbe:
+            tcpSocket:
+              port: udr-sbi
+            periodSeconds: 5
+            failureThreshold: 24
+          readinessProbe:
+            tcpSocket:
+              port: udr-sbi
+            periodSeconds: 5
+          livenessProbe:
+            tcpSocket:
+              port: udr-sbi
+            periodSeconds: 10
+          volumeMounts:
+            - name: config
+              mountPath: /etc/open5gs
+            - name: logs
+              mountPath: /var/log/open5gs
+        - name: nssf
+          image: open5gs-runtime:latest
+          imagePullPolicy: IfNotPresent
+          command:
+            - /bin/sh
+            - -ec
+            - |
+              /usr/local/bin/wait-for-tcp.sh open5gs-scp:7777 open5gs-nrf:7777
+              exec open5gs-nssfd -c /etc/open5gs/nssf.yaml
+          ports:
+            - name: nssf-sbi
+              containerPort: 7784
+              protocol: TCP
+          startupProbe:
+            tcpSocket:
+              port: nssf-sbi
+            periodSeconds: 5
+            failureThreshold: 24
+          readinessProbe:
+            tcpSocket:
+              port: nssf-sbi
+            periodSeconds: 5
+          livenessProbe:
+            tcpSocket:
+              port: nssf-sbi
+            periodSeconds: 10
+          volumeMounts:
+            - name: config
+              mountPath: /etc/open5gs
+            - name: logs
+              mountPath: /var/log/open5gs
+        - name: pcf
+          image: open5gs-runtime:latest
+          imagePullPolicy: IfNotPresent
+          command:
+            - /bin/sh
+            - -ec
+            - |
+              /usr/local/bin/wait-for-tcp.sh open5gs-mongodb:27017 open5gs-scp:7777
+              exec open5gs-pcfd -c /etc/open5gs/pcf.yaml
+          ports:
+            - name: pcf-sbi
+              containerPort: 7785
+              protocol: TCP
+            - name: pcf-metrics
+              containerPort: 9094
+              protocol: TCP
+          startupProbe:
+            tcpSocket:
+              port: pcf-sbi
+            periodSeconds: 5
+            failureThreshold: 24
+          readinessProbe:
+            tcpSocket:
+              port: pcf-sbi
+            periodSeconds: 5
+          livenessProbe:
+            tcpSocket:
+              port: pcf-sbi
+            periodSeconds: 10
+          volumeMounts:
+            - name: config
+              mountPath: /etc/open5gs
+            - name: logs
+              mountPath: /var/log/open5gs
+      volumes:
+        - name: config
+          configMap:
+            name: open5gs-config
+        - name: logs
+          emptyDir: {}
+        - name: hnet
+          secret:
+            secretName: open5gs-udm-hnet
+        - name: dev-net-tun
+          hostPath:
+            path: /dev/net/tun
+            type: CharDevice

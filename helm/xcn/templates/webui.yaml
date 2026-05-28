@@ -1,0 +1,103 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "xcn.componentName" (dict "root" . "component" "webui") }}
+  labels:
+    {{- include "xcn.labels" . | nindent 4 }}
+spec:
+  selector:
+    app: {{ include "xcn.componentName" (dict "root" . "component" "webui") }}
+  ports:
+    - name: http
+      port: {{ .Values.networking.webui.port }}
+      targetPort: http
+      protocol: TCP
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "xcn.componentName" (dict "root" . "component" "webui") }}
+  labels:
+    {{- include "xcn.labels" . | nindent 4 }}
+spec:
+  strategy:
+    type: {{ ternary "Recreate" "RollingUpdate" .Values.hostPorts.webui.enabled }}
+  replicas: 1
+  selector:
+    matchLabels:
+      app: {{ include "xcn.componentName" (dict "root" . "component" "webui") }}
+  template:
+    metadata:
+      labels:
+        app: {{ include "xcn.componentName" (dict "root" . "component" "webui") }}
+    spec:
+      initContainers:
+        - name: wait-for-mongodb
+          image: {{ printf "%s:%s" .Values.images.runtime.repository .Values.images.runtime.tag }}
+          imagePullPolicy: {{ .Values.images.runtime.pullPolicy }}
+          command:
+            - /usr/local/bin/wait-for-tcp.sh
+            - {{ printf "%s:27017" (include "xcn.componentName" (dict "root" . "component" "mongodb")) }}
+          resources:
+{{ toYaml .Values.resources.webui.waitForMongodb | indent 12 }}
+        - name: mongo-admin
+          image: {{ printf "%s:%s" .Values.images.mongodb.repository .Values.images.mongodb.tag }}
+          imagePullPolicy: {{ .Values.images.mongodb.pullPolicy }}
+          command:
+            - /bin/sh
+            - -ec
+            - |
+              mongosh "mongodb://{{ include "xcn.componentName" (dict "root" . "component" "mongodb") }}/open5gs" /bootstrap/mongo-init.js
+          resources:
+{{ toYaml .Values.resources.webui.mongoAdmin | indent 12 }}
+          volumeMounts:
+            - name: mongo-init
+              mountPath: /bootstrap
+      containers:
+        - name: webui
+          image: {{ printf "%s:%s" .Values.images.webui.repository .Values.images.webui.tag }}
+          imagePullPolicy: {{ .Values.images.webui.pullPolicy }}
+          env:
+            - name: DB_URI
+              value: {{ printf "mongodb://%s/open5gs" (include "xcn.componentName" (dict "root" . "component" "mongodb")) | quote }}
+            - name: HOST_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.hostIP
+            - name: WEBUI_HOSTNAME
+              value: {{ .Values.networking.webui.hostname | quote }}
+            - name: WEBUI_PORT
+              value: {{ printf "%v" .Values.networking.webui.port | quote }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.networking.webui.port }}
+{{- if .Values.hostPorts.webui.enabled }}
+              hostPort: {{ .Values.hostPorts.webui.port }}
+{{- end }}
+              protocol: TCP
+          startupProbe:
+            tcpSocket:
+              port: http
+            periodSeconds: 5
+            failureThreshold: 24
+          readinessProbe:
+            tcpSocket:
+              port: http
+            periodSeconds: 5
+          livenessProbe:
+            tcpSocket:
+              port: http
+            periodSeconds: 10
+          resources:
+{{ toYaml .Values.resources.webui.webui | indent 12 }}
+          volumeMounts:
+            - name: webui-env
+              mountPath: /usr/src/open5gs/webui/.env
+              subPath: .env
+      volumes:
+        - name: webui-env
+          secret:
+            secretName: {{ include "xcn.componentName" (dict "root" . "component" "webui-env") }}
+        - name: mongo-init
+          configMap:
+            name: {{ include "xcn.componentName" (dict "root" . "component" "mongo-init") }}

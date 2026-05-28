@@ -1,0 +1,634 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "xcn.componentName" (dict "root" . "component" "upf") }}
+  labels:
+    {{- include "xcn.labels" . | nindent 4 }}
+spec:
+  publishNotReadyAddresses: true
+  selector:
+    app: {{ include "xcn.componentName" (dict "root" . "component" "5gc") }}
+  ports:
+    - name: pfcp
+      port: 8805
+      targetPort: 8805
+      protocol: UDP
+    - name: metrics
+      port: 9090
+      targetPort: 9093
+      protocol: TCP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "xcn.componentName" (dict "root" . "component" "upf-n3") }}
+  labels:
+    {{- include "xcn.labels" . | nindent 4 }}
+spec:
+  type: NodePort
+  externalTrafficPolicy: {{ .Values.services.upfN3.externalTrafficPolicy }}
+  publishNotReadyAddresses: true
+  selector:
+    app: {{ include "xcn.componentName" (dict "root" . "component" "5gc") }}
+  ports:
+    - name: gtpu
+      port: 2152
+      targetPort: 2152
+      nodePort: {{ .Values.services.upfN3.nodePort }}
+      protocol: UDP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "xcn.componentName" (dict "root" . "component" "smf") }}
+  labels:
+    {{- include "xcn.labels" . | nindent 4 }}
+spec:
+  publishNotReadyAddresses: true
+  selector:
+    app: {{ include "xcn.componentName" (dict "root" . "component" "5gc") }}
+  ports:
+    - name: sbi
+      port: 7777
+      targetPort: 7780
+      protocol: TCP
+    - name: pfcp
+      port: 8805
+      targetPort: 8805
+      protocol: UDP
+    - name: metrics
+      port: 9090
+      targetPort: 9092
+      protocol: TCP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "xcn.componentName" (dict "root" . "component" "amf") }}
+  labels:
+    {{- include "xcn.labels" . | nindent 4 }}
+spec:
+  publishNotReadyAddresses: true
+  selector:
+    app: {{ include "xcn.componentName" (dict "root" . "component" "5gc") }}
+  ports:
+    - name: sbi
+      port: 7777
+      targetPort: 7779
+      protocol: TCP
+    - name: metrics
+      port: 9090
+      targetPort: 9091
+      protocol: TCP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "xcn.componentName" (dict "root" . "component" "amf-ngap") }}
+  labels:
+    {{- include "xcn.labels" . | nindent 4 }}
+spec:
+  type: NodePort
+  externalTrafficPolicy: {{ .Values.services.amfNgap.externalTrafficPolicy }}
+  publishNotReadyAddresses: true
+  selector:
+    app: {{ include "xcn.componentName" (dict "root" . "component" "5gc") }}
+  ports:
+    - name: ngap
+      port: 38412
+      targetPort: 38412
+      nodePort: {{ .Values.services.amfNgap.nodePort }}
+      protocol: SCTP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "xcn.componentName" (dict "root" . "component" "ausf") }}
+  labels:
+    {{- include "xcn.labels" . | nindent 4 }}
+spec:
+  publishNotReadyAddresses: true
+  selector:
+    app: {{ include "xcn.componentName" (dict "root" . "component" "5gc") }}
+  ports:
+    - name: sbi
+      port: 7777
+      targetPort: 7781
+      protocol: TCP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "xcn.componentName" (dict "root" . "component" "udm") }}
+  labels:
+    {{- include "xcn.labels" . | nindent 4 }}
+spec:
+  publishNotReadyAddresses: true
+  selector:
+    app: {{ include "xcn.componentName" (dict "root" . "component" "5gc") }}
+  ports:
+    - name: sbi
+      port: 7777
+      targetPort: 7782
+      protocol: TCP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "xcn.componentName" (dict "root" . "component" "udr") }}
+  labels:
+    {{- include "xcn.labels" . | nindent 4 }}
+spec:
+  publishNotReadyAddresses: true
+  selector:
+    app: {{ include "xcn.componentName" (dict "root" . "component" "5gc") }}
+  ports:
+    - name: sbi
+      port: 7777
+      targetPort: 7783
+      protocol: TCP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "xcn.componentName" (dict "root" . "component" "nssf") }}
+  labels:
+    {{- include "xcn.labels" . | nindent 4 }}
+spec:
+  publishNotReadyAddresses: true
+  selector:
+    app: {{ include "xcn.componentName" (dict "root" . "component" "5gc") }}
+  ports:
+    - name: sbi
+      port: 7777
+      targetPort: 7784
+      protocol: TCP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "xcn.componentName" (dict "root" . "component" "pcf") }}
+  labels:
+    {{- include "xcn.labels" . | nindent 4 }}
+spec:
+  publishNotReadyAddresses: true
+  selector:
+    app: {{ include "xcn.componentName" (dict "root" . "component" "5gc") }}
+  ports:
+    - name: sbi
+      port: 7777
+      targetPort: 7785
+      protocol: TCP
+    - name: metrics
+      port: 9090
+      targetPort: 9094
+      protocol: TCP
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "xcn.componentName" (dict "root" . "component" "5gc") }}
+  labels:
+    {{- include "xcn.labels" . | nindent 4 }}
+spec:
+  strategy:
+    type: Recreate
+  replicas: 1
+  selector:
+    matchLabels:
+      app: {{ include "xcn.componentName" (dict "root" . "component" "5gc") }}
+  template:
+    metadata:
+      labels:
+        app: {{ include "xcn.componentName" (dict "root" . "component" "5gc") }}
+    spec:
+{{- if .Values.fivegc.hostNetwork.enabled }}
+      hostNetwork: true
+      dnsPolicy: {{ .Values.fivegc.hostNetwork.dnsPolicy | quote }}
+{{- end }}
+      containers:
+        - name: upf
+          image: {{ printf "%s:%s" .Values.images.runtime.repository .Values.images.runtime.tag }}
+          imagePullPolicy: {{ .Values.images.runtime.pullPolicy }}
+          env:
+            - name: WAIT_TIMEOUT
+              value: {{ .Values.fivegc.wait.timeout | quote }}
+            - name: WAIT_INTERVAL
+              value: {{ .Values.fivegc.wait.interval | quote }}
+            - name: HOST_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.hostIP
+            - name: UPF_GTPU_SERVER_ADDRESS
+              value: {{ .Values.networking.upf.gtpu.serverAddress | quote }}
+            - name: UPF_GTPU_ADVERTISE_ADDRESS
+              value: {{ .Values.networking.upf.gtpu.advertiseAddress | quote }}
+          command:
+            - /bin/sh
+            - -ec
+            - |
+              UPF_GTPU_SERVER_ADDRESS="${UPF_GTPU_SERVER_ADDRESS:-$HOST_IP}"
+              UPF_GTPU_ADVERTISE_ADDRESS="${UPF_GTPU_ADVERTISE_ADDRESS:-$HOST_IP}"
+              sed \
+                -e "s|__UPF_GTPU_SERVER_ADDRESS__|${UPF_GTPU_SERVER_ADDRESS}|g" \
+                -e "s|__UPF_GTPU_ADVERTISE_ADDRESS__|${UPF_GTPU_ADVERTISE_ADDRESS}|g" \
+                /etc/open5gs/upf.yaml.tmpl > /tmp/upf.yaml
+              echo "=== rendered /tmp/upf.yaml ==="
+              cat /tmp/upf.yaml
+              echo "=== ip addr ==="
+              ip addr
+              echo "=== listeners before UPF start ==="
+              ss -lntup || true
+              for port in 2152 8805; do
+                if ss -H -lun "sport = :${port}" | grep -q .; then
+                  echo "ERROR: UDP port ${port} is already in use before UPF start" >&2
+                  exit 1
+                fi
+              done
+              if ss -H -ltn "sport = :9093" | grep -q .; then
+                echo "ERROR: TCP port 9093 is already in use before UPF start" >&2
+                exit 1
+              fi
+              /usr/local/bin/open5gs-k8s-setup
+              exec open5gs-upfd -c /tmp/upf.yaml
+          securityContext:
+            privileged: true
+            capabilities:
+              add: ["NET_ADMIN"]
+{{- if not .Values.fivegc.hostNetwork.enabled }}
+          ports:
+            - name: upf-pfcp
+              containerPort: 8805
+              protocol: UDP
+            - name: upf-gtpu
+              containerPort: 2152
+{{- if and .Values.hostPorts.upfGtpu.enabled (not .Values.fivegc.hostNetwork.enabled) }}
+              hostPort: {{ .Values.hostPorts.upfGtpu.port }}
+{{- end }}
+              protocol: UDP
+            - name: upf-metrics
+              containerPort: 9093
+              protocol: TCP
+{{- end }}
+          startupProbe:
+            tcpSocket:
+              port: 9093
+            periodSeconds: {{ .Values.fivegc.startupProbe.periodSeconds }}
+            failureThreshold: {{ .Values.fivegc.startupProbe.failureThreshold }}
+            timeoutSeconds: {{ .Values.fivegc.startupProbe.timeoutSeconds }}
+          readinessProbe:
+            tcpSocket:
+              port: 9093
+            periodSeconds: {{ .Values.fivegc.healthProbe.readinessPeriodSeconds }}
+            timeoutSeconds: {{ .Values.fivegc.healthProbe.timeoutSeconds }}
+          livenessProbe:
+            tcpSocket:
+              port: 9093
+            periodSeconds: {{ .Values.fivegc.healthProbe.livenessPeriodSeconds }}
+            timeoutSeconds: {{ .Values.fivegc.healthProbe.timeoutSeconds }}
+          resources:
+{{ toYaml .Values.resources.fivegc.upf | indent 12 }}
+          volumeMounts:
+            - name: config
+              mountPath: /etc/open5gs
+            - name: logs
+              mountPath: /var/log/open5gs
+            - name: dev-net-tun
+              mountPath: /dev/net/tun
+        - name: smf
+          image: {{ printf "%s:%s" .Values.images.runtime.repository .Values.images.runtime.tag }}
+          imagePullPolicy: {{ .Values.images.runtime.pullPolicy }}
+          env:
+            - name: WAIT_TIMEOUT
+              value: {{ .Values.fivegc.wait.timeout | quote }}
+            - name: WAIT_INTERVAL
+              value: {{ .Values.fivegc.wait.interval | quote }}
+          command:
+            - /bin/sh
+            - -ec
+            - |
+              /usr/local/bin/wait-for-tcp.sh {{ include "xcn.componentName" (dict "root" . "component" "scp") }}:7777 127.0.0.1:9093
+              exec open5gs-smfd -c /etc/open5gs/smf.yaml
+{{- if not .Values.fivegc.hostNetwork.enabled }}
+          ports:
+            - name: smf-sbi
+              containerPort: 7780
+              protocol: TCP
+            - name: smf-pfcp
+              containerPort: 8805
+              protocol: UDP
+            - name: smf-metrics
+              containerPort: 9092
+              protocol: TCP
+{{- end }}
+          startupProbe:
+            tcpSocket:
+              port: 7780
+            periodSeconds: {{ .Values.fivegc.startupProbe.periodSeconds }}
+            failureThreshold: {{ .Values.fivegc.startupProbe.failureThreshold }}
+            timeoutSeconds: {{ .Values.fivegc.startupProbe.timeoutSeconds }}
+          readinessProbe:
+            tcpSocket:
+              port: 7780
+            periodSeconds: {{ .Values.fivegc.healthProbe.readinessPeriodSeconds }}
+            timeoutSeconds: {{ .Values.fivegc.healthProbe.timeoutSeconds }}
+          livenessProbe:
+            tcpSocket:
+              port: 7780
+            periodSeconds: {{ .Values.fivegc.healthProbe.livenessPeriodSeconds }}
+            timeoutSeconds: {{ .Values.fivegc.healthProbe.timeoutSeconds }}
+          resources:
+{{ toYaml .Values.resources.fivegc.smf | indent 12 }}
+          volumeMounts:
+            - name: config
+              mountPath: /etc/open5gs
+            - name: logs
+              mountPath: /var/log/open5gs
+        - name: amf
+          image: {{ printf "%s:%s" .Values.images.runtime.repository .Values.images.runtime.tag }}
+          imagePullPolicy: {{ .Values.images.runtime.pullPolicy }}
+          env:
+            - name: WAIT_TIMEOUT
+              value: {{ .Values.fivegc.wait.timeout | quote }}
+            - name: WAIT_INTERVAL
+              value: {{ .Values.fivegc.wait.interval | quote }}
+            - name: HOST_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.hostIP
+            - name: AMF_NGAP_SERVER_ADDRESS
+              value: {{ .Values.networking.amf.ngap.serverAddress | quote }}
+          command:
+            - /bin/sh
+            - -ec
+            - |
+              /usr/local/bin/wait-for-tcp.sh {{ include "xcn.componentName" (dict "root" . "component" "scp") }}:7777
+              AMF_NGAP_SERVER_ADDRESS="${AMF_NGAP_SERVER_ADDRESS:-$HOST_IP}"
+              sed "s|__AMF_NGAP_SERVER_ADDRESS__|${AMF_NGAP_SERVER_ADDRESS}|g" /etc/open5gs/amf.yaml.tmpl > /tmp/amf.yaml
+              exec open5gs-amfd -c /tmp/amf.yaml
+{{- if not .Values.fivegc.hostNetwork.enabled }}
+          ports:
+            - name: amf-sbi
+              containerPort: 7779
+              protocol: TCP
+            - name: amf-ngap
+              containerPort: 38412
+{{- if and .Values.hostPorts.amfNgap.enabled (not .Values.fivegc.hostNetwork.enabled) }}
+              hostPort: {{ .Values.hostPorts.amfNgap.port }}
+{{- end }}
+              protocol: SCTP
+            - name: amf-metrics
+              containerPort: 9091
+              protocol: TCP
+{{- end }}
+          startupProbe:
+            tcpSocket:
+              port: 7779
+            periodSeconds: {{ .Values.fivegc.startupProbe.periodSeconds }}
+            failureThreshold: {{ .Values.fivegc.startupProbe.failureThreshold }}
+            timeoutSeconds: {{ .Values.fivegc.startupProbe.timeoutSeconds }}
+          readinessProbe:
+            tcpSocket:
+              port: 7779
+            periodSeconds: {{ .Values.fivegc.healthProbe.readinessPeriodSeconds }}
+            timeoutSeconds: {{ .Values.fivegc.healthProbe.timeoutSeconds }}
+          livenessProbe:
+            tcpSocket:
+              port: 7779
+            periodSeconds: {{ .Values.fivegc.healthProbe.livenessPeriodSeconds }}
+            timeoutSeconds: {{ .Values.fivegc.healthProbe.timeoutSeconds }}
+          resources:
+{{ toYaml .Values.resources.fivegc.amf | indent 12 }}
+          volumeMounts:
+            - name: config
+              mountPath: /etc/open5gs
+            - name: logs
+              mountPath: /var/log/open5gs
+        - name: ausf
+          image: {{ printf "%s:%s" .Values.images.runtime.repository .Values.images.runtime.tag }}
+          imagePullPolicy: {{ .Values.images.runtime.pullPolicy }}
+          env:
+            - name: WAIT_TIMEOUT
+              value: {{ .Values.fivegc.wait.timeout | quote }}
+            - name: WAIT_INTERVAL
+              value: {{ .Values.fivegc.wait.interval | quote }}
+          command:
+            - /bin/sh
+            - -ec
+            - |
+              /usr/local/bin/wait-for-tcp.sh {{ include "xcn.componentName" (dict "root" . "component" "scp") }}:7777
+              exec open5gs-ausfd -c /etc/open5gs/ausf.yaml
+{{- if not .Values.fivegc.hostNetwork.enabled }}
+          ports:
+            - name: ausf-sbi
+              containerPort: 7781
+              protocol: TCP
+{{- end }}
+          startupProbe:
+            tcpSocket:
+              port: 7781
+            periodSeconds: {{ .Values.fivegc.startupProbe.periodSeconds }}
+            failureThreshold: {{ .Values.fivegc.startupProbe.failureThreshold }}
+            timeoutSeconds: {{ .Values.fivegc.startupProbe.timeoutSeconds }}
+          readinessProbe:
+            tcpSocket:
+              port: 7781
+            periodSeconds: {{ .Values.fivegc.healthProbe.readinessPeriodSeconds }}
+            timeoutSeconds: {{ .Values.fivegc.healthProbe.timeoutSeconds }}
+          livenessProbe:
+            tcpSocket:
+              port: 7781
+            periodSeconds: {{ .Values.fivegc.healthProbe.livenessPeriodSeconds }}
+            timeoutSeconds: {{ .Values.fivegc.healthProbe.timeoutSeconds }}
+          resources:
+{{ toYaml .Values.resources.fivegc.ausf | indent 12 }}
+          volumeMounts:
+            - name: config
+              mountPath: /etc/open5gs
+            - name: logs
+              mountPath: /var/log/open5gs
+        - name: udm
+          image: {{ printf "%s:%s" .Values.images.runtime.repository .Values.images.runtime.tag }}
+          imagePullPolicy: {{ .Values.images.runtime.pullPolicy }}
+          env:
+            - name: WAIT_TIMEOUT
+              value: {{ .Values.fivegc.wait.timeout | quote }}
+            - name: WAIT_INTERVAL
+              value: {{ .Values.fivegc.wait.interval | quote }}
+          command:
+            - /bin/sh
+            - -ec
+            - |
+              /usr/local/bin/wait-for-tcp.sh {{ include "xcn.componentName" (dict "root" . "component" "scp") }}:7777
+              exec open5gs-udmd -c /etc/open5gs/udm.yaml
+{{- if not .Values.fivegc.hostNetwork.enabled }}
+          ports:
+            - name: udm-sbi
+              containerPort: 7782
+              protocol: TCP
+{{- end }}
+          startupProbe:
+            tcpSocket:
+              port: 7782
+            periodSeconds: {{ .Values.fivegc.startupProbe.periodSeconds }}
+            failureThreshold: {{ .Values.fivegc.startupProbe.failureThreshold }}
+            timeoutSeconds: {{ .Values.fivegc.startupProbe.timeoutSeconds }}
+          readinessProbe:
+            tcpSocket:
+              port: 7782
+            periodSeconds: {{ .Values.fivegc.healthProbe.readinessPeriodSeconds }}
+            timeoutSeconds: {{ .Values.fivegc.healthProbe.timeoutSeconds }}
+          livenessProbe:
+            tcpSocket:
+              port: 7782
+            periodSeconds: {{ .Values.fivegc.healthProbe.livenessPeriodSeconds }}
+            timeoutSeconds: {{ .Values.fivegc.healthProbe.timeoutSeconds }}
+          resources:
+{{ toYaml .Values.resources.fivegc.udm | indent 12 }}
+          volumeMounts:
+            - name: config
+              mountPath: /etc/open5gs
+            - name: logs
+              mountPath: /var/log/open5gs
+            - name: hnet
+              mountPath: /etc/open5gs/hnet
+        - name: udr
+          image: {{ printf "%s:%s" .Values.images.runtime.repository .Values.images.runtime.tag }}
+          imagePullPolicy: {{ .Values.images.runtime.pullPolicy }}
+          env:
+            - name: WAIT_TIMEOUT
+              value: {{ .Values.fivegc.wait.timeout | quote }}
+            - name: WAIT_INTERVAL
+              value: {{ .Values.fivegc.wait.interval | quote }}
+          command:
+            - /bin/sh
+            - -ec
+            - |
+              /usr/local/bin/wait-for-tcp.sh {{ include "xcn.componentName" (dict "root" . "component" "mongodb") }}:27017 {{ include "xcn.componentName" (dict "root" . "component" "scp") }}:7777
+              exec open5gs-udrd -c /etc/open5gs/udr.yaml
+{{- if not .Values.fivegc.hostNetwork.enabled }}
+          ports:
+            - name: udr-sbi
+              containerPort: 7783
+              protocol: TCP
+{{- end }}
+          startupProbe:
+            tcpSocket:
+              port: 7783
+            periodSeconds: {{ .Values.fivegc.startupProbe.periodSeconds }}
+            failureThreshold: {{ .Values.fivegc.startupProbe.failureThreshold }}
+            timeoutSeconds: {{ .Values.fivegc.startupProbe.timeoutSeconds }}
+          readinessProbe:
+            tcpSocket:
+              port: 7783
+            periodSeconds: {{ .Values.fivegc.healthProbe.readinessPeriodSeconds }}
+            timeoutSeconds: {{ .Values.fivegc.healthProbe.timeoutSeconds }}
+          livenessProbe:
+            tcpSocket:
+              port: 7783
+            periodSeconds: {{ .Values.fivegc.healthProbe.livenessPeriodSeconds }}
+            timeoutSeconds: {{ .Values.fivegc.healthProbe.timeoutSeconds }}
+          resources:
+{{ toYaml .Values.resources.fivegc.udr | indent 12 }}
+          volumeMounts:
+            - name: config
+              mountPath: /etc/open5gs
+            - name: logs
+              mountPath: /var/log/open5gs
+        - name: nssf
+          image: {{ printf "%s:%s" .Values.images.runtime.repository .Values.images.runtime.tag }}
+          imagePullPolicy: {{ .Values.images.runtime.pullPolicy }}
+          env:
+            - name: WAIT_TIMEOUT
+              value: {{ .Values.fivegc.wait.timeout | quote }}
+            - name: WAIT_INTERVAL
+              value: {{ .Values.fivegc.wait.interval | quote }}
+          command:
+            - /bin/sh
+            - -ec
+            - |
+              /usr/local/bin/wait-for-tcp.sh {{ include "xcn.componentName" (dict "root" . "component" "scp") }}:7777 {{ include "xcn.componentName" (dict "root" . "component" "nrf") }}:7777
+              exec open5gs-nssfd -c /etc/open5gs/nssf.yaml
+{{- if not .Values.fivegc.hostNetwork.enabled }}
+          ports:
+            - name: nssf-sbi
+              containerPort: 7784
+              protocol: TCP
+{{- end }}
+          startupProbe:
+            tcpSocket:
+              port: 7784
+            periodSeconds: {{ .Values.fivegc.startupProbe.periodSeconds }}
+            failureThreshold: {{ .Values.fivegc.startupProbe.failureThreshold }}
+            timeoutSeconds: {{ .Values.fivegc.startupProbe.timeoutSeconds }}
+          readinessProbe:
+            tcpSocket:
+              port: 7784
+            periodSeconds: {{ .Values.fivegc.healthProbe.readinessPeriodSeconds }}
+            timeoutSeconds: {{ .Values.fivegc.healthProbe.timeoutSeconds }}
+          livenessProbe:
+            tcpSocket:
+              port: 7784
+            periodSeconds: {{ .Values.fivegc.healthProbe.livenessPeriodSeconds }}
+            timeoutSeconds: {{ .Values.fivegc.healthProbe.timeoutSeconds }}
+          resources:
+{{ toYaml .Values.resources.fivegc.nssf | indent 12 }}
+          volumeMounts:
+            - name: config
+              mountPath: /etc/open5gs
+            - name: logs
+              mountPath: /var/log/open5gs
+        - name: pcf
+          image: {{ printf "%s:%s" .Values.images.runtime.repository .Values.images.runtime.tag }}
+          imagePullPolicy: {{ .Values.images.runtime.pullPolicy }}
+          command:
+            - /bin/sh
+            - -ec
+            - |
+              /usr/local/bin/wait-for-tcp.sh {{ include "xcn.componentName" (dict "root" . "component" "mongodb") }}:27017 {{ include "xcn.componentName" (dict "root" . "component" "scp") }}:7777
+              exec open5gs-pcfd -c /etc/open5gs/pcf.yaml
+{{- if not .Values.fivegc.hostNetwork.enabled }}
+          ports:
+            - name: pcf-sbi
+              containerPort: 7785
+              protocol: TCP
+            - name: pcf-metrics
+              containerPort: 9094
+              protocol: TCP
+{{- end }}
+          startupProbe:
+            tcpSocket:
+              port: 7785
+            periodSeconds: {{ .Values.fivegc.startupProbe.periodSeconds }}
+            failureThreshold: {{ .Values.fivegc.startupProbe.failureThreshold }}
+            timeoutSeconds: {{ .Values.fivegc.startupProbe.timeoutSeconds }}
+          readinessProbe:
+            tcpSocket:
+              port: 7785
+            periodSeconds: {{ .Values.fivegc.healthProbe.readinessPeriodSeconds }}
+            timeoutSeconds: {{ .Values.fivegc.healthProbe.timeoutSeconds }}
+          livenessProbe:
+            tcpSocket:
+              port: 7785
+            periodSeconds: {{ .Values.fivegc.healthProbe.livenessPeriodSeconds }}
+            timeoutSeconds: {{ .Values.fivegc.healthProbe.timeoutSeconds }}
+          resources:
+{{ toYaml .Values.resources.fivegc.pcf | indent 12 }}
+          volumeMounts:
+            - name: config
+              mountPath: /etc/open5gs
+            - name: logs
+              mountPath: /var/log/open5gs
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "xcn.componentName" (dict "root" . "component" "config") }}
+        - name: logs
+          emptyDir: {}
+        - name: hnet
+          secret:
+            secretName: {{ include "xcn.componentName" (dict "root" . "component" "udm-hnet") }}
+        - name: dev-net-tun
+          hostPath:
+            path: /dev/net/tun
+            type: CharDevice

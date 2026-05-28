@@ -1,0 +1,81 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: open5gs-webui
+spec:
+  selector:
+    app: open5gs-webui
+  ports:
+    - name: http
+      port: 9999
+      targetPort: 9999
+      protocol: TCP
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: open5gs-webui
+spec:
+  strategy:
+    type: Recreate
+  replicas: 1
+  selector:
+    matchLabels:
+      app: open5gs-webui
+  template:
+    metadata:
+      labels:
+        app: open5gs-webui
+    spec:
+      initContainers:
+        - name: wait-for-mongodb
+          image: open5gs-runtime:latest
+          imagePullPolicy: IfNotPresent
+          command: ["/usr/local/bin/wait-for-tcp.sh", "open5gs-mongodb:27017"]
+      containers:
+        - name: webui
+          image: open5gs-webui:latest
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: DB_URI
+              value: mongodb://open5gs-mongodb/open5gs
+            - name: HOST_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.hostIP
+            - name: WEBUI_HOSTNAME
+              valueFrom:
+                configMapKeyRef:
+                  name: open5gs-runtime-config
+                  key: WEBUI_HOSTNAME
+            - name: WEBUI_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: open5gs-runtime-config
+                  key: WEBUI_PORT
+          ports:
+            - name: http
+              containerPort: 9999
+              hostPort: 9999
+              protocol: TCP
+          startupProbe:
+            tcpSocket:
+              port: http
+            periodSeconds: 5
+            failureThreshold: 24
+          readinessProbe:
+            tcpSocket:
+              port: http
+            periodSeconds: 5
+          livenessProbe:
+            tcpSocket:
+              port: http
+            periodSeconds: 10
+          volumeMounts:
+            - name: webui-env
+              mountPath: /usr/src/open5gs/webui/.env
+              subPath: .env
+      volumes:
+        - name: webui-env
+          secret:
+            secretName: open5gs-webui-env
