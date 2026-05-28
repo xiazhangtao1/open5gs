@@ -72,7 +72,7 @@ data:
         - plmn_id:
             mcc: 460
             mnc: 11
-          tac: 0
+          tac: 1
       plmn_support:
         - plmn_id:
             mcc: 460
