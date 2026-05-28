@@ -100,7 +100,7 @@ data:
     smf:
       sbi:
         server:
-          - address: 127.0.0.4
+          - address: 0.0.0.0
             port: 7780
             advertise: {{ printf "%s:7777" (include "xcn.componentName" (dict "root" . "component" "smf")) | quote }}
         client:

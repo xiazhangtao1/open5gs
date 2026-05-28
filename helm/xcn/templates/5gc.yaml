@@ -9,10 +9,6 @@ spec:
   selector:
     app: {{ include "xcn.componentName" (dict "root" . "component" "5gc") }}
   ports:
-    - name: pfcp
-      port: 8805
-      targetPort: 8805
-      protocol: UDP
     - name: metrics
       port: 9090
       targetPort: 9093
@@ -52,10 +48,6 @@ spec:
       port: 7777
       targetPort: 7780
       protocol: TCP
-    - name: pfcp
-      port: 8805
-      targetPort: 8805
-      protocol: UDP
     - name: metrics
       port: 9090
       targetPort: 9092
@@ -257,9 +249,6 @@ spec:
               add: ["NET_ADMIN"]
 {{- if not .Values.fivegc.hostNetwork.enabled }}
           ports:
-            - name: upf-pfcp
-              containerPort: 8805
-              protocol: UDP
             - name: upf-gtpu
               containerPort: 2152
 {{- if and .Values.hostPorts.upfGtpu.enabled (not .Values.fivegc.hostNetwork.enabled) }}
@@ -314,9 +303,6 @@ spec:
             - name: smf-sbi
               containerPort: 7780
               protocol: TCP
-            - name: smf-pfcp
-              containerPort: 8805
-              protocol: UDP
             - name: smf-metrics
               containerPort: 9092
               protocol: TCP
