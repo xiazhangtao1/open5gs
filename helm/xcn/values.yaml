@@ -2,15 +2,15 @@ fullnameOverride: xcn
 
 images:
   runtime:
-    repository: 192.168.10.35/xcn/xcn-runtime
-    tag: 26.05.20
+    repository: xcn-runtime
+    tag: latest
     pullPolicy: IfNotPresent
   webui:
-    repository: 192.168.10.35/xcn/xcn-webui
-    tag: 26.05.20
+    repository: xcn-webui
+    tag: latest
     pullPolicy: IfNotPresent
   mongodb:
-    repository: 192.168.10.35/xcn/mongo
+    repository: mongo
     tag: latest
     pullPolicy: IfNotPresent
 

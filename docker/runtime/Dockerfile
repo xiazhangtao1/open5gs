@@ -1,10 +1,6 @@
-ARG dist=192.168.10.35/xnet/ubuntu
-ARG tag=22.04
-
-FROM ${dist}:${tag} AS build
+FROM ubuntu:22.04 AS build
 
 LABEL org.opencontainers.image.authors="Sukchan Lee <acetcom@gmail.com>"
-COPY sources.list /etc/apt/
 RUN apt-get update && \
     DEBIAN_FRONTEND=noninteractive \
     apt-get install -y --no-install-recommends \
@@ -45,10 +41,9 @@ WORKDIR /open5gs
 COPY ./ /open5gs
 RUN meson setup build --prefix=/usr && ninja -C build install
 
-FROM ${dist}:${tag}
+FROM ubuntu:22.04
 
 LABEL org.opencontainers.image.authors="Sukchan Lee <acetcom@gmail.com>"
-COPY sources.list /etc/apt/
 RUN apt-get update && \
     DEBIAN_FRONTEND=noninteractive \
     apt-get install -y --no-install-recommends \
