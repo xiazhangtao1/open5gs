@@ -1067,6 +1067,7 @@ bool pcf_npcf_policyauthorization_handle_create(pcf_sess_t *sess,
 
     for (i = 0; i < ims_data.num_of_media_component; i++) {
         int flow_presence = 0;
+        ogs_pcc_rule_t fallback_pcc_rule;
 
         ogs_pcc_rule_t *pcc_rule = NULL;
         ogs_pcc_rule_t *db_pcc_rule = NULL;
@@ -1123,6 +1124,22 @@ bool pcf_npcf_policyauthorization_handle_create(pcf_sess_t *sess,
             } else {
                 continue;
             }
+        }
+
+        if (!db_pcc_rule && AscReqData->af_app_id &&
+            strcmp(AscReqData->af_app_id, XCN_SVC_DEDICATED_BEARER) == 0) {
+            memset(&fallback_pcc_rule, 0, sizeof(fallback_pcc_rule));
+            fallback_pcc_rule.id = (char *)XCN_SVC_DEDICATED_BEARER;
+            fallback_pcc_rule.qos.index = qos_index;
+            fallback_pcc_rule.qos.arp.priority_level = 8;
+            fallback_pcc_rule.qos.arp.pre_emption_capability =
+                OGS_5GC_PRE_EMPTION_DISABLED;
+            fallback_pcc_rule.qos.arp.pre_emption_vulnerability =
+                OGS_5GC_PRE_EMPTION_ENABLED;
+            fallback_pcc_rule.flow_status = media_component->flow_status ?
+                media_component->flow_status : OpenAPI_flow_status_ENABLED;
+            fallback_pcc_rule.precedence = 100;
+            db_pcc_rule = &fallback_pcc_rule;
         }
 
         if (!db_pcc_rule) {
@@ -1900,6 +1917,8 @@ bool pcf_xcn_dedicated_bearer_handle_create(
     ogs_assert(sub_component);
 
     app_context->asc_req_data = asc_req_data;
+    asc_req_data->af_app_id = ogs_strdup(XCN_SVC_DEDICATED_BEARER);
+    ogs_assert(asc_req_data->af_app_id);
     asc_req_data->supp_feat = ogs_strdup("0");
     ogs_assert(asc_req_data->supp_feat);
 

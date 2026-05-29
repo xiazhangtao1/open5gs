@@ -8,3 +8,6 @@
 .gitignore
 .github
 build
+subprojects/freeDiameter
+subprojects/libtins
+subprojects/prometheus-client-c
