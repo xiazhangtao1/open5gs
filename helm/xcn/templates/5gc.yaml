@@ -163,6 +163,10 @@ metadata:
   labels:
     {{- include "xcn.labels" . | nindent 4 }}
 spec:
+  type: {{ .Values.services.pcfSbi.type }}
+  {{- if eq .Values.services.pcfSbi.type "NodePort" }}
+  externalTrafficPolicy: {{ .Values.services.pcfSbi.externalTrafficPolicy }}
+  {{- end }}
   publishNotReadyAddresses: true
   selector:
     app: {{ include "xcn.componentName" (dict "root" . "component" "5gc") }}
@@ -171,6 +175,9 @@ spec:
       port: 7777
       targetPort: 7785
       protocol: TCP
+      {{- if and (eq .Values.services.pcfSbi.type "NodePort") .Values.services.pcfSbi.nodePort }}
+      nodePort: {{ .Values.services.pcfSbi.nodePort }}
+      {{- end }}
     - name: metrics
       port: 9090
       targetPort: 9094

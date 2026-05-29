@@ -2914,6 +2914,14 @@ static int parse_json(ogs_sbi_message_t *message,
             END
             break;
 
+        CASE("xcn-dedicated-bearer")
+            /* PCF handles this private API from the raw HTTP body. */
+            break;
+
+        CASE("xcn-core-query")
+            /* PCF query API uses URL parameters only. */
+            break;
+
         CASE(OGS_SBI_SERVICE_NAME_N32C_HANDSHAKE)
             SWITCH(message->h.resource.component[0])
             CASE(OGS_SBI_RESOURCE_NAME_EXCHANGE_CAPABILITY)

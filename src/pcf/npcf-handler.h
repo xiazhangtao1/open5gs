@@ -43,6 +43,20 @@ bool pcf_npcf_policyauthorization_handle_delete(
         pcf_sess_t *sess, pcf_app_t *app,
         ogs_sbi_stream_t *stream, ogs_sbi_message_t *recvmsg);
 
+bool pcf_xcn_dedicated_bearer_handle_create(
+        ogs_sbi_stream_t *stream, ogs_sbi_message_t *recvmsg,
+        const char *content);
+bool pcf_xcn_dedicated_bearer_handle_delete(
+        ogs_sbi_stream_t *stream, ogs_sbi_message_t *recvmsg);
+
+bool pcf_xcn_query_handle_users(
+        ogs_sbi_stream_t *stream, ogs_sbi_message_t *recvmsg);
+bool pcf_xcn_query_handle_user(
+        ogs_sbi_stream_t *stream, ogs_sbi_message_t *recvmsg);
+bool pcf_xcn_query_handle_sessions(
+        ogs_sbi_stream_t *stream, ogs_sbi_message_t *recvmsg,
+        const char *ue_ip);
+
 #ifdef __cplusplus
 }
 #endif

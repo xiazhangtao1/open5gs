@@ -21,6 +21,208 @@
 
 #include "npcf-handler.h"
 
+#define XCN_SVC_DEDICATED_BEARER "xcn-dedicated-bearer"
+#define XCN_SVC_CORE_QUERY "xcn-core-query"
+#define XCN_RESOURCE_BEARERS "bearers"
+#define XCN_RESOURCE_USERS "users"
+#define XCN_RESOURCE_SESSIONS "sessions"
+
+static bool xcn_send_json_response(
+        ogs_sbi_stream_t *stream, int status, cJSON *item)
+{
+    char *content = NULL;
+    ogs_sbi_response_t *response = NULL;
+
+    ogs_assert(stream);
+    ogs_assert(item);
+
+    content = cJSON_PrintUnformatted(item);
+    if (!content) {
+        ogs_error("cJSON_PrintUnformatted() failed");
+        return false;
+    }
+
+    response = ogs_sbi_response_new();
+    if (!response) {
+        ogs_error("ogs_sbi_response_new() failed");
+        cJSON_free(content);
+        return false;
+    }
+
+    response->status = status;
+    response->http.content = ogs_strdup(content);
+    ogs_assert(response->http.content);
+    response->http.content_length = strlen(response->http.content);
+    ogs_sbi_header_set(response->http.headers,
+            OGS_SBI_CONTENT_TYPE, OGS_SBI_CONTENT_JSON_TYPE);
+
+    cJSON_free(content);
+
+    return ogs_sbi_server_send_response(stream, response);
+}
+
+static bool xcn_send_error(ogs_sbi_stream_t *stream,
+        ogs_sbi_message_t *message, int status, const char *detail)
+{
+    ogs_assert(stream);
+
+    return ogs_sbi_server_send_error(stream, status, message,
+            detail ? detail : "XCN request failed", NULL, NULL);
+}
+
+static const char *xcn_json_string(cJSON *item, const char *key)
+{
+    cJSON *child = NULL;
+
+    ogs_assert(item);
+    ogs_assert(key);
+
+    child = cJSON_GetObjectItemCaseSensitive(item, key);
+    if (!cJSON_IsString(child))
+        return NULL;
+
+    return child->valuestring;
+}
+
+static int xcn_json_int(cJSON *item, const char *key, int default_value)
+{
+    cJSON *child = NULL;
+
+    ogs_assert(item);
+    ogs_assert(key);
+
+    child = cJSON_GetObjectItemCaseSensitive(item, key);
+    if (!cJSON_IsNumber(child))
+        return default_value;
+
+    return child->valueint;
+}
+
+static const char *xcn_supi_to_imsi(const char *supi)
+{
+    if (supi && !ogs_strncasecmp(supi, "imsi-", strlen("imsi-")))
+        return supi + strlen("imsi-");
+
+    return supi;
+}
+
+static OpenAPI_media_type_e xcn_media_type_from_json(cJSON *item)
+{
+    const char *media_type = xcn_json_string(item, "mediaType");
+
+    if (!media_type)
+        return OpenAPI_media_type_NULL;
+
+    if (!ogs_strcasecmp(media_type, "audio"))
+        return OpenAPI_media_type_AUDIO;
+    if (!ogs_strcasecmp(media_type, "video"))
+        return OpenAPI_media_type_VIDEO;
+    if (!ogs_strcasecmp(media_type, "control"))
+        return OpenAPI_media_type_CONTROL;
+
+    return OpenAPI_media_type_FromString((char *)media_type);
+}
+
+static cJSON *xcn_session_to_json(pcf_sess_t *sess)
+{
+    cJSON *item = NULL, *snssai = NULL, *routes = NULL;
+    OpenAPI_lnode_t *node = NULL;
+
+    ogs_assert(sess);
+
+    item = cJSON_CreateObject();
+    ogs_assert(item);
+
+    cJSON_AddNumberToObject(item, "pduSessionId", sess->psi);
+    if (sess->dnn)
+        cJSON_AddStringToObject(item, "dnn", sess->dnn);
+    if (sess->full_dnn)
+        cJSON_AddStringToObject(item, "fullDnn", sess->full_dnn);
+    cJSON_AddNumberToObject(item, "pduSessionType", sess->pdu_session_type);
+    if (sess->ipv4addr_string)
+        cJSON_AddStringToObject(item, "ipv4", sess->ipv4addr_string);
+    if (sess->ipv6prefix_string)
+        cJSON_AddStringToObject(item, "ipv6Prefix", sess->ipv6prefix_string);
+
+    snssai = cJSON_AddObjectToObject(item, "sNssai");
+    ogs_assert(snssai);
+    cJSON_AddNumberToObject(snssai, "sst", sess->s_nssai.sst);
+    if (sess->s_nssai.sd.v != OGS_S_NSSAI_NO_SD_VALUE) {
+        char *sd = ogs_s_nssai_sd_to_string(sess->s_nssai.sd);
+        if (sd) {
+            cJSON_AddStringToObject(snssai, "sd", sd);
+            ogs_free(sd);
+        }
+    }
+
+    if (sess->ipv4_frame_route_list) {
+        routes = cJSON_AddArrayToObject(item, "ipv4FrameRoutes");
+        ogs_assert(routes);
+        OpenAPI_list_for_each(sess->ipv4_frame_route_list, node) {
+            if (node->data)
+                cJSON_AddItemToArray(routes,
+                        cJSON_CreateString((char *)node->data));
+        }
+    }
+
+    if (sess->ipv6_frame_route_list) {
+        routes = cJSON_AddArrayToObject(item, "ipv6FrameRoutes");
+        ogs_assert(routes);
+        OpenAPI_list_for_each(sess->ipv6_frame_route_list, node) {
+            if (node->data)
+                cJSON_AddItemToArray(routes,
+                        cJSON_CreateString((char *)node->data));
+        }
+    }
+
+    return item;
+}
+
+static cJSON *xcn_user_to_json(pcf_ue_sm_t *pcf_ue_sm)
+{
+    cJSON *item = NULL, *sessions = NULL;
+    pcf_sess_t *sess = NULL;
+
+    ogs_assert(pcf_ue_sm);
+
+    item = cJSON_CreateObject();
+    ogs_assert(item);
+
+    cJSON_AddStringToObject(item, "supi", pcf_ue_sm->supi);
+    cJSON_AddStringToObject(item, "imsi", xcn_supi_to_imsi(pcf_ue_sm->supi));
+    cJSON_AddBoolToObject(item, "registered",
+            pcf_ue_am_find_by_supi(pcf_ue_sm->supi) ? true : false);
+
+    sessions = cJSON_AddArrayToObject(item, "sessions");
+    ogs_assert(sessions);
+    ogs_list_for_each(&pcf_ue_sm->sess_list, sess)
+        cJSON_AddItemToArray(sessions, xcn_session_to_json(sess));
+
+    return item;
+}
+
+static bool xcn_parse_bearer_request(cJSON *item, pcf_sess_t **sess)
+{
+    const char *supi = NULL;
+    int pdu_session_id = 0;
+    pcf_ue_sm_t *pcf_ue_sm = NULL;
+
+    ogs_assert(item);
+    ogs_assert(sess);
+
+    supi = xcn_json_string(item, "supi");
+    pdu_session_id = xcn_json_int(item, "pduSessionId", 0);
+    if (!supi || pdu_session_id <= 0 || pdu_session_id > UINT8_MAX)
+        return false;
+
+    pcf_ue_sm = pcf_ue_sm_find_by_supi((char *)supi);
+    if (!pcf_ue_sm)
+        return false;
+
+    *sess = pcf_sess_find_by_psi(pcf_ue_sm, (uint8_t)pdu_session_id);
+    return *sess ? true : false;
+}
+
 bool pcf_npcf_am_policy_control_handle_create(pcf_ue_am_t *pcf_ue_am,
         ogs_sbi_stream_t *stream, ogs_sbi_message_t *message)
 {
@@ -1636,5 +1838,295 @@ bool pcf_npcf_policyauthorization_handle_delete(
     }
     OpenAPI_list_free(QosDecisionList);
 
+    return true;
+}
+
+bool pcf_xcn_dedicated_bearer_handle_create(
+        ogs_sbi_stream_t *stream, ogs_sbi_message_t *recvmsg,
+        const char *content)
+{
+    cJSON *item = NULL, *flow_descriptions = NULL, *flow = NULL;
+    pcf_sess_t *sess = NULL;
+    OpenAPI_app_session_context_t *app_context = NULL;
+    OpenAPI_app_session_context_req_data_t *asc_req_data = NULL;
+    OpenAPI_media_component_t *media_component = NULL;
+    OpenAPI_media_sub_component_t *sub_component = NULL;
+    OpenAPI_map_t *media_map = NULL, *sub_map = NULL;
+    const char *notif_uri = NULL;
+    OpenAPI_media_type_e media_type = OpenAPI_media_type_NULL;
+
+    ogs_assert(stream);
+    ogs_assert(recvmsg);
+
+    if (!content)
+        return xcn_send_error(stream, recvmsg,
+                OGS_SBI_HTTP_STATUS_BAD_REQUEST, "No request body");
+
+    item = cJSON_Parse(content);
+    if (!item)
+        return xcn_send_error(stream, recvmsg,
+                OGS_SBI_HTTP_STATUS_BAD_REQUEST, "Invalid JSON body");
+
+    if (!xcn_parse_bearer_request(item, &sess)) {
+        cJSON_Delete(item);
+        return xcn_send_error(stream, recvmsg,
+                OGS_SBI_HTTP_STATUS_NOT_FOUND,
+                "No PCF SM policy session for SUPI and pduSessionId");
+    }
+
+    media_type = xcn_media_type_from_json(item);
+    if (media_type == OpenAPI_media_type_NULL) {
+        cJSON_Delete(item);
+        return xcn_send_error(stream, recvmsg,
+                OGS_SBI_HTTP_STATUS_BAD_REQUEST, "Invalid mediaType");
+    }
+
+    flow_descriptions =
+        cJSON_GetObjectItemCaseSensitive(item, "flowDescriptions");
+    if (!cJSON_IsArray(flow_descriptions) ||
+        cJSON_GetArraySize(flow_descriptions) == 0) {
+        cJSON_Delete(item);
+        return xcn_send_error(stream, recvmsg,
+                OGS_SBI_HTTP_STATUS_BAD_REQUEST, "No flowDescriptions");
+    }
+
+    app_context = ogs_calloc(1, sizeof(*app_context));
+    ogs_assert(app_context);
+    asc_req_data = ogs_calloc(1, sizeof(*asc_req_data));
+    ogs_assert(asc_req_data);
+    media_component = ogs_calloc(1, sizeof(*media_component));
+    ogs_assert(media_component);
+    sub_component = ogs_calloc(1, sizeof(*sub_component));
+    ogs_assert(sub_component);
+
+    app_context->asc_req_data = asc_req_data;
+    asc_req_data->supp_feat = ogs_strdup("0");
+    ogs_assert(asc_req_data->supp_feat);
+
+    notif_uri = xcn_json_string(item, "notificationUri");
+    asc_req_data->notif_uri = notif_uri ?
+        ogs_strdup(notif_uri) :
+        ogs_strdup("http://127.0.0.1:7785/xcn-dedicated-bearer/v1/notifications");
+    ogs_assert(asc_req_data->notif_uri);
+
+    asc_req_data->supi = ogs_strdup(xcn_json_string(item, "supi"));
+    ogs_assert(asc_req_data->supi);
+    if (sess->dnn)
+        asc_req_data->dnn = ogs_strdup(sess->dnn);
+
+    media_component->med_comp_n = 0;
+    media_component->f_status = OpenAPI_flow_status_ENABLED;
+    media_component->med_type = media_type;
+
+#define XCN_COPY_BW(__json_key, __field) \
+    do { \
+        const char *__v = xcn_json_string(item, (__json_key)); \
+        if (__v) { \
+            media_component->__field = ogs_strdup(__v); \
+            ogs_assert(media_component->__field); \
+        } \
+    } while (0)
+    XCN_COPY_BW("marBwDl", mar_bw_dl);
+    XCN_COPY_BW("marBwUl", mar_bw_ul);
+    XCN_COPY_BW("mirBwDl", mir_bw_dl);
+    XCN_COPY_BW("mirBwUl", mir_bw_ul);
+    XCN_COPY_BW("rrBw", rr_bw);
+    XCN_COPY_BW("rsBw", rs_bw);
+#undef XCN_COPY_BW
+
+    sub_component->f_num = 0;
+    sub_component->flow_usage = OpenAPI_flow_usage_NO_INFO;
+    sub_component->f_descs = OpenAPI_list_create();
+    ogs_assert(sub_component->f_descs);
+
+    cJSON_ArrayForEach(flow, flow_descriptions) {
+        if (cJSON_IsString(flow) && flow->valuestring) {
+            OpenAPI_list_add(sub_component->f_descs,
+                    ogs_strdup(flow->valuestring));
+        }
+    }
+
+    if (sub_component->f_descs->count == 0) {
+        recvmsg->AppSessionContext = app_context;
+        cJSON_Delete(item);
+        return xcn_send_error(stream, recvmsg,
+                OGS_SBI_HTTP_STATUS_BAD_REQUEST, "No valid flowDescriptions");
+    }
+
+    media_component->med_sub_comps = OpenAPI_list_create();
+    ogs_assert(media_component->med_sub_comps);
+    sub_map = OpenAPI_map_create(ogs_msprintf("%d", sub_component->f_num),
+            sub_component);
+    ogs_assert(sub_map);
+    OpenAPI_list_add(media_component->med_sub_comps, sub_map);
+
+    asc_req_data->med_components = OpenAPI_list_create();
+    ogs_assert(asc_req_data->med_components);
+    media_map = OpenAPI_map_create(
+            ogs_msprintf("%d", media_component->med_comp_n), media_component);
+    ogs_assert(media_map);
+    OpenAPI_list_add(asc_req_data->med_components, media_map);
+
+    recvmsg->AppSessionContext = app_context;
+    cJSON_Delete(item);
+
+    return pcf_npcf_policyauthorization_handle_create(sess, stream, recvmsg);
+}
+
+bool pcf_xcn_dedicated_bearer_handle_delete(
+        ogs_sbi_stream_t *stream, ogs_sbi_message_t *recvmsg)
+{
+    pcf_app_t *app_session = NULL;
+
+    ogs_assert(stream);
+    ogs_assert(recvmsg);
+
+    if (!recvmsg->h.resource.component[1])
+        return xcn_send_error(stream, recvmsg,
+                OGS_SBI_HTTP_STATUS_BAD_REQUEST, "No appSessionId");
+
+    app_session = pcf_app_find_by_app_session_id(
+            recvmsg->h.resource.component[1]);
+    if (!app_session)
+        return xcn_send_error(stream, recvmsg,
+                OGS_SBI_HTTP_STATUS_NOT_FOUND, "No appSessionId");
+
+    return pcf_npcf_policyauthorization_handle_delete(
+            app_session->sess, app_session, stream, recvmsg);
+}
+
+bool pcf_xcn_query_handle_users(
+        ogs_sbi_stream_t *stream, ogs_sbi_message_t *recvmsg)
+{
+    cJSON *root = NULL, *users = NULL;
+    pcf_context_t *self = pcf_self();
+    pcf_ue_am_t *pcf_ue_am = NULL;
+    pcf_ue_sm_t *pcf_ue_sm = NULL;
+    int user_count = 0;
+
+    ogs_assert(stream);
+    ogs_assert(recvmsg);
+
+    root = cJSON_CreateObject();
+    ogs_assert(root);
+    cJSON_AddNumberToObject(root, "registeredUserCount",
+            ogs_list_count(&self->pcf_ue_am_list));
+    cJSON_AddNumberToObject(root, "sessionUserCount",
+            ogs_list_count(&self->pcf_ue_sm_list));
+    users = cJSON_AddArrayToObject(root, "users");
+    ogs_assert(users);
+
+    ogs_list_for_each(&self->pcf_ue_sm_list, pcf_ue_sm) {
+        cJSON_AddItemToArray(users, xcn_user_to_json(pcf_ue_sm));
+        user_count++;
+    }
+
+    ogs_list_for_each(&self->pcf_ue_am_list, pcf_ue_am) {
+        if (!pcf_ue_sm_find_by_supi(pcf_ue_am->supi)) {
+            cJSON *user = cJSON_CreateObject();
+            cJSON *sessions = NULL;
+            ogs_assert(user);
+            cJSON_AddStringToObject(user, "supi", pcf_ue_am->supi);
+            cJSON_AddStringToObject(user, "imsi",
+                    xcn_supi_to_imsi(pcf_ue_am->supi));
+            cJSON_AddBoolToObject(user, "registered", true);
+            sessions = cJSON_AddArrayToObject(user, "sessions");
+            ogs_assert(sessions);
+            cJSON_AddItemToArray(users, user);
+            user_count++;
+        }
+    }
+    cJSON_AddNumberToObject(root, "userCount", user_count);
+
+    if (xcn_send_json_response(stream, OGS_SBI_HTTP_STATUS_OK, root) == false) {
+        cJSON_Delete(root);
+        return false;
+    }
+
+    cJSON_Delete(root);
+    return true;
+}
+
+bool pcf_xcn_query_handle_user(
+        ogs_sbi_stream_t *stream, ogs_sbi_message_t *recvmsg)
+{
+    const char *supi = NULL;
+    cJSON *root = NULL, *sessions = NULL;
+    pcf_ue_sm_t *pcf_ue_sm = NULL;
+    pcf_ue_am_t *pcf_ue_am = NULL;
+
+    ogs_assert(stream);
+    ogs_assert(recvmsg);
+
+    supi = recvmsg->h.resource.component[1];
+    if (!supi)
+        return xcn_send_error(stream, recvmsg,
+                OGS_SBI_HTTP_STATUS_BAD_REQUEST, "No SUPI");
+
+    pcf_ue_sm = pcf_ue_sm_find_by_supi((char *)supi);
+    if (pcf_ue_sm) {
+        root = xcn_user_to_json(pcf_ue_sm);
+    } else {
+        pcf_ue_am = pcf_ue_am_find_by_supi((char *)supi);
+        if (!pcf_ue_am)
+            return xcn_send_error(stream, recvmsg,
+                    OGS_SBI_HTTP_STATUS_NOT_FOUND, "No SUPI");
+
+        root = cJSON_CreateObject();
+        ogs_assert(root);
+        cJSON_AddStringToObject(root, "supi", pcf_ue_am->supi);
+        cJSON_AddStringToObject(root, "imsi", xcn_supi_to_imsi(pcf_ue_am->supi));
+        cJSON_AddBoolToObject(root, "registered", true);
+        sessions = cJSON_AddArrayToObject(root, "sessions");
+        ogs_assert(sessions);
+    }
+
+    if (xcn_send_json_response(stream, OGS_SBI_HTTP_STATUS_OK, root) == false) {
+        cJSON_Delete(root);
+        return false;
+    }
+
+    cJSON_Delete(root);
+    return true;
+}
+
+bool pcf_xcn_query_handle_sessions(
+        ogs_sbi_stream_t *stream, ogs_sbi_message_t *recvmsg,
+        const char *ue_ip)
+{
+    cJSON *root = NULL;
+    pcf_sess_t *sess = NULL;
+    pcf_ue_sm_t *pcf_ue_sm = NULL;
+
+    ogs_assert(stream);
+    ogs_assert(recvmsg);
+
+    if (!ue_ip)
+        return xcn_send_error(stream, recvmsg,
+                OGS_SBI_HTTP_STATUS_BAD_REQUEST, "No ueIp");
+
+    sess = pcf_sess_find_by_ipv4addr((char *)ue_ip);
+    if (!sess)
+        sess = pcf_sess_find_by_ipv6prefix((char *)ue_ip);
+
+    if (!sess)
+        return xcn_send_error(stream, recvmsg,
+                OGS_SBI_HTTP_STATUS_NOT_FOUND, "No UE IP");
+
+    pcf_ue_sm = pcf_ue_sm_find_by_id(sess->pcf_ue_sm_id);
+    ogs_assert(pcf_ue_sm);
+
+    root = cJSON_CreateObject();
+    ogs_assert(root);
+    cJSON_AddStringToObject(root, "supi", pcf_ue_sm->supi);
+    cJSON_AddStringToObject(root, "imsi", xcn_supi_to_imsi(pcf_ue_sm->supi));
+    cJSON_AddItemToObject(root, "session", xcn_session_to_json(sess));
+
+    if (xcn_send_json_response(stream, OGS_SBI_HTTP_STATUS_OK, root) == false) {
+        cJSON_Delete(root);
+        return false;
+    }
+
+    cJSON_Delete(root);
     return true;
 }

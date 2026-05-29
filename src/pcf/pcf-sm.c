@@ -19,6 +19,13 @@
 
 #include "sbi-path.h"
 #include "nnrf-handler.h"
+#include "npcf-handler.h"
+
+#define XCN_SVC_DEDICATED_BEARER "xcn-dedicated-bearer"
+#define XCN_SVC_CORE_QUERY "xcn-core-query"
+#define XCN_RESOURCE_BEARERS "bearers"
+#define XCN_RESOURCE_USERS "users"
+#define XCN_RESOURCE_SESSIONS "sessions"
 
 void pcf_state_initial(ogs_fsm_t *s, pcf_event_t *e)
 {
@@ -340,6 +347,78 @@ void pcf_state_operational(ogs_fsm_t *s, pcf_event_t *e)
                         pcf_ue_sm ? pcf_ue_sm->supi : "Unknown", sess->psi);
                 PCF_SESS_CLEAR(sess);
             }
+            break;
+
+        CASE(XCN_SVC_DEDICATED_BEARER)
+            SWITCH(message.h.resource.component[0])
+            CASE(XCN_RESOURCE_BEARERS)
+                SWITCH(message.h.method)
+                CASE(OGS_SBI_HTTP_METHOD_POST)
+                    if (message.h.resource.component[1]) {
+                        ogs_assert(true ==
+                            ogs_sbi_server_send_error(stream,
+                                OGS_SBI_HTTP_STATUS_BAD_REQUEST, &message,
+                                "Invalid bearer create URI",
+                                message.h.uri, NULL));
+                    } else {
+                        pcf_xcn_dedicated_bearer_handle_create(
+                                stream, &message, request->http.content);
+                    }
+                    break;
+                CASE(OGS_SBI_HTTP_METHOD_DELETE)
+                    pcf_xcn_dedicated_bearer_handle_delete(stream, &message);
+                    break;
+                DEFAULT
+                    ogs_assert(true ==
+                        ogs_sbi_server_send_error(stream,
+                            OGS_SBI_HTTP_STATUS_METHOD_NOT_ALLOWED, &message,
+                            "Invalid HTTP method",
+                            message.h.method, NULL));
+                END
+                break;
+            DEFAULT
+                ogs_assert(true ==
+                    ogs_sbi_server_send_error(stream,
+                        OGS_SBI_HTTP_STATUS_BAD_REQUEST, &message,
+                        "Unknown resource name",
+                        message.h.resource.component[0], NULL));
+            END
+            break;
+
+        CASE(XCN_SVC_CORE_QUERY)
+            SWITCH(message.h.resource.component[0])
+            CASE(XCN_RESOURCE_USERS)
+                if (strcmp(message.h.method, OGS_SBI_HTTP_METHOD_GET) != 0) {
+                    ogs_assert(true ==
+                        ogs_sbi_server_send_error(stream,
+                            OGS_SBI_HTTP_STATUS_METHOD_NOT_ALLOWED, &message,
+                            "Invalid HTTP method",
+                            message.h.method, NULL));
+                } else if (message.h.resource.component[1]) {
+                    pcf_xcn_query_handle_user(stream, &message);
+                } else {
+                    pcf_xcn_query_handle_users(stream, &message);
+                }
+                break;
+            CASE(XCN_RESOURCE_SESSIONS)
+                if (strcmp(message.h.method, OGS_SBI_HTTP_METHOD_GET) != 0) {
+                    ogs_assert(true ==
+                        ogs_sbi_server_send_error(stream,
+                            OGS_SBI_HTTP_STATUS_METHOD_NOT_ALLOWED, &message,
+                            "Invalid HTTP method",
+                            message.h.method, NULL));
+                } else {
+                    pcf_xcn_query_handle_sessions(stream, &message,
+                            ogs_sbi_header_get(request->http.params, "ueIp"));
+                }
+                break;
+            DEFAULT
+                ogs_assert(true ==
+                    ogs_sbi_server_send_error(stream,
+                        OGS_SBI_HTTP_STATUS_BAD_REQUEST, &message,
+                        "Unknown resource name",
+                        message.h.resource.component[0], NULL));
+            END
             break;
 
         DEFAULT

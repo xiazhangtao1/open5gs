@@ -101,6 +101,7 @@ The `UPF` advertise address falls back to the node IP from `status.hostIP` when 
 
 - `open5gs-amf-ngap` exposes `NGAP/SCTP` with `NodePort 31412`.
 - `open5gs-upf-n3` exposes `GTP-U/UDP` with `NodePort 32152`.
+- `open5gs-pcf` exposes `PCF SBI/HTTP` with `NodePort 30777`.
 - The combined `open5gs-5gc` Pod uses `hostPort 38412` for `AMF NGAP`.
 - The combined `open5gs-5gc` Pod uses `hostPort 2152` for `UPF GTP-U`.
 - The `open5gs-webui` Pod uses `hostPort 9999` for direct access on the node IP.
@@ -109,6 +110,50 @@ The `UPF` advertise address falls back to the node IP from `status.hostIP` when 
 - All other Open5GS services are `ClusterIP`.
 
 The host ports are enabled because most lab integrations expect the standard ports directly on the node IP. The NodePort services are still present for clusters that want explicit service objects for external exposure.
+
+## External PCF APIs
+
+PCF exposes lab-oriented APIs on:
+
+```text
+http://<node-ip>:30777
+```
+
+Create a dedicated bearer/QoS flow for an existing PDU session:
+
+```bash
+curl -X POST http://<node-ip>:30777/xcn-dedicated-bearer/v1/bearers \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "supi": "imsi-460110000000001",
+    "pduSessionId": 1,
+    "mediaType": "audio",
+    "flowDescriptions": [
+      "permit out ip from any to assigned",
+      "permit in ip from assigned to any"
+    ],
+    "marBwDl": "10 Mbps",
+    "marBwUl": "10 Mbps"
+  }'
+```
+
+The request is translated inside PCF into the normal policy authorization path and triggers SM policy/session modification when the target UE session exists. Required fields are `supi`, `pduSessionId`, `mediaType`, and `flowDescriptions`. Optional bandwidth fields include `marBwDl`, `marBwUl`, `mirBwDl`, `mirBwUl`, `rrBw`, and `rsBw`.
+
+Delete the created application session/bearer trigger:
+
+```bash
+curl -X DELETE http://<node-ip>:30777/xcn-dedicated-bearer/v1/bearers/<appSessionId>
+```
+
+Query current core users and sessions:
+
+```bash
+curl http://<node-ip>:30777/xcn-core-query/v1/users
+curl http://<node-ip>:30777/xcn-core-query/v1/users/imsi-460110000000001
+curl 'http://<node-ip>:30777/xcn-core-query/v1/sessions?ueIp=10.45.0.2'
+```
+
+These APIs are unauthenticated HTTP endpoints. Restrict `NodePort 30777` with firewall rules, security groups, or Kubernetes network policy before using it outside a controlled lab network.
 
 ## WebUI Access
 

@@ -131,6 +131,10 @@ services:
   upfN3:
     nodePort: 32152
     externalTrafficPolicy: Local
+  pcfSbi:
+    type: NodePort
+    nodePort: 30777
+    externalTrafficPolicy: Local
 
 fivegc:
   hostNetwork:

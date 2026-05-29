@@ -140,6 +140,8 @@ kind: Service
 metadata:
   name: open5gs-pcf
 spec:
+  type: NodePort
+  externalTrafficPolicy: Local
   selector:
     app: open5gs-5gc
   ports:
@@ -147,6 +149,7 @@ spec:
       port: 7777
       targetPort: pcf-sbi
       protocol: TCP
+      nodePort: 30777
     - name: metrics
       port: 9090
       targetPort: pcf-metrics
