@@ -35,7 +35,8 @@ bool pcf_npcf_smpolicycontrol_handle_delete(pcf_sess_t *sess,
         ogs_sbi_stream_t *stream, ogs_sbi_message_t *recvmsg);
 
 bool pcf_npcf_policyauthorization_handle_create(pcf_sess_t *sess,
-        ogs_sbi_stream_t *stream, ogs_sbi_message_t *recvmsg);
+        ogs_sbi_stream_t *stream, ogs_sbi_message_t *recvmsg,
+        ogs_pcc_rule_t *xcn_qos_override);
 bool pcf_npcf_policyauthorization_handle_update(
         pcf_sess_t *sess, pcf_app_t *app,
         ogs_sbi_stream_t *stream, ogs_sbi_message_t *recvmsg);

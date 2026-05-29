@@ -132,12 +132,22 @@ curl -X POST http://<node-ip>:30777/xcn-dedicated-bearer/v1/bearers \
       "permit out ip from any to assigned",
       "permit in ip from assigned to any"
     ],
-    "marBwDl": "10 Mbps",
-    "marBwUl": "10 Mbps"
+    "qos": {
+      "5qi": 2,
+      "arp": {
+        "priorityLevel": 8,
+        "preemptionCapability": "NOT_PREEMPT",
+        "preemptionVulnerability": "PREEMPTABLE"
+      },
+      "maxbrDl": "10 Mbps",
+      "maxbrUl": "10 Mbps",
+      "gbrDl": "5 Mbps",
+      "gbrUl": "5 Mbps"
+    }
   }'
 ```
 
-The request is translated inside PCF into the normal policy authorization path and triggers SM policy/session modification when the target UE session exists. Required fields are `supi`, `pduSessionId`, `mediaType`, and `flowDescriptions`. Optional bandwidth fields include `marBwDl`, `marBwUl`, `mirBwDl`, `mirBwUl`, `rrBw`, and `rsBw`.
+The request is translated inside PCF into the normal policy authorization path and triggers SM policy/session modification when the target UE session exists. Required fields are `supi`, `pduSessionId`, and `flowDescriptions`. `mediaType` is still supported for legacy automatic QoS mapping (`audio` -> 5QI 1, `video` -> 5QI 2, `control` -> 5QI 5). New callers can directly specify `qos.5qi` or `qos.index`, `qos.arp.priorityLevel`, `qos.arp.preemptionCapability`, `qos.arp.preemptionVulnerability`, `qos.maxbrDl`, `qos.maxbrUl`, `qos.gbrDl`, and `qos.gbrUl`. Legacy top-level bandwidth fields `marBwDl`, `marBwUl`, `mirBwDl`, `mirBwUl`, `rrBw`, and `rsBw` are also supported.
 
 Delete the created application session/bearer trigger:
 

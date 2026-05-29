@@ -98,6 +98,171 @@ static int xcn_json_int(cJSON *item, const char *key, int default_value)
     return child->valueint;
 }
 
+static int xcn_json_int_from_any(
+        cJSON *item, const char *key1, const char *key2, int default_value)
+{
+    int value = xcn_json_int(item, key1, default_value);
+
+    if (value != default_value || !key2)
+        return value;
+
+    return xcn_json_int(item, key2, default_value);
+}
+
+static const char *xcn_json_string_from_any(
+        cJSON *item, const char *key1, const char *key2)
+{
+    const char *value = xcn_json_string(item, key1);
+
+    if (value || !key2)
+        return value;
+
+    return xcn_json_string(item, key2);
+}
+
+static uint8_t xcn_preemption_from_json(
+        const char *value, const char **error_detail)
+{
+    ogs_assert(error_detail);
+
+    if (!value)
+        return 0;
+
+    if (!ogs_strcasecmp(value, "enabled") ||
+        !ogs_strcasecmp(value, "may_preempt") ||
+        !ogs_strcasecmp(value, "may-preempt") ||
+        !ogs_strcasecmp(value, "preempt"))
+        return OGS_5GC_PRE_EMPTION_ENABLED;
+
+    if (!ogs_strcasecmp(value, "disabled") ||
+        !ogs_strcasecmp(value, "not_preempt") ||
+        !ogs_strcasecmp(value, "not-preempt") ||
+        !ogs_strcasecmp(value, "not preempt"))
+        return OGS_5GC_PRE_EMPTION_DISABLED;
+
+    *error_detail = "Invalid qos.arp.preemption value";
+    return 0;
+}
+
+static uint8_t xcn_preemption_vulnerability_from_json(
+        const char *value, const char **error_detail)
+{
+    ogs_assert(error_detail);
+
+    if (!value)
+        return 0;
+
+    if (!ogs_strcasecmp(value, "enabled") ||
+        !ogs_strcasecmp(value, "preemptable") ||
+        !ogs_strcasecmp(value, "pre-emptable"))
+        return OGS_5GC_PRE_EMPTION_ENABLED;
+
+    if (!ogs_strcasecmp(value, "disabled") ||
+        !ogs_strcasecmp(value, "not_preemptable") ||
+        !ogs_strcasecmp(value, "not-preemptable") ||
+        !ogs_strcasecmp(value, "not preemptable"))
+        return OGS_5GC_PRE_EMPTION_DISABLED;
+
+    *error_detail = "Invalid qos.arp.preemptionVulnerability";
+    return 0;
+}
+
+static bool xcn_parse_qos_override(
+        cJSON *item, ogs_pcc_rule_t *pcc_rule, const char **error_detail)
+{
+    cJSON *qos = NULL, *arp = NULL;
+    int qos_index = 0, priority_level = 8, precedence = 100;
+    const char *value = NULL;
+
+    ogs_assert(item);
+    ogs_assert(pcc_rule);
+    ogs_assert(error_detail);
+
+    qos = cJSON_GetObjectItemCaseSensitive(item, "qos");
+    if (!qos)
+        return true;
+
+    if (!cJSON_IsObject(qos)) {
+        *error_detail = "qos must be an object";
+        return false;
+    }
+
+    qos_index = xcn_json_int_from_any(qos, "5qi", "index", 0);
+    if (qos_index <= 0 || qos_index > UINT8_MAX) {
+        *error_detail = "qos.5qi or qos.index must be 1..255";
+        return false;
+    }
+
+    arp = cJSON_GetObjectItemCaseSensitive(qos, "arp");
+    if (arp && !cJSON_IsObject(arp)) {
+        *error_detail = "qos.arp must be an object";
+        return false;
+    }
+
+    if (arp)
+        priority_level = xcn_json_int(arp, "priorityLevel", priority_level);
+    priority_level = xcn_json_int(qos, "arpPriorityLevel", priority_level);
+    if (priority_level < 1 || priority_level > 15) {
+        *error_detail = "qos.arp.priorityLevel must be 1..15";
+        return false;
+    }
+
+    precedence = xcn_json_int(qos, "precedence", precedence);
+    if (precedence < 0) {
+        *error_detail = "qos.precedence must be >= 0";
+        return false;
+    }
+
+    memset(pcc_rule, 0, sizeof(*pcc_rule));
+    pcc_rule->id = (char *)XCN_SVC_DEDICATED_BEARER;
+    pcc_rule->qos.index = (uint8_t)qos_index;
+    pcc_rule->qos.arp.priority_level = (uint8_t)priority_level;
+
+    value = arp ? xcn_json_string_from_any(arp,
+            "preemptionCapability", "preemptCap") : NULL;
+    if (!value)
+        value = xcn_json_string_from_any(qos,
+                "preemptionCapability", "preemptCap");
+    pcc_rule->qos.arp.pre_emption_capability =
+        xcn_preemption_from_json(value, error_detail);
+    if (*error_detail)
+        return false;
+    if (!pcc_rule->qos.arp.pre_emption_capability)
+        pcc_rule->qos.arp.pre_emption_capability =
+            OGS_5GC_PRE_EMPTION_DISABLED;
+
+    value = arp ? xcn_json_string_from_any(arp,
+            "preemptionVulnerability", "preemptVuln") : NULL;
+    if (!value)
+        value = xcn_json_string_from_any(qos,
+                "preemptionVulnerability", "preemptVuln");
+    pcc_rule->qos.arp.pre_emption_vulnerability =
+        xcn_preemption_vulnerability_from_json(value, error_detail);
+    if (*error_detail)
+        return false;
+    if (!pcc_rule->qos.arp.pre_emption_vulnerability)
+        pcc_rule->qos.arp.pre_emption_vulnerability =
+            OGS_5GC_PRE_EMPTION_ENABLED;
+
+    value = xcn_json_string_from_any(qos, "maxbrDl", "mbrDl");
+    if (value)
+        pcc_rule->qos.mbr.downlink = ogs_sbi_bitrate_from_string((char *)value);
+    value = xcn_json_string_from_any(qos, "maxbrUl", "mbrUl");
+    if (value)
+        pcc_rule->qos.mbr.uplink = ogs_sbi_bitrate_from_string((char *)value);
+    value = xcn_json_string(qos, "gbrDl");
+    if (value)
+        pcc_rule->qos.gbr.downlink = ogs_sbi_bitrate_from_string((char *)value);
+    value = xcn_json_string(qos, "gbrUl");
+    if (value)
+        pcc_rule->qos.gbr.uplink = ogs_sbi_bitrate_from_string((char *)value);
+
+    pcc_rule->flow_status = OpenAPI_flow_status_ENABLED;
+    pcc_rule->precedence = (uint32_t)precedence;
+
+    return true;
+}
+
 static const char *xcn_supi_to_imsi(const char *supi)
 {
     if (supi && !ogs_strncasecmp(supi, "imsi-", strlen("imsi-")))
@@ -810,7 +975,8 @@ cleanup:
 }
 
 bool pcf_npcf_policyauthorization_handle_create(pcf_sess_t *sess,
-        ogs_sbi_stream_t *stream, ogs_sbi_message_t *recvmsg)
+        ogs_sbi_stream_t *stream, ogs_sbi_message_t *recvmsg,
+        ogs_pcc_rule_t *xcn_qos_override)
 {
     bool rc;
     int i, j, rv, status = 0;
@@ -1074,34 +1240,42 @@ bool pcf_npcf_policyauthorization_handle_create(pcf_sess_t *sess,
         uint8_t qos_index = 0;
         ogs_media_component_t *media_component = &ims_data.media_component[i];
 
-        if (media_component->media_type == OpenAPI_media_type_NULL) {
+        if (media_component->media_type == OpenAPI_media_type_NULL &&
+            (!xcn_qos_override || !xcn_qos_override->qos.index)) {
             strerror = ogs_msprintf("[%s:%d] Media-Type is Required",
                     pcf_ue_sm->supi, sess->psi);
             status = OGS_SBI_HTTP_STATUS_BAD_REQUEST;
             goto cleanup;
         }
 
-        switch(media_component->media_type) {
-        case OpenAPI_media_type_AUDIO:
-            qos_index = OGS_QOS_INDEX_1;
-            break;
-        case OpenAPI_media_type_VIDEO:
-            qos_index = OGS_QOS_INDEX_2;
-            break;
-        case OpenAPI_media_type_CONTROL:
-            qos_index = OGS_QOS_INDEX_5;
-            break;
-        default:
-            strerror = ogs_msprintf("[%s:%d] Unknown Media-Type [%d]",
-                    pcf_ue_sm->supi, sess->psi, media_component->media_type);
-            status = OGS_SBI_HTTP_STATUS_BAD_REQUEST;
-            goto cleanup;
+        if (xcn_qos_override && xcn_qos_override->qos.index) {
+            qos_index = xcn_qos_override->qos.index;
+            db_pcc_rule = xcn_qos_override;
+        } else {
+            switch(media_component->media_type) {
+            case OpenAPI_media_type_AUDIO:
+                qos_index = OGS_QOS_INDEX_1;
+                break;
+            case OpenAPI_media_type_VIDEO:
+                qos_index = OGS_QOS_INDEX_2;
+                break;
+            case OpenAPI_media_type_CONTROL:
+                qos_index = OGS_QOS_INDEX_5;
+                break;
+            default:
+                strerror = ogs_msprintf("[%s:%d] Unknown Media-Type [%d]",
+                        pcf_ue_sm->supi, sess->psi, media_component->media_type);
+                status = OGS_SBI_HTTP_STATUS_BAD_REQUEST;
+                goto cleanup;
+            }
         }
 
-        for (j = 0; j < session_data.num_of_pcc_rule; j++) {
-            if (session_data.pcc_rule[j].qos.index == qos_index) {
-                db_pcc_rule = &session_data.pcc_rule[j];
-                break;
+        if (!db_pcc_rule) {
+            for (j = 0; j < session_data.num_of_pcc_rule; j++) {
+                if (session_data.pcc_rule[j].qos.index == qos_index) {
+                    db_pcc_rule = &session_data.pcc_rule[j];
+                    break;
+                }
             }
         }
 
@@ -1863,6 +2037,8 @@ bool pcf_xcn_dedicated_bearer_handle_create(
         const char *content)
 {
     cJSON *item = NULL, *flow_descriptions = NULL, *flow = NULL;
+    ogs_pcc_rule_t xcn_qos_override;
+    bool has_xcn_qos_override = false;
     pcf_sess_t *sess = NULL;
     OpenAPI_app_session_context_t *app_context = NULL;
     OpenAPI_app_session_context_req_data_t *asc_req_data = NULL;
@@ -1870,6 +2046,7 @@ bool pcf_xcn_dedicated_bearer_handle_create(
     OpenAPI_media_sub_component_t *sub_component = NULL;
     OpenAPI_map_t *media_map = NULL, *sub_map = NULL;
     const char *notif_uri = NULL;
+    const char *error_detail = NULL;
     OpenAPI_media_type_e media_type = OpenAPI_media_type_NULL;
 
     ogs_assert(stream);
@@ -1891,11 +2068,22 @@ bool pcf_xcn_dedicated_bearer_handle_create(
                 "No PCF SM policy session for SUPI and pduSessionId");
     }
 
-    media_type = xcn_media_type_from_json(item);
-    if (media_type == OpenAPI_media_type_NULL) {
+    memset(&xcn_qos_override, 0, sizeof(xcn_qos_override));
+    if (!xcn_parse_qos_override(item, &xcn_qos_override, &error_detail)) {
         cJSON_Delete(item);
         return xcn_send_error(stream, recvmsg,
-                OGS_SBI_HTTP_STATUS_BAD_REQUEST, "Invalid mediaType");
+                OGS_SBI_HTTP_STATUS_BAD_REQUEST, error_detail);
+    }
+    has_xcn_qos_override = xcn_qos_override.qos.index ? true : false;
+
+    media_type = xcn_media_type_from_json(item);
+    if (media_type == OpenAPI_media_type_NULL) {
+        if (!has_xcn_qos_override) {
+            cJSON_Delete(item);
+            return xcn_send_error(stream, recvmsg,
+                    OGS_SBI_HTTP_STATUS_BAD_REQUEST, "Invalid mediaType");
+        }
+        media_type = OpenAPI_media_type_DATA;
     }
 
     flow_descriptions =
@@ -1953,6 +2141,26 @@ bool pcf_xcn_dedicated_bearer_handle_create(
     XCN_COPY_BW("rsBw", rs_bw);
 #undef XCN_COPY_BW
 
+#define XCN_COPY_QOS_BW(__json_key, __field) \
+    do { \
+        cJSON *__qos = cJSON_GetObjectItemCaseSensitive(item, "qos"); \
+        const char *__v = cJSON_IsObject(__qos) ? \
+            xcn_json_string(__qos, (__json_key)) : NULL; \
+        if (__v) { \
+            if (media_component->__field) \
+                ogs_free(media_component->__field); \
+            media_component->__field = ogs_strdup(__v); \
+            ogs_assert(media_component->__field); \
+        } \
+    } while (0)
+    XCN_COPY_QOS_BW("maxbrDl", mar_bw_dl);
+    XCN_COPY_QOS_BW("mbrDl", mar_bw_dl);
+    XCN_COPY_QOS_BW("maxbrUl", mar_bw_ul);
+    XCN_COPY_QOS_BW("mbrUl", mar_bw_ul);
+    XCN_COPY_QOS_BW("gbrDl", mir_bw_dl);
+    XCN_COPY_QOS_BW("gbrUl", mir_bw_ul);
+#undef XCN_COPY_QOS_BW
+
     sub_component->f_num = 0;
     sub_component->flow_usage = OpenAPI_flow_usage_NO_INFO;
     sub_component->f_descs = OpenAPI_list_create();
@@ -1989,7 +2197,9 @@ bool pcf_xcn_dedicated_bearer_handle_create(
     recvmsg->AppSessionContext = app_context;
     cJSON_Delete(item);
 
-    return pcf_npcf_policyauthorization_handle_create(sess, stream, recvmsg);
+    return pcf_npcf_policyauthorization_handle_create(
+            sess, stream, recvmsg,
+            has_xcn_qos_override ? &xcn_qos_override : NULL);
 }
 
 bool pcf_xcn_dedicated_bearer_handle_delete(

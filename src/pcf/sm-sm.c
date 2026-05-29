@@ -147,7 +147,7 @@ void pcf_sm_state_operational(ogs_fsm_t *s, pcf_event_t *e)
                 SWITCH(message->h.method)
                 CASE(OGS_SBI_HTTP_METHOD_POST)
                     handled = pcf_npcf_policyauthorization_handle_create(
-                            sess, stream, message);
+                            sess, stream, message, NULL);
                     break;
                 DEFAULT
                     ogs_error("[%s:%d] Unknown method [%s]",
