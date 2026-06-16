@@ -1582,6 +1582,10 @@ smf_sess_t *smf_sess_add_by_sm_context(ogs_sbi_message_t *message)
     }
 
     sess = smf_sess_add_by_psi(smf_ue, SmContextCreateData->pdu_session_id);
+    if (sess) {
+        sess->xcn_amf_ue_ngap_id = SmContextCreateData->xcn_amf_ue_ngap_id;
+        sess->xcn_ran_ue_ngap_id = SmContextCreateData->xcn_ran_ue_ngap_id;
+    }
 
     return sess;
 }

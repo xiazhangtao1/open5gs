@@ -30,6 +30,7 @@ ogs_sbi_request_t *amf_nsmf_pdusession_build_create_sm_context(
     ogs_sbi_header_t header;
 
     amf_ue_t *amf_ue = NULL;
+    ran_ue_t *ran_ue = NULL;
 
     OpenAPI_sm_context_create_data_t SmContextCreateData;
     OpenAPI_snssai_t sNssai;
@@ -42,6 +43,11 @@ ogs_sbi_request_t *amf_nsmf_pdusession_build_create_sm_context(
     amf_ue = amf_ue_find_by_id(sess->amf_ue_id);
     ogs_assert(amf_ue);
     ogs_assert(amf_ue->nas.access_type);
+    if (sess->ran_ue_id >= OGS_MIN_POOL_ID &&
+        sess->ran_ue_id <= OGS_MAX_POOL_ID)
+        ran_ue = ran_ue_find_by_id(sess->ran_ue_id);
+    if (!ran_ue)
+        ran_ue = ran_ue_find_by_id(amf_ue->ran_ue_id);
 
     memset(&message, 0, sizeof(message));
     message.h.method = (char *)OGS_SBI_HTTP_METHOD_POST;
@@ -150,6 +156,11 @@ ogs_sbi_request_t *amf_nsmf_pdusession_build_create_sm_context(
 
     SmContextCreateData.an_type = amf_ue->nas.access_type;
     SmContextCreateData.rat_type = amf_ue_rat_type(amf_ue);
+    if (ran_ue) {
+        SmContextCreateData.xcn_amf_ue_ngap_id = ran_ue->amf_ue_ngap_id;
+        if (ran_ue->ran_ue_ngap_id != INVALID_UE_NGAP_ID)
+            SmContextCreateData.xcn_ran_ue_ngap_id = ran_ue->ran_ue_ngap_id;
+    }
 
     ueLocation.nr_location = ogs_sbi_build_nr_location(
             &amf_ue->nr_tai, &amf_ue->nr_cgi);

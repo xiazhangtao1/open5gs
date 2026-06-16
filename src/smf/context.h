@@ -346,6 +346,8 @@ typedef struct smf_sess_s {
 
     char            *sm_context_ref; /* smContextRef */
     char            *sm_context_status_uri; /* SmContextStatusNotification */
+    uint64_t        xcn_amf_ue_ngap_id;
+    uint64_t        xcn_ran_ue_ngap_id;
     struct {
         ogs_sbi_client_t *client;
     } namf;

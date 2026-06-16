@@ -21,11 +21,77 @@
 
 #include "npcf-handler.h"
 
+#include <curl/curl.h>
+
 #define XCN_SVC_DEDICATED_BEARER "xcn-dedicated-bearer"
 #define XCN_SVC_CORE_QUERY "xcn-core-query"
 #define XCN_RESOURCE_BEARERS "bearers"
 #define XCN_RESOURCE_USERS "users"
 #define XCN_RESOURCE_SESSIONS "sessions"
+#define XCN_AMF_UE_INFO_URL "http://xcn-amf:9090/ue-info"
+
+typedef struct xcn_http_buffer_s {
+    char *data;
+    size_t len;
+} xcn_http_buffer_t;
+
+static size_t xcn_http_write_cb(
+        void *contents, size_t size, size_t nmemb, void *userp)
+{
+    size_t realsize = size * nmemb;
+    xcn_http_buffer_t *buffer = userp;
+    char *data = NULL;
+
+    ogs_assert(buffer);
+
+    data = ogs_realloc(buffer->data, buffer->len + realsize + 1);
+    if (!data)
+        return 0;
+
+    buffer->data = data;
+    memcpy(&(buffer->data[buffer->len]), contents, realsize);
+    buffer->len += realsize;
+    buffer->data[buffer->len] = '\0';
+
+    return realsize;
+}
+
+static char *xcn_http_get(const char *url)
+{
+    CURL *curl = NULL;
+    CURLcode res;
+    long status = 0;
+    xcn_http_buffer_t buffer = {0};
+
+    ogs_assert(url);
+
+    curl = curl_easy_init();
+    if (!curl) {
+        ogs_error("curl_easy_init() failed");
+        return NULL;
+    }
+
+    curl_easy_setopt(curl, CURLOPT_URL, url);
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, xcn_http_write_cb);
+    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &buffer);
+    curl_easy_setopt(curl, CURLOPT_TIMEOUT_MS, 1000L);
+    curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT_MS, 500L);
+
+    res = curl_easy_perform(curl);
+    if (res == CURLE_OK)
+        curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &status);
+    curl_easy_cleanup(curl);
+
+    if (res != CURLE_OK || status < 200 || status >= 300) {
+        ogs_warn("GET %s failed [%s,status:%ld]",
+                url, curl_easy_strerror(res), status);
+        if (buffer.data)
+            ogs_free(buffer.data);
+        return NULL;
+    }
+
+    return buffer.data;
+}
 
 static bool xcn_send_json_response(
         ogs_sbi_stream_t *stream, int status, cJSON *item)
@@ -96,6 +162,111 @@ static int xcn_json_int(cJSON *item, const char *key, int default_value)
         return default_value;
 
     return child->valueint;
+}
+
+static uint64_t xcn_json_uint64(cJSON *item, const char *key)
+{
+    cJSON *child = NULL;
+
+    ogs_assert(item);
+    ogs_assert(key);
+
+    child = cJSON_GetObjectItemCaseSensitive(item, key);
+    if (cJSON_IsNumber(child) && child->valuedouble >= 0)
+        return (uint64_t)child->valuedouble;
+    if (cJSON_IsString(child) && child->valuestring)
+        return strtoull(child->valuestring, NULL, 10);
+
+    return 0;
+}
+
+static bool xcn_amf_ue_info_match_session(
+        cJSON *ue, const char *supi, uint8_t psi,
+        uint64_t *amf_ue_ngap_id, uint64_t *ran_ue_ngap_id)
+{
+    const char *ue_supi = NULL;
+    cJSON *sessions = NULL, *session = NULL, *gnb = NULL;
+
+    ogs_assert(ue);
+    ogs_assert(supi);
+    ogs_assert(amf_ue_ngap_id);
+    ogs_assert(ran_ue_ngap_id);
+
+    ue_supi = xcn_json_string(ue, "supi");
+    if (!ue_supi || strcmp(ue_supi, supi) != 0)
+        return false;
+
+    sessions = cJSON_GetObjectItemCaseSensitive(ue, "pdu_sessions");
+    if (!cJSON_IsArray(sessions))
+        return false;
+
+    cJSON_ArrayForEach(session, sessions) {
+        if (xcn_json_int(session, "psi", 0) == psi) {
+            gnb = cJSON_GetObjectItemCaseSensitive(ue, "gnb");
+            if (!cJSON_IsObject(gnb))
+                return false;
+
+            *amf_ue_ngap_id = xcn_json_uint64(gnb, "amf_ue_ngap_id");
+            *ran_ue_ngap_id = xcn_json_uint64(gnb, "ran_ue_ngap_id");
+            return *amf_ue_ngap_id || *ran_ue_ngap_id;
+        }
+    }
+
+    return false;
+}
+
+static bool xcn_sess_store_ngap_ids_from_amf_info(
+        pcf_ue_sm_t *pcf_ue_sm, pcf_sess_t *sess, cJSON *amf_info)
+{
+    cJSON *items = NULL, *ue = NULL;
+    uint64_t amf_ue_ngap_id = 0;
+    uint64_t ran_ue_ngap_id = 0;
+
+    ogs_assert(pcf_ue_sm);
+    ogs_assert(sess);
+    ogs_assert(amf_info);
+
+    items = cJSON_GetObjectItemCaseSensitive(amf_info, "items");
+    if (!cJSON_IsArray(items))
+        return false;
+
+    cJSON_ArrayForEach(ue, items) {
+        if (xcn_amf_ue_info_match_session(ue, pcf_ue_sm->supi, sess->psi,
+                    &amf_ue_ngap_id, &ran_ue_ngap_id)) {
+            pcf_sess_set_ngap_ids(sess, amf_ue_ngap_id, ran_ue_ngap_id);
+            return true;
+        }
+    }
+
+    return false;
+}
+
+void pcf_xcn_refresh_ngap_ids_from_amf(void)
+{
+    char *content = NULL;
+    cJSON *amf_info = NULL;
+    pcf_context_t *self = pcf_self();
+    pcf_ue_sm_t *pcf_ue_sm = NULL;
+    pcf_sess_t *sess = NULL;
+
+    content = xcn_http_get(XCN_AMF_UE_INFO_URL);
+    if (!content)
+        return;
+
+    amf_info = cJSON_Parse(content);
+    ogs_free(content);
+    if (!amf_info) {
+        ogs_warn("Failed to parse AMF ue-info JSON");
+        return;
+    }
+
+    ogs_list_for_each(&self->pcf_ue_sm_list, pcf_ue_sm) {
+        ogs_list_for_each(&pcf_ue_sm->sess_list, sess)
+            xcn_sess_store_ngap_ids_from_amf_info(
+                    pcf_ue_sm, sess, amf_info);
+    }
+
+    cJSON_Delete(amf_info);
 }
 
 static int xcn_json_int_from_any(
@@ -308,6 +479,10 @@ static cJSON *xcn_session_to_json(pcf_sess_t *sess)
         cJSON_AddStringToObject(item, "ipv4", sess->ipv4addr_string);
     if (sess->ipv6prefix_string)
         cJSON_AddStringToObject(item, "ipv6Prefix", sess->ipv6prefix_string);
+    if (sess->amf_ue_ngap_id)
+        cJSON_AddNumberToObject(item, "amfUeNgapId", sess->amf_ue_ngap_id);
+    if (sess->ran_ue_ngap_id)
+        cJSON_AddNumberToObject(item, "ranUeNgapId", sess->ran_ue_ngap_id);
 
     snssai = cJSON_AddObjectToObject(item, "sNssai");
     ogs_assert(snssai);
@@ -369,11 +544,45 @@ static cJSON *xcn_user_to_json(pcf_ue_sm_t *pcf_ue_sm)
 static bool xcn_parse_bearer_request(cJSON *item, pcf_sess_t **sess)
 {
     const char *supi = NULL;
+    const char *ue_ip = NULL;
+    uint64_t ngap_id = 0;
+    uint64_t amf_ue_ngap_id = 0;
+    uint64_t ran_ue_ngap_id = 0;
     int pdu_session_id = 0;
     pcf_ue_sm_t *pcf_ue_sm = NULL;
 
     ogs_assert(item);
     ogs_assert(sess);
+
+    *sess = NULL;
+
+    ue_ip = xcn_json_string_from_any(item, "ueIp", "ueIpAddr");
+    if (!ue_ip)
+        ue_ip = xcn_json_string_from_any(item, "ueIpv4", "ueIpv6");
+    if (ue_ip) {
+        *sess = pcf_sess_find_by_ipv4addr((char *)ue_ip);
+        if (!*sess)
+            *sess = pcf_sess_find_by_ipv6addr((char *)ue_ip);
+        if (!*sess)
+            *sess = pcf_sess_find_by_ipv6prefix((char *)ue_ip);
+        return *sess ? true : false;
+    }
+
+    amf_ue_ngap_id = xcn_json_uint64(item, "amfUeNgapId");
+    ran_ue_ngap_id = xcn_json_uint64(item, "ranUeNgapId");
+    ngap_id = xcn_json_uint64(item, "ngapId");
+    if (amf_ue_ngap_id || ran_ue_ngap_id || ngap_id) {
+        pcf_xcn_refresh_ngap_ids_from_amf();
+        if (amf_ue_ngap_id)
+            *sess = pcf_sess_find_by_amf_ue_ngap_id(amf_ue_ngap_id);
+        if (!*sess && ngap_id)
+            *sess = pcf_sess_find_by_amf_ue_ngap_id(ngap_id);
+        if (!*sess && ran_ue_ngap_id)
+            *sess = pcf_sess_find_by_ran_ue_ngap_id(ran_ue_ngap_id);
+        if (!*sess && ngap_id)
+            *sess = pcf_sess_find_by_ran_ue_ngap_id(ngap_id);
+        return *sess ? true : false;
+    }
 
     supi = xcn_json_string(item, "supi");
     pdu_session_id = xcn_json_int(item, "pduSessionId", 0);
@@ -386,6 +595,30 @@ static bool xcn_parse_bearer_request(cJSON *item, pcf_sess_t **sess)
 
     *sess = pcf_sess_find_by_psi(pcf_ue_sm, (uint8_t)pdu_session_id);
     return *sess ? true : false;
+}
+
+void pcf_xcn_store_ngap_ids_from_sm_policy_content(
+        pcf_sess_t *sess, const char *content)
+{
+    cJSON *item = NULL;
+    uint64_t amf_ue_ngap_id = 0;
+    uint64_t ran_ue_ngap_id = 0;
+
+    ogs_assert(sess);
+
+    if (!content)
+        return;
+
+    item = cJSON_Parse(content);
+    if (!item)
+        return;
+
+    amf_ue_ngap_id = xcn_json_uint64(item, "xcnAmfUeNgapId");
+    ran_ue_ngap_id = xcn_json_uint64(item, "xcnRanUeNgapId");
+    if (amf_ue_ngap_id || ran_ue_ngap_id)
+        pcf_sess_set_ngap_ids(sess, amf_ue_ngap_id, ran_ue_ngap_id);
+
+    cJSON_Delete(item);
 }
 
 bool pcf_npcf_am_policy_control_handle_create(pcf_ue_am_t *pcf_ue_am,
@@ -825,6 +1058,13 @@ bool pcf_npcf_smpolicycontrol_handle_create(pcf_sess_t *sess,
         ogs_assert(true ==
             pcf_sess_set_ipv6prefix(
                 sess, SmPolicyContextData->ipv6_address_prefix));
+    if (SmPolicyContextData->xcn_amf_ue_ngap_id ||
+        SmPolicyContextData->xcn_ran_ue_ngap_id)
+        pcf_sess_set_ngap_ids(sess,
+                SmPolicyContextData->xcn_amf_ue_ngap_id,
+                SmPolicyContextData->xcn_ran_ue_ngap_id);
+    if (!sess->amf_ue_ngap_id && !sess->ran_ue_ngap_id)
+        pcf_xcn_refresh_ngap_ids_from_amf();
 
     if (SmPolicyContextData->ipv4_frame_route_list) {
         OpenAPI_lnode_t *node = NULL;
@@ -2065,7 +2305,7 @@ bool pcf_xcn_dedicated_bearer_handle_create(
         cJSON_Delete(item);
         return xcn_send_error(stream, recvmsg,
                 OGS_SBI_HTTP_STATUS_NOT_FOUND,
-                "No PCF SM policy session for SUPI and pduSessionId");
+                "No PCF SM policy session for target UE");
     }
 
     memset(&xcn_qos_override, 0, sizeof(xcn_qos_override));
@@ -2238,6 +2478,9 @@ bool pcf_xcn_query_handle_users(
 
     root = cJSON_CreateObject();
     ogs_assert(root);
+
+    pcf_xcn_refresh_ngap_ids_from_amf();
+
     cJSON_AddNumberToObject(root, "registeredUserCount",
             ogs_list_count(&self->pcf_ue_am_list));
     cJSON_AddNumberToObject(root, "sessionUserCount",
@@ -2294,6 +2537,7 @@ bool pcf_xcn_query_handle_user(
 
     pcf_ue_sm = pcf_ue_sm_find_by_supi((char *)supi);
     if (pcf_ue_sm) {
+        pcf_xcn_refresh_ngap_ids_from_amf();
         root = xcn_user_to_json(pcf_ue_sm);
     } else {
         pcf_ue_am = pcf_ue_am_find_by_supi((char *)supi);
@@ -2337,6 +2581,12 @@ bool pcf_xcn_query_handle_sessions(
     sess = pcf_sess_find_by_ipv4addr((char *)ue_ip);
     if (!sess)
         sess = pcf_sess_find_by_ipv6prefix((char *)ue_ip);
+    if (sess && !sess->amf_ue_ngap_id && !sess->ran_ue_ngap_id) {
+        pcf_xcn_refresh_ngap_ids_from_amf();
+        sess = pcf_sess_find_by_ipv4addr((char *)ue_ip);
+        if (!sess)
+            sess = pcf_sess_find_by_ipv6prefix((char *)ue_ip);
+    }
 
     if (!sess)
         return xcn_send_error(stream, recvmsg,

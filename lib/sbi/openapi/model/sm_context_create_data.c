@@ -254,6 +254,8 @@ OpenAPI_sm_context_create_data_t *OpenAPI_sm_context_create_data_create(
     sm_context_create_data_local_var->anchor_smf_oauth2_required = anchor_smf_oauth2_required;
     sm_context_create_data_local_var->is_sm_context_smf_oauth2_required = is_sm_context_smf_oauth2_required;
     sm_context_create_data_local_var->sm_context_smf_oauth2_required = sm_context_smf_oauth2_required;
+    sm_context_create_data_local_var->xcn_amf_ue_ngap_id = 0;
+    sm_context_create_data_local_var->xcn_ran_ue_ngap_id = 0;
 
     return sm_context_create_data_local_var;
 }
@@ -1433,6 +1435,18 @@ cJSON *OpenAPI_sm_context_create_data_convertToJSON(OpenAPI_sm_context_create_da
     if (sm_context_create_data->is_sm_context_smf_oauth2_required) {
     if (cJSON_AddBoolToObject(item, "smContextSmfOauth2Required", sm_context_create_data->sm_context_smf_oauth2_required) == NULL) {
         ogs_error("OpenAPI_sm_context_create_data_convertToJSON() failed [sm_context_smf_oauth2_required]");
+        goto end;
+    }
+    }
+    if (sm_context_create_data->xcn_amf_ue_ngap_id) {
+    if (cJSON_AddNumberToObject(item, "xcnAmfUeNgapId", sm_context_create_data->xcn_amf_ue_ngap_id) == NULL) {
+        ogs_error("OpenAPI_sm_context_create_data_convertToJSON() failed [xcn_amf_ue_ngap_id]");
+        goto end;
+    }
+    }
+    if (sm_context_create_data->xcn_ran_ue_ngap_id) {
+    if (cJSON_AddNumberToObject(item, "xcnRanUeNgapId", sm_context_create_data->xcn_ran_ue_ngap_id) == NULL) {
+        ogs_error("OpenAPI_sm_context_create_data_convertToJSON() failed [xcn_ran_ue_ngap_id]");
         goto end;
     }
     }
@@ -2651,6 +2665,14 @@ OpenAPI_sm_context_create_data_t *OpenAPI_sm_context_create_data_parseFromJSON(c
         sm_context_smf_oauth2_required ? true : false,
         sm_context_smf_oauth2_required ? sm_context_smf_oauth2_required->valueint : 0
     );
+    if (sm_context_create_data_local_var) {
+        cJSON *xcn_amf_ue_ngap_id = cJSON_GetObjectItemCaseSensitive(sm_context_create_dataJSON, "xcnAmfUeNgapId");
+        cJSON *xcn_ran_ue_ngap_id = cJSON_GetObjectItemCaseSensitive(sm_context_create_dataJSON, "xcnRanUeNgapId");
+        if (cJSON_IsNumber(xcn_amf_ue_ngap_id) && xcn_amf_ue_ngap_id->valuedouble >= 0)
+            sm_context_create_data_local_var->xcn_amf_ue_ngap_id = (uint64_t)xcn_amf_ue_ngap_id->valuedouble;
+        if (cJSON_IsNumber(xcn_ran_ue_ngap_id) && xcn_ran_ue_ngap_id->valuedouble >= 0)
+            sm_context_create_data_local_var->xcn_ran_ue_ngap_id = (uint64_t)xcn_ran_ue_ngap_id->valuedouble;
+    }
 
     return sm_context_create_data_local_var;
 end:
@@ -2825,4 +2847,3 @@ OpenAPI_sm_context_create_data_t *OpenAPI_sm_context_create_data_copy(OpenAPI_sm
 
     return dst;
 }
-

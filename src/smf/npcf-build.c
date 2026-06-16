@@ -150,6 +150,8 @@ ogs_sbi_request_t *smf_npcf_smpolicycontrol_build_create(
     }
 
     SmPolicyContextData.rat_type = OpenAPI_rat_type_NR;
+    SmPolicyContextData.xcn_amf_ue_ngap_id = sess->xcn_amf_ue_ngap_id;
+    SmPolicyContextData.xcn_ran_ue_ngap_id = sess->xcn_ran_ue_ngap_id;
 
     SmPolicyContextData.serving_network =
         ogs_sbi_build_plmn_id_nid(&sess->serving_plmn_id);

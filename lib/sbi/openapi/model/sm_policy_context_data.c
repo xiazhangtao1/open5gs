@@ -122,6 +122,8 @@ OpenAPI_sm_policy_context_data_t *OpenAPI_sm_policy_context_data_create(
     sm_policy_context_data_local_var->is_onboard_ind = is_onboard_ind;
     sm_policy_context_data_local_var->onboard_ind = onboard_ind;
     sm_policy_context_data_local_var->nwdaf_datas = nwdaf_datas;
+    sm_policy_context_data_local_var->xcn_amf_ue_ngap_id = 0;
+    sm_policy_context_data_local_var->xcn_ran_ue_ngap_id = 0;
 
     return sm_policy_context_data_local_var;
 }
@@ -741,6 +743,18 @@ cJSON *OpenAPI_sm_policy_context_data_convertToJSON(OpenAPI_sm_policy_context_da
             goto end;
         }
         cJSON_AddItemToArray(nwdaf_datasList, itemLocal);
+    }
+    }
+    if (sm_policy_context_data->xcn_amf_ue_ngap_id) {
+    if (cJSON_AddNumberToObject(item, "xcnAmfUeNgapId", sm_policy_context_data->xcn_amf_ue_ngap_id) == NULL) {
+        ogs_error("OpenAPI_sm_policy_context_data_convertToJSON() failed [xcn_amf_ue_ngap_id]");
+        goto end;
+    }
+    }
+    if (sm_policy_context_data->xcn_ran_ue_ngap_id) {
+    if (cJSON_AddNumberToObject(item, "xcnRanUeNgapId", sm_policy_context_data->xcn_ran_ue_ngap_id) == NULL) {
+        ogs_error("OpenAPI_sm_policy_context_data_convertToJSON() failed [xcn_ran_ue_ngap_id]");
+        goto end;
     }
     }
 
@@ -1366,6 +1380,14 @@ OpenAPI_sm_policy_context_data_t *OpenAPI_sm_policy_context_data_parseFromJSON(c
         onboard_ind ? onboard_ind->valueint : 0,
         nwdaf_datas ? nwdaf_datasList : NULL
     );
+    if (sm_policy_context_data_local_var) {
+        cJSON *xcn_amf_ue_ngap_id = cJSON_GetObjectItemCaseSensitive(sm_policy_context_dataJSON, "xcnAmfUeNgapId");
+        cJSON *xcn_ran_ue_ngap_id = cJSON_GetObjectItemCaseSensitive(sm_policy_context_dataJSON, "xcnRanUeNgapId");
+        if (cJSON_IsNumber(xcn_amf_ue_ngap_id) && xcn_amf_ue_ngap_id->valuedouble >= 0)
+            sm_policy_context_data_local_var->xcn_amf_ue_ngap_id = (uint64_t)xcn_amf_ue_ngap_id->valuedouble;
+        if (cJSON_IsNumber(xcn_ran_ue_ngap_id) && xcn_ran_ue_ngap_id->valuedouble >= 0)
+            sm_policy_context_data_local_var->xcn_ran_ue_ngap_id = (uint64_t)xcn_ran_ue_ngap_id->valuedouble;
+    }
 
     return sm_policy_context_data_local_var;
 end:
@@ -1488,4 +1510,3 @@ OpenAPI_sm_policy_context_data_t *OpenAPI_sm_policy_context_data_copy(OpenAPI_sm
 
     return dst;
 }
-

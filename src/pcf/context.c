@@ -32,6 +32,7 @@ static int context_initialized = 0;
 
 static void clear_ipv4addr(pcf_sess_t *sess);
 static void clear_ipv6prefix(pcf_sess_t *sess);
+static void clear_ngap_ids(pcf_sess_t *sess);
 
 void pcf_context_init(void)
 {
@@ -59,6 +60,10 @@ void pcf_context_init(void)
     ogs_assert(self.ipv4addr_hash);
     self.ipv6prefix_hash = ogs_hash_make();
     ogs_assert(self.ipv6prefix_hash);
+    self.amf_ue_ngap_id_hash = ogs_hash_make();
+    ogs_assert(self.amf_ue_ngap_id_hash);
+    self.ran_ue_ngap_id_hash = ogs_hash_make();
+    ogs_assert(self.ran_ue_ngap_id_hash);
 
     context_initialized = 1;
 }
@@ -78,6 +83,10 @@ void pcf_context_final(void)
     ogs_hash_destroy(self.ipv4addr_hash);
     ogs_assert(self.ipv6prefix_hash);
     ogs_hash_destroy(self.ipv6prefix_hash);
+    ogs_assert(self.amf_ue_ngap_id_hash);
+    ogs_hash_destroy(self.amf_ue_ngap_id_hash);
+    ogs_assert(self.ran_ue_ngap_id_hash);
+    ogs_hash_destroy(self.ran_ue_ngap_id_hash);
 
     ogs_pool_final(&pcf_app_pool);
     ogs_pool_final(&pcf_sess_pool);
@@ -585,6 +594,7 @@ void pcf_sess_remove(pcf_sess_t *sess)
 
     clear_ipv4addr(sess);
     clear_ipv6prefix(sess);
+    clear_ngap_ids(sess);
 
     OpenAPI_clear_and_free_string_list(sess->ipv4_frame_route_list);
     OpenAPI_clear_and_free_string_list(sess->ipv6_frame_route_list);
@@ -626,6 +636,23 @@ static void clear_ipv6prefix(pcf_sess_t *sess)
         ogs_hash_set(self.ipv6prefix_hash,
                 &sess->ipv6prefix, (sess->ipv6prefix.len >> 3) + 1, NULL);
         ogs_free(sess->ipv6prefix_string);
+    }
+}
+
+static void clear_ngap_ids(pcf_sess_t *sess)
+{
+    ogs_assert(sess);
+
+    if (sess->amf_ue_ngap_id) {
+        ogs_hash_set(self.amf_ue_ngap_id_hash,
+                &sess->amf_ue_ngap_id, sizeof(sess->amf_ue_ngap_id), NULL);
+        sess->amf_ue_ngap_id = 0;
+    }
+
+    if (sess->ran_ue_ngap_id) {
+        ogs_hash_set(self.ran_ue_ngap_id_hash,
+                &sess->ran_ue_ngap_id, sizeof(sess->ran_ue_ngap_id), NULL);
+        sess->ran_ue_ngap_id = 0;
     }
 }
 
@@ -684,6 +711,26 @@ bool pcf_sess_set_ipv6prefix(pcf_sess_t *sess, char *ipv6prefix_string)
             &sess->ipv6prefix, (sess->ipv6prefix.len >> 3) + 1, sess);
 
     return true;
+}
+
+void pcf_sess_set_ngap_ids(
+        pcf_sess_t *sess, uint64_t amf_ue_ngap_id, uint64_t ran_ue_ngap_id)
+{
+    ogs_assert(sess);
+
+    clear_ngap_ids(sess);
+
+    if (amf_ue_ngap_id) {
+        sess->amf_ue_ngap_id = amf_ue_ngap_id;
+        ogs_hash_set(self.amf_ue_ngap_id_hash,
+                &sess->amf_ue_ngap_id, sizeof(sess->amf_ue_ngap_id), sess);
+    }
+
+    if (ran_ue_ngap_id) {
+        sess->ran_ue_ngap_id = ran_ue_ngap_id;
+        ogs_hash_set(self.ran_ue_ngap_id_hash,
+                &sess->ran_ue_ngap_id, sizeof(sess->ran_ue_ngap_id), sess);
+    }
 }
 
 pcf_sess_t *pcf_sess_find(uint32_t index)
@@ -778,12 +825,34 @@ pcf_sess_t *pcf_sess_find_by_ipv6prefix(char *ipv6prefix_string)
 
     rv = ogs_ipv6prefix_from_string(
             ipv6prefix.addr6, &ipv6prefix.len, ipv6prefix_string);
-    ogs_assert(rv == OGS_OK);
+    if (rv != OGS_OK) {
+        ogs_error("ogs_ipv6prefix_from_string() failed");
+        return NULL;
+    }
 
-    ogs_assert(ipv6prefix.len == OGS_IPV6_128_PREFIX_LEN);
+    if (ipv6prefix.len != OGS_IPV6_128_PREFIX_LEN)
+        return NULL;
 
     return ogs_hash_get(self.ipv6prefix_hash,
             &ipv6prefix, (ipv6prefix.len >> 3) + 1);
+}
+
+pcf_sess_t *pcf_sess_find_by_amf_ue_ngap_id(uint64_t amf_ue_ngap_id)
+{
+    if (!amf_ue_ngap_id)
+        return NULL;
+
+    return ogs_hash_get(self.amf_ue_ngap_id_hash,
+            &amf_ue_ngap_id, sizeof(amf_ue_ngap_id));
+}
+
+pcf_sess_t *pcf_sess_find_by_ran_ue_ngap_id(uint64_t ran_ue_ngap_id)
+{
+    if (!ran_ue_ngap_id)
+        return NULL;
+
+    return ogs_hash_get(self.ran_ue_ngap_id_hash,
+            &ran_ue_ngap_id, sizeof(ran_ue_ngap_id));
 }
 
 pcf_ue_am_t *pcf_ue_am_find_by_id(ogs_pool_id_t id)

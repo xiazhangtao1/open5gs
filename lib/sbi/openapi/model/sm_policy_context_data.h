@@ -8,6 +8,7 @@
 #define _OpenAPI_sm_policy_context_data_H_
 
 #include <string.h>
+#include <stdint.h>
 #include "../external/cJSON.h"
 #include "../include/list.h"
 #include "../include/keyValuePair.h"
@@ -97,6 +98,8 @@ typedef struct OpenAPI_sm_policy_context_data_s {
     bool is_onboard_ind;
     int onboard_ind;
     OpenAPI_list_t *nwdaf_datas;
+    uint64_t xcn_amf_ue_ngap_id;
+    uint64_t xcn_ran_ue_ngap_id;
 } OpenAPI_sm_policy_context_data_t;
 
 OpenAPI_sm_policy_context_data_t *OpenAPI_sm_policy_context_data_create(
@@ -167,4 +170,3 @@ OpenAPI_sm_policy_context_data_t *OpenAPI_sm_policy_context_data_copy(OpenAPI_sm
 #endif
 
 #endif /* _OpenAPI_sm_policy_context_data_H_ */
-

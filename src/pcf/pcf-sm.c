@@ -255,6 +255,9 @@ void pcf_state_operational(ogs_fsm_t *s, pcf_event_t *e)
                                 }
                             }
                         }
+                        if (sess)
+                            pcf_xcn_store_ngap_ids_from_sm_policy_content(
+                                    sess, request->http.content);
                     }
                 } else {
                     sess = pcf_sess_find_by_sm_policy_id(
