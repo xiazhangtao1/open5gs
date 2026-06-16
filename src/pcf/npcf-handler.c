@@ -21,6 +21,7 @@
 
 #include "npcf-handler.h"
 
+#include <errno.h>
 #include <curl/curl.h>
 
 #define XCN_SVC_DEDICATED_BEARER "xcn-dedicated-bearer"
@@ -178,6 +179,22 @@ static uint64_t xcn_json_uint64(cJSON *item, const char *key)
         return strtoull(child->valuestring, NULL, 10);
 
     return 0;
+}
+
+static uint64_t xcn_string_uint64(const char *value)
+{
+    char *end = NULL;
+    unsigned long long number = 0;
+
+    if (!value || !*value)
+        return 0;
+
+    errno = 0;
+    number = strtoull(value, &end, 10);
+    if (errno || !end || *end != '\0')
+        return 0;
+
+    return (uint64_t)number;
 }
 
 static bool xcn_amf_ue_info_match_session(
@@ -587,6 +604,72 @@ static bool xcn_parse_bearer_request(cJSON *item, pcf_sess_t **sess)
     supi = xcn_json_string(item, "supi");
     pdu_session_id = xcn_json_int(item, "pduSessionId", 0);
     if (!supi || pdu_session_id <= 0 || pdu_session_id > UINT8_MAX)
+        return false;
+
+    pcf_ue_sm = pcf_ue_sm_find_by_supi((char *)supi);
+    if (!pcf_ue_sm)
+        return false;
+
+    *sess = pcf_sess_find_by_psi(pcf_ue_sm, (uint8_t)pdu_session_id);
+    return *sess ? true : false;
+}
+
+static bool xcn_parse_bearer_params(ogs_hash_t *params, pcf_sess_t **sess)
+{
+    const char *supi = NULL;
+    const char *ue_ip = NULL;
+    const char *pdu_session_id_string = NULL;
+    uint64_t ngap_id = 0;
+    uint64_t amf_ue_ngap_id = 0;
+    uint64_t ran_ue_ngap_id = 0;
+    uint64_t pdu_session_id = 0;
+    pcf_ue_sm_t *pcf_ue_sm = NULL;
+
+    ogs_assert(sess);
+
+    *sess = NULL;
+
+    if (!params)
+        return false;
+
+    ue_ip = ogs_sbi_header_get(params, "ueIp");
+    if (!ue_ip)
+        ue_ip = ogs_sbi_header_get(params, "ueIpAddr");
+    if (!ue_ip)
+        ue_ip = ogs_sbi_header_get(params, "ueIpv4");
+    if (!ue_ip)
+        ue_ip = ogs_sbi_header_get(params, "ueIpv6");
+    if (ue_ip) {
+        *sess = pcf_sess_find_by_ipv4addr((char *)ue_ip);
+        if (!*sess)
+            *sess = pcf_sess_find_by_ipv6addr((char *)ue_ip);
+        if (!*sess)
+            *sess = pcf_sess_find_by_ipv6prefix((char *)ue_ip);
+        return *sess ? true : false;
+    }
+
+    amf_ue_ngap_id =
+        xcn_string_uint64(ogs_sbi_header_get(params, "amfUeNgapId"));
+    ran_ue_ngap_id =
+        xcn_string_uint64(ogs_sbi_header_get(params, "ranUeNgapId"));
+    ngap_id = xcn_string_uint64(ogs_sbi_header_get(params, "ngapId"));
+    if (amf_ue_ngap_id || ran_ue_ngap_id || ngap_id) {
+        pcf_xcn_refresh_ngap_ids_from_amf();
+        if (amf_ue_ngap_id)
+            *sess = pcf_sess_find_by_amf_ue_ngap_id(amf_ue_ngap_id);
+        if (!*sess && ngap_id)
+            *sess = pcf_sess_find_by_amf_ue_ngap_id(ngap_id);
+        if (!*sess && ran_ue_ngap_id)
+            *sess = pcf_sess_find_by_ran_ue_ngap_id(ran_ue_ngap_id);
+        if (!*sess && ngap_id)
+            *sess = pcf_sess_find_by_ran_ue_ngap_id(ngap_id);
+        return *sess ? true : false;
+    }
+
+    supi = ogs_sbi_header_get(params, "supi");
+    pdu_session_id_string = ogs_sbi_header_get(params, "pduSessionId");
+    pdu_session_id = xcn_string_uint64(pdu_session_id_string);
+    if (!supi || pdu_session_id == 0 || pdu_session_id > UINT8_MAX)
         return false;
 
     pcf_ue_sm = pcf_ue_sm_find_by_supi((char *)supi);
@@ -1428,6 +1511,11 @@ bool pcf_npcf_policyauthorization_handle_create(pcf_sess_t *sess,
 
     app_session = pcf_app_add(sess);
     ogs_assert(app_session);
+
+    if (AscReqData->af_app_id) {
+        app_session->af_app_id = ogs_strdup(AscReqData->af_app_id);
+        ogs_assert(app_session->af_app_id);
+    }
 
     if (app_session->notif_uri)
         ogs_free(app_session->notif_uri);
@@ -2288,6 +2376,7 @@ bool pcf_xcn_dedicated_bearer_handle_create(
     const char *notif_uri = NULL;
     const char *error_detail = NULL;
     OpenAPI_media_type_e media_type = OpenAPI_media_type_NULL;
+    pcf_ue_sm_t *pcf_ue_sm = NULL;
 
     ogs_assert(stream);
     ogs_assert(recvmsg);
@@ -2307,6 +2396,8 @@ bool pcf_xcn_dedicated_bearer_handle_create(
                 OGS_SBI_HTTP_STATUS_NOT_FOUND,
                 "No PCF SM policy session for target UE");
     }
+    pcf_ue_sm = pcf_ue_sm_find_by_id(sess->pcf_ue_sm_id);
+    ogs_assert(pcf_ue_sm);
 
     memset(&xcn_qos_override, 0, sizeof(xcn_qos_override));
     if (!xcn_parse_qos_override(item, &xcn_qos_override, &error_detail)) {
@@ -2356,7 +2447,7 @@ bool pcf_xcn_dedicated_bearer_handle_create(
         ogs_strdup("http://127.0.0.1:7785/xcn-dedicated-bearer/v1/notifications");
     ogs_assert(asc_req_data->notif_uri);
 
-    asc_req_data->supi = ogs_strdup(xcn_json_string(item, "supi"));
+    asc_req_data->supi = ogs_strdup(pcf_ue_sm->supi);
     ogs_assert(asc_req_data->supi);
     if (sess->dnn)
         asc_req_data->dnn = ogs_strdup(sess->dnn);
@@ -2440,6 +2531,179 @@ bool pcf_xcn_dedicated_bearer_handle_create(
     return pcf_npcf_policyauthorization_handle_create(
             sess, stream, recvmsg,
             has_xcn_qos_override ? &xcn_qos_override : NULL);
+}
+
+static bool xcn_app_is_dedicated_bearer(pcf_app_t *app)
+{
+    int i;
+
+    ogs_assert(app);
+
+    if (app->af_app_id &&
+        strcmp(app->af_app_id, XCN_SVC_DEDICATED_BEARER) == 0)
+        return true;
+
+    for (i = 0; i < app->num_of_pcc_rule; i++) {
+        ogs_pcc_rule_t *pcc_rule = &app->pcc_rule[i];
+
+        if (pcc_rule->id &&
+            !strncmp(pcc_rule->id, XCN_SVC_DEDICATED_BEARER,
+                    strlen(XCN_SVC_DEDICATED_BEARER)))
+            return true;
+    }
+
+    return false;
+}
+
+static const char *xcn_flow_direction_to_string(uint8_t direction)
+{
+    switch (direction) {
+    case OGS_FLOW_DOWNLINK_ONLY:
+        return "DOWNLINK";
+    case OGS_FLOW_UPLINK_ONLY:
+        return "UPLINK";
+    case OGS_FLOW_BIDIRECTIONAL:
+        return "BIDIRECTIONAL";
+    default:
+        return "UNSPECIFIED";
+    }
+}
+
+static cJSON *xcn_pcc_rule_to_json(ogs_pcc_rule_t *pcc_rule)
+{
+    int i;
+    cJSON *item = NULL, *qos = NULL, *arp = NULL, *flows = NULL;
+
+    ogs_assert(pcc_rule);
+
+    item = cJSON_CreateObject();
+    ogs_assert(item);
+
+    if (pcc_rule->id)
+        cJSON_AddStringToObject(item, "pccRuleId", pcc_rule->id);
+    cJSON_AddNumberToObject(item, "precedence", pcc_rule->precedence);
+    cJSON_AddStringToObject(item, "flowStatus",
+            OpenAPI_flow_status_ToString(pcc_rule->flow_status));
+
+    qos = cJSON_AddObjectToObject(item, "qos");
+    ogs_assert(qos);
+    cJSON_AddNumberToObject(qos, "5qi", pcc_rule->qos.index);
+
+    arp = cJSON_AddObjectToObject(qos, "arp");
+    ogs_assert(arp);
+    cJSON_AddNumberToObject(arp, "priorityLevel",
+            pcc_rule->qos.arp.priority_level);
+    cJSON_AddNumberToObject(arp, "preemptionCapability",
+            pcc_rule->qos.arp.pre_emption_capability);
+    cJSON_AddNumberToObject(arp, "preemptionVulnerability",
+            pcc_rule->qos.arp.pre_emption_vulnerability);
+
+    if (pcc_rule->qos.mbr.downlink)
+        cJSON_AddNumberToObject(qos, "mbrDl", pcc_rule->qos.mbr.downlink);
+    if (pcc_rule->qos.mbr.uplink)
+        cJSON_AddNumberToObject(qos, "mbrUl", pcc_rule->qos.mbr.uplink);
+    if (pcc_rule->qos.gbr.downlink)
+        cJSON_AddNumberToObject(qos, "gbrDl", pcc_rule->qos.gbr.downlink);
+    if (pcc_rule->qos.gbr.uplink)
+        cJSON_AddNumberToObject(qos, "gbrUl", pcc_rule->qos.gbr.uplink);
+
+    flows = cJSON_AddArrayToObject(item, "flows");
+    ogs_assert(flows);
+    for (i = 0; i < pcc_rule->num_of_flow; i++) {
+        cJSON *flow = cJSON_CreateObject();
+        ogs_assert(flow);
+
+        cJSON_AddStringToObject(flow, "direction",
+                xcn_flow_direction_to_string(pcc_rule->flow[i].direction));
+        if (pcc_rule->flow[i].description)
+            cJSON_AddStringToObject(flow, "description",
+                    pcc_rule->flow[i].description);
+        cJSON_AddItemToArray(flows, flow);
+    }
+
+    return item;
+}
+
+static cJSON *xcn_app_to_json(pcf_app_t *app)
+{
+    int i;
+    cJSON *item = NULL, *pcc_rules = NULL;
+
+    ogs_assert(app);
+
+    item = cJSON_CreateObject();
+    ogs_assert(item);
+
+    if (app->app_session_id)
+        cJSON_AddStringToObject(item, "appSessionId", app->app_session_id);
+    if (app->af_app_id)
+        cJSON_AddStringToObject(item, "afAppId", app->af_app_id);
+
+    pcc_rules = cJSON_AddArrayToObject(item, "pccRules");
+    ogs_assert(pcc_rules);
+    for (i = 0; i < app->num_of_pcc_rule; i++)
+        cJSON_AddItemToArray(pcc_rules,
+                xcn_pcc_rule_to_json(&app->pcc_rule[i]));
+    cJSON_AddNumberToObject(item, "pccRuleCount", app->num_of_pcc_rule);
+
+    return item;
+}
+
+bool pcf_xcn_dedicated_bearer_handle_query(
+        ogs_sbi_stream_t *stream, ogs_sbi_message_t *recvmsg,
+        ogs_hash_t *params)
+{
+    cJSON *root = NULL, *bearers = NULL;
+    pcf_sess_t *sess = NULL;
+    pcf_ue_sm_t *pcf_ue_sm = NULL;
+    pcf_app_t *app = NULL;
+    int bearer_count = 0;
+
+    ogs_assert(stream);
+    ogs_assert(recvmsg);
+
+    if (!xcn_parse_bearer_params(params, &sess))
+        return xcn_send_error(stream, recvmsg,
+                OGS_SBI_HTTP_STATUS_NOT_FOUND,
+                "No PCF SM policy session for target UE");
+
+    pcf_ue_sm = pcf_ue_sm_find_by_id(sess->pcf_ue_sm_id);
+    ogs_assert(pcf_ue_sm);
+
+    root = cJSON_CreateObject();
+    ogs_assert(root);
+
+    cJSON_AddStringToObject(root, "supi", pcf_ue_sm->supi);
+    cJSON_AddStringToObject(root, "imsi", xcn_supi_to_imsi(pcf_ue_sm->supi));
+    cJSON_AddNumberToObject(root, "pduSessionId", sess->psi);
+    if (sess->ipv4addr_string)
+        cJSON_AddStringToObject(root, "ueIp", sess->ipv4addr_string);
+    else if (sess->ipv6prefix_string)
+        cJSON_AddStringToObject(root, "ueIp", sess->ipv6prefix_string);
+    if (sess->amf_ue_ngap_id)
+        cJSON_AddNumberToObject(root, "amfUeNgapId", sess->amf_ue_ngap_id);
+    if (sess->ran_ue_ngap_id)
+        cJSON_AddNumberToObject(root, "ranUeNgapId", sess->ran_ue_ngap_id);
+
+    bearers = cJSON_AddArrayToObject(root, "bearers");
+    ogs_assert(bearers);
+
+    ogs_list_for_each(&sess->app_list, app) {
+        if (!xcn_app_is_dedicated_bearer(app))
+            continue;
+
+        cJSON_AddItemToArray(bearers, xcn_app_to_json(app));
+        bearer_count++;
+    }
+    cJSON_AddNumberToObject(root, "bearerCount", bearer_count);
+
+    if (xcn_send_json_response(stream, OGS_SBI_HTTP_STATUS_OK, root) == false) {
+        cJSON_Delete(root);
+        return false;
+    }
+
+    cJSON_Delete(root);
+    return true;
 }
 
 bool pcf_xcn_dedicated_bearer_handle_delete(

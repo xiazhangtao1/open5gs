@@ -906,6 +906,8 @@ int pcf_app_remove(pcf_app_t *app)
 
     if (app->notif_uri)
         ogs_free(app->notif_uri);
+    if (app->af_app_id)
+        ogs_free(app->af_app_id);
     if (app->naf.client)
         ogs_sbi_client_remove(app->naf.client);
 

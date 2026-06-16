@@ -356,6 +356,18 @@ void pcf_state_operational(ogs_fsm_t *s, pcf_event_t *e)
             SWITCH(message.h.resource.component[0])
             CASE(XCN_RESOURCE_BEARERS)
                 SWITCH(message.h.method)
+                CASE(OGS_SBI_HTTP_METHOD_GET)
+                    if (message.h.resource.component[1]) {
+                        ogs_assert(true ==
+                            ogs_sbi_server_send_error(stream,
+                                OGS_SBI_HTTP_STATUS_BAD_REQUEST, &message,
+                                "Invalid bearer query URI",
+                                message.h.uri, NULL));
+                    } else {
+                        pcf_xcn_dedicated_bearer_handle_query(
+                                stream, &message, request->http.params);
+                    }
+                    break;
                 CASE(OGS_SBI_HTTP_METHOD_POST)
                     if (message.h.resource.component[1]) {
                         ogs_assert(true ==

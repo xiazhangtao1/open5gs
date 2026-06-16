@@ -85,7 +85,15 @@ The request is translated inside PCF into the normal policy authorization path a
 
 The target session can be selected by `ueIp`, `ngapId`, or the legacy `supi` + `pduSessionId` pair. If multiple selectors are present, PCF uses only the highest priority selector: `ueIp` first, then `ngapId`, then `supi` + `pduSessionId`. `ngapId` matches AMF UE NGAP ID first and then RAN UE NGAP ID; callers can also use explicit `amfUeNgapId` or `ranUeNgapId`.
 
-Delete the created application session/bearer trigger:
+Query XCN-created dedicated bearer triggers for a target PDU session:
+
+```bash
+curl 'http://<node-ip>:30777/xcn-dedicated-bearer/v1/bearers?ueIp=10.45.0.2'
+curl 'http://<node-ip>:30777/xcn-dedicated-bearer/v1/bearers?ngapId=2'
+curl 'http://<node-ip>:30777/xcn-dedicated-bearer/v1/bearers?supi=imsi-460110000000001&pduSessionId=1'
+```
+
+Delete one created application session/bearer trigger by the returned `appSessionId`. This removes the PCC/QoS rules created by that trigger, not the UE PDU session:
 
 ```bash
 curl -X DELETE http://<node-ip>:30777/xcn-dedicated-bearer/v1/bearers/<appSessionId>

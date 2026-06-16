@@ -190,6 +190,7 @@ typedef struct pcf_app_s {
     ogs_lnode_t lnode;
 
     char *app_session_id;
+    char *af_app_id;
 
     char *notif_uri;
     struct {

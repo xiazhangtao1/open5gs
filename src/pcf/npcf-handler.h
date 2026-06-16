@@ -47,6 +47,9 @@ bool pcf_npcf_policyauthorization_handle_delete(
 bool pcf_xcn_dedicated_bearer_handle_create(
         ogs_sbi_stream_t *stream, ogs_sbi_message_t *recvmsg,
         const char *content);
+bool pcf_xcn_dedicated_bearer_handle_query(
+        ogs_sbi_stream_t *stream, ogs_sbi_message_t *recvmsg,
+        ogs_hash_t *params);
 bool pcf_xcn_dedicated_bearer_handle_delete(
         ogs_sbi_stream_t *stream, ogs_sbi_message_t *recvmsg);
 void pcf_xcn_store_ngap_ids_from_sm_policy_content(
