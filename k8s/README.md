@@ -122,7 +122,8 @@ http://<node-ip>:30777
 Create a dedicated bearer/QoS flow for an existing PDU session:
 
 ```bash
-curl -X POST http://<node-ip>:30777/xcn-dedicated-bearer/v1/bearers \
+curl --http2-prior-knowledge -sS -i -X POST \
+  http://<node-ip>:30777/xcn-dedicated-bearer/v1/bearers \
   -H 'Content-Type: application/json' \
   -d '{
     "supi": "imsi-460110000000001",
@@ -154,23 +155,30 @@ The target session can be selected by `ueIp`, `ngapId`, or the legacy `supi` + `
 Query XCN-created dedicated bearer triggers for a target PDU session:
 
 ```bash
-curl 'http://<node-ip>:30777/xcn-dedicated-bearer/v1/bearers?ueIp=10.45.0.2'
-curl 'http://<node-ip>:30777/xcn-dedicated-bearer/v1/bearers?ngapId=2'
-curl 'http://<node-ip>:30777/xcn-dedicated-bearer/v1/bearers?supi=imsi-460110000000001&pduSessionId=1'
+curl --http2-prior-knowledge -sS -i \
+  'http://<node-ip>:30777/xcn-dedicated-bearer/v1/bearers?ueIp=10.45.0.2'
+curl --http2-prior-knowledge -sS -i \
+  'http://<node-ip>:30777/xcn-dedicated-bearer/v1/bearers?ngapId=2'
+curl --http2-prior-knowledge -sS -i \
+  'http://<node-ip>:30777/xcn-dedicated-bearer/v1/bearers?supi=imsi-460110000000001&pduSessionId=1'
 ```
 
 Delete one created application session/bearer trigger by the returned `appSessionId`. This removes the PCC/QoS rules created by that trigger, not the UE PDU session:
 
 ```bash
-curl -X DELETE http://<node-ip>:30777/xcn-dedicated-bearer/v1/bearers/<appSessionId>
+curl --http2-prior-knowledge -sS -i -X DELETE \
+  http://<node-ip>:30777/xcn-dedicated-bearer/v1/bearers/<appSessionId>
 ```
 
 Query current core users and sessions:
 
 ```bash
-curl http://<node-ip>:30777/xcn-core-query/v1/users
-curl http://<node-ip>:30777/xcn-core-query/v1/users/imsi-460110000000001
-curl 'http://<node-ip>:30777/xcn-core-query/v1/sessions?ueIp=10.45.0.2'
+curl --http2-prior-knowledge -sS -i \
+  http://<node-ip>:30777/xcn-core-query/v1/users
+curl --http2-prior-knowledge -sS -i \
+  http://<node-ip>:30777/xcn-core-query/v1/users/imsi-460110000000001
+curl --http2-prior-knowledge -sS -i \
+  'http://<node-ip>:30777/xcn-core-query/v1/sessions?ueIp=10.45.0.2'
 ```
 
 These APIs are unauthenticated HTTP endpoints. Restrict `NodePort 30777` with firewall rules, security groups, or Kubernetes network policy before using it outside a controlled lab network.
