@@ -101,6 +101,7 @@ static void update_authorized_pcc_rule_and_qos(
             ogs_pcc_rule_t *pcc_rule =
                 &sess->policy.pcc_rule[sess->policy.num_of_pcc_rule];
             ogs_assert(pcc_rule);
+            QosData = NULL;
 
             PccRuleMap = node->data;
             if (!PccRuleMap) {
@@ -182,8 +183,16 @@ static void update_authorized_pcc_rule_and_qos(
             if (PccRule->flow_infos) {
                 ogs_assert(pcc_rule->num_of_flow == 0);
                 OpenAPI_list_for_each(PccRule->flow_infos, node2) {
-                    ogs_flow_t *flow = &pcc_rule->flow[pcc_rule->num_of_flow];
+                    ogs_flow_t *flow = NULL;
 
+                    if (pcc_rule->num_of_flow >=
+                            OGS_ARRAY_SIZE(pcc_rule->flow)) {
+                        ogs_error("Overflow: Num of Flow [%d]",
+                                pcc_rule->num_of_flow);
+                        break;
+                    }
+
+                    flow = &pcc_rule->flow[pcc_rule->num_of_flow];
                     ogs_assert(flow);
 
                     FlowInformation = node2->data;
@@ -745,6 +754,14 @@ bool smf_npcf_smpolicycontrol_handle_update_notify(
                 smf_ue->supi, sess->psi);
         goto cleanup;
     }
+
+    ogs_info("[%s:%d] Received SM policy update notify "
+            "[pcc_rules:%d,qos_decs:%d]",
+            smf_ue->supi, sess->psi,
+            SmPolicyDecision->pcc_rules ?
+                (int)SmPolicyDecision->pcc_rules->count : 0,
+            SmPolicyDecision->qos_decs ?
+                (int)SmPolicyDecision->qos_decs->count : 0);
 
     /* Update authorized PCC rule & QoS */
     update_authorized_pcc_rule_and_qos(sess, SmPolicyDecision);

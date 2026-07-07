@@ -533,6 +533,10 @@ void smf_qos_flow_binding(smf_sess_t *sess)
             bool qos_flow_created = false;
             bool qos_presence = false;
 
+            ogs_info("Bind PCC rule [id:%s,precedence:%u,5qi:%u,flows:%d]",
+                    pcc_rule->id, pcc_rule->precedence,
+                    pcc_rule->qos.index, pcc_rule->num_of_flow);
+
             qos_flow = smf_qos_flow_find_by_pcc_rule_id(sess, pcc_rule->id);
             if (!qos_flow) {
                 if (pcc_rule->num_of_flow == 0) {
@@ -598,6 +602,8 @@ void smf_qos_flow_binding(smf_sess_t *sess)
                 memcpy(&qos_flow->qos, &pcc_rule->qos, sizeof(ogs_qos_t));
 
                 qos_flow_created = true;
+                ogs_info("Created QoS flow [pcc_rule:%s,qfi:%u]",
+                        pcc_rule->id, qos_flow->qfi);
 
             } else {
                 ogs_assert(strcmp(qos_flow->pcc_rule.id, pcc_rule->id) == 0);
@@ -681,6 +687,9 @@ void smf_qos_flow_binding(smf_sess_t *sess)
                 pf->direction = flow->direction;
                 pf->flow_description = ogs_strdup(flow->description);
                 ogs_assert(pf->flow_description);
+
+                ogs_info("Install packet filter [qfi:%u,direction:%u,%s]",
+                        qos_flow->qfi, pf->direction, pf->flow_description);
 
                 rv = ogs_ipfw_compile_rule(
                         &pf->ipfw_rule, pf->flow_description);
@@ -778,6 +787,9 @@ void smf_qos_flow_binding(smf_sess_t *sess)
     }
 
     if (ogs_list_count(&sess->qos_flow_to_modify_list)) {
+        ogs_info("Send QoS flow modification [count:%d,flags:0x%llx]",
+                ogs_list_count(&sess->qos_flow_to_modify_list),
+                (long long)pfcp_flags);
         ogs_assert(OGS_OK ==
                 smf_5gc_pfcp_send_qos_flow_list_modification_request(
                     sess, NULL,

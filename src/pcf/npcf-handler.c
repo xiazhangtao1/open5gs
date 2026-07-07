@@ -1335,6 +1335,101 @@ cleanup:
     return false;
 }
 
+static void pcf_free_policy_decision_lists(
+        OpenAPI_list_t **PccRuleList, OpenAPI_list_t **QosDecisionList)
+{
+    OpenAPI_lnode_t *node = NULL;
+    OpenAPI_map_t *PccRuleMap = NULL, *QosDecisionMap = NULL;
+    OpenAPI_pcc_rule_t *PccRule = NULL;
+    OpenAPI_qos_data_t *QosData = NULL;
+
+    if (PccRuleList && *PccRuleList) {
+        OpenAPI_list_for_each(*PccRuleList, node) {
+            PccRuleMap = node->data;
+            if (PccRuleMap) {
+                PccRule = PccRuleMap->value;
+                if (PccRule)
+                    ogs_sbi_free_pcc_rule(PccRule);
+                ogs_free(PccRuleMap);
+            }
+        }
+        OpenAPI_list_free(*PccRuleList);
+        *PccRuleList = NULL;
+    }
+
+    if (QosDecisionList && *QosDecisionList) {
+        OpenAPI_list_for_each(*QosDecisionList, node) {
+            QosDecisionMap = node->data;
+            if (QosDecisionMap) {
+                QosData = QosDecisionMap->value;
+                if (QosData)
+                    ogs_sbi_free_qos_data(QosData);
+                ogs_free(QosDecisionMap);
+            }
+        }
+        OpenAPI_list_free(*QosDecisionList);
+        *QosDecisionList = NULL;
+    }
+}
+
+static bool pcf_build_app_policy_decision(
+        pcf_sess_t *sess, OpenAPI_sm_policy_decision_t *SmPolicyDecision,
+        OpenAPI_list_t **PccRuleList, OpenAPI_list_t **QosDecisionList)
+{
+    int i;
+    pcf_app_t *app_session = NULL;
+
+    ogs_assert(sess);
+    ogs_assert(SmPolicyDecision);
+    ogs_assert(PccRuleList);
+    ogs_assert(QosDecisionList);
+
+    memset(SmPolicyDecision, 0, sizeof(*SmPolicyDecision));
+
+    *PccRuleList = OpenAPI_list_create();
+    ogs_assert(*PccRuleList);
+    *QosDecisionList = OpenAPI_list_create();
+    ogs_assert(*QosDecisionList);
+
+    ogs_list_for_each(&sess->app_list, app_session) {
+        for (i = 0; i < app_session->num_of_pcc_rule; i++) {
+            OpenAPI_pcc_rule_t *PccRule = NULL;
+            OpenAPI_qos_data_t *QosData = NULL;
+            OpenAPI_map_t *PccRuleMap = NULL, *QosDecisionMap = NULL;
+            ogs_pcc_rule_t *pcc_rule = &app_session->pcc_rule[i];
+
+            ogs_assert(pcc_rule);
+
+            if (!pcc_rule->id || !pcc_rule->num_of_flow)
+                continue;
+
+            PccRule = ogs_sbi_build_pcc_rule(pcc_rule, 1);
+            ogs_assert(PccRule);
+            ogs_assert(PccRule->pcc_rule_id);
+
+            PccRuleMap = OpenAPI_map_create(PccRule->pcc_rule_id, PccRule);
+            ogs_assert(PccRuleMap);
+            OpenAPI_list_add(*PccRuleList, PccRuleMap);
+
+            QosData = ogs_sbi_build_qos_data(pcc_rule);
+            ogs_assert(QosData);
+            ogs_assert(QosData->qos_id);
+
+            QosDecisionMap = OpenAPI_map_create(QosData->qos_id, QosData);
+            ogs_assert(QosDecisionMap);
+            OpenAPI_list_add(*QosDecisionList, QosDecisionMap);
+        }
+    }
+
+    if ((*PccRuleList)->count)
+        SmPolicyDecision->pcc_rules = *PccRuleList;
+
+    if ((*QosDecisionList)->count)
+        SmPolicyDecision->qos_decs = *QosDecisionList;
+
+    return (*PccRuleList)->count || (*QosDecisionList)->count;
+}
+
 bool pcf_npcf_policyauthorization_handle_create(pcf_sess_t *sess,
         ogs_sbi_stream_t *stream, ogs_sbi_message_t *recvmsg,
         ogs_pcc_rule_t *xcn_qos_override)
@@ -1791,11 +1886,22 @@ bool pcf_npcf_policyauthorization_handle_create(pcf_sess_t *sess,
         OpenAPI_list_add(QosDecisionList, QosDecisionMap);
     }
 
-    if (PccRuleList->count)
-        SmPolicyDecision.pcc_rules = PccRuleList;
+    pcf_free_policy_decision_lists(&PccRuleList, &QosDecisionList);
 
-    if (QosDecisionList->count)
-        SmPolicyDecision.qos_decs = QosDecisionList;
+    if (pcf_build_app_policy_decision(
+                sess, &SmPolicyDecision, &PccRuleList, &QosDecisionList)) {
+        if (pcf_sbi_send_smpolicycontrol_update_notify(
+                    sess, &SmPolicyDecision) != true) {
+            strerror = ogs_msprintf("[%s:%d] SM policy update notify failed",
+                    pcf_ue_sm->supi, sess->psi);
+            status = OGS_SBI_HTTP_STATUS_GATEWAY_TIMEOUT;
+            goto cleanup;
+        }
+    } else {
+        ogs_warn("[%s:%d] Empty app policy decision [apps:%d]",
+                pcf_ue_sm->supi, sess->psi,
+                ogs_list_count(&sess->app_list));
+    }
 
     memset(&sendmsg, 0, sizeof(sendmsg));
 
@@ -1815,32 +1921,7 @@ bool pcf_npcf_policyauthorization_handle_create(pcf_sess_t *sess,
 
     ogs_free(sendmsg.http.location);
 
-    if (PccRuleList->count || QosDecisionList->count) {
-        ogs_assert(true == pcf_sbi_send_smpolicycontrol_update_notify(
-                                sess, &SmPolicyDecision));
-    }
-
-    OpenAPI_list_for_each(PccRuleList, node) {
-        PccRuleMap = node->data;
-        if (PccRuleMap) {
-            PccRule = PccRuleMap->value;
-            if (PccRule)
-                ogs_sbi_free_pcc_rule(PccRule);
-            ogs_free(PccRuleMap);
-        }
-    }
-    OpenAPI_list_free(PccRuleList);
-
-    OpenAPI_list_for_each(QosDecisionList, node) {
-        QosDecisionMap = node->data;
-        if (QosDecisionMap) {
-            QosData = QosDecisionMap->value;
-            if (QosData)
-                ogs_sbi_free_qos_data(QosData);
-            ogs_free(QosDecisionMap);
-        }
-    }
-    OpenAPI_list_free(QosDecisionList);
+    pcf_free_policy_decision_lists(&PccRuleList, &QosDecisionList);
 
     ogs_ims_data_free(&ims_data);
     OGS_SESSION_DATA_FREE(&session_data);
@@ -1856,27 +1937,10 @@ cleanup:
                 NULL));
     ogs_free(strerror);
 
-    OpenAPI_list_for_each(PccRuleList, node) {
-        PccRuleMap = node->data;
-        if (PccRuleMap) {
-            PccRule = PccRuleMap->value;
-            if (PccRule)
-                ogs_sbi_free_pcc_rule(PccRule);
-            ogs_free(PccRuleMap);
-        }
-    }
-    OpenAPI_list_free(PccRuleList);
+    if (app_session)
+        pcf_app_remove(app_session);
 
-    OpenAPI_list_for_each(QosDecisionList, node) {
-        QosDecisionMap = node->data;
-        if (QosDecisionMap) {
-            QosData = QosDecisionMap->value;
-            if (QosData)
-                ogs_sbi_free_qos_data(QosData);
-            ogs_free(QosDecisionMap);
-        }
-    }
-    OpenAPI_list_free(QosDecisionList);
+    pcf_free_policy_decision_lists(&PccRuleList, &QosDecisionList);
 
     ogs_ims_data_free(&ims_data);
     OGS_SESSION_DATA_FREE(&session_data);

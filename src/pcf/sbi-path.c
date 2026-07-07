@@ -239,8 +239,9 @@ static int client_notify_cb(
     }
 
     if (message.res_status != OGS_SBI_HTTP_STATUS_NO_CONTENT)
-        ogs_error("SmContextStatusNotification failed [%d]",
-                message.res_status);
+        ogs_error("Policy notification failed [%d]", message.res_status);
+    else
+        ogs_info("Policy notification accepted");
 
     ogs_sbi_message_free(&message);
     ogs_sbi_response_free(response);
@@ -624,10 +625,14 @@ bool pcf_sbi_send_smpolicycontrol_update_notify(
         pcf_sess_t *sess, OpenAPI_sm_policy_decision_t *SmPolicyDecision)
 {
     bool rc;
+    pcf_ue_sm_t *pcf_ue_sm = NULL;
     ogs_sbi_request_t *request = NULL;
     ogs_sbi_client_t *client = NULL;
 
     ogs_assert(sess);
+    pcf_ue_sm = pcf_ue_sm_find_by_id(sess->pcf_ue_sm_id);
+    ogs_assert(pcf_ue_sm);
+
     client = sess->nsmf.client;
     ogs_assert(client);
 
@@ -638,9 +643,15 @@ bool pcf_sbi_send_smpolicycontrol_update_notify(
         return false;
     }
 
+    ogs_info("[%s:%d] Send SM policy update notify to [%s]",
+            pcf_ue_sm->supi ? pcf_ue_sm->supi : "unknown", sess->psi,
+            sess->notification_uri ? sess->notification_uri : "NULL");
+
     rc = ogs_sbi_send_request_to_client(
             client, client_notify_cb, request, NULL);
-    ogs_expect(rc == true);
+    if (rc != true)
+        ogs_error("[%s:%d] SM policy update notify send failed",
+                pcf_ue_sm->supi ? pcf_ue_sm->supi : "unknown", sess->psi);
 
     ogs_sbi_request_free(request);
 
