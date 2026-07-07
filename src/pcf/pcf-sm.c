@@ -412,7 +412,8 @@ void pcf_state_operational(ogs_fsm_t *s, pcf_event_t *e)
                 } else if (message.h.resource.component[1]) {
                     pcf_xcn_query_handle_user(stream, &message);
                 } else {
-                    pcf_xcn_query_handle_users(stream, &message);
+                    pcf_xcn_query_handle_users(stream, &message,
+                            request->http.params);
                 }
                 break;
             CASE(XCN_RESOURCE_SESSIONS)

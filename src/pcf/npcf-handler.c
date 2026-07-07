@@ -197,6 +197,44 @@ static uint64_t xcn_string_uint64(const char *value)
     return (uint64_t)number;
 }
 
+static char *xcn_supi_from_amf_tmsi(uint64_t tmsi)
+{
+    char *content = NULL, *supi = NULL;
+    cJSON *amf_info = NULL, *items = NULL, *ue = NULL;
+
+    if (!tmsi)
+        return NULL;
+
+    content = xcn_http_get(XCN_AMF_UE_INFO_URL);
+    if (!content)
+        return NULL;
+
+    amf_info = cJSON_Parse(content);
+    ogs_free(content);
+    if (!amf_info) {
+        ogs_warn("Failed to parse AMF ue-info JSON");
+        return NULL;
+    }
+
+    items = cJSON_GetObjectItemCaseSensitive(amf_info, "items");
+    if (!cJSON_IsArray(items)) {
+        cJSON_Delete(amf_info);
+        return NULL;
+    }
+
+    cJSON_ArrayForEach(ue, items) {
+        if (xcn_json_uint64(ue, "m_tmsi") == tmsi) {
+            const char *ue_supi = xcn_json_string(ue, "supi");
+            if (ue_supi)
+                supi = ogs_strdup(ue_supi);
+            break;
+        }
+    }
+
+    cJSON_Delete(amf_info);
+    return supi;
+}
+
 static bool xcn_amf_ue_info_match_session(
         cJSON *ue, const char *supi, uint8_t psi,
         uint64_t *amf_ue_ngap_id, uint64_t *ran_ue_ngap_id)
@@ -2729,16 +2767,67 @@ bool pcf_xcn_dedicated_bearer_handle_delete(
 }
 
 bool pcf_xcn_query_handle_users(
-        ogs_sbi_stream_t *stream, ogs_sbi_message_t *recvmsg)
+        ogs_sbi_stream_t *stream, ogs_sbi_message_t *recvmsg,
+        ogs_hash_t *params)
 {
     cJSON *root = NULL, *users = NULL;
     pcf_context_t *self = pcf_self();
     pcf_ue_am_t *pcf_ue_am = NULL;
     pcf_ue_sm_t *pcf_ue_sm = NULL;
+    const char *tmsi_string = NULL;
+    char *tmsi_supi = NULL;
     int user_count = 0;
 
     ogs_assert(stream);
     ogs_assert(recvmsg);
+
+    tmsi_string = params ? ogs_sbi_header_get(params, "tmsi") : NULL;
+    if (tmsi_string) {
+        uint64_t tmsi = xcn_string_uint64(tmsi_string);
+        if (!tmsi)
+            return xcn_send_error(stream, recvmsg,
+                    OGS_SBI_HTTP_STATUS_BAD_REQUEST, "Invalid TMSI");
+
+        tmsi_supi = xcn_supi_from_amf_tmsi(tmsi);
+        if (!tmsi_supi)
+            return xcn_send_error(stream, recvmsg,
+                    OGS_SBI_HTTP_STATUS_NOT_FOUND, "No TMSI");
+
+        pcf_ue_sm = pcf_ue_sm_find_by_supi(tmsi_supi);
+        if (pcf_ue_sm) {
+            pcf_xcn_refresh_ngap_ids_from_amf();
+            root = xcn_user_to_json(pcf_ue_sm);
+        } else {
+            pcf_ue_am = pcf_ue_am_find_by_supi(tmsi_supi);
+            if (!pcf_ue_am) {
+                ogs_free(tmsi_supi);
+                return xcn_send_error(stream, recvmsg,
+                        OGS_SBI_HTTP_STATUS_NOT_FOUND, "No TMSI");
+            }
+
+            root = cJSON_CreateObject();
+            ogs_assert(root);
+            cJSON_AddStringToObject(root, "supi", pcf_ue_am->supi);
+            cJSON_AddStringToObject(root, "imsi",
+                    xcn_supi_to_imsi(pcf_ue_am->supi));
+            cJSON_AddBoolToObject(root, "registered", true);
+            users = cJSON_AddArrayToObject(root, "sessions");
+            ogs_assert(users);
+        }
+
+        if (root)
+            cJSON_AddNumberToObject(root, "m_tmsi", tmsi);
+        ogs_free(tmsi_supi);
+
+        if (xcn_send_json_response(
+                    stream, OGS_SBI_HTTP_STATUS_OK, root) == false) {
+            cJSON_Delete(root);
+            return false;
+        }
+
+        cJSON_Delete(root);
+        return true;
+    }
 
     root = cJSON_CreateObject();
     ogs_assert(root);

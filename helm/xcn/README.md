@@ -124,6 +124,8 @@ curl --http2-prior-knowledge -sS -i \
 curl --http2-prior-knowledge -sS -i \
   http://<node-ip>:30777/xcn-core-query/v1/users/imsi-460110000000001
 curl --http2-prior-knowledge -sS -i \
+  'http://<node-ip>:30777/xcn-core-query/v1/users?tmsi=3221227435'
+curl --http2-prior-knowledge -sS -i \
   'http://<node-ip>:30777/xcn-core-query/v1/sessions?ueIp=10.45.0.2'
 ```
 
