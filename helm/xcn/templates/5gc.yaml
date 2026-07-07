@@ -1,3 +1,7 @@
+{{- $upfGtpuAddress := toString .Values.networking.upf.gtpu.serverAddress }}
+{{- if or (eq $upfGtpuAddress "0.0.0.0") (eq $upfGtpuAddress "::") (eq $upfGtpuAddress "127.0.0.4") }}
+{{- fail "networking.upf.gtpu.serverAddress must be a dedicated non-wildcard address: the UPF and SMF share one pod network namespace and both use UDP/2152" }}
+{{- end }}
 apiVersion: v1
 kind: Service
 metadata:
@@ -200,6 +204,8 @@ spec:
     metadata:
       labels:
         app: {{ include "xcn.componentName" (dict "root" . "component" "5gc") }}
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/config.yaml") . | sha256sum }}
     spec:
 {{- if .Values.fivegc.hostNetwork.enabled }}
       hostNetwork: true
@@ -218,6 +224,10 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: status.hostIP
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
             - name: UPF_GTPU_SERVER_ADDRESS
               value: {{ .Values.networking.upf.gtpu.serverAddress | quote }}
             - name: UPF_GTPU_ADVERTISE_ADDRESS
@@ -226,8 +236,8 @@ spec:
             - /bin/sh
             - -ec
             - |
-              UPF_GTPU_SERVER_ADDRESS="${UPF_GTPU_SERVER_ADDRESS:-$HOST_IP}"
-              UPF_GTPU_ADVERTISE_ADDRESS="${UPF_GTPU_ADVERTISE_ADDRESS:-$HOST_IP}"
+              UPF_GTPU_SERVER_ADDRESS="${UPF_GTPU_SERVER_ADDRESS:-$POD_IP}"
+              UPF_GTPU_ADVERTISE_ADDRESS="${UPF_GTPU_ADVERTISE_ADDRESS:-$POD_IP}"
               sed \
                 -e "s|__UPF_GTPU_SERVER_ADDRESS__|${UPF_GTPU_SERVER_ADDRESS}|g" \
                 -e "s|__UPF_GTPU_ADVERTISE_ADDRESS__|${UPF_GTPU_ADVERTISE_ADDRESS}|g" \

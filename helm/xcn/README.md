@@ -45,6 +45,18 @@ helm install xcn helm/xcn \
   --set services.pcfSbi.nodePort=30777
 ```
 
+For a `hostNetwork` deployment, bind UPF N3 to the node address rather than
+`0.0.0.0`. The SMF uses `127.0.0.4:2152` for the internal CP-function GTP-U
+path, so a wildcard UPF listener would receive the SMF-bound packets itself.
+
+```bash
+helm install xcn helm/xcn -n xcn --create-namespace \
+  --set fivegc.hostNetwork.enabled=true \
+  --set networking.amf.ngap.serverAddress=192.168.9.60 \
+  --set networking.upf.gtpu.serverAddress=192.168.9.60 \
+  --set networking.upf.gtpu.advertiseAddress=192.168.9.60
+```
+
 ## External PCF APIs
 
 The chart exposes PCF SBI through `xcn-pcf` as `NodePort 30777` by default. External modules such as a computing center can call:

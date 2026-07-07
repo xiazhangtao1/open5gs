@@ -121,8 +121,9 @@ data:
             port: 2124
       gtpu:
         server:
-          - address: 0.0.0.0
-            port: 2153
+          - address: 127.0.0.4
+            port: 2152
+            advertise: 127.0.0.4
       metrics:
         server:
           - address: 0.0.0.0

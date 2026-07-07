@@ -169,7 +169,9 @@ networking:
       serverAddress: 0.0.0.0
   upf:
     gtpu:
-      serverAddress: 0.0.0.0
+      # Empty values are resolved to status.podIP at container startup.
+      # Do not use 0.0.0.0:2152; it would also capture SMF CP-function GTP-U.
+      serverAddress: ""
       advertiseAddress: ""
   webui:
     hostname: 0.0.0.0
