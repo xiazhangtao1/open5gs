@@ -251,7 +251,17 @@ spec:
               check_udp_listener() {
                 address="$1"
                 port="$2"
-                if ss -H -lun "sport = :${port}" | awk -v expected="${address}:${port}" '$4 == expected { found = 1 } END { exit found ? 0 : 1 }'; then
+                if ss -H -lun "sport = :${port}" | awk -v expected="${address}:${port}" -v port="${port}" '
+                  {
+                    bind = $(NF - 1)
+                  }
+                  bind == expected ||
+                  bind == "0.0.0.0:" port ||
+                  bind == "*:" port ||
+                  bind == "[::]:" port ||
+                  bind == ":::" port { found = 1 }
+                  END { exit found ? 0 : 1 }
+                '; then
                   echo "ERROR: UDP ${address}:${port} is already in use before UPF start" >&2
                   exit 1
                 fi
