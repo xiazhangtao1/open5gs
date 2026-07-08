@@ -69,6 +69,9 @@ spec:
             periodSeconds: 10
           resources:
 {{ toYaml .Values.resources.mongodb.mongodb | indent 12 }}
+          volumeMounts:
+            - name: data
+              mountPath: /data/db
       volumes:
 {{- if not .Values.mongodb.persistence.enabled }}
         - name: data

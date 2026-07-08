@@ -16,7 +16,7 @@ images:
 
 mongodb:
   persistence:
-    enabled: false
+    enabled: true
     size: 1Gi
     storageClassName: "local-path"
 
