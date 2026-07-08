@@ -39,17 +39,17 @@ resources:
   fivegc:
     upf:
       requests:
-        cpu: 500m
+        cpu: 1
         memory: 512Mi
       limits:
-        cpu: 1500m
+        cpu: 1
         memory: 2Gi
     smf:
       requests:
-        cpu: 500m
+        cpu: 1
         memory: 256Mi
       limits:
-        cpu: 1500m
+        cpu: 1
         memory: 512Mi
     amf:
       requests:
