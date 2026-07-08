@@ -36,7 +36,8 @@ ogs_pkbuf_t *ogs_tun_read(ogs_socket_t fd, ogs_pkbuf_pool_t *packet_pool)
 
     n = ogs_read(fd, recvbuf->data, recvbuf->len);
     if (n <= 0) {
-        ogs_log_message(OGS_LOG_WARN, ogs_socket_errno, "ogs_read() failed");
+        if (ogs_socket_errno != OGS_EAGAIN)
+            ogs_log_message(OGS_LOG_WARN, ogs_socket_errno, "ogs_read() failed");
         ogs_pkbuf_free(recvbuf);
         return NULL;
     }
