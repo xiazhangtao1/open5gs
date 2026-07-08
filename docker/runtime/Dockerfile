@@ -61,7 +61,9 @@ RUN apt-get update && \
         libtalloc-dev \
         iputils-ping \
         iproute2 \
+        iperf \
         iperf3 \
+        tcpdump \
         iptables \
         netbase \
         netcat-openbsd \

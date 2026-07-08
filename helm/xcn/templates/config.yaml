@@ -315,7 +315,7 @@ data:
             "__v": 0
         });
     }
-    for (var i = 1; i <= 800; i++) {
+    for (var i = 1; i <= 200; i++) {
         var imsi = '460110000000' + ('000' + i).slice(-3);
         db.subscribers.updateOne(
             { imsi: imsi },
@@ -361,7 +361,6 @@ data:
                           downlink: { value: 1, unit: 3 },
                           uplink: { value: 1, unit: 3 }
                       },
-                      ue: { ipv4: '10.45.0.2' },
                       pcc_rule: []
                     }],
                     sd: '010101'

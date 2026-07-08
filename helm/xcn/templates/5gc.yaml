@@ -1,4 +1,17 @@
+{{- $amfNgapAddress := toString .Values.networking.amf.ngap.serverAddress }}
 {{- $upfGtpuAddress := toString .Values.networking.upf.gtpu.serverAddress }}
+{{- $upfGtpuAdvertiseAddress := toString .Values.networking.upf.gtpu.advertiseAddress }}
+{{- if .Values.fivegc.hostNetwork.enabled }}
+{{- if or (eq $amfNgapAddress "") (eq $amfNgapAddress "0.0.0.0") (eq $amfNgapAddress "::") }}
+{{- fail "networking.amf.ngap.serverAddress must be an explicit node interface address when fivegc.hostNetwork.enabled=true" }}
+{{- end }}
+{{- if or (eq $upfGtpuAddress "") (eq $upfGtpuAddress "0.0.0.0") (eq $upfGtpuAddress "::") (eq $upfGtpuAddress "127.0.0.4") }}
+{{- fail "networking.upf.gtpu.serverAddress must be an explicit node interface address when fivegc.hostNetwork.enabled=true" }}
+{{- end }}
+{{- if or (eq $upfGtpuAdvertiseAddress "") (eq $upfGtpuAdvertiseAddress "0.0.0.0") (eq $upfGtpuAdvertiseAddress "::") (eq $upfGtpuAdvertiseAddress "127.0.0.4") }}
+{{- fail "networking.upf.gtpu.advertiseAddress must be an explicit UE-reachable address when fivegc.hostNetwork.enabled=true" }}
+{{- end }}
+{{- end }}
 {{- if or (eq $upfGtpuAddress "0.0.0.0") (eq $upfGtpuAddress "::") (eq $upfGtpuAddress "127.0.0.4") }}
 {{- fail "networking.upf.gtpu.serverAddress must be a dedicated non-wildcard address: the UPF and SMF share one pod network namespace and both use UDP/2152" }}
 {{- end }}
