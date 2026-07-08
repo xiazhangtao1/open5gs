@@ -248,12 +248,16 @@ spec:
               ip addr
               echo "=== listeners before UPF start ==="
               ss -lntup || true
-              for port in 2152 8805; do
-                if ss -H -lun "sport = :${port}" | grep -q .; then
-                  echo "ERROR: UDP port ${port} is already in use before UPF start" >&2
+              check_udp_listener() {
+                address="$1"
+                port="$2"
+                if ss -H -lun "sport = :${port}" | awk -v expected="${address}:${port}" '$4 == expected { found = 1 } END { exit found ? 0 : 1 }'; then
+                  echo "ERROR: UDP ${address}:${port} is already in use before UPF start" >&2
                   exit 1
                 fi
-              done
+              }
+              check_udp_listener "${UPF_GTPU_SERVER_ADDRESS}" 2152
+              check_udp_listener 127.0.0.7 8805
               if ss -H -ltn "sport = :9093" | grep -q .; then
                 echo "ERROR: TCP port 9093 is already in use before UPF start" >&2
                 exit 1
