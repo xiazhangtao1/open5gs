@@ -72,6 +72,7 @@ spec:
           volumeMounts:
             - name: data
               mountPath: /data/db
+{{- include "xcn.localtimeVolumeMount" . | nindent 12 }}
       volumes:
 {{- if not .Values.mongodb.persistence.enabled }}
         - name: data
@@ -80,6 +81,7 @@ spec:
         - name: mongo-init
           configMap:
             name: {{ include "xcn.componentName" (dict "root" . "component" "mongo-init") }}
+{{- include "xcn.localtimeVolume" . | nindent 8 }}
 {{- if .Values.mongodb.persistence.enabled }}
   volumeClaimTemplates:
     - metadata:

@@ -40,6 +40,8 @@ spec:
             - {{ printf "%s:27017" (include "xcn.componentName" (dict "root" . "component" "mongodb")) }}
           resources:
 {{ toYaml .Values.resources.webui.waitForMongodb | indent 12 }}
+          volumeMounts:
+{{- include "xcn.localtimeVolumeMount" . | nindent 12 }}
         - name: mongo-admin
           image: {{ printf "%s:%s" .Values.images.mongodb.repository .Values.images.mongodb.tag }}
           imagePullPolicy: {{ .Values.images.mongodb.pullPolicy }}
@@ -53,6 +55,7 @@ spec:
           volumeMounts:
             - name: mongo-init
               mountPath: /bootstrap
+{{- include "xcn.localtimeVolumeMount" . | nindent 12 }}
       containers:
         - name: webui
           image: {{ printf "%s:%s" .Values.images.webui.repository .Values.images.webui.tag }}
@@ -94,6 +97,7 @@ spec:
             - name: webui-env
               mountPath: /usr/src/open5gs/webui/.env
               subPath: .env
+{{- include "xcn.localtimeVolumeMount" . | nindent 12 }}
       volumes:
         - name: webui-env
           secret:
@@ -101,3 +105,4 @@ spec:
         - name: mongo-init
           configMap:
             name: {{ include "xcn.componentName" (dict "root" . "component" "mongo-init") }}
+{{- include "xcn.localtimeVolume" . | nindent 8 }}

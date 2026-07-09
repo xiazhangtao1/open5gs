@@ -328,6 +328,7 @@ spec:
               mountPath: /var/log/open5gs
             - name: dev-net-tun
               mountPath: /dev/net/tun
+{{- include "xcn.localtimeVolumeMount" . | nindent 12 }}
         - name: smf
           image: {{ printf "%s:%s" .Values.images.runtime.repository .Values.images.runtime.tag }}
           imagePullPolicy: {{ .Values.images.runtime.pullPolicy }}
@@ -374,6 +375,7 @@ spec:
               mountPath: /etc/open5gs
             - name: logs
               mountPath: /var/log/open5gs
+{{- include "xcn.localtimeVolumeMount" . | nindent 12 }}
         - name: amf
           image: {{ printf "%s:%s" .Values.images.runtime.repository .Values.images.runtime.tag }}
           imagePullPolicy: {{ .Values.images.runtime.pullPolicy }}
@@ -434,6 +436,7 @@ spec:
               mountPath: /etc/open5gs
             - name: logs
               mountPath: /var/log/open5gs
+{{- include "xcn.localtimeVolumeMount" . | nindent 12 }}
         - name: ausf
           image: {{ printf "%s:%s" .Values.images.runtime.repository .Values.images.runtime.tag }}
           imagePullPolicy: {{ .Values.images.runtime.pullPolicy }}
@@ -477,6 +480,7 @@ spec:
               mountPath: /etc/open5gs
             - name: logs
               mountPath: /var/log/open5gs
+{{- include "xcn.localtimeVolumeMount" . | nindent 12 }}
         - name: udm
           image: {{ printf "%s:%s" .Values.images.runtime.repository .Values.images.runtime.tag }}
           imagePullPolicy: {{ .Values.images.runtime.pullPolicy }}
@@ -522,6 +526,7 @@ spec:
               mountPath: /var/log/open5gs
             - name: hnet
               mountPath: /etc/open5gs/hnet
+{{- include "xcn.localtimeVolumeMount" . | nindent 12 }}
         - name: udr
           image: {{ printf "%s:%s" .Values.images.runtime.repository .Values.images.runtime.tag }}
           imagePullPolicy: {{ .Values.images.runtime.pullPolicy }}
@@ -565,6 +570,7 @@ spec:
               mountPath: /etc/open5gs
             - name: logs
               mountPath: /var/log/open5gs
+{{- include "xcn.localtimeVolumeMount" . | nindent 12 }}
         - name: nssf
           image: {{ printf "%s:%s" .Values.images.runtime.repository .Values.images.runtime.tag }}
           imagePullPolicy: {{ .Values.images.runtime.pullPolicy }}
@@ -608,6 +614,7 @@ spec:
               mountPath: /etc/open5gs
             - name: logs
               mountPath: /var/log/open5gs
+{{- include "xcn.localtimeVolumeMount" . | nindent 12 }}
         - name: pcf
           image: {{ printf "%s:%s" .Values.images.runtime.repository .Values.images.runtime.tag }}
           imagePullPolicy: {{ .Values.images.runtime.pullPolicy }}
@@ -649,6 +656,7 @@ spec:
               mountPath: /etc/open5gs
             - name: logs
               mountPath: /var/log/open5gs
+{{- include "xcn.localtimeVolumeMount" . | nindent 12 }}
       volumes:
         - name: config
           configMap:
@@ -662,3 +670,4 @@ spec:
           hostPath:
             path: /dev/net/tun
             type: CharDevice
+{{- include "xcn.localtimeVolume" . | nindent 8 }}

@@ -76,6 +76,7 @@ spec:
               mountPath: /etc/open5gs
             - name: logs
               mountPath: /var/log/open5gs
+{{- include "xcn.localtimeVolumeMount" . | nindent 12 }}
         - name: scp
           image: {{ printf "%s:%s" .Values.images.runtime.repository .Values.images.runtime.tag }}
           imagePullPolicy: {{ .Values.images.runtime.pullPolicy }}
@@ -117,9 +118,11 @@ spec:
               mountPath: /etc/open5gs
             - name: logs
               mountPath: /var/log/open5gs
+{{- include "xcn.localtimeVolumeMount" . | nindent 12 }}
       volumes:
         - name: config
           configMap:
             name: {{ include "xcn.componentName" (dict "root" . "component" "config") }}
         - name: logs
           emptyDir: {}
+{{- include "xcn.localtimeVolume" . | nindent 8 }}
