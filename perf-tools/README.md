@@ -36,7 +36,7 @@ kubectl -n xcn exec "$POD" -c upf -- ip route get "$GNB_IP"
 
 `ip route get` 输出里的 `dev <iface>` 就是 `VETH`。
 
-上行 TEID 需要从真实 UE 上行包里取：
+上行 TEID 需要从真实 UE 上行包里取。UDP N3 可直接在 UPF 抓包：
 
 ```bash
 kubectl -n xcn exec "$POD" -c upf -- \
@@ -46,6 +46,19 @@ kubectl exec <nrue-pod> -- ping -c 2 -W 1 10.45.0.1
 ```
 
 抓包里 gNB 到 UPF 的 GTP-U 头部 `TEID` 即 `UL_TEID`。
+
+N3 memif 模式下 VF 由 DPDK 接管，应使用 VPP pcap trace：
+
+```bash
+kubectl -n xcn exec "$POD" -c vpp -- \
+  vppctl -s /run/vpp/cli.sock pcap trace rx max 2000 intfc dpdk-n3 file gtpu.pcap
+kubectl exec <nrue-pod> -- ping -I oaitun_ue1 -c 3 -W 1 10.2.0.119
+kubectl -n xcn exec "$POD" -c vpp -- \
+  vppctl -s /run/vpp/cli.sock pcap trace off
+kubectl -n xcn cp "$POD":/tmp/gtpu.pcap /tmp/gtpu.pcap -c vpp
+tcpdump -nn -r /tmp/gtpu.pcap \
+  'udp dst port 2152 and dst host <N3-advertise-address>' -XX
+```
 
 ## 部署工具
 
@@ -93,33 +106,40 @@ env POD="$POD" GNB_POD="$GNB_POD" GNB_IP="$GNB_IP" VETH="$VETH" \
   perf-tools/scripts/run_ul_once.sh 1200 10
 ```
 
-### VPP memif N6 计数口径
+### VPP memif N3/N6 计数口径
 
-`networking.upf.n6.backend=memif` 时不再有 `ogstun` 计数。仍可复用
-`gtpu_gen` 绕过 OAI 空口，但应使用 VPP 计数：
+N3/N6 都为 memif 时不再使用 `ogstun` 或 Linux UDP socket 计数。仍可复用
+`gtpu_gen` 绕过 OAI 空口，但必须使用当前会话的 UL TEID，并对比 VPP 四段
+计数：
 
 ```bash
-# 测试前后各执行一次；两次 rx packets 的差值是 UPF 解封装后送入 N6 的包数。
+# 测试前清零，测试后读取四段计数和错误。
 kubectl -n xcn exec deploy/xcn-5gc -c vpp -- \
-  vppctl -s /run/vpp/cli.sock show interface memif1/0
-
-# 对比测试前后 UdpRcvbufErrors；增量是 UPF N3 UDP socket 未接收的包数。
-kubectl -n xcn exec deploy/xcn-5gc -c upf -- \
-  nstat -az UdpInErrors UdpRcvbufErrors
+  vppctl -s /run/vpp/cli.sock clear interfaces
+kubectl -n xcn exec deploy/xcn-5gc -c vpp -- \
+  vppctl -s /run/vpp/cli.sock clear errors
 
 kubectl exec "$GNB_POD" -- /tmp/gtpu_gen \
-  "$UPF_IP" "$UL_TEID" 10.45.0.2 10.2.0.222 10 1000 1400
+  "$UPF_IP" "$UL_TEID" 10.45.0.2 10.2.0.119 10 1000 1400
+
+kubectl -n xcn exec deploy/xcn-5gc -c vpp -- \
+  vppctl -s /run/vpp/cli.sock show interface
+kubectl -n xcn exec deploy/xcn-5gc -c vpp -- \
+  vppctl -s /run/vpp/cli.sock show errors
 ```
 
-计算时应满足：
+测试目标应运行静默 UDP sink（例如 `nc -u -l -p 9999 >/dev/null`），避免 ICMP
+或 UDP 回包污染单上行计数。正常情况下应满足：
 
 ```text
-gtpu_gen sent_pkts - UdpRcvbufErrors 增量 ≈ memif1/0 rx packets 增量
+gtpu_gen sent_pkts - dpdk-n3 rx-miss ≈ memif2/0 tx packets
+memif2/0 tx packets >= memif1/0 rx packets = dpdk-n6 tx packets
 ```
 
-`dpdk0 tx packets` 增量用于确认 memif 之后的 VPP/NAT/VF 转发。若目标地址
-首次使用，应先发少量包完成 ARP，避免把 `ip4-glean` 冷启动丢包算作 memif
-丢包。每次 UE/UPF 重建后都必须重新抓取 UL TEID。
+`memif2/0` 是 VPP 到 Open5GS 的 N3，`memif1/0` 是 Open5GS 到 VPP 的 N6。
+两者差值表示 Open5GS 处理或 memif ring 压力；`memif1/0` 与 `dpdk-n6` 的差值
+表示 VPP NAT/转发压力。检查 `show errors` 中的 `no free tx slots`、NAT handoff
+congestion 和 VF `rx-miss`。每次 UE/UPF 重建后都必须重新抓取 UL TEID。
 
 计数方式：
 

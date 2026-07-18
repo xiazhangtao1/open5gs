@@ -25,8 +25,23 @@ static struct {
     memif_socket_handle_t socket;
     memif_conn_handle_t connection;
     upf_memif_fd_t fds[UPF_MEMIF_MAX_CONTROL_FDS];
+    uint64_t tx_drops;
+    ogs_time_t last_tx_drop_log;
     bool connected;
 } self;
+
+static void log_tx_drop(const char *reason)
+{
+    ogs_time_t now = ogs_get_monotonic_time();
+
+    self.tx_drops++;
+    if (!self.last_tx_drop_log ||
+        now - self.last_tx_drop_log >= ogs_time_from_sec(1)) {
+        ogs_warn("[DROP] N6 memif TX failed [%s, total:%llu]",
+                reason, (unsigned long long)self.tx_drops);
+        self.last_tx_drop_log = now;
+    }
+}
 
 static upf_memif_fd_t *find_fd(int fd)
 {
@@ -267,11 +282,12 @@ int upf_n6_memif_send(const ogs_pkbuf_t *pkbuf)
 
     ogs_assert(pkbuf);
 
-    if (!self.connected)
+    if (!self.connected) {
+        log_tx_drop("disconnected");
         return OGS_ERROR;
+    }
     if (pkbuf->len > upf_self()->n6.buffer_size || pkbuf->len > UINT16_MAX) {
-        ogs_error("[DROP] N6 packet length %u exceeds memif buffer %u",
-                pkbuf->len, upf_self()->n6.buffer_size);
+        log_tx_drop("packet too large");
         return OGS_ERROR;
     }
 
@@ -280,6 +296,7 @@ int upf_n6_memif_send(const ogs_pkbuf_t *pkbuf)
     if (rv != MEMIF_ERR_SUCCESS || allocated != 1) {
         if (rv != MEMIF_ERR_NOBUF_RING && rv != MEMIF_ERR_NOBUF)
             ogs_error("memif_buffer_alloc() failed: %s", memif_strerror(rv));
+        log_tx_drop(memif_strerror(rv));
         return OGS_ERROR;
     }
 
@@ -289,6 +306,7 @@ int upf_n6_memif_send(const ogs_pkbuf_t *pkbuf)
     if (rv != MEMIF_ERR_SUCCESS || sent != 1) {
         if (rv != MEMIF_ERR_NOBUF_RING && rv != MEMIF_ERR_NOBUF)
             ogs_error("memif_tx_burst() failed: %s", memif_strerror(rv));
+        log_tx_drop(memif_strerror(rv));
         return OGS_ERROR;
     }
 

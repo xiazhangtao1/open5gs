@@ -57,14 +57,16 @@ helm install xcn helm/xcn -n xcn --create-namespace \
   --set networking.upf.gtpu.advertiseAddress=192.168.9.60
 ```
 
-## VPP memif N6 with an SR-IOV VF
+## VPP memif N3/N6 with two SR-IOV VFs
 
 The first-stage accelerated topology keeps Open5GS UPF responsible for PFCP,
-PDR/FAR/QER/URR and GTP-U. Only the N6 packet I/O is replaced by a raw-IP
-memif connected to a VPP 26.06 sidecar. VPP owns one
-`intel.com/external_network` VF through DPDK.
+PDR/FAR/QER/URR and GTP-U semantics. N3 and N6 packet I/O use separate raw-IP
+memif links to a VPP 26.06 sidecar. VPP owns two
+`intel.com/external_network` VFs through DPDK: one VF and FIB table for N3,
+and one VF for N6/NAT44. The original UDP N3 and TUN N6 backends remain
+available for fallback.
 
-Build the memif-enabled runtime image and install with a free N6 address:
+Build the memif-enabled runtime image and install with free N3/N6 addresses:
 
 ```bash
 docker build --network host -f docker/runtime/Dockerfile \
@@ -75,33 +77,54 @@ helm upgrade --install xcn helm/xcn -n xcn --create-namespace \
   --set fivegc.hostNetwork.enabled=true \
   --set networking.amf.ngap.serverAddress=10.2.0.119 \
   --set networking.upf.gtpu.serverAddress=10.2.0.119 \
-  --set networking.upf.gtpu.advertiseAddress=10.2.0.119 \
+  --set networking.upf.gtpu.advertiseAddress=10.2.0.226 \
+  --set networking.upf.n3.backend=memif \
+  --set networking.upf.n3.memif.localAddress=10.2.0.226 \
   --set networking.upf.n6.backend=memif \
   --set vpp.enabled=true \
+  --set vpp.n3.interfaceAddress=10.2.0.225/20 \
+  --set vpp.n3.defaultGateway=10.2.7.254 \
   --set vpp.n6.externalAddress=10.2.0.224/20 \
   --set vpp.n6.defaultGateway=10.2.7.254
 ```
+
+The chart requests two VFs, 8 exclusive CPUs for VPP, 8 CPUs for UPF, 8 GiB
+of hugepages and 16 GiB of regular memory for VPP. The VPP main heap is 8 GiB.
+Adjust these values to the NIC NUMA layout rather than reducing them for a
+performance run. Both VFs must be link-up and use different PCI functions.
 
 NAT44 is enabled by default so IPv4 UE traffic keeps the former
 TUN/iptables-MASQUERADE behavior. When the upstream router has a route for
 `10.45.0.0/16` via the VPP external address, disable NAT with
 `--set vpp.n6.nat44.enabled=false`.
 
-Verify the connection, PCI interface, counters, and errors:
+Verify the connections, PCI interfaces, counters, N3 FIB, and NAT worker:
 
 ```bash
 kubectl -n xcn exec deploy/xcn-5gc -c vpp -- \
   vppctl -s /run/vpp/cli.sock show memif
 kubectl -n xcn exec deploy/xcn-5gc -c vpp -- \
-  vppctl -s /run/vpp/cli.sock show interface
+  vppctl -s /run/vpp/cli.sock show hardware-interfaces
+kubectl -n xcn exec deploy/xcn-5gc -c vpp -- \
+  vppctl -s /run/vpp/cli.sock show ip fib table 10
+kubectl -n xcn exec deploy/xcn-5gc -c vpp -- \
+  vppctl -s /run/vpp/cli.sock show nat workers
 kubectl -n xcn exec deploy/xcn-5gc -c vpp -- \
   vppctl -s /run/vpp/cli.sock show errors
-kubectl -n xcn logs deploy/xcn-5gc -c upf | grep 'N6 memif'
+kubectl -n xcn logs deploy/xcn-5gc -c upf | grep -E 'N[36] memif'
 ```
 
+The expected uplink path is `dpdk-n3 -> memif2/0 -> Open5GS -> memif1/0 ->
+dpdk-n6`. The default pins NAT44 to worker 2 because `memif1/0` RX is assigned
+to that worker in this 8-worker layout. If interface placement changes, update
+`vpp.n6.nat44.workers` after checking `show hardware-interfaces`. Each current
+libmemif backend uses one ring, so extra VPP CPUs do not by themselves
+parallelize a single Open5GS UPF instance.
+
 The current implementation is IPv4-first. IPv6 UE routing/NAT is not enabled
-by this VPP template. The original TUN backend remains the default and can be
-restored by setting `networking.upf.n6.backend=tun` and `vpp.enabled=false`.
+by this VPP template. Restore the original path with
+`networking.upf.n3.backend=udp`, `networking.upf.n6.backend=tun`, and
+`vpp.enabled=false`.
 
 ## External PCF APIs
 

@@ -39,11 +39,11 @@ resources:
   fivegc:
     upf:
       requests:
-        cpu: 2
-        memory: 512Mi
+        cpu: 8
+        memory: 4Gi
       limits:
-        cpu: 2
-        memory: 2Gi
+        cpu: 8
+        memory: 4Gi
     smf:
       requests:
         cpu: 1
@@ -173,6 +173,17 @@ networking:
       # Do not use 0.0.0.0:2152; it would also capture SMF CP-function GTP-U.
       serverAddress: ""
       advertiseAddress: ""
+    n3:
+      backend: udp
+      memif:
+        socket: /run/vpp/memif-n3.sock
+        socketId: 2
+        id: 0
+        localAddress: ""
+        bufferSize: 2048
+        burstSize: 256
+        ringSize: 8192
+        log2RingSize: 13
     n6:
       backend: tun
       memif:
@@ -181,8 +192,8 @@ networking:
         id: 0
         bufferSize: 2048
         burstSize: 256
-        ringSize: 4096
-        log2RingSize: 12
+        ringSize: 8192
+        log2RingSize: 13
   webui:
     hostname: 0.0.0.0
     port: 9999
@@ -201,10 +212,16 @@ vpp:
     resourceName: intel.com/external_network
     deviceEnv: PCIDEVICE_INTEL_COM_EXTERNAL_NETWORK
   dpdk:
-    numRxQueues: 1
-    numTxQueues: 1
+    numRxQueues: 4
+    numTxQueues: 4
     numRxDesc: 4096
     numTxDesc: 4096
+  memory:
+    mainHeapSize: 8G
+  n3:
+    interfaceAddress: ""
+    defaultGateway: ""
+    fibTable: 10
   n6:
     interfaceAddress: 10.45.0.1/16
     externalAddress: ""
@@ -212,15 +229,17 @@ vpp:
     nat44:
       enabled: true
       maxSessions: "1048576"
+      frameQueueNelts: 8192
+      workers: "2"
   resources:
     requests:
-      cpu: "2"
-      memory: 4Gi
-      hugepages-1Gi: 4Gi
+      cpu: "8"
+      memory: 16Gi
+      hugepages-1Gi: 8Gi
     limits:
-      cpu: "2"
-      memory: 4Gi
-      hugepages-1Gi: 4Gi
+      cpu: "8"
+      memory: 16Gi
+      hugepages-1Gi: 8Gi
 
 udm:
   hnet:

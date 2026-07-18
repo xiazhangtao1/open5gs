@@ -50,6 +50,7 @@
 #include "arp-nd.h"
 #include "event.h"
 #include "gtp-path.h"
+#include "n3-memif.h"
 #include "n6-memif.h"
 #include "pfcp-path.h"
 #include "rule-match.h"
@@ -290,40 +291,22 @@ static void _gtpv1_tun_recv_eth_cb(short when, ogs_socket_t fd, void *data)
     _gtpv1_tun_recv_common_cb(when, fd, true, data);
 }
 
-static void _gtpv1_u_recv_cb(short when, ogs_socket_t fd, void *data)
+static void upf_gtp_handle_n3_packet(
+        ogs_pkbuf_t *pkbuf, ogs_sock_t *sock, ogs_sockaddr_t *from)
 {
     int len;
-    ssize_t size;
     char buf1[OGS_ADDRSTRLEN];
     char buf2[OGS_ADDRSTRLEN];
 
     upf_sess_t *sess = NULL;
 
-    ogs_pkbuf_t *pkbuf = NULL;
-    ogs_sock_t *sock = NULL;
-    ogs_sockaddr_t from;
-
     ogs_gtp2_header_t *gtp_h = NULL;
     ogs_gtp2_header_desc_t header_desc;
     ogs_pfcp_user_plane_report_t report;
 
-    ogs_assert(fd != INVALID_SOCKET);
-    sock = data;
-    ogs_assert(sock);
-
-    pkbuf = ogs_pkbuf_alloc(packet_pool, OGS_MAX_PKT_LEN);
     ogs_assert(pkbuf);
-    ogs_pkbuf_reserve(pkbuf, OGS_TUN_MAX_HEADROOM);
-    ogs_pkbuf_put(pkbuf, OGS_MAX_PKT_LEN-OGS_TUN_MAX_HEADROOM);
-
-    size = ogs_recvfrom(fd, pkbuf->data, pkbuf->len, 0, &from);
-    if (size <= 0) {
-        ogs_log_message(OGS_LOG_ERROR, ogs_socket_errno,
-                "ogs_recv() failed");
-        goto cleanup;
-    }
-
-    ogs_pkbuf_trim(pkbuf, size);
+    ogs_assert(sock);
+    ogs_assert(from);
 
     ogs_assert(pkbuf);
     ogs_assert(pkbuf->len);
@@ -344,20 +327,22 @@ static void _gtpv1_u_recv_cb(short when, ogs_socket_t fd, void *data)
     if (header_desc.type == OGS_GTPU_MSGTYPE_ECHO_REQ) {
         ogs_pkbuf_t *echo_rsp;
 
-        ogs_info("[RECV] Echo Request from [%s]", OGS_ADDR(&from, buf1));
+        ogs_info("[RECV] Echo Request from [%s]", OGS_ADDR(from, buf1));
         echo_rsp = ogs_gtp2_handle_echo_req(pkbuf);
         ogs_expect(echo_rsp);
         if (echo_rsp) {
             ssize_t sent;
 
             /* Echo reply */
-            ogs_info("[SEND] Echo Response to [%s]", OGS_ADDR(&from, buf1));
+            ogs_info("[SEND] Echo Response to [%s]", OGS_ADDR(from, buf1));
 
-            sent = ogs_sendto(fd, echo_rsp->data, echo_rsp->len, 0, &from);
-            if (sent < 0 || sent != echo_rsp->len) {
-                ogs_log_message(OGS_LOG_ERROR, ogs_socket_errno,
-                        "ogs_sendto() failed");
-            }
+            if (upf_self()->n3.memif)
+                sent = upf_n3_memif_send_gtpu(echo_rsp, from);
+            else
+                sent = ogs_sendto(
+                        sock->fd, echo_rsp->data, echo_rsp->len, 0, from);
+            if (sent < 0 || (!upf_self()->n3.memif && sent != echo_rsp->len))
+                ogs_error("Failed to send GTP-U Echo Response");
             ogs_pkbuf_free(echo_rsp);
         }
         goto cleanup;
@@ -371,7 +356,7 @@ static void _gtpv1_u_recv_cb(short when, ogs_socket_t fd, void *data)
     }
 
     ogs_trace("[RECV] GPU-U Type [%d] from [%s] : TEID[0x%x]",
-            header_desc.type, OGS_ADDR(&from, buf1), header_desc.teid);
+            header_desc.type, OGS_ADDR(from, buf1), header_desc.teid);
 
     /* Remove GTP header and send packets to TUN interface */
     ogs_assert(ogs_pkbuf_pull(pkbuf, len));
@@ -447,10 +432,10 @@ static void _gtpv1_u_recv_cb(short when, ogs_socket_t fd, void *data)
                 ogs_error("[%s] Send Error Indication [TEID:0x%x] to [%s]",
                         OGS_ADDR(&sock->local_addr, buf1),
                         header_desc.teid,
-                        OGS_ADDR(&from, buf2));
+                        OGS_ADDR(from, buf2));
                 ogs_gtp1_send_error_indication(
                         sock, header_desc.teid,
-                        header_desc.qos_flow_identifier, &from);
+                        header_desc.qos_flow_identifier, from);
             }
             goto cleanup;
         }
@@ -520,10 +505,10 @@ static void _gtpv1_u_recv_cb(short when, ogs_socket_t fd, void *data)
                             "[%s] Send Error Indication [TEID:0x%x] to [%s]",
                             OGS_ADDR(&sock->local_addr, buf1),
                             header_desc.teid,
-                            OGS_ADDR(&from, buf2));
+                            OGS_ADDR(from, buf2));
                     ogs_gtp1_send_error_indication(
                             sock, header_desc.teid,
-                            header_desc.qos_flow_identifier, &from);
+                            header_desc.qos_flow_identifier, from);
                 }
                 goto cleanup;
             }
@@ -862,8 +847,7 @@ static void _gtpv1_u_recv_cb(short when, ogs_socket_t fd, void *data)
             }
 
             if (upf_self()->n6.memif) {
-                if (upf_n6_memif_send(pkbuf) != OGS_OK)
-                    ogs_warn("upf_n6_memif_send() failed");
+                upf_n6_memif_send(pkbuf);
             } else {
                 if (ogs_tun_write(dev->fd, pkbuf) != OGS_OK)
                     ogs_warn("ogs_tun_write() failed");
@@ -924,6 +908,54 @@ static void _gtpv1_u_recv_cb(short when, ogs_socket_t fd, void *data)
 
 cleanup:
     ogs_pkbuf_free(pkbuf);
+}
+
+static void _gtpv1_u_recv_cb(short when, ogs_socket_t fd, void *data)
+{
+    ogs_pkbuf_t *pkbuf = NULL;
+    ogs_sock_t *sock = data;
+    ogs_sockaddr_t from;
+    ssize_t size;
+
+    ogs_assert(fd != INVALID_SOCKET);
+    ogs_assert(sock);
+
+    pkbuf = ogs_pkbuf_alloc(packet_pool, OGS_MAX_PKT_LEN);
+    ogs_assert(pkbuf);
+    ogs_pkbuf_reserve(pkbuf, OGS_TUN_MAX_HEADROOM);
+    ogs_pkbuf_put(pkbuf, OGS_MAX_PKT_LEN-OGS_TUN_MAX_HEADROOM);
+
+    size = ogs_recvfrom(fd, pkbuf->data, pkbuf->len, 0, &from);
+    if (size <= 0) {
+        ogs_log_message(OGS_LOG_ERROR, ogs_socket_errno,
+                "ogs_recv() failed");
+        ogs_pkbuf_free(pkbuf);
+        return;
+    }
+
+    ogs_pkbuf_trim(pkbuf, size);
+    upf_gtp_handle_n3_packet(pkbuf, sock, &from);
+}
+
+int upf_gtp_handle_n3_data(
+        const void *data, size_t len, const ogs_sockaddr_t *from)
+{
+    ogs_pkbuf_t *pkbuf = NULL;
+    ogs_sock_t *sock = ogs_gtp_self()->gtpu_sock;
+
+    if (!data || !from || !sock || len == 0 ||
+        len > OGS_MAX_PKT_LEN-OGS_TUN_MAX_HEADROOM)
+        return OGS_ERROR;
+
+    pkbuf = ogs_pkbuf_alloc(packet_pool, OGS_MAX_PKT_LEN);
+    if (!pkbuf)
+        return OGS_ERROR;
+    ogs_pkbuf_reserve(pkbuf, OGS_TUN_MAX_HEADROOM);
+    ogs_pkbuf_put(pkbuf, len);
+    memcpy(pkbuf->data, data, len);
+
+    upf_gtp_handle_n3_packet(pkbuf, sock, (ogs_sockaddr_t *)from);
+    return OGS_OK;
 }
 
 int upf_gtp_init(void)
@@ -993,9 +1025,11 @@ int upf_gtp_open(void)
         else if (sock->family == AF_INET6)
             ogs_gtp_self()->gtpu_sock6 = sock;
 
-        node->poll = ogs_pollset_add(ogs_app()->pollset,
-                OGS_POLLIN, sock->fd, _gtpv1_u_recv_cb, sock);
-        ogs_assert(node->poll);
+        if (!upf_self()->n3.memif) {
+            node->poll = ogs_pollset_add(ogs_app()->pollset,
+                    OGS_POLLIN, sock->fd, _gtpv1_u_recv_cb, sock);
+            ogs_assert(node->poll);
+        }
     }
 
     OGS_SETUP_GTPU_SERVER;
@@ -1011,8 +1045,21 @@ int upf_gtp_open(void)
      *
      */
 
-    if (upf_self()->n6.memif)
-        return upf_n6_memif_open();
+    if (upf_self()->n3.memif) {
+        rc = upf_n3_memif_open();
+        if (rc != OGS_OK)
+            return rc;
+    }
+
+    if (upf_self()->n6.memif) {
+        rc = upf_n6_memif_open();
+        if (rc != OGS_OK) {
+            if (upf_self()->n3.memif)
+                upf_n3_memif_close();
+            return rc;
+        }
+        return OGS_OK;
+    }
 
     /* Open Tun interface */
     ogs_list_for_each(&ogs_pfcp_self()->dev_list, dev) {
@@ -1066,10 +1113,13 @@ void upf_gtp_close(void)
 
     ogs_socknode_remove_all(&ogs_gtp_self()->gtpu_list);
 
-    if (upf_self()->n6.memif) {
+    if (upf_self()->n6.memif)
         upf_n6_memif_close();
+    if (upf_self()->n3.memif)
+        upf_n3_memif_close();
+
+    if (upf_self()->n6.memif)
         return;
-    }
 
     ogs_list_for_each(&ogs_pfcp_self()->dev_list, dev) {
         if (dev->poll)

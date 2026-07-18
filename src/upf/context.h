@@ -64,6 +64,16 @@ typedef struct upf_context_s {
     struct {
         bool memif;
         const char *socket_path;
+        const char *local_address;
+        uint32_t interface_id;
+        uint16_t buffer_size;
+        uint16_t burst_size;
+        uint8_t log2_ring_size;
+    } n3;
+
+    struct {
+        bool memif;
+        const char *socket_path;
         uint32_t interface_id;
         uint16_t buffer_size;
         uint16_t burst_size;

@@ -1,5 +1,39 @@
 # UPF performance results
 
+## VPP 26.06 + N3/N6 双 memif + 双 X710 VF（2026-07-18）
+
+本轮将 N3 和 N6 都改为独立 SR-IOV VF + VPP raw-IP memif。Open5GS UPF
+继续负责 PFCP、GTP-U 解封装和 PDR/FAR/QER/URR 语义；VPP 负责 N3/N6 高速
+收发、N3 独立 FIB 10、N6 NAT44。两个 iAVF 各配置 4 RX/4 TX queue、4096
+descriptor，两个 memif ring 均为 8192。VPP/UPF 各使用 8 个独占 CPU，VPP
+使用 8 GiB 大页、8 GiB main heap 和 16 GiB regular memory。
+
+需要注意：虽然物理环境预期为 X710 10G，本次 VPP 实际报告 N3/N6 两个 VF
+的 `Link speed` 都只有 **1.000 Gbps**。因此本轮可验证架构和当前 1G 链路下
+的峰值，不能据此声称已验证同机 10G。
+
+测试使用真实 UE 建立 `10.45.0.2` 会话，再由 gNB Pod 内的 `gtpu_gen` 直接
+向 N3 VIP `10.2.0.226:2152` 注入当前 UL TEID，内层目标为本机静默 UDP
+sink `10.2.0.119:9999`。包长为 outer 1444 bytes、inner IP 1428 bytes。
+
+| 生成 outer | 生成包 | N3 memif | N6 memif/N6 VF TX | N3 VF rx-miss | 实际 inner | 结论 |
+|---:|---:|---:|---:|---:|---:|---|
+| 10M/2s | 1,732 | 1,732 | 1,732 | 0 | 9.89M | 端到端逐包一致 |
+| 600M | 519,399 | 475,161 | 475,161 | 44,244 | 542.8M | VF 后无额外丢包 |
+| 800M | 692,519 | 545,415 | 545,415 | 147,121 | 623.1M | VF 后无额外丢包 |
+| 1,000M | 865,651 | 750,510 | 746,220 | 115,143 | 852.4M | 饱和峰值，开始出现 ring 压力 |
+
+1 Gbps 饱和测试中，VPP N3 memif 出现 432 次 `no free tx slots`，N3/N6
+memif 之间另有约 4,290 包差值；N6 memif 与 N6 VF TX 仍一致。N6 memif
+逐包失败日志已改为每秒最多一条汇总，10 秒压力测试只输出 2 条 warning，
+不会因逐包刷日志放大过载。VPP main heap 峰后使用 3.57 GiB/8 GiB。
+
+NAT44 固定到 `vpp_wk_2`，与 `memif1/0` RX queue 同 worker 后，先前的 NAT
+handoff congestion 已消失。当前首要限制是 N3 单 GTP-U 流落在单 VF RX
+queue 并产生 `rx-miss`；达到饱和后才出现单 ring/Open5GS 逐包处理压力。
+要验证 10G，需先修复 PF/VF 链路协商或资源配置，使 VF 实际报告 10 Gbps，
+然后再考虑多 memif queue、libmemif burst 和 Open5GS 多 worker/会话分片。
+
 ## VPP 26.06 + memif + X710 VF（2026-07-18）
 
 拓扑保留 Open5GS UPF 的 PFCP/PDR/FAR/QER/GTP-U 语义，仅将 N6 TUN 替换为

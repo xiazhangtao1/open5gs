@@ -65,6 +65,7 @@ libupf_sources = files('''
     pfcp-path.h
     n4-build.h
     n4-handler.h
+    n3-memif.h
     n6-memif.h
 
     rule-match.c
@@ -79,6 +80,7 @@ libupf_sources = files('''
     pfcp-path.c
     n4-build.c
     n4-handler.c
+    n3-memif.c
     n6-memif.c
 '''.split())
 

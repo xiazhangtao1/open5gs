@@ -21,7 +21,25 @@
 {{- if and (eq .Values.networking.upf.n6.backend "memif") (not .Values.vpp.enabled) }}
 {{- fail "vpp.enabled must be true when networking.upf.n6.backend=memif" }}
 {{- end }}
+{{- if and .Values.vpp.enabled (ne .Values.networking.upf.n3.backend "memif") }}
+{{- fail "networking.upf.n3.backend must be memif when vpp.enabled=true" }}
+{{- end }}
+{{- if and (eq .Values.networking.upf.n3.backend "memif") (not .Values.vpp.enabled) }}
+{{- fail "vpp.enabled must be true when networking.upf.n3.backend=memif" }}
+{{- end }}
 {{- if .Values.vpp.enabled }}
+{{- if eq (toString .Values.networking.upf.n3.memif.localAddress) "" }}
+{{- fail "networking.upf.n3.memif.localAddress is required when vpp.enabled=true" }}
+{{- end }}
+{{- if ne (toString .Values.networking.upf.n3.memif.localAddress) $upfGtpuAdvertiseAddress }}
+{{- fail "networking.upf.n3.memif.localAddress must equal networking.upf.gtpu.advertiseAddress" }}
+{{- end }}
+{{- if eq (toString .Values.vpp.n3.interfaceAddress) "" }}
+{{- fail "vpp.n3.interfaceAddress is required when vpp.enabled=true" }}
+{{- end }}
+{{- if eq (toString .Values.vpp.n3.defaultGateway) "" }}
+{{- fail "vpp.n3.defaultGateway is required when vpp.enabled=true" }}
+{{- end }}
 {{- if eq (toString .Values.vpp.n6.externalAddress) "" }}
 {{- fail "vpp.n6.externalAddress is required when vpp.enabled=true" }}
 {{- end }}
@@ -261,6 +279,8 @@ spec:
               value: {{ .Values.networking.upf.gtpu.advertiseAddress | quote }}
             - name: UPF_N6_BACKEND
               value: {{ .Values.networking.upf.n6.backend | quote }}
+            - name: UPF_N3_BACKEND
+              value: {{ .Values.networking.upf.n3.backend | quote }}
           command:
             - /bin/sh
             - -ec
@@ -307,7 +327,7 @@ spec:
             privileged: true
             capabilities:
               add: ["NET_ADMIN"]
-{{- if not .Values.fivegc.hostNetwork.enabled }}
+{{- if and (not .Values.fivegc.hostNetwork.enabled) (eq .Values.networking.upf.n3.backend "udp") }}
           ports:
             - name: upf-gtpu
               containerPort: 2152
@@ -356,6 +376,7 @@ spec:
           imagePullPolicy: {{ .Values.vpp.image.pullPolicy }}
           securityContext:
             privileged: true
+          command: ["/usr/local/bin/vpp-entrypoint-dual.py"]
           env:
             - name: VPP_CPU_LIMIT
               valueFrom:
@@ -363,9 +384,15 @@ spec:
                   containerName: vpp
                   resource: limits.cpu
                   divisor: "1"
-            - name: VPP_INTERFACE_ADDRESSES
+            - name: VPP_N3_INTERFACE_ADDRESS
+              value: {{ .Values.vpp.n3.interfaceAddress | quote }}
+            - name: VPP_N3_DEFAULT_GATEWAY
+              value: {{ .Values.vpp.n3.defaultGateway | quote }}
+            - name: VPP_N3_UPF_ADDRESS
+              value: {{ .Values.networking.upf.n3.memif.localAddress | quote }}
+            - name: VPP_N6_INTERFACE_ADDRESS
               value: {{ .Values.vpp.n6.externalAddress | quote }}
-            - name: VPP_DEFAULT_GATEWAY
+            - name: VPP_N6_DEFAULT_GATEWAY
               value: {{ .Values.vpp.n6.defaultGateway | quote }}
             - name: VPP_TEMPLATE_DIR
               value: /etc/vpp/templates
@@ -374,10 +401,10 @@ spec:
           resources:
             requests:
 {{ toYaml .Values.vpp.resources.requests | indent 14 }}
-              {{ .Values.vpp.sriov.resourceName }}: "1"
+              {{ .Values.vpp.sriov.resourceName }}: "2"
             limits:
 {{ toYaml .Values.vpp.resources.limits | indent 14 }}
-              {{ .Values.vpp.sriov.resourceName }}: "1"
+              {{ .Values.vpp.sriov.resourceName }}: "2"
           readinessProbe:
             exec:
               command: ["vppctl", "-s", "/run/vpp/cli.sock", "show", "interface"]
@@ -386,6 +413,10 @@ spec:
             timeoutSeconds: 3
             failureThreshold: 12
           volumeMounts:
+            - name: vpp-entrypoint
+              mountPath: /usr/local/bin/vpp-entrypoint-dual.py
+              subPath: vpp-entrypoint-dual.py
+              readOnly: true
             - name: vpp-templates
               mountPath: /etc/vpp/templates
               readOnly: true
@@ -747,6 +778,13 @@ spec:
                 path: vcl.conf.template
               - key: vpp-cli-commands.conf.template
                 path: cli-commands.conf.template
+        - name: vpp-entrypoint
+          configMap:
+            name: {{ include "xcn.componentName" (dict "root" . "component" "config") }}
+            defaultMode: 0555
+            items:
+              - key: vpp-entrypoint-dual.py
+                path: vpp-entrypoint-dual.py
         - name: vpp-run
           emptyDir: {}
         - name: vpp-hugepages
