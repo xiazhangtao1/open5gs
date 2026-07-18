@@ -39,10 +39,10 @@ resources:
   fivegc:
     upf:
       requests:
-        cpu: 1
+        cpu: 2
         memory: 512Mi
       limits:
-        cpu: 1
+        cpu: 2
         memory: 2Gi
     smf:
       requests:
@@ -173,6 +173,16 @@ networking:
       # Do not use 0.0.0.0:2152; it would also capture SMF CP-function GTP-U.
       serverAddress: ""
       advertiseAddress: ""
+    n6:
+      backend: tun
+      memif:
+        socket: /run/vpp/memif.sock
+        socketId: 1
+        id: 0
+        bufferSize: 2048
+        burstSize: 256
+        ringSize: 4096
+        log2RingSize: 12
   webui:
     hostname: 0.0.0.0
     port: 9999
@@ -180,6 +190,37 @@ networking:
 webui:
   secretKey: change-this-open5gs-webui-secret
   jwtSecretKey: change-this-open5gs-webui-jwt-secret
+
+vpp:
+  enabled: false
+  image:
+    repository: vpp
+    tag: "26.06"
+    pullPolicy: IfNotPresent
+  sriov:
+    resourceName: intel.com/external_network
+    deviceEnv: PCIDEVICE_INTEL_COM_EXTERNAL_NETWORK
+  dpdk:
+    numRxQueues: 1
+    numTxQueues: 1
+    numRxDesc: 4096
+    numTxDesc: 4096
+  n6:
+    interfaceAddress: 10.45.0.1/16
+    externalAddress: ""
+    defaultGateway: ""
+    nat44:
+      enabled: true
+      maxSessions: "1048576"
+  resources:
+    requests:
+      cpu: "2"
+      memory: 4Gi
+      hugepages-1Gi: 4Gi
+    limits:
+      cpu: "2"
+      memory: 4Gi
+      hugepages-1Gi: 4Gi
 
 udm:
   hnet:

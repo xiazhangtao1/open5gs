@@ -44,6 +44,11 @@ ensure_ip6tables_rule() {
 }
 
 
+if [ "${UPF_N6_BACKEND:-tun}" = "memif" ]; then
+    echo "N6 memif backend selected; skipping TUN and iptables setup"
+    exit 0
+fi
+
 if ! grep "ogstun" /proc/net/dev > /dev/null 2>&1; then
     ip tuntap add name ogstun mode tun
 fi

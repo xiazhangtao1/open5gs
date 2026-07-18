@@ -60,6 +60,15 @@ typedef struct upf_context_s {
     struct upf_route_trie_node *ipv6_framed_routes;
 
     ogs_list_t sess_list;
+
+    struct {
+        bool memif;
+        const char *socket_path;
+        uint32_t interface_id;
+        uint16_t buffer_size;
+        uint16_t burst_size;
+        uint8_t log2_ring_size;
+    } n6;
 } upf_context_t;
 
 /* trie mapping from IP framed routes to session. */

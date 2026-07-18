@@ -33,6 +33,8 @@ void upf_gtp_final(void);
 int upf_gtp_open(void);
 void upf_gtp_close(void);
 
+int upf_gtp_handle_n6_data(const void *data, size_t len);
+
 #ifdef __cplusplus
 }
 #endif

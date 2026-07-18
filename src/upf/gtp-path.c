@@ -50,6 +50,7 @@
 #include "arp-nd.h"
 #include "event.h"
 #include "gtp-path.h"
+#include "n6-memif.h"
 #include "pfcp-path.h"
 #include "rule-match.h"
 
@@ -60,6 +61,8 @@ const uint8_t proxy_mac_addr[] = { 0x0e, 0x00, 0x00, 0x00, 0x00, 0x01 };
 static ogs_pkbuf_pool_t *packet_pool = NULL;
 
 static void upf_gtp_handle_multicast(ogs_pkbuf_t *recvbuf);
+static void upf_gtp_handle_n6_packet(
+        ogs_pkbuf_t *recvbuf, bool has_eth, ogs_socket_t fd);
 
 static int check_framed_routes(upf_sess_t *sess, int family, uint32_t *addr)
 {
@@ -104,18 +107,25 @@ static void _gtpv1_tun_recv_common_cb(
 {
     ogs_pkbuf_t *recvbuf = NULL;
 
+    recvbuf = ogs_tun_read(fd, packet_pool);
+    if (!recvbuf) {
+        ogs_warn("ogs_tun_read() failed");
+        return;
+    }
+
+    upf_gtp_handle_n6_packet(recvbuf, has_eth, fd);
+}
+
+static void upf_gtp_handle_n6_packet(
+        ogs_pkbuf_t *recvbuf, bool has_eth, ogs_socket_t fd)
+{
+
     upf_sess_t *sess = NULL;
     ogs_pfcp_pdr_t *pdr = NULL;
     ogs_pfcp_pdr_t *fallback_pdr = NULL;
     ogs_pfcp_far_t *far = NULL;
     ogs_pfcp_user_plane_report_t report;
     int i;
-
-    recvbuf = ogs_tun_read(fd, packet_pool);
-    if (!recvbuf) {
-        ogs_warn("ogs_tun_read() failed");
-        return;
-    }
 
     if (has_eth) {
         ogs_pkbuf_t *replybuf = NULL;
@@ -250,6 +260,24 @@ static void _gtpv1_tun_recv_common_cb(
 
 cleanup:
     ogs_pkbuf_free(recvbuf);
+}
+
+int upf_gtp_handle_n6_data(const void *data, size_t len)
+{
+    ogs_pkbuf_t *recvbuf = NULL;
+
+    if (!data || len == 0 || len > OGS_MAX_PKT_LEN-OGS_TUN_MAX_HEADROOM)
+        return OGS_ERROR;
+
+    recvbuf = ogs_pkbuf_alloc(packet_pool, OGS_MAX_PKT_LEN);
+    if (!recvbuf)
+        return OGS_ERROR;
+    ogs_pkbuf_reserve(recvbuf, OGS_TUN_MAX_HEADROOM);
+    ogs_pkbuf_put(recvbuf, len);
+    memcpy(recvbuf->data, data, len);
+
+    upf_gtp_handle_n6_packet(recvbuf, false, INVALID_SOCKET);
+    return OGS_OK;
 }
 
 static void _gtpv1_tun_recv_cb(short when, ogs_socket_t fd, void *data)
@@ -833,8 +861,13 @@ static void _gtpv1_u_recv_cb(short when, ogs_socket_t fd, void *data)
                 memcpy(pkbuf->data, dev->mac_addr, ETHER_ADDR_LEN);
             }
 
-            if (ogs_tun_write(dev->fd, pkbuf) != OGS_OK)
-                ogs_warn("ogs_tun_write() failed");
+            if (upf_self()->n6.memif) {
+                if (upf_n6_memif_send(pkbuf) != OGS_OK)
+                    ogs_warn("upf_n6_memif_send() failed");
+            } else {
+                if (ogs_tun_write(dev->fd, pkbuf) != OGS_OK)
+                    ogs_warn("ogs_tun_write() failed");
+            }
 
         } else {
 
@@ -978,6 +1011,9 @@ int upf_gtp_open(void)
      *
      */
 
+    if (upf_self()->n6.memif)
+        return upf_n6_memif_open();
+
     /* Open Tun interface */
     ogs_list_for_each(&ogs_pfcp_self()->dev_list, dev) {
         dev->is_tap = strstr(dev->ifname, "tap");
@@ -1029,6 +1065,11 @@ void upf_gtp_close(void)
     ogs_pfcp_dev_t *dev = NULL;
 
     ogs_socknode_remove_all(&ogs_gtp_self()->gtpu_list);
+
+    if (upf_self()->n6.memif) {
+        upf_n6_memif_close();
+        return;
+    }
 
     ogs_list_for_each(&ogs_pfcp_self()->dev_list, dev) {
         if (dev->poll)

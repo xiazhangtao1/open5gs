@@ -42,6 +42,16 @@ if have_func_kqueue
     upf_conf.set('HAVE_KQUEUE', 1)
 endif
 
+libmemif_dep = cc.find_library('memif',
+    required : get_option('upf_memif'),
+    dirs : ['/usr/local/lib'])
+if libmemif_dep.found()
+    if not cc.has_header('libmemif.h', args : '-I/usr/local/include')
+        error('libmemif library found but libmemif.h is missing')
+    endif
+    upf_conf.set('HAVE_LIBMEMIF', 1)
+endif
+
 configure_file(output : 'upf-config.h', configuration : upf_conf)
 
 libupf_sources = files('''
@@ -55,6 +65,7 @@ libupf_sources = files('''
     pfcp-path.h
     n4-build.h
     n4-handler.h
+    n6-memif.h
 
     rule-match.c
     init.c
@@ -68,6 +79,7 @@ libupf_sources = files('''
     pfcp-path.c
     n4-build.c
     n4-handler.c
+    n6-memif.c
 '''.split())
 
 libtins_dep = dependency('libtins',
@@ -92,6 +104,7 @@ libupf = static_library('upf',
         libpfcp_dep,
         libtun_dep,
         libarp_nd_dep,
+        libmemif_dep,
     ],
     install : false)
 
@@ -102,6 +115,7 @@ libupf_dep = declare_dependency(
         libpfcp_dep,
         libtun_dep,
         libarp_nd_dep,
+        libmemif_dep,
     ])
 
 upf_sources = files('''

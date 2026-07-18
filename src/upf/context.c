@@ -109,6 +109,12 @@ upf_context_t *upf_self(void)
 
 static int upf_context_prepare(void)
 {
+    upf_self()->n6.socket_path = "/run/vpp/memif.sock";
+    upf_self()->n6.interface_id = 0;
+    upf_self()->n6.buffer_size = 2048;
+    upf_self()->n6.burst_size = 256;
+    upf_self()->n6.log2_ring_size = 12;
+
     return OGS_OK;
 }
 
@@ -121,6 +127,28 @@ static int upf_context_validation(void)
     if (ogs_list_first(&ogs_pfcp_self()->subnet_list) == NULL) {
         ogs_error("No upf.session.subnet: in '%s'", ogs_app()->file);
         return OGS_ERROR;
+    }
+    if (upf_self()->n6.memif) {
+        if (!upf_self()->n6.socket_path ||
+            upf_self()->n6.socket_path[0] != '/') {
+            ogs_error("upf.n6.memif.socket must be an absolute path");
+            return OGS_ERROR;
+        }
+        if (upf_self()->n6.buffer_size < OGS_MAX_PKT_LEN) {
+            ogs_error("upf.n6.memif.buffer_size must be at least %d",
+                    OGS_MAX_PKT_LEN);
+            return OGS_ERROR;
+        }
+        if (upf_self()->n6.burst_size == 0 ||
+            upf_self()->n6.burst_size > 256) {
+            ogs_error("upf.n6.memif.burst_size must be between 1 and 256");
+            return OGS_ERROR;
+        }
+        if (upf_self()->n6.log2_ring_size < 1 ||
+            upf_self()->n6.log2_ring_size > 14) {
+            ogs_error("upf.n6.memif.log2_ring_size must be between 1 and 14");
+            return OGS_ERROR;
+        }
     }
     return OGS_OK;
 }
@@ -159,6 +187,49 @@ int upf_context_parse_config(void)
                     /* handle config in pfcp library */
                 } else if (!strcmp(upf_key, "metrics")) {
                     /* handle config in metrics library */
+                } else if (!strcmp(upf_key, "n6")) {
+                    ogs_yaml_iter_t n6_iter;
+                    ogs_yaml_iter_recurse(&upf_iter, &n6_iter);
+                    while (ogs_yaml_iter_next(&n6_iter)) {
+                        const char *n6_key = ogs_yaml_iter_key(&n6_iter);
+                        ogs_assert(n6_key);
+
+                        if (!strcmp(n6_key, "backend")) {
+                            const char *v = ogs_yaml_iter_value(&n6_iter);
+                            if (!v || !strcmp(v, "tun"))
+                                upf_self()->n6.memif = false;
+                            else if (!strcmp(v, "memif"))
+                                upf_self()->n6.memif = true;
+                            else {
+                                ogs_error("Unknown upf.n6.backend [%s]", v);
+                                return OGS_ERROR;
+                            }
+                        } else if (!strcmp(n6_key, "memif")) {
+                            ogs_yaml_iter_t memif_iter;
+                            ogs_yaml_iter_recurse(&n6_iter, &memif_iter);
+                            while (ogs_yaml_iter_next(&memif_iter)) {
+                                const char *key =
+                                    ogs_yaml_iter_key(&memif_iter);
+                                const char *v =
+                                    ogs_yaml_iter_value(&memif_iter);
+                                ogs_assert(key);
+
+                                if (!strcmp(key, "socket"))
+                                    upf_self()->n6.socket_path = v;
+                                else if (!strcmp(key, "id"))
+                                    upf_self()->n6.interface_id = atoi(v);
+                                else if (!strcmp(key, "buffer_size"))
+                                    upf_self()->n6.buffer_size = atoi(v);
+                                else if (!strcmp(key, "burst_size"))
+                                    upf_self()->n6.burst_size = atoi(v);
+                                else if (!strcmp(key, "log2_ring_size"))
+                                    upf_self()->n6.log2_ring_size = atoi(v);
+                                else
+                                    ogs_warn("unknown key `%s`", key);
+                            }
+                        } else
+                            ogs_warn("unknown key `%s`", n6_key);
+                    }
                 } else
                     ogs_warn("unknown key `%s`", upf_key);
             }

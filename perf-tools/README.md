@@ -93,6 +93,34 @@ env POD="$POD" GNB_POD="$GNB_POD" GNB_IP="$GNB_IP" VETH="$VETH" \
   perf-tools/scripts/run_ul_once.sh 1200 10
 ```
 
+### VPP memif N6 计数口径
+
+`networking.upf.n6.backend=memif` 时不再有 `ogstun` 计数。仍可复用
+`gtpu_gen` 绕过 OAI 空口，但应使用 VPP 计数：
+
+```bash
+# 测试前后各执行一次；两次 rx packets 的差值是 UPF 解封装后送入 N6 的包数。
+kubectl -n xcn exec deploy/xcn-5gc -c vpp -- \
+  vppctl -s /run/vpp/cli.sock show interface memif1/0
+
+# 对比测试前后 UdpRcvbufErrors；增量是 UPF N3 UDP socket 未接收的包数。
+kubectl -n xcn exec deploy/xcn-5gc -c upf -- \
+  nstat -az UdpInErrors UdpRcvbufErrors
+
+kubectl exec "$GNB_POD" -- /tmp/gtpu_gen \
+  "$UPF_IP" "$UL_TEID" 10.45.0.2 10.2.0.222 10 1000 1400
+```
+
+计算时应满足：
+
+```text
+gtpu_gen sent_pkts - UdpRcvbufErrors 增量 ≈ memif1/0 rx packets 增量
+```
+
+`dpdk0 tx packets` 增量用于确认 memif 之后的 VPP/NAT/VF 转发。若目标地址
+首次使用，应先发少量包完成 ARP，避免把 `ip4-glean` 冷启动丢包算作 memif
+丢包。每次 UE/UPF 重建后都必须重新抓取 UL TEID。
+
 计数方式：
 
 - `gtpu_gen sent_pkts`: fake RAN 注入到 UPF 的 GTP-U 包数。
@@ -112,3 +140,4 @@ env POD="$POD" GNB_POD="$GNB_POD" GNB_IP="$GNB_IP" VETH="$VETH" \
 - 脚本会临时插入 `iptables` 计数规则，结束时删除同一规则。
 - 每次 gNB/UPF Pod 重建后，`GNB_IP`、`VETH` 和 `UL_TEID` 都可能变化，必须重新获取。
 - `AMBR` 当前会被 SMF 下发到 PFCP QER MBR，但 Open5GS UPF 数据面未实际基于 `qer->mbr` 做限速。
+- VPP memif 模式下，UE IPv4 数据面已验证；当前模板不提供 IPv6 N6 路由/NAT。

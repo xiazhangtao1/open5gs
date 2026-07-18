@@ -1,3 +1,5 @@
+FROM vpp:26.06 AS vpp-libs
+
 FROM ubuntu:22.04 AS build
 
 LABEL org.opencontainers.image.authors="Sukchan Lee <acetcom@gmail.com>"
@@ -38,8 +40,10 @@ RUN apt-get update && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /open5gs
+COPY --from=vpp-libs /usr/local/include/libmemif.h /usr/local/include/libmemif.h
+COPY --from=vpp-libs /usr/local/lib/libmemif.so /usr/local/lib/libmemif.so
 COPY ./ /open5gs
-RUN meson setup build --prefix=/usr && ninja -C build install
+RUN meson setup build --prefix=/usr -Dupf_memif=true && ninja -C build install
 
 FROM ubuntu:22.04
 
@@ -76,10 +80,12 @@ RUN apt-get update && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
 COPY --from=build /usr /usr
+COPY --from=vpp-libs /usr/local/lib/libmemif.so /usr/local/lib/libmemif.so
 COPY docker/runtime/setup.sh /usr/local/bin/open5gs-k8s-setup
 COPY docker/runtime/wait-for-tcp.sh /usr/local/bin/wait-for-tcp.sh
 
 RUN chmod +x /usr/local/bin/open5gs-k8s-setup /usr/local/bin/wait-for-tcp.sh && \
-    mkdir -p /etc/open5gs /var/log/open5gs
+    mkdir -p /etc/open5gs /var/log/open5gs && \
+    ldconfig
 
 WORKDIR /root

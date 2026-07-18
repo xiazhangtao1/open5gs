@@ -15,6 +15,20 @@
 {{- if or (eq $upfGtpuAddress "0.0.0.0") (eq $upfGtpuAddress "::") (eq $upfGtpuAddress "127.0.0.4") }}
 {{- fail "networking.upf.gtpu.serverAddress must be a dedicated non-wildcard address: the UPF and SMF share one pod network namespace and both use UDP/2152" }}
 {{- end }}
+{{- if and .Values.vpp.enabled (ne .Values.networking.upf.n6.backend "memif") }}
+{{- fail "networking.upf.n6.backend must be memif when vpp.enabled=true" }}
+{{- end }}
+{{- if and (eq .Values.networking.upf.n6.backend "memif") (not .Values.vpp.enabled) }}
+{{- fail "vpp.enabled must be true when networking.upf.n6.backend=memif" }}
+{{- end }}
+{{- if .Values.vpp.enabled }}
+{{- if eq (toString .Values.vpp.n6.externalAddress) "" }}
+{{- fail "vpp.n6.externalAddress is required when vpp.enabled=true" }}
+{{- end }}
+{{- if eq (toString .Values.vpp.n6.defaultGateway) "" }}
+{{- fail "vpp.n6.defaultGateway is required when vpp.enabled=true" }}
+{{- end }}
+{{- end }}
 apiVersion: v1
 kind: Service
 metadata:
@@ -245,6 +259,8 @@ spec:
               value: {{ .Values.networking.upf.gtpu.serverAddress | quote }}
             - name: UPF_GTPU_ADVERTISE_ADDRESS
               value: {{ .Values.networking.upf.gtpu.advertiseAddress | quote }}
+            - name: UPF_N6_BACKEND
+              value: {{ .Values.networking.upf.n6.backend | quote }}
           command:
             - /bin/sh
             - -ec
@@ -326,9 +342,58 @@ spec:
               mountPath: /etc/open5gs
             - name: logs
               mountPath: /var/log/open5gs
+{{- if eq .Values.networking.upf.n6.backend "tun" }}
             - name: dev-net-tun
               mountPath: /dev/net/tun
+{{- else }}
+            - name: vpp-run
+              mountPath: /run/vpp
+{{- end }}
 {{- include "xcn.localtimeVolumeMount" . | nindent 12 }}
+{{- if .Values.vpp.enabled }}
+        - name: vpp
+          image: {{ printf "%s:%s" .Values.vpp.image.repository .Values.vpp.image.tag }}
+          imagePullPolicy: {{ .Values.vpp.image.pullPolicy }}
+          securityContext:
+            privileged: true
+          env:
+            - name: VPP_CPU_LIMIT
+              valueFrom:
+                resourceFieldRef:
+                  containerName: vpp
+                  resource: limits.cpu
+                  divisor: "1"
+            - name: VPP_INTERFACE_ADDRESSES
+              value: {{ .Values.vpp.n6.externalAddress | quote }}
+            - name: VPP_DEFAULT_GATEWAY
+              value: {{ .Values.vpp.n6.defaultGateway | quote }}
+            - name: VPP_TEMPLATE_DIR
+              value: /etc/vpp/templates
+            - name: VPP_CONFIG_DIR
+              value: /run/vpp/config
+          resources:
+            requests:
+{{ toYaml .Values.vpp.resources.requests | indent 14 }}
+              {{ .Values.vpp.sriov.resourceName }}: "1"
+            limits:
+{{ toYaml .Values.vpp.resources.limits | indent 14 }}
+              {{ .Values.vpp.sriov.resourceName }}: "1"
+          readinessProbe:
+            exec:
+              command: ["vppctl", "-s", "/run/vpp/cli.sock", "show", "interface"]
+            initialDelaySeconds: 2
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 12
+          volumeMounts:
+            - name: vpp-templates
+              mountPath: /etc/vpp/templates
+              readOnly: true
+            - name: vpp-run
+              mountPath: /run/vpp
+            - name: vpp-hugepages
+              mountPath: /dev/hugepages
+{{- end }}
         - name: smf
           image: {{ printf "%s:%s" .Values.images.runtime.repository .Values.images.runtime.tag }}
           imagePullPolicy: {{ .Values.images.runtime.pullPolicy }}
@@ -666,8 +731,26 @@ spec:
         - name: hnet
           secret:
             secretName: {{ include "xcn.componentName" (dict "root" . "component" "udm-hnet") }}
+{{- if eq .Values.networking.upf.n6.backend "tun" }}
         - name: dev-net-tun
           hostPath:
             path: /dev/net/tun
             type: CharDevice
+{{- else }}
+        - name: vpp-templates
+          configMap:
+            name: {{ include "xcn.componentName" (dict "root" . "component" "config") }}
+            items:
+              - key: vpp-startup.conf.template
+                path: startup.conf.template
+              - key: vpp-vcl.conf.template
+                path: vcl.conf.template
+              - key: vpp-cli-commands.conf.template
+                path: cli-commands.conf.template
+        - name: vpp-run
+          emptyDir: {}
+        - name: vpp-hugepages
+          emptyDir:
+            medium: HugePages
+{{- end }}
 {{- include "xcn.localtimeVolume" . | nindent 8 }}

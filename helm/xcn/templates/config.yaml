@@ -156,6 +156,14 @@ data:
         server:
           - address: __UPF_GTPU_SERVER_ADDRESS__
             advertise: __UPF_GTPU_ADVERTISE_ADDRESS__
+      n6:
+        backend: {{ .Values.networking.upf.n6.backend | quote }}
+        memif:
+          socket: {{ .Values.networking.upf.n6.memif.socket | quote }}
+          id: {{ .Values.networking.upf.n6.memif.id }}
+          buffer_size: {{ .Values.networking.upf.n6.memif.bufferSize }}
+          burst_size: {{ .Values.networking.upf.n6.memif.burstSize }}
+          log2_ring_size: {{ .Values.networking.upf.n6.memif.log2RingSize }}
       session:
         - subnet: 10.45.0.0/16
           gateway: 10.45.0.1
@@ -165,6 +173,49 @@ data:
         server:
           - address: 0.0.0.0
             port: 9093
+  vpp-startup.conf.template: |
+    unix {
+      nodaemon
+      log /dev/stderr
+      cli-listen /run/vpp/cli.sock
+      startup-config /run/vpp/config/cli-commands.conf
+    }
+    socksvr { default }
+    cpu {
+    {{ "{{CPU_CONFIG}}" }}
+    }
+    buffers {
+      buffers-per-numa 262144
+      default data-size 2048
+      page-size default-hugepage
+    }
+    dpdk {
+      socket-mem 0,2048
+      dev {{ "{{PCI_ADDRESS}}" }} {
+        name dpdk0
+        num-rx-queues {{ .Values.vpp.dpdk.numRxQueues }}
+        num-tx-queues {{ .Values.vpp.dpdk.numTxQueues }}
+        num-rx-desc {{ .Values.vpp.dpdk.numRxDesc }}
+        num-tx-desc {{ .Values.vpp.dpdk.numTxDesc }}
+      }
+    }
+  vpp-vcl.conf.template: |
+    vcl {
+      app-socket-api /run/vpp/app_ns_sockets/default
+    }
+  vpp-cli-commands.conf.template: |
+    create memif socket id {{ .Values.networking.upf.n6.memif.socketId }} filename {{ .Values.networking.upf.n6.memif.socket }}
+    create interface memif id {{ .Values.networking.upf.n6.memif.id }} socket-id {{ .Values.networking.upf.n6.memif.socketId }} master mode ip ring-size {{ .Values.networking.upf.n6.memif.ringSize }} buffer-size {{ .Values.networking.upf.n6.memif.bufferSize }}
+    set interface state memif{{ .Values.networking.upf.n6.memif.socketId }}/{{ .Values.networking.upf.n6.memif.id }} up
+    set interface ip address memif{{ .Values.networking.upf.n6.memif.socketId }}/{{ .Values.networking.upf.n6.memif.id }} {{ .Values.vpp.n6.interfaceAddress }}
+    set interface state dpdk0 up
+    {{ "{{INTERFACE_ADDRESS_COMMANDS}}" }}
+    ip route add 0.0.0.0/0 via {{ "{{DEFAULT_GATEWAY}}" }} dpdk0
+{{- if .Values.vpp.n6.nat44.enabled }}
+    nat44 plugin enable sessions {{ .Values.vpp.n6.nat44.maxSessions }}
+    set interface nat44 in memif{{ .Values.networking.upf.n6.memif.socketId }}/{{ .Values.networking.upf.n6.memif.id }} out dpdk0
+    nat44 add interface address dpdk0
+{{- end }}
   ausf.yaml: |
     logger:
       file:

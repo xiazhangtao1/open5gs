@@ -1,5 +1,37 @@
 # UPF performance results
 
+## VPP 26.06 + memif + X710 VF（2026-07-18）
+
+拓扑保留 Open5GS UPF 的 PFCP/PDR/FAR/QER/GTP-U 语义，仅将 N6 TUN 替换为
+raw-IP libmemif；VPP 26.06 sidecar 使用 `intel.com/external_network` X710 VF、
+NAT44 和 1 RX/1 TX queue。测试仍用真实 UE 建立会话，再由 `gtpu_gen` 直接
+注入当前 UL TEID，绕过 OAI 空口。
+
+功能验证：
+
+- VPP 与 Open5GS 协商 4096-entry 双向 memif ring，断线后可自动重连。
+- UE `10.45.0.2` 到 `8.8.8.8` ping 5/5；NAT 映射为 `10.2.0.224`。
+- 端到端 OAI TCP 仅约 UL 125M / DL 209M，瓶颈在 OAI，不作为核心网能力。
+
+绕空口上行结果（1428-byte inner IP，10 秒）：
+
+| UPF CPU | 生成 inner | UDP socket drop | memif/VPP 额外 drop | 结论 |
+|---:|---:|---:|---:|---|
+| 1 | 790.60M | 95/692161，0.0137% | 0 | pass |
+| 1 | 988.92M | 376/865651，0.0434% | 0 | pass |
+| 1 | 1189.92M | 7058/1041594，0.678% | 0 | 接近拐点 |
+| 1 | 1371.53M | 70591/1200572，5.88% | 0 | overload |
+| 2 | 988.88M | 323/865613，0.0373% | 0 | pass |
+| 2 | 1149.60M | 4227/1006299，0.420% | 0 | 接近拐点 |
+| 2 | 1418.51M | 69931/1241717，5.63% | 0 | overload |
+
+2 CPU 实际 cpuset 为同一物理核的两个超线程。所有持续压测的丢包都对应
+Linux `UdpRcvbufErrors`；包进入 memif 后未观察到额外丢包。当前逐包
+`recvfrom -> PFCP rule -> memif_buffer_alloc/tx` 实现的低丢包边界约 1.0~1.15G，
+说明单纯替换 TUN 尚不足以达到同机 10G。下一步需要对 N3 使用
+`recvmmsg`/多队列，并对 memif TX/RX 做真正的 burst 批处理，再考虑多 UPF
+worker/会话分片。
+
 测试日期：2026-07-08
 
 环境：

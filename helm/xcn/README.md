@@ -57,6 +57,52 @@ helm install xcn helm/xcn -n xcn --create-namespace \
   --set networking.upf.gtpu.advertiseAddress=192.168.9.60
 ```
 
+## VPP memif N6 with an SR-IOV VF
+
+The first-stage accelerated topology keeps Open5GS UPF responsible for PFCP,
+PDR/FAR/QER/URR and GTP-U. Only the N6 packet I/O is replaced by a raw-IP
+memif connected to a VPP 26.06 sidecar. VPP owns one
+`intel.com/external_network` VF through DPDK.
+
+Build the memif-enabled runtime image and install with a free N6 address:
+
+```bash
+docker build --network host -f docker/runtime/Dockerfile \
+  -t xcn-runtime:memif-dev .
+
+helm upgrade --install xcn helm/xcn -n xcn --create-namespace \
+  --set images.runtime.tag=memif-dev \
+  --set fivegc.hostNetwork.enabled=true \
+  --set networking.amf.ngap.serverAddress=10.2.0.119 \
+  --set networking.upf.gtpu.serverAddress=10.2.0.119 \
+  --set networking.upf.gtpu.advertiseAddress=10.2.0.119 \
+  --set networking.upf.n6.backend=memif \
+  --set vpp.enabled=true \
+  --set vpp.n6.externalAddress=10.2.0.224/20 \
+  --set vpp.n6.defaultGateway=10.2.7.254
+```
+
+NAT44 is enabled by default so IPv4 UE traffic keeps the former
+TUN/iptables-MASQUERADE behavior. When the upstream router has a route for
+`10.45.0.0/16` via the VPP external address, disable NAT with
+`--set vpp.n6.nat44.enabled=false`.
+
+Verify the connection, PCI interface, counters, and errors:
+
+```bash
+kubectl -n xcn exec deploy/xcn-5gc -c vpp -- \
+  vppctl -s /run/vpp/cli.sock show memif
+kubectl -n xcn exec deploy/xcn-5gc -c vpp -- \
+  vppctl -s /run/vpp/cli.sock show interface
+kubectl -n xcn exec deploy/xcn-5gc -c vpp -- \
+  vppctl -s /run/vpp/cli.sock show errors
+kubectl -n xcn logs deploy/xcn-5gc -c upf | grep 'N6 memif'
+```
+
+The current implementation is IPv4-first. IPv6 UE routing/NAT is not enabled
+by this VPP template. The original TUN backend remains the default and can be
+restored by setting `networking.upf.n6.backend=tun` and `vpp.enabled=false`.
+
 ## External PCF APIs
 
 The chart exposes PCF SBI through `xcn-pcf` as `NodePort 30777` by default. External modules such as a computing center can call:
