@@ -125,7 +125,9 @@ def main():
         if not limit_text.isdigit() or int(limit_text) < 2:
             raise ConfigError("VPP_CPU_LIMIT must be an integer of at least 2")
         cpus = allocated_cpus(int(limit_text))
-        pci_n3, pci_n6 = parse_pcis(required("PCIDEVICE_INTEL_COM_EXTERNAL_NETWORK"))
+        pci_device_env = os.environ.get(
+            "VPP_PCI_DEVICE_ENV", "PCIDEVICE_INTEL_COM_EXTERNAL_NETWORK")
+        pci_n3, pci_n6 = parse_pcis(required(pci_device_env))
         cpu_config = f"    main-core {cpus[0]}\n    corelist-workers {','.join(map(str, cpus[1:]))}"
 
         replacements = {

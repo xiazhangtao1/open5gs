@@ -209,8 +209,8 @@ vpp:
     tag: "26.06"
     pullPolicy: IfNotPresent
   sriov:
-    resourceName: intel.com/external_network
-    deviceEnv: PCIDEVICE_INTEL_COM_EXTERNAL_NETWORK
+    resourceName: intel.com/fabric_network
+    deviceEnv: PCIDEVICE_INTEL_COM_FABRIC_NETWORK
   dpdk:
     numRxQueues: 4
     numTxQueues: 4

@@ -378,6 +378,8 @@ spec:
             privileged: true
           command: ["/usr/local/bin/vpp-entrypoint-dual.py"]
           env:
+            - name: VPP_PCI_DEVICE_ENV
+              value: {{ .Values.vpp.sriov.deviceEnv | quote }}
             - name: VPP_CPU_LIMIT
               valueFrom:
                 resourceFieldRef:

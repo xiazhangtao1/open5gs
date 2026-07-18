@@ -61,10 +61,10 @@ helm install xcn helm/xcn -n xcn --create-namespace \
 
 The first-stage accelerated topology keeps Open5GS UPF responsible for PFCP,
 PDR/FAR/QER/URR and GTP-U semantics. N3 and N6 packet I/O use separate raw-IP
-memif links to a VPP 26.06 sidecar. VPP owns two
-`intel.com/external_network` VFs through DPDK: one VF and FIB table for N3,
-and one VF for N6/NAT44. The original UDP N3 and TUN N6 backends remain
-available for fallback.
+memif links to a VPP 26.06 sidecar. VPP owns two SR-IOV VFs through DPDK: one
+VF and FIB table for N3, and one VF for N6/NAT44. The resource is configurable;
+the chart currently defaults to `intel.com/fabric_network`. The original UDP
+N3 and TUN N6 backends remain available for fallback.
 
 Build the memif-enabled runtime image and install with free N3/N6 addresses:
 
@@ -82,6 +82,8 @@ helm upgrade --install xcn helm/xcn -n xcn --create-namespace \
   --set networking.upf.n3.memif.localAddress=10.2.0.226 \
   --set networking.upf.n6.backend=memif \
   --set vpp.enabled=true \
+  --set vpp.sriov.resourceName=intel.com/fabric_network \
+  --set vpp.sriov.deviceEnv=PCIDEVICE_INTEL_COM_FABRIC_NETWORK \
   --set vpp.n3.interfaceAddress=10.2.0.225/20 \
   --set vpp.n3.defaultGateway=10.2.7.254 \
   --set vpp.n6.externalAddress=10.2.0.224/20 \
@@ -92,6 +94,10 @@ The chart requests two VFs, 8 exclusive CPUs for VPP, 8 CPUs for UPF, 8 GiB
 of hugepages and 16 GiB of regular memory for VPP. The VPP main heap is 8 GiB.
 Adjust these values to the NIC NUMA layout rather than reducing them for a
 performance run. Both VFs must be link-up and use different PCI functions.
+To use the cabled external PF instead, set the resource and device environment
+to `intel.com/external_network` and
+`PCIDEVICE_INTEL_COM_EXTERNAL_NETWORK`. The entrypoint reads the configured
+environment-variable name rather than assuming one device-plugin resource.
 
 NAT44 is enabled by default so IPv4 UE traffic keeps the former
 TUN/iptables-MASQUERADE behavior. When the upstream router has a route for

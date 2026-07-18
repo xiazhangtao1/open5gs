@@ -1,6 +1,36 @@
 # UPF performance results
 
-## VPP 26.06 + N3/N6 双 memif + 双 X710 VF（2026-07-18）
+## fabric_network 无网线 VF 内部交换（2026-07-18）
+
+将正式 xcn VPP 的两个 VF 从 `intel.com/external_network` 切换为
+`intel.com/fabric_network`。该资源对应 PF `ens5f1`，物理口未插网线且 PF
+administratively DOWN；VF 被设置为 `link-state enable`，VPP 显示
+`carrier up`、`Link speed: unknown`。测试额外创建一个临时 VPP/VCL Pod，
+使用同一 PF 的第三个 fabric VF 发送 GTP-U 并接收 N6 包，全程走 X710
+内部 VF-to-VF switching，不经过物理线缆。
+
+真实 UE 建立会话后，发生器使用当前 UL TEID。内层目的使用静态邻居加
+drop route，确保 N6 包确实发送到接收 VF，同时不产生 ICMP/UDP 回包。
+
+| 生成 outer | 生成包 | N3 VF/memif | N6 VF TX | N3 rx-miss | N3/N6 ring 差值 | 实际 inner |
+|---:|---:|---:|---:|---:|---:|---:|
+| 10M/2s | 1,732 | 1,732 | 1,732 | 0 | 0 | 9.89M |
+| 794.9M | 688,109 | 671,640 | 656,757 | 16,469 | 14,883 | 750.28M |
+| 1,000M | 865,648 | 805,820 | 763,182 | 59,828 | 42,638 | 871.86M |
+| 1,160M | 1,006,038 | 957,293 | 943,670 | 48,745 | 13,623 | 1,076.43M |
+| 2,085M/5s | 950,698 | 899,106 | 882,047 | 51,592 | 17,059 | 1,913.14M |
+
+无节流峰值测试总损失约 7.2%，但实际 inner 已达到约 1.91 Gbps，证明之前
+external 测试的约 0.85 Gbps 峰值确实受到外部 1 Gbps 链路条件影响，而不是
+fabric VF 或 memif 固定只能达到 1 Gbps。各档单次结果有明显波动，不应把
+1.91 Gbps 当作无损能力。
+
+当前剩余热点分为两段：N3 单 GTP-U flow 所在 VF RX queue 的 `rx-miss`，以及
+VPP N3 memif 到 Open5GS、Open5GS 到 N6 memif 的单 ring/逐包处理。下一阶段
+应优先实现多 memif queue 与 libmemif burst，再配合多会话/多流 RSS 验证，
+而不是继续增加空闲 VPP worker。
+
+## external_network + N3/N6 双 memif + 双 X710 VF（2026-07-18）
 
 本轮将 N3 和 N6 都改为独立 SR-IOV VF + VPP raw-IP memif。Open5GS UPF
 继续负责 PFCP、GTP-U 解封装和 PDR/FAR/QER/URR 语义；VPP 负责 N3/N6 高速
