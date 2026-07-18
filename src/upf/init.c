@@ -18,6 +18,7 @@
  */
 
 #include "context.h"
+#include "dataplane.h"
 #include "gtp-path.h"
 #include "pfcp-path.h"
 #include "metrics.h"
@@ -43,6 +44,7 @@ int upf_initialize(void)
     upf_context_init();
     upf_event_init();
     upf_gtp_init();
+    upf_dataplane_init();
 
     rv = ogs_pfcp_xact_init();
     if (rv != OGS_OK) return rv;
@@ -90,8 +92,8 @@ void upf_terminate(void)
 
     ogs_thread_destroy(thread);
 
-    upf_pfcp_close();
     upf_gtp_close();
+    upf_pfcp_close();
 
     ogs_metrics_context_close(ogs_metrics_self());
 
@@ -103,6 +105,7 @@ void upf_terminate(void)
     ogs_pfcp_xact_final();
 
     upf_gtp_final();
+    upf_dataplane_final();
     upf_event_final();
 
     upf_metrics_final();
@@ -130,7 +133,9 @@ static void upf_main(void *data)
          * because 'if rv == OGS_DONE' statement is exiting and
          * not calling ogs_timer_mgr_expire().
          */
+        upf_dataplane_lock();
         ogs_timer_mgr_expire(ogs_app()->timer_mgr);
+        upf_dataplane_unlock();
 
         for ( ;; ) {
             upf_event_t *e = NULL;
@@ -145,7 +150,9 @@ static void upf_main(void *data)
                 break;
 
             ogs_assert(e);
+            upf_dataplane_lock();
             ogs_fsm_dispatch(&upf_sm, e);
+            upf_dataplane_unlock();
             upf_event_free(e);
         }
     }

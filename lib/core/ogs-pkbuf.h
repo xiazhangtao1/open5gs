@@ -43,6 +43,8 @@ typedef struct ogs_pkbuf_pool_s ogs_pkbuf_pool_t;
 typedef struct ogs_pkbuf_s {
     ogs_lnode_t lnode;
 
+    unsigned int reference_count;
+
     /* Currently it is used in SCTP stream number and PPID. */
     uint64_t param[2];
 
@@ -88,6 +90,7 @@ void ogs_pkbuf_pool_destroy(ogs_pkbuf_pool_t *pool);
 ogs_pkbuf_t *ogs_pkbuf_alloc_debug(
         ogs_pkbuf_pool_t *pool, unsigned int size, const char *file_line);
 void ogs_pkbuf_free(ogs_pkbuf_t *pkbuf);
+void ogs_pkbuf_ref(ogs_pkbuf_t *pkbuf);
 
 void *ogs_pkbuf_put_data(
         ogs_pkbuf_t *pkbuf, const void *data, unsigned int len);

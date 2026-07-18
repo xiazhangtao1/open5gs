@@ -1,5 +1,58 @@
 # UPF performance results
 
+## Open5GS 专用 memif worker + burst（2026-07-18）
+
+本阶段保留 Open5GS UPF 的全部 PFCP/PDR/FAR/QER/URR/GTP-U 语义，仅优化
+Open5GS 与 VPP 26.06 之间的数据面：N3/N6 libmemif 事件从 Open5GS 主事件线程
+移到一个专用 worker；每次最多 256 包执行 `memif_rx_burst`、连续规则处理、
+一次 `memif_buffer_alloc` 和一次 `memif_tx_burst`。TX 队列保存 `ogs_pkbuf`
+引用而不是复制 `ogs_pkbuf`，因此没有为批量队列增加第三次 payload copy；当前
+memif RX 到 `ogs_pkbuf`、再到对端 memif region 仍各有一次 payload copy。
+
+PFCP 主线程修改规则和专用 worker 查询规则之间使用同一互斥锁，避免 session、
+PDR/FAR/QER/URR 生命周期竞争。`ogs_pkbuf_ref()` 使用原子引用计数，释放路径用
+CAS 处理并发递减。N3/N6 共用一个数据面 worker，当前没有并行修改 Open5GS
+session/rule 对象。
+
+测试继续使用无网线 `fabric_network` 第三个 VF 发生流量。所有数值均为单次
+测试；X710 VF 单队列 `rx-miss` 和临时 VCL sink FIFO 会先饱和，不能把发生器
+提交数直接视为 UPF 已收到数。
+
+### 上行 N3 → N6
+
+| 生成 outer | 生成包 | N3 VF/memif | N6 memif/VF | N3 rx-miss | Open5GS 段差值 | 实际 inner |
+|---:|---:|---:|---:|---:|---:|---:|
+| 10M/2s | 1,732 | 1,732 | 1,732 | 0 | 0 | 9.89M |
+| 1,000M/10s | 865,648 | 801,819 | 787,245 | 63,829 | 14,574 | 899.35M |
+| 1,200M/10s | 1,038,848 | 954,034 | 954,034 | 84,814 | 0 | 1,089.89M |
+| 1,500M/10s | 1,297,732 | 1,157,668 | 1,128,364 | 140,064 | 29,304 | 1,289.04M |
+| 2,000M/5s | 865,647 | 789,988 | 721,247 | 75,659 | 68,741 | 1,647.91M |
+| 无节流/5s | 4,373,476 | 3,901,276 | 1,749,543 | 472,200 | 严重 ring overload | 3,997.36M |
+
+同为 1 Gbps/10 秒时，旧逐包实现 N3 到 N6 丢 42,638 包，新实现丢 14,574
+包，Open5GS 段丢包减少约 66%，实际 inner 从 871.86M 提升到 899.35M。
+1.2 Gbps 档中，包一旦进入 N3 VF，Open5GS、N6 memif 和 N6 VF 的 954,034
+包完全一致，说明 burst 路径已经消除该档位的 Open5GS 段丢包。无节流约
+4.0 Gbps 只是高丢包峰值，不是稳定吞吐。
+
+### 下行 N6 → N3
+
+首次下行测试发现 N3 memif 只有 FIB 10、没有启用 IPv4，Open5GS 已送入 N3
+memif 的 1,751 包全部在 VPP `ip4-not-enabled` 丢弃。Helm 配置现已将 N3
+memif unnumbered 到 `dpdk-n3`。修复后 10M/2s 测试中，N6 VF、N6 memif、
+N3 memif、N3 VF 和接收 VF 均为 1,751 包，验证了反向 burst 及 GTP-U 封装。
+
+1 Gbps/10 秒单次下行中，发生器提交 875,348 包，N6 VF 收到 653,722 包
+（`rx-miss=221,626`），N3 memif/N3 VF 发出 653,463 包，VPP/Open5GS 段只
+再少 259 包，实际 inner 约 746.52M。该数据主要反映 N6 VF RX 和临时 VCL
+sink 已过载，不代表下行低丢包上限。
+
+当前结论：worker/burst 改造可行且已同时覆盖 N3/N6 上下行；1.2G 上行档
+消除了 Open5GS 段丢包，但单 memif ring、单数据面 worker、两次 payload copy
+以及 VF 单 flow/单 RX queue 仍限制同机 10G。下一阶段若继续冲击 10G，应先
+引入多 memif queue 和多会话分片，并让每个数据面 worker 独占 session/rule
+分片，避免用一个全局规则锁串行化。
+
 ## fabric_network 无网线 VF 内部交换（2026-07-18）
 
 将正式 xcn VPP 的两个 VF 从 `intel.com/external_network` 切换为

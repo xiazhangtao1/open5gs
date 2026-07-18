@@ -18,6 +18,7 @@
  */
 
 #include "context.h"
+#include "dataplane.h"
 
 #if HAVE_NETINET_IP_H
 #include <netinet/ip.h>
@@ -1058,6 +1059,13 @@ int upf_gtp_open(void)
                 upf_n3_memif_close();
             return rc;
         }
+        rc = upf_dataplane_start();
+        if (rc != OGS_OK) {
+            upf_n6_memif_close();
+            if (upf_self()->n3.memif)
+                upf_n3_memif_close();
+            return rc;
+        }
         return OGS_OK;
     }
 
@@ -1104,6 +1112,9 @@ int upf_gtp_open(void)
         }
     }
 
+    if (upf_self()->n3.memif)
+        return upf_dataplane_start();
+
     return OGS_OK;
 }
 
@@ -1111,6 +1122,7 @@ void upf_gtp_close(void)
 {
     ogs_pfcp_dev_t *dev = NULL;
 
+    upf_dataplane_stop();
     ogs_socknode_remove_all(&ogs_gtp_self()->gtpu_list);
 
     if (upf_self()->n6.memif)

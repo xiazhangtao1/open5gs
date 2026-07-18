@@ -239,6 +239,7 @@ data:
     set interface ip table dpdk-n3 {{ $n3FibTable }}
     set interface ip table memif{{ .Values.networking.upf.n3.memif.socketId }}/{{ .Values.networking.upf.n3.memif.id }} {{ $n3FibTable }}
     set interface ip address dpdk-n3 {{ "{{N3_INTERFACE_ADDRESS}}" }}
+    set interface unnumbered memif{{ .Values.networking.upf.n3.memif.socketId }}/{{ .Values.networking.upf.n3.memif.id }} use dpdk-n3
     ip route add table {{ $n3FibTable }} {{ "{{N3_UPF_ADDRESS}}" }}/32 via memif{{ .Values.networking.upf.n3.memif.socketId }}/{{ .Values.networking.upf.n3.memif.id }}
     ip route add table {{ $n3FibTable }} 0.0.0.0/0 via {{ "{{N3_DEFAULT_GATEWAY}}" }} dpdk-n3
     set arp proxy table-id {{ $n3FibTable }} start {{ "{{N3_UPF_ADDRESS}}" }} end {{ "{{N3_UPF_ADDRESS}}" }}

@@ -288,6 +288,18 @@ ogs_pkbuf_t *ogs_pkbuf_alloc_debug(
 
 void ogs_pkbuf_free(ogs_pkbuf_t *pkbuf)
 {
+    unsigned int references;
+
+    ogs_assert(pkbuf);
+    references = __atomic_load_n(
+            &pkbuf->reference_count, __ATOMIC_ACQUIRE);
+    while (references) {
+        if (__atomic_compare_exchange_n(&pkbuf->reference_count,
+                    &references, references - 1, false,
+                    __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE))
+            return;
+    }
+
 #if OGS_USE_TALLOC == 1
     ogs_talloc_free(pkbuf, OGS_FILE_LINE);
 #else
@@ -312,6 +324,12 @@ void ogs_pkbuf_free(ogs_pkbuf_t *pkbuf)
 
     ogs_thread_mutex_unlock(&pool->mutex);
 #endif
+}
+
+void ogs_pkbuf_ref(ogs_pkbuf_t *pkbuf)
+{
+    ogs_assert(pkbuf);
+    __atomic_fetch_add(&pkbuf->reference_count, 1, __ATOMIC_RELAXED);
 }
 
 ogs_pkbuf_t *ogs_pkbuf_copy_debug(ogs_pkbuf_t *pkbuf, const char *file_line)
@@ -363,6 +381,7 @@ ogs_pkbuf_t *ogs_pkbuf_copy_debug(ogs_pkbuf_t *pkbuf, const char *file_line)
     }
     ogs_assert(newbuf);
     memcpy(newbuf, pkbuf, sizeof *pkbuf);
+    newbuf->reference_count = 0;
 
     OGS_OBJECT_REF(newbuf->cluster);
 

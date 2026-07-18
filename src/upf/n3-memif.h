@@ -14,6 +14,10 @@ extern "C" {
 
 int upf_n3_memif_open(void);
 void upf_n3_memif_close(void);
+int upf_n3_memif_poll(void);
+void upf_n3_memif_cancel_poll(void);
+void upf_n3_memif_tx_batch_begin(void);
+void upf_n3_memif_tx_batch_flush(void);
 int upf_n3_memif_send_gtpu(
         ogs_pkbuf_t *gtpu, const ogs_sockaddr_t *to);
 

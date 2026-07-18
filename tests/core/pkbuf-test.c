@@ -70,12 +70,31 @@ static void test2_func(abts_case *tc, void *data)
     ogs_pkbuf_free(p3);
 }
 
+static void test3_func(abts_case *tc, void *data)
+{
+    ogs_pkbuf_t *pkbuf = NULL;
+
+    pkbuf = ogs_pkbuf_alloc(NULL, 100);
+    ABTS_PTR_NOTNULL(tc, pkbuf);
+
+    ogs_pkbuf_ref(pkbuf);
+    ogs_pkbuf_ref(pkbuf);
+    ABTS_INT_EQUAL(tc, 2, pkbuf->reference_count);
+
+    ogs_pkbuf_free(pkbuf);
+    ABTS_INT_EQUAL(tc, 1, pkbuf->reference_count);
+    ogs_pkbuf_free(pkbuf);
+    ABTS_INT_EQUAL(tc, 0, pkbuf->reference_count);
+    ogs_pkbuf_free(pkbuf);
+}
+
 abts_suite *test_pkbuf(abts_suite *suite)
 {
     suite = ADD_SUITE(suite)
 
     abts_run_test(suite, test1_func, NULL);
     abts_run_test(suite, test2_func, NULL);
+    abts_run_test(suite, test3_func, NULL);
 
     return suite;
 }

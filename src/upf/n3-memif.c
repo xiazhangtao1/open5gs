@@ -4,8 +4,10 @@
  */
 
 #include "context.h"
+#include "dataplane.h"
 #include "gtp-path.h"
 #include "n3-memif.h"
+#include "n6-memif.h"
 
 #include <netinet/ip.h>
 #include <netinet/udp.h>
@@ -13,23 +15,22 @@
 #if HAVE_LIBMEMIF
 #include <libmemif.h>
 
-#define UPF_MEMIF_MAX_CONTROL_FDS 64
 #define UPF_MEMIF_MAX_BURST 256
 #define UPF_GTPU_PORT 2152
 
-typedef struct upf_n3_memif_fd_s {
-    int fd;
-    void *private_ctx;
-    ogs_poll_t *read_poll;
-    ogs_poll_t *write_poll;
-} upf_n3_memif_fd_t;
+typedef struct upf_n3_tx_packet_s {
+    ogs_pkbuf_t *pkbuf;
+    ogs_sockaddr_t to;
+} upf_n3_tx_packet_t;
 
 static struct {
     memif_socket_handle_t socket;
     memif_conn_handle_t connection;
-    upf_n3_memif_fd_t fds[UPF_MEMIF_MAX_CONTROL_FDS];
     struct in_addr local_addr;
+    upf_n3_tx_packet_t tx_packets[UPF_MEMIF_MAX_BURST];
+    uint16_t tx_count;
     uint16_t ip_id;
+    bool tx_batch;
     bool connected;
 } self;
 
@@ -71,101 +72,6 @@ static uint16_t udp_checksum(const struct ip *ip_h,
     sum = checksum_add(sum, pseudo, sizeof(pseudo));
     sum = checksum_add(sum, udp_h, udp_len);
     return checksum_finish(sum);
-}
-
-static upf_n3_memif_fd_t *find_fd(int fd)
-{
-    int i;
-
-    for (i = 0; i < UPF_MEMIF_MAX_CONTROL_FDS; i++) {
-        if (self.fds[i].fd == fd)
-            return &self.fds[i];
-    }
-    return NULL;
-}
-
-static upf_n3_memif_fd_t *alloc_fd(int fd)
-{
-    int i;
-
-    for (i = 0; i < UPF_MEMIF_MAX_CONTROL_FDS; i++) {
-        if (self.fds[i].fd == -1) {
-            self.fds[i].fd = fd;
-            return &self.fds[i];
-        }
-    }
-    return NULL;
-}
-
-static void remove_polls(upf_n3_memif_fd_t *entry)
-{
-    if (entry->read_poll) {
-        ogs_pollset_remove(entry->read_poll);
-        entry->read_poll = NULL;
-    }
-    if (entry->write_poll) {
-        ogs_pollset_remove(entry->write_poll);
-        entry->write_poll = NULL;
-    }
-}
-
-static void control_fd_cb(short when, ogs_socket_t fd, void *data)
-{
-    upf_n3_memif_fd_t *entry = data;
-    memif_fd_event_type_t events = 0;
-    int rv;
-
-    ogs_assert(entry);
-    ogs_assert(fd == entry->fd);
-
-    if (when & OGS_POLLIN)
-        events |= MEMIF_FD_EVENT_READ;
-    if (when & OGS_POLLOUT)
-        events |= MEMIF_FD_EVENT_WRITE;
-
-    rv = memif_control_fd_handler(entry->private_ctx, events);
-    if (rv != MEMIF_ERR_SUCCESS && rv != MEMIF_ERR_AGAIN)
-        ogs_error("N3 memif_control_fd_handler(%d) failed: %s",
-                fd, memif_strerror(rv));
-}
-
-static int control_fd_update(memif_fd_event_t event, void *private_ctx)
-{
-    upf_n3_memif_fd_t *entry = find_fd(event.fd);
-
-    if (event.type & MEMIF_FD_EVENT_DEL) {
-        if (entry) {
-            remove_polls(entry);
-            entry->fd = -1;
-            entry->private_ctx = NULL;
-        }
-        return MEMIF_ERR_SUCCESS;
-    }
-
-    if (!entry)
-        entry = alloc_fd(event.fd);
-    if (!entry) {
-        ogs_error("Too many N3 memif control file descriptors");
-        return MEMIF_ERR_NOMEM;
-    }
-
-    entry->private_ctx = event.private_ctx;
-    if (event.type & MEMIF_FD_EVENT_MOD)
-        remove_polls(entry);
-
-    if ((event.type & MEMIF_FD_EVENT_READ) && !entry->read_poll) {
-        entry->read_poll = ogs_pollset_add(ogs_app()->pollset,
-                OGS_POLLIN, event.fd, control_fd_cb, entry);
-        if (!entry->read_poll)
-            return MEMIF_ERR_CB_FDUPDATE;
-    }
-    if ((event.type & MEMIF_FD_EVENT_WRITE) && !entry->write_poll) {
-        entry->write_poll = ogs_pollset_add(ogs_app()->pollset,
-                OGS_POLLOUT, event.fd, control_fd_cb, entry);
-        if (!entry->write_poll)
-            return MEMIF_ERR_CB_FDUPDATE;
-    }
-    return MEMIF_ERR_SUCCESS;
 }
 
 static int handle_raw_ipv4(const void *data, uint16_t len)
@@ -259,6 +165,7 @@ static int on_interrupt(
             return rv;
         }
 
+        upf_n6_memif_tx_batch_begin();
         for (i = 0; i < count; i++) {
             if (buffers[i].flags & MEMIF_BUFFER_FLAG_NEXT) {
                 ogs_error("[DROP] Chained N3 memif buffers are unsupported");
@@ -267,6 +174,7 @@ static int on_interrupt(
             if (handle_raw_ipv4(buffers[i].data, buffers[i].len) != OGS_OK)
                 ogs_debug("[DROP] Invalid packet received from N3 memif");
         }
+        upf_n6_memif_tx_batch_flush();
 
         rv = memif_refill_queue(connection, qid, count, 0);
         if (rv != MEMIF_ERR_SUCCESS) {
@@ -285,11 +193,8 @@ int upf_n3_memif_open(void)
     memif_conn_args_t connection_args;
     ogs_sockaddr_t local;
     int rv;
-    int i;
 
     memset(&self, 0, sizeof(self));
-    for (i = 0; i < UPF_MEMIF_MAX_CONTROL_FDS; i++)
-        self.fds[i].fd = -1;
 
     memset(&local, 0, sizeof(local));
     if (ogs_inet_pton(AF_INET, upf_self()->n3.local_address, &local) != OGS_OK)
@@ -303,7 +208,6 @@ int upf_n3_memif_open(void)
             sizeof(socket_args.app_name));
     socket_args.connection_request_timer.it_value.tv_sec = 1;
     socket_args.connection_request_timer.it_interval.tv_sec = 1;
-    socket_args.on_control_fd_update = control_fd_update;
 
     rv = memif_create_socket(&self.socket, &socket_args, NULL);
     if (rv != MEMIF_ERR_SUCCESS) {
@@ -343,8 +247,7 @@ int upf_n3_memif_open(void)
 
 void upf_n3_memif_close(void)
 {
-    int i;
-
+    upf_n3_memif_tx_batch_flush();
     ogs_gtp_set_user_plane_send_cb(NULL);
     self.connected = false;
     if (self.connection)
@@ -352,75 +255,147 @@ void upf_n3_memif_close(void)
     if (self.socket)
         memif_delete_socket(&self.socket);
 
-    for (i = 0; i < UPF_MEMIF_MAX_CONTROL_FDS; i++) {
-        remove_polls(&self.fds[i]);
-        self.fds[i].fd = -1;
-        self.fds[i].private_ctx = NULL;
-    }
 }
 
-int upf_n3_memif_send_gtpu(
-        ogs_pkbuf_t *gtpu, const ogs_sockaddr_t *to)
+int upf_n3_memif_poll(void)
 {
-    memif_buffer_t buffer;
+    int rv;
+
+    if (!self.socket)
+        return OGS_DONE;
+
+    rv = memif_poll_event(self.socket, 0);
+    if (rv == MEMIF_ERR_SUCCESS || rv == MEMIF_ERR_AGAIN)
+        return OGS_OK;
+    if (rv == MEMIF_ERR_POLL_CANCEL)
+        return OGS_DONE;
+
+    ogs_error("N3 memif_poll_event() failed: %s", memif_strerror(rv));
+    return OGS_ERROR;
+}
+
+void upf_n3_memif_cancel_poll(void)
+{
+    if (self.socket)
+        memif_cancel_poll_event(self.socket);
+}
+
+void upf_n3_memif_tx_batch_begin(void)
+{
+    ogs_assert(self.tx_count == 0);
+    self.tx_batch = true;
+}
+
+void upf_n3_memif_tx_batch_flush(void)
+{
+    memif_buffer_t buffers[UPF_MEMIF_MAX_BURST];
     struct ip *ip_h;
     struct udphdr *udp_h;
     uint16_t allocated = 0;
     uint16_t sent = 0;
     uint16_t udp_len;
     uint16_t total_len;
+    uint16_t max_len = 0;
     uint16_t checksum;
+    uint16_t i;
     int rv;
+
+    self.tx_batch = false;
+    if (!self.tx_count)
+        return;
+
+    if (!self.connected)
+        goto cleanup;
+
+    for (i = 0; i < self.tx_count; i++) {
+        total_len = sizeof(*ip_h) + sizeof(*udp_h) +
+            self.tx_packets[i].pkbuf->len;
+        if (total_len > max_len)
+            max_len = total_len;
+    }
+
+    rv = memif_buffer_alloc(self.connection, 0, buffers, self.tx_count,
+            &allocated, max_len);
+    if ((rv != MEMIF_ERR_SUCCESS && rv != MEMIF_ERR_NOBUF_RING &&
+            rv != MEMIF_ERR_NOBUF) || !allocated)
+        goto cleanup;
+
+    for (i = 0; i < allocated; i++) {
+        ogs_pkbuf_t *gtpu = self.tx_packets[i].pkbuf;
+        ogs_sockaddr_t *to = &self.tx_packets[i].to;
+
+        udp_len = sizeof(*udp_h) + gtpu->len;
+        total_len = sizeof(*ip_h) + udp_len;
+        memset(buffers[i].data, 0, sizeof(*ip_h) + sizeof(*udp_h));
+        ip_h = buffers[i].data;
+        udp_h = (struct udphdr *)((uint8_t *)buffers[i].data + sizeof(*ip_h));
+        memcpy((uint8_t *)udp_h + sizeof(*udp_h), gtpu->data, gtpu->len);
+
+        ip_h->ip_v = 4;
+        ip_h->ip_hl = sizeof(*ip_h) >> 2;
+        ip_h->ip_len = htobe16(total_len);
+        ip_h->ip_id = htobe16(++self.ip_id);
+        ip_h->ip_off = htobe16(IP_DF);
+        ip_h->ip_ttl = 64;
+        ip_h->ip_p = IPPROTO_UDP;
+        ip_h->ip_src = self.local_addr;
+        ip_h->ip_dst = to->sin.sin_addr;
+        ip_h->ip_sum = htobe16(ipv4_checksum(ip_h, sizeof(*ip_h)));
+
+        udp_h->uh_sport = htobe16(UPF_GTPU_PORT);
+        udp_h->uh_dport = to->ogs_sin_port ?
+            to->ogs_sin_port : htobe16(UPF_GTPU_PORT);
+        udp_h->uh_ulen = htobe16(udp_len);
+        udp_h->uh_sum = 0;
+        checksum = udp_checksum(ip_h, udp_h, udp_len);
+        udp_h->uh_sum = htobe16(checksum ? checksum : 0xffffU);
+        buffers[i].len = total_len;
+    }
+
+    rv = memif_tx_burst(self.connection, 0, buffers, allocated, &sent);
+    if (rv != MEMIF_ERR_SUCCESS || sent != allocated)
+        ogs_warn("[DROP] N3 memif batch TX failed [%s sent:%u/%u]",
+                memif_strerror(rv), sent, allocated);
+
+cleanup:
+    for (i = 0; i < self.tx_count; i++)
+        ogs_pkbuf_free(self.tx_packets[i].pkbuf);
+    self.tx_count = 0;
+}
+
+int upf_n3_memif_send_gtpu(
+        ogs_pkbuf_t *gtpu, const ogs_sockaddr_t *to)
+{
+    bool standalone = !self.tx_batch;
+    uint16_t total_len;
 
     ogs_assert(gtpu);
     ogs_assert(to);
 
     if (!self.connected || to->ogs_sa_family != AF_INET)
         return OGS_ERROR;
-    if (gtpu->len > UINT16_MAX - sizeof(*ip_h) - sizeof(*udp_h))
+    if (gtpu->len > UINT16_MAX - sizeof(struct ip) - sizeof(struct udphdr))
         return OGS_ERROR;
 
-    udp_len = sizeof(*udp_h) + gtpu->len;
-    total_len = sizeof(*ip_h) + udp_len;
+    total_len = sizeof(struct ip) + sizeof(struct udphdr) + gtpu->len;
     if (total_len > upf_self()->n3.buffer_size) {
         ogs_warn("[DROP] N3 packet length %u exceeds memif buffer %u",
                 total_len, upf_self()->n3.buffer_size);
         return OGS_ERROR;
     }
 
-    rv = memif_buffer_alloc(self.connection, 0, &buffer, 1,
-            &allocated, total_len);
-    if (rv != MEMIF_ERR_SUCCESS || allocated != 1)
-        return OGS_ERROR;
+    if (self.tx_count == UPF_MEMIF_MAX_BURST) {
+        upf_n3_memif_tx_batch_flush();
+        self.tx_batch = true;
+    }
 
-    memset(buffer.data, 0, sizeof(*ip_h) + sizeof(*udp_h));
-    ip_h = buffer.data;
-    udp_h = (struct udphdr *)((uint8_t *)buffer.data + sizeof(*ip_h));
-    memcpy((uint8_t *)udp_h + sizeof(*udp_h), gtpu->data, gtpu->len);
+    ogs_pkbuf_ref(gtpu);
+    self.tx_packets[self.tx_count].pkbuf = gtpu;
+    memcpy(&self.tx_packets[self.tx_count].to, to, sizeof(*to));
+    self.tx_count++;
 
-    ip_h->ip_v = 4;
-    ip_h->ip_hl = sizeof(*ip_h) >> 2;
-    ip_h->ip_len = htobe16(total_len);
-    ip_h->ip_id = htobe16(++self.ip_id);
-    ip_h->ip_off = htobe16(IP_DF);
-    ip_h->ip_ttl = 64;
-    ip_h->ip_p = IPPROTO_UDP;
-    ip_h->ip_src = self.local_addr;
-    ip_h->ip_dst = to->sin.sin_addr;
-    ip_h->ip_sum = htobe16(ipv4_checksum(ip_h, sizeof(*ip_h)));
-
-    udp_h->uh_sport = htobe16(UPF_GTPU_PORT);
-    udp_h->uh_dport = to->ogs_sin_port ?
-        to->ogs_sin_port : htobe16(UPF_GTPU_PORT);
-    udp_h->uh_ulen = htobe16(udp_len);
-    udp_h->uh_sum = 0;
-    checksum = udp_checksum(ip_h, udp_h, udp_len);
-    udp_h->uh_sum = htobe16(checksum ? checksum : 0xffffU);
-    buffer.len = total_len;
-
-    rv = memif_tx_burst(self.connection, 0, &buffer, 1, &sent);
-    if (rv != MEMIF_ERR_SUCCESS || sent != 1)
-        return OGS_ERROR;
+    if (standalone)
+        upf_n3_memif_tx_batch_flush();
     return OGS_OK;
 }
 
@@ -433,6 +408,23 @@ int upf_n3_memif_open(void)
 }
 
 void upf_n3_memif_close(void)
+{
+}
+
+int upf_n3_memif_poll(void)
+{
+    return OGS_DONE;
+}
+
+void upf_n3_memif_cancel_poll(void)
+{
+}
+
+void upf_n3_memif_tx_batch_begin(void)
+{
+}
+
+void upf_n3_memif_tx_batch_flush(void)
 {
 }
 

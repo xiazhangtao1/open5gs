@@ -67,6 +67,7 @@ libupf_sources = files('''
     n4-handler.h
     n3-memif.h
     n6-memif.h
+    dataplane.h
 
     rule-match.c
     init.c
@@ -82,6 +83,7 @@ libupf_sources = files('''
     n4-handler.c
     n3-memif.c
     n6-memif.c
+    dataplane.c
 '''.split())
 
 libtins_dep = dependency('libtins',

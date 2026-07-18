@@ -4,7 +4,7 @@
 
 ## 工具
 
-- `udp_gen.c`: 下行 N6 侧 UDP 生成器。在 UPF 容器内运行，从 `ogstun` 网关地址向 UE 地址发 UDP。
+- `udp_gen.c`: 下行 N6 侧 UDP 生成器。在 UPF 容器内运行，从 `ogstun` 网关地址向 UE 地址发 UDP；最后一个可选参数可固定源端口，用于命中 VPP NAT 回程五元组。
 - `gtpu_gen.c`: 上行 fake RAN GTP-U 生成器。在 gNB Pod 内运行，使用当前 PDU session 的上行 TEID 向 UPF `2152/udp` 注入 G-PDU。
 - `scripts/dl_diag.sh`: UPF 容器内下行统计脚本。
 - `scripts/ul_diag.sh`: UPF 容器内上行统计脚本。

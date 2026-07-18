@@ -5,28 +5,24 @@
  */
 
 #include "context.h"
+#include "dataplane.h"
 #include "gtp-path.h"
+#include "n3-memif.h"
 #include "n6-memif.h"
 
 #if HAVE_LIBMEMIF
 #include <libmemif.h>
 
-#define UPF_MEMIF_MAX_CONTROL_FDS 64
 #define UPF_MEMIF_MAX_BURST 256
-
-typedef struct upf_memif_fd_s {
-    int fd;
-    void *private_ctx;
-    ogs_poll_t *read_poll;
-    ogs_poll_t *write_poll;
-} upf_memif_fd_t;
 
 static struct {
     memif_socket_handle_t socket;
     memif_conn_handle_t connection;
-    upf_memif_fd_t fds[UPF_MEMIF_MAX_CONTROL_FDS];
+    ogs_pkbuf_t *tx_packets[UPF_MEMIF_MAX_BURST];
+    uint16_t tx_count;
     uint64_t tx_drops;
     ogs_time_t last_tx_drop_log;
+    bool tx_batch;
     bool connected;
 } self;
 
@@ -41,102 +37,6 @@ static void log_tx_drop(const char *reason)
                 reason, (unsigned long long)self.tx_drops);
         self.last_tx_drop_log = now;
     }
-}
-
-static upf_memif_fd_t *find_fd(int fd)
-{
-    int i;
-
-    for (i = 0; i < UPF_MEMIF_MAX_CONTROL_FDS; i++) {
-        if (self.fds[i].fd == fd)
-            return &self.fds[i];
-    }
-    return NULL;
-}
-
-static upf_memif_fd_t *alloc_fd(int fd)
-{
-    int i;
-
-    for (i = 0; i < UPF_MEMIF_MAX_CONTROL_FDS; i++) {
-        if (self.fds[i].fd == -1) {
-            self.fds[i].fd = fd;
-            return &self.fds[i];
-        }
-    }
-    return NULL;
-}
-
-static void remove_polls(upf_memif_fd_t *entry)
-{
-    if (entry->read_poll) {
-        ogs_pollset_remove(entry->read_poll);
-        entry->read_poll = NULL;
-    }
-    if (entry->write_poll) {
-        ogs_pollset_remove(entry->write_poll);
-        entry->write_poll = NULL;
-    }
-}
-
-static void control_fd_cb(short when, ogs_socket_t fd, void *data)
-{
-    upf_memif_fd_t *entry = data;
-    memif_fd_event_type_t events = 0;
-    int rv;
-
-    ogs_assert(entry);
-    ogs_assert(fd == entry->fd);
-
-    if (when & OGS_POLLIN)
-        events |= MEMIF_FD_EVENT_READ;
-    if (when & OGS_POLLOUT)
-        events |= MEMIF_FD_EVENT_WRITE;
-
-    rv = memif_control_fd_handler(entry->private_ctx, events);
-    if (rv != MEMIF_ERR_SUCCESS && rv != MEMIF_ERR_AGAIN)
-        ogs_error("memif_control_fd_handler(%d) failed: %s",
-                fd, memif_strerror(rv));
-}
-
-static int control_fd_update(memif_fd_event_t event, void *private_ctx)
-{
-    upf_memif_fd_t *entry = find_fd(event.fd);
-
-    if (event.type & MEMIF_FD_EVENT_DEL) {
-        if (entry) {
-            remove_polls(entry);
-            entry->fd = -1;
-            entry->private_ctx = NULL;
-        }
-        return MEMIF_ERR_SUCCESS;
-    }
-
-    if (!entry)
-        entry = alloc_fd(event.fd);
-    if (!entry) {
-        ogs_error("Too many memif control file descriptors");
-        return MEMIF_ERR_NOMEM;
-    }
-
-    entry->private_ctx = event.private_ctx;
-    if (event.type & MEMIF_FD_EVENT_MOD)
-        remove_polls(entry);
-
-    if ((event.type & MEMIF_FD_EVENT_READ) && !entry->read_poll) {
-        entry->read_poll = ogs_pollset_add(ogs_app()->pollset,
-                OGS_POLLIN, event.fd, control_fd_cb, entry);
-        if (!entry->read_poll)
-            return MEMIF_ERR_CB_FDUPDATE;
-    }
-    if ((event.type & MEMIF_FD_EVENT_WRITE) && !entry->write_poll) {
-        entry->write_poll = ogs_pollset_add(ogs_app()->pollset,
-                OGS_POLLOUT, event.fd, control_fd_cb, entry);
-        if (!entry->write_poll)
-            return MEMIF_ERR_CB_FDUPDATE;
-    }
-
-    return MEMIF_ERR_SUCCESS;
 }
 
 static int on_connect(memif_conn_handle_t connection, void *private_ctx)
@@ -180,6 +80,7 @@ static int on_interrupt(
             return rv;
         }
 
+        upf_n3_memif_tx_batch_begin();
         for (i = 0; i < count; i++) {
             if (buffers[i].flags & MEMIF_BUFFER_FLAG_NEXT) {
                 ogs_error("[DROP] Chained N6 memif buffers are not supported");
@@ -189,6 +90,7 @@ static int on_interrupt(
                     OGS_OK)
                 ogs_error("[DROP] Invalid packet received from N6 memif");
         }
+        upf_n3_memif_tx_batch_flush();
 
         rv = memif_refill_queue(connection, qid, count, 0);
         if (rv != MEMIF_ERR_SUCCESS) {
@@ -206,11 +108,8 @@ int upf_n6_memif_open(void)
     memif_socket_args_t socket_args;
     memif_conn_args_t connection_args;
     int rv;
-    int i;
 
     memset(&self, 0, sizeof(self));
-    for (i = 0; i < UPF_MEMIF_MAX_CONTROL_FDS; i++)
-        self.fds[i].fd = -1;
 
     memset(&socket_args, 0, sizeof(socket_args));
     ogs_cpystrn(socket_args.path, upf_self()->n6.socket_path,
@@ -219,7 +118,6 @@ int upf_n6_memif_open(void)
             sizeof(socket_args.app_name));
     socket_args.connection_request_timer.it_value.tv_sec = 1;
     socket_args.connection_request_timer.it_interval.tv_sec = 1;
-    socket_args.on_control_fd_update = control_fd_update;
 
     rv = memif_create_socket(&self.socket, &socket_args, NULL);
     if (rv != MEMIF_ERR_SUCCESS) {
@@ -258,58 +156,119 @@ int upf_n6_memif_open(void)
 
 void upf_n6_memif_close(void)
 {
-    int i;
-
+    upf_n6_memif_tx_batch_flush();
     self.connected = false;
     if (self.connection)
         memif_delete(&self.connection);
     if (self.socket)
         memif_delete_socket(&self.socket);
 
-    for (i = 0; i < UPF_MEMIF_MAX_CONTROL_FDS; i++) {
-        remove_polls(&self.fds[i]);
-        self.fds[i].fd = -1;
-        self.fds[i].private_ctx = NULL;
+}
+
+int upf_n6_memif_poll(void)
+{
+    int rv;
+
+    if (!self.socket)
+        return OGS_DONE;
+
+    rv = memif_poll_event(self.socket, 0);
+    if (rv == MEMIF_ERR_SUCCESS || rv == MEMIF_ERR_AGAIN)
+        return OGS_OK;
+    if (rv == MEMIF_ERR_POLL_CANCEL)
+        return OGS_DONE;
+
+    ogs_error("N6 memif_poll_event() failed: %s", memif_strerror(rv));
+    return OGS_ERROR;
+}
+
+void upf_n6_memif_cancel_poll(void)
+{
+    if (self.socket)
+        memif_cancel_poll_event(self.socket);
+}
+
+void upf_n6_memif_tx_batch_begin(void)
+{
+    ogs_assert(self.tx_count == 0);
+    self.tx_batch = true;
+}
+
+void upf_n6_memif_tx_batch_flush(void)
+{
+    memif_buffer_t buffers[UPF_MEMIF_MAX_BURST];
+    uint16_t allocated = 0;
+    uint16_t sent = 0;
+    uint16_t max_len = 0;
+    uint16_t i;
+    int rv;
+
+    self.tx_batch = false;
+    if (!self.tx_count)
+        return;
+
+    if (!self.connected) {
+        log_tx_drop("disconnected");
+        goto cleanup;
     }
+
+    for (i = 0; i < self.tx_count; i++) {
+        if (self.tx_packets[i]->len > max_len)
+            max_len = self.tx_packets[i]->len;
+    }
+
+    rv = memif_buffer_alloc(self.connection, 0, buffers, self.tx_count,
+            &allocated, max_len);
+    if ((rv != MEMIF_ERR_SUCCESS && rv != MEMIF_ERR_NOBUF_RING &&
+            rv != MEMIF_ERR_NOBUF) || !allocated) {
+        if (rv != MEMIF_ERR_NOBUF_RING && rv != MEMIF_ERR_NOBUF)
+            ogs_error("memif_buffer_alloc() failed: %s", memif_strerror(rv));
+        log_tx_drop(memif_strerror(rv));
+        goto cleanup;
+    }
+
+    for (i = 0; i < allocated; i++) {
+        memcpy(buffers[i].data, self.tx_packets[i]->data,
+                self.tx_packets[i]->len);
+        buffers[i].len = self.tx_packets[i]->len;
+    }
+
+    rv = memif_tx_burst(self.connection, 0, buffers, allocated, &sent);
+    if (rv != MEMIF_ERR_SUCCESS || sent != allocated) {
+        if (rv != MEMIF_ERR_NOBUF_RING && rv != MEMIF_ERR_NOBUF)
+            ogs_error("memif_tx_burst() failed: %s", memif_strerror(rv));
+        log_tx_drop(memif_strerror(rv));
+    }
+    if (allocated != self.tx_count)
+        log_tx_drop("partial batch allocation");
+
+cleanup:
+    for (i = 0; i < self.tx_count; i++)
+        ogs_pkbuf_free(self.tx_packets[i]);
+    self.tx_count = 0;
 }
 
 int upf_n6_memif_send(const ogs_pkbuf_t *pkbuf)
 {
-    memif_buffer_t buffer;
-    uint16_t allocated = 0;
-    uint16_t sent = 0;
-    int rv;
+    bool standalone = !self.tx_batch;
 
     ogs_assert(pkbuf);
 
-    if (!self.connected) {
-        log_tx_drop("disconnected");
-        return OGS_ERROR;
-    }
     if (pkbuf->len > upf_self()->n6.buffer_size || pkbuf->len > UINT16_MAX) {
         log_tx_drop("packet too large");
         return OGS_ERROR;
     }
 
-    rv = memif_buffer_alloc(self.connection, 0, &buffer, 1,
-            &allocated, (uint16_t)pkbuf->len);
-    if (rv != MEMIF_ERR_SUCCESS || allocated != 1) {
-        if (rv != MEMIF_ERR_NOBUF_RING && rv != MEMIF_ERR_NOBUF)
-            ogs_error("memif_buffer_alloc() failed: %s", memif_strerror(rv));
-        log_tx_drop(memif_strerror(rv));
-        return OGS_ERROR;
+    if (self.tx_count == UPF_MEMIF_MAX_BURST) {
+        upf_n6_memif_tx_batch_flush();
+        self.tx_batch = true;
     }
 
-    memcpy(buffer.data, pkbuf->data, pkbuf->len);
-    buffer.len = pkbuf->len;
-    rv = memif_tx_burst(self.connection, 0, &buffer, 1, &sent);
-    if (rv != MEMIF_ERR_SUCCESS || sent != 1) {
-        if (rv != MEMIF_ERR_NOBUF_RING && rv != MEMIF_ERR_NOBUF)
-            ogs_error("memif_tx_burst() failed: %s", memif_strerror(rv));
-        log_tx_drop(memif_strerror(rv));
-        return OGS_ERROR;
-    }
+    ogs_pkbuf_ref((ogs_pkbuf_t *)pkbuf);
+    self.tx_packets[self.tx_count++] = (ogs_pkbuf_t *)pkbuf;
 
+    if (standalone)
+        upf_n6_memif_tx_batch_flush();
     return OGS_OK;
 }
 
@@ -322,6 +281,23 @@ int upf_n6_memif_open(void)
 }
 
 void upf_n6_memif_close(void)
+{
+}
+
+int upf_n6_memif_poll(void)
+{
+    return OGS_DONE;
+}
+
+void upf_n6_memif_cancel_poll(void)
+{
+}
+
+void upf_n6_memif_tx_batch_begin(void)
+{
+}
+
+void upf_n6_memif_tx_batch_flush(void)
 {
 }
 

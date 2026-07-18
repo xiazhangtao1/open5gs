@@ -17,9 +17,9 @@ static uint64_t nsec_now(void)
 
 int main(int argc, char **argv)
 {
-    if (argc != 7) {
+    if (argc != 7 && argc != 8) {
         fprintf(stderr,
-            "usage: %s <src_ip> <dst_ip> <dst_port> <seconds> <mbps|0=max> <payload_bytes>\n",
+            "usage: %s <src_ip> <dst_ip> <dst_port> <seconds> <mbps|0=max> <payload_bytes> [src_port]\n",
             argv[0]);
         return 2;
     }
@@ -30,9 +30,11 @@ int main(int argc, char **argv)
     int seconds = atoi(argv[4]);
     double mbps = atof(argv[5]);
     int payload_len = atoi(argv[6]);
+    int src_port = argc == 8 ? atoi(argv[7]) : 0;
 
     if (dst_port <= 0 || dst_port > 65535 ||
-        seconds <= 0 || payload_len < 0 || payload_len > 9000)
+        src_port < 0 || src_port > 65535 || seconds <= 0 ||
+        payload_len < 0 || payload_len > 9000)
         return 2;
 
     int fd = socket(AF_INET, SOCK_DGRAM, 0);
@@ -44,7 +46,7 @@ int main(int argc, char **argv)
     struct sockaddr_in src;
     memset(&src, 0, sizeof(src));
     src.sin_family = AF_INET;
-    src.sin_port = htons(0);
+    src.sin_port = htons((uint16_t)src_port);
     if (inet_pton(AF_INET, src_ip, &src.sin_addr) != 1) {
         perror("inet_pton src");
         return 2;
