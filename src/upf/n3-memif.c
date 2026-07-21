@@ -21,6 +21,10 @@
 typedef struct upf_n3_tx_packet_s {
     ogs_pkbuf_t *pkbuf;
     ogs_sockaddr_t to;
+    memif_buffer_t buffer;
+    ogs_pkbuf_t direct_pkbuf;
+    bool direct;
+    bool ready;
 } upf_n3_tx_packet_t;
 
 static struct {
@@ -72,6 +76,12 @@ static uint16_t udp_checksum(const struct ip *ip_h,
     sum = checksum_add(sum, pseudo, sizeof(pseudo));
     sum = checksum_add(sum, udp_h, udp_len);
     return checksum_finish(sum);
+}
+
+static void release_direct_pkbuf(ogs_pkbuf_t *pkbuf)
+{
+    /* Storage belongs to the fixed per-batch TX entry and memif ring. */
+    ogs_assert(pkbuf);
 }
 
 static int handle_raw_ipv4(const void *data, uint16_t len)
@@ -238,10 +248,11 @@ int upf_n3_memif_open(void)
     }
 
     ogs_gtp_set_user_plane_send_cb(upf_n3_memif_send_gtpu);
-    ogs_info("N3 memif initialized [socket:%s id:%u address:%s ring:%u]",
+    ogs_info("N3 memif initialized [socket:%s id:%u address:%s ring:%u udp-checksum:%s]",
             upf_self()->n3.socket_path, upf_self()->n3.interface_id,
             upf_self()->n3.local_address,
-            1U << upf_self()->n3.log2_ring_size);
+            1U << upf_self()->n3.log2_ring_size,
+            upf_self()->n3.udp_checksum ? "on" : "off");
     return OGS_OK;
 }
 
@@ -298,6 +309,7 @@ void upf_n3_memif_tx_batch_flush(void)
     uint16_t max_len = 0;
     uint16_t checksum;
     uint16_t i;
+    bool direct;
     int rv;
 
     self.tx_batch = false;
@@ -307,18 +319,29 @@ void upf_n3_memif_tx_batch_flush(void)
     if (!self.connected)
         goto cleanup;
 
-    for (i = 0; i < self.tx_count; i++) {
-        total_len = sizeof(*ip_h) + sizeof(*udp_h) +
-            self.tx_packets[i].pkbuf->len;
-        if (total_len > max_len)
-            max_len = total_len;
-    }
+    direct = self.tx_packets[0].direct;
+    if (direct) {
+        allocated = self.tx_count;
+        for (i = 0; i < allocated; i++) {
+            ogs_assert(self.tx_packets[i].direct);
+            ogs_assert(self.tx_packets[i].ready);
+            buffers[i] = self.tx_packets[i].buffer;
+        }
+    } else {
+        for (i = 0; i < self.tx_count; i++) {
+            ogs_assert(!self.tx_packets[i].direct);
+            total_len = sizeof(*ip_h) + sizeof(*udp_h) +
+                self.tx_packets[i].pkbuf->len;
+            if (total_len > max_len)
+                max_len = total_len;
+        }
 
-    rv = memif_buffer_alloc(self.connection, 0, buffers, self.tx_count,
-            &allocated, max_len);
-    if ((rv != MEMIF_ERR_SUCCESS && rv != MEMIF_ERR_NOBUF_RING &&
-            rv != MEMIF_ERR_NOBUF) || !allocated)
-        goto cleanup;
+        rv = memif_buffer_alloc(self.connection, 0, buffers, self.tx_count,
+                &allocated, max_len);
+        if ((rv != MEMIF_ERR_SUCCESS && rv != MEMIF_ERR_NOBUF_RING &&
+                rv != MEMIF_ERR_NOBUF) || !allocated)
+            goto cleanup;
+    }
 
     for (i = 0; i < allocated; i++) {
         ogs_pkbuf_t *gtpu = self.tx_packets[i].pkbuf;
@@ -329,7 +352,13 @@ void upf_n3_memif_tx_batch_flush(void)
         memset(buffers[i].data, 0, sizeof(*ip_h) + sizeof(*udp_h));
         ip_h = buffers[i].data;
         udp_h = (struct udphdr *)((uint8_t *)buffers[i].data + sizeof(*ip_h));
-        memcpy((uint8_t *)udp_h + sizeof(*udp_h), gtpu->data, gtpu->len);
+        if (direct) {
+            ogs_assert(gtpu->data ==
+                    (uint8_t *)udp_h + sizeof(*udp_h));
+        } else {
+            memcpy((uint8_t *)udp_h + sizeof(*udp_h),
+                    gtpu->data, gtpu->len);
+        }
 
         ip_h->ip_v = 4;
         ip_h->ip_hl = sizeof(*ip_h) >> 2;
@@ -347,8 +376,10 @@ void upf_n3_memif_tx_batch_flush(void)
             to->ogs_sin_port : htobe16(UPF_GTPU_PORT);
         udp_h->uh_ulen = htobe16(udp_len);
         udp_h->uh_sum = 0;
-        checksum = udp_checksum(ip_h, udp_h, udp_len);
-        udp_h->uh_sum = htobe16(checksum ? checksum : 0xffffU);
+        if (upf_self()->n3.udp_checksum) {
+            checksum = udp_checksum(ip_h, udp_h, udp_len);
+            udp_h->uh_sum = htobe16(checksum ? checksum : 0xffffU);
+        }
         buffers[i].len = total_len;
     }
 
@@ -361,6 +392,61 @@ cleanup:
     for (i = 0; i < self.tx_count; i++)
         ogs_pkbuf_free(self.tx_packets[i].pkbuf);
     self.tx_count = 0;
+}
+
+ogs_pkbuf_t *upf_n3_memif_prepare_gtpu(
+        const void *payload, uint16_t payload_len, uint8_t gtpu_headroom)
+{
+    upf_n3_tx_packet_t *packet;
+    uint16_t allocated = 0;
+    uint16_t total_len;
+    uint32_t capacity;
+    int rv;
+
+    ogs_assert(payload);
+    ogs_assert(payload_len);
+
+    if (!self.connected || !self.tx_batch ||
+        gtpu_headroom < OGS_GTPV1U_HEADER_LEN ||
+        gtpu_headroom > OGS_TUN_MAX_HEADROOM)
+        return NULL;
+
+    total_len = sizeof(struct ip) + sizeof(struct udphdr) +
+        gtpu_headroom + payload_len;
+    if (total_len > upf_self()->n3.buffer_size)
+        return NULL;
+
+    if (self.tx_count && !self.tx_packets[0].direct) {
+        upf_n3_memif_tx_batch_flush();
+        self.tx_batch = true;
+    }
+    if (self.tx_count == UPF_MEMIF_MAX_BURST) {
+        upf_n3_memif_tx_batch_flush();
+        self.tx_batch = true;
+    }
+
+    packet = &self.tx_packets[self.tx_count];
+    memset(packet, 0, sizeof(*packet));
+    rv = memif_buffer_alloc(self.connection, 0, &packet->buffer, 1,
+            &allocated, total_len);
+    if ((rv != MEMIF_ERR_SUCCESS && rv != MEMIF_ERR_NOBUF_RING &&
+            rv != MEMIF_ERR_NOBUF) || allocated != 1)
+        return NULL;
+
+    capacity = packet->buffer.len;
+    ogs_assert(capacity >= total_len);
+    ogs_pkbuf_init_external(&packet->direct_pkbuf,
+            (uint8_t *)packet->buffer.data +
+                sizeof(struct ip) + sizeof(struct udphdr),
+            capacity - sizeof(struct ip) - sizeof(struct udphdr),
+            release_direct_pkbuf);
+    ogs_pkbuf_reserve(&packet->direct_pkbuf, gtpu_headroom);
+    ogs_pkbuf_put_data(&packet->direct_pkbuf, payload, payload_len);
+
+    packet->pkbuf = &packet->direct_pkbuf;
+    packet->direct = true;
+    self.tx_count++;
+    return packet->pkbuf;
 }
 
 int upf_n3_memif_send_gtpu(
@@ -384,12 +470,30 @@ int upf_n3_memif_send_gtpu(
         return OGS_ERROR;
     }
 
+    if (self.tx_count && self.tx_packets[self.tx_count - 1].direct &&
+        self.tx_packets[self.tx_count - 1].pkbuf == gtpu) {
+        upf_n3_tx_packet_t *packet = &self.tx_packets[self.tx_count - 1];
+
+        ogs_assert(!packet->ready);
+        ogs_pkbuf_ref(gtpu);
+        memcpy(&packet->to, to, sizeof(*to));
+        packet->ready = true;
+        return OGS_OK;
+    }
+
+    if (self.tx_count && self.tx_packets[0].direct) {
+        upf_n3_memif_tx_batch_flush();
+        self.tx_batch = true;
+    }
+
     if (self.tx_count == UPF_MEMIF_MAX_BURST) {
         upf_n3_memif_tx_batch_flush();
         self.tx_batch = true;
     }
 
     ogs_pkbuf_ref(gtpu);
+    memset(&self.tx_packets[self.tx_count], 0,
+            sizeof(self.tx_packets[self.tx_count]));
     self.tx_packets[self.tx_count].pkbuf = gtpu;
     memcpy(&self.tx_packets[self.tx_count].to, to, sizeof(*to));
     self.tx_count++;
@@ -426,6 +530,12 @@ void upf_n3_memif_tx_batch_begin(void)
 
 void upf_n3_memif_tx_batch_flush(void)
 {
+}
+
+ogs_pkbuf_t *upf_n3_memif_prepare_gtpu(
+        const void *payload, uint16_t payload_len, uint8_t gtpu_headroom)
+{
+    return NULL;
 }
 
 int upf_n3_memif_send_gtpu(

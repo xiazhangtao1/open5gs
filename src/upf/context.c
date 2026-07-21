@@ -114,6 +114,7 @@ static int upf_context_prepare(void)
     upf_self()->n3.buffer_size = 2048;
     upf_self()->n3.burst_size = 256;
     upf_self()->n3.log2_ring_size = 13;
+    upf_self()->n3.udp_checksum = false;
 
     upf_self()->n6.socket_path = "/run/vpp/memif.sock";
     upf_self()->n6.interface_id = 0;
@@ -261,6 +262,9 @@ int upf_context_parse_config(void)
                                     upf_self()->n3.burst_size = atoi(v);
                                 else if (!strcmp(key, "log2_ring_size"))
                                     upf_self()->n3.log2_ring_size = atoi(v);
+                                else if (!strcmp(key, "udp_checksum"))
+                                    upf_self()->n3.udp_checksum =
+                                        ogs_yaml_iter_bool(&memif_iter);
                                 else
                                     ogs_warn("unknown key `%s`", key);
                             }

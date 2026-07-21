@@ -168,6 +168,7 @@ data:
           buffer_size: {{ .Values.networking.upf.n3.memif.bufferSize }}
           burst_size: {{ .Values.networking.upf.n3.memif.burstSize }}
           log2_ring_size: {{ .Values.networking.upf.n3.memif.log2RingSize }}
+          udp_checksum: {{ .Values.networking.upf.n3.memif.udpChecksum }}
       n6:
         backend: {{ .Values.networking.upf.n6.backend | quote }}
         memif:

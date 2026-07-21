@@ -69,6 +69,7 @@ typedef struct upf_context_s {
         uint16_t buffer_size;
         uint16_t burst_size;
         uint8_t log2_ring_size;
+        bool udp_checksum;
     } n3;
 
     struct {

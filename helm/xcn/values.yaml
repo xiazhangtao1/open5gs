@@ -184,6 +184,9 @@ networking:
         burstSize: 256
         ringSize: 8192
         log2RingSize: 13
+        # UDP checksum is optional for IPv4. Keep disabled on the high-speed
+        # N3 memif path; enable only when required by a peer/network policy.
+        udpChecksum: false
     n6:
       backend: tun
       memif:

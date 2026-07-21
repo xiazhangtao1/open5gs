@@ -58,8 +58,11 @@ typedef struct ogs_pkbuf_s {
     unsigned char *end;
 
     const char *file_line;
-    
+
     ogs_pkbuf_pool_t *pool;
+
+    /* Optional release hook for packet buffers backed by external storage. */
+    void (*release_cb)(struct ogs_pkbuf_s *pkbuf);
 
     unsigned char _data[0]; /*!< optional immediate data array */
 } ogs_pkbuf_t;
@@ -89,6 +92,9 @@ void ogs_pkbuf_pool_destroy(ogs_pkbuf_pool_t *pool);
     ogs_pkbuf_alloc_debug(pool, size, OGS_FILE_LINE)
 ogs_pkbuf_t *ogs_pkbuf_alloc_debug(
         ogs_pkbuf_pool_t *pool, unsigned int size, const char *file_line);
+void ogs_pkbuf_init_external(ogs_pkbuf_t *pkbuf,
+        void *data, unsigned int size,
+        void (*release_cb)(ogs_pkbuf_t *pkbuf));
 void ogs_pkbuf_free(ogs_pkbuf_t *pkbuf);
 void ogs_pkbuf_ref(ogs_pkbuf_t *pkbuf);
 

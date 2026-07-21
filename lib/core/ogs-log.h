@@ -37,7 +37,10 @@ extern "C" {
 #define ogs_warn(...) ogs_log_message(OGS_LOG_WARN, 0, __VA_ARGS__)
 #define ogs_info(...) ogs_log_message(OGS_LOG_INFO, 0, __VA_ARGS__)
 #define ogs_debug(...) ogs_log_message(OGS_LOG_DEBUG, 0, __VA_ARGS__)
-#define ogs_trace(...) ogs_log_message(OGS_LOG_TRACE, 0, __VA_ARGS__)
+#define ogs_trace(...) do { \
+    if (ogs_log_get_domain_level(OGS_LOG_DOMAIN) >= OGS_LOG_TRACE) \
+        ogs_log_message(OGS_LOG_TRACE, 0, __VA_ARGS__); \
+} while (0)
 
 #define ogs_log_message(level, err, ...) \
     ogs_log_printf(level, OGS_LOG_DOMAIN, \

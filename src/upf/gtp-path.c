@@ -64,7 +64,50 @@ static ogs_pkbuf_pool_t *packet_pool = NULL;
 
 static void upf_gtp_handle_multicast(ogs_pkbuf_t *recvbuf);
 static void upf_gtp_handle_n6_packet(
-        ogs_pkbuf_t *recvbuf, bool has_eth, ogs_socket_t fd);
+        ogs_pkbuf_t *recvbuf, bool has_eth, ogs_socket_t fd, bool external);
+
+static ogs_pkbuf_t *upf_gtp_copy_n6_packet(const ogs_pkbuf_t *src)
+{
+    ogs_pkbuf_t *dst = NULL;
+
+    ogs_assert(src);
+    if (src->len > OGS_MAX_PKT_LEN-OGS_TUN_MAX_HEADROOM)
+        return NULL;
+
+    dst = ogs_pkbuf_alloc(packet_pool, OGS_MAX_PKT_LEN);
+    if (!dst)
+        return NULL;
+    ogs_pkbuf_reserve(dst, OGS_TUN_MAX_HEADROOM);
+    ogs_pkbuf_put_data(dst, src->data, src->len);
+    return dst;
+}
+
+static bool upf_gtp_can_use_direct_n3(const ogs_pfcp_pdr_t *pdr)
+{
+    const ogs_pfcp_far_t *far;
+    const ogs_gtp_node_t *gnode;
+
+    ogs_assert(pdr);
+    far = pdr->far;
+    ogs_assert(far);
+    gnode = far->gnode;
+
+    if (!upf_self()->n3.memif || !upf_self()->n6.memif ||
+        pdr->src_if != OGS_PFCP_INTERFACE_CORE ||
+        far->dst_if != OGS_PFCP_INTERFACE_ACCESS ||
+        !(far->apply_action & OGS_PFCP_APPLY_ACTION_FORW) ||
+        !far->outer_header_creation.gtpu4 ||
+        !gnode || !gnode->sock ||
+        gnode->addr.ogs_sa_family != AF_INET)
+        return false;
+
+    /* Home-routed N9 forwarding has different encapsulation semantics. */
+    if (pdr->src_if_type_presence &&
+        pdr->src_if_type == OGS_PFCP_3GPP_INTERFACE_TYPE_N9_FOR_ROAMING)
+        return false;
+
+    return true;
+}
 
 static int check_framed_routes(upf_sess_t *sess, int family, uint32_t *addr)
 {
@@ -115,11 +158,11 @@ static void _gtpv1_tun_recv_common_cb(
         return;
     }
 
-    upf_gtp_handle_n6_packet(recvbuf, has_eth, fd);
+    upf_gtp_handle_n6_packet(recvbuf, has_eth, fd, false);
 }
 
 static void upf_gtp_handle_n6_packet(
-        ogs_pkbuf_t *recvbuf, bool has_eth, ogs_socket_t fd)
+        ogs_pkbuf_t *recvbuf, bool has_eth, ogs_socket_t fd, bool external)
 {
 
     upf_sess_t *sess = NULL;
@@ -216,6 +259,12 @@ static void upf_gtp_handle_n6_packet(
 
     if (!pdr) {
         if (ogs_global_conf()->parameter.multicast) {
+            if (external) {
+                recvbuf = upf_gtp_copy_n6_packet(recvbuf);
+                if (!recvbuf)
+                    return;
+                external = false;
+            }
             upf_gtp_handle_multicast(recvbuf);
         }
         goto cleanup;
@@ -224,6 +273,26 @@ static void upf_gtp_handle_n6_packet(
     /* Increment total & dl octets + pkts */
     for (i = 0; i < pdr->num_of_urr; i++)
         upf_sess_urr_acc_add(sess, pdr->urr[i], recvbuf->len, false);
+
+    if (external) {
+        ogs_pkbuf_t *sendbuf = NULL;
+
+        if (upf_gtp_can_use_direct_n3(pdr)) {
+            uint8_t gtpu_headroom =
+                (pdr->qer && pdr->qer->qfi) ?
+                    OGS_GTPV1U_5GC_HEADER_LEN : OGS_GTPV1U_HEADER_LEN;
+
+            sendbuf = upf_n3_memif_prepare_gtpu(
+                    recvbuf->data, recvbuf->len, gtpu_headroom);
+        }
+        if (!sendbuf)
+            sendbuf = upf_gtp_copy_n6_packet(recvbuf);
+        if (!sendbuf)
+            return;
+
+        recvbuf = sendbuf;
+        external = false;
+    }
 
     ogs_assert(true == ogs_pfcp_up_handle_pdr(
                 pdr, OGS_GTPU_MSGTYPE_GPDU, 0, NULL, recvbuf, &report));
@@ -261,24 +330,25 @@ static void upf_gtp_handle_n6_packet(
     return;
 
 cleanup:
-    ogs_pkbuf_free(recvbuf);
+    if (!external)
+        ogs_pkbuf_free(recvbuf);
 }
 
 int upf_gtp_handle_n6_data(const void *data, size_t len)
 {
-    ogs_pkbuf_t *recvbuf = NULL;
+    ogs_pkbuf_t recvbuf;
 
     if (!data || len == 0 || len > OGS_MAX_PKT_LEN-OGS_TUN_MAX_HEADROOM)
         return OGS_ERROR;
 
-    recvbuf = ogs_pkbuf_alloc(packet_pool, OGS_MAX_PKT_LEN);
-    if (!recvbuf)
-        return OGS_ERROR;
-    ogs_pkbuf_reserve(recvbuf, OGS_TUN_MAX_HEADROOM);
-    ogs_pkbuf_put(recvbuf, len);
-    memcpy(recvbuf->data, data, len);
+    memset(&recvbuf, 0, sizeof(recvbuf));
+    recvbuf.head = (unsigned char *)data;
+    recvbuf.data = (unsigned char *)data;
+    recvbuf.tail = (unsigned char *)data + len;
+    recvbuf.end = (unsigned char *)data + len;
+    recvbuf.len = len;
 
-    upf_gtp_handle_n6_packet(recvbuf, false, INVALID_SOCKET);
+    upf_gtp_handle_n6_packet(&recvbuf, false, INVALID_SOCKET, true);
     return OGS_OK;
 }
 

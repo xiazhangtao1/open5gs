@@ -286,6 +286,23 @@ ogs_pkbuf_t *ogs_pkbuf_alloc_debug(
 #endif
 }
 
+void ogs_pkbuf_init_external(ogs_pkbuf_t *pkbuf,
+        void *data, unsigned int size,
+        void (*release_cb)(ogs_pkbuf_t *pkbuf))
+{
+    ogs_assert(pkbuf);
+    ogs_assert(data);
+    ogs_assert(size);
+    ogs_assert(release_cb);
+
+    memset(pkbuf, 0, sizeof(*pkbuf));
+    pkbuf->head = data;
+    pkbuf->data = data;
+    pkbuf->tail = data;
+    pkbuf->end = (unsigned char *)data + size;
+    pkbuf->release_cb = release_cb;
+}
+
 void ogs_pkbuf_free(ogs_pkbuf_t *pkbuf)
 {
     unsigned int references;
@@ -298,6 +315,11 @@ void ogs_pkbuf_free(ogs_pkbuf_t *pkbuf)
                     &references, references - 1, false,
                     __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE))
             return;
+    }
+
+    if (pkbuf->release_cb) {
+        pkbuf->release_cb(pkbuf);
+        return;
     }
 
 #if OGS_USE_TALLOC == 1
