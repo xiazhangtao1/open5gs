@@ -1,5 +1,44 @@
 # UPF performance results
 
+## perf 定位与同步热路径优化（2026-07-21）
+
+本轮不增加 fast path，也不跳过任何 PDR/FAR/QER/URR/PFCP 处理。修改仅包括：
+
+- runtime 从 Meson 默认 debug（`-O0`）改为 `debugoptimized`（`-O2 -g`），保留
+  调试符号和断言；
+- 保持原规则锁覆盖范围、获取顺序和单 worker 并发模型不变，将 worker 与 PFCP
+  主线程之间的 pthread mutex 改为 FIFO ticket lock；解锁由原子 RMW 改为单写者
+  release-store。
+
+在专用 memif worker 满载时采集 `cycles:u`，热点对比如下。各轮发生器供给和 VF
+丢包有波动，百分比用于定位 CPU 开销，不应直接按比例推算吞吐。
+
+| 构建/同步方式 | lock | unlock | 两次 `memif_poll_event`/`epoll_pwait` | 说明 |
+|---|---:|---:|---:|---|
+| `-O0` + pthread | 约 6.9% | 约 11.4% | 约 68% | 原始 runtime 实际无优化 |
+| `-O2` + pthread | 6.02% | 21.85% | 主要剩余热点 | O2 后 pthread 成为首要可控热点 |
+| `-O2` + ticket/RMW unlock | 6.12% | 15.58% | 约 68% | RMW unlock 仍锁总线 |
+| `-O2` + ticket/store unlock | 19.89% | <0.1% | 约 67% | 同步总热点降至约 19.9% |
+
+最终版本使用真实 PFCP 会话（UE `10.45.0.2`，本轮 UL TEID `0x1e60`）验证。
+10 Mbps/2 秒冒烟测试中，发生器、N3 VF、N3 memif、N6 memif、N6 VF 和接收
+VF 均为 1,732 包，Open5GS 日志无错误；同一镜像下连续两次重建 NR-UE，PFCP
+会话均完整执行 `Removed -> Added`。并发 ticket lock 另以 4 线程、每线程
+2,000,000 次临界区执行压力测试，最终计数和 ticket 均为 8,000,000。
+
+不限速 10 秒测试中，发生器提交 17,095,321 包（inner 19.53 Gbps），N3 VF
+实际收到 14,581,151 包，N6 VF 发出 9,506,606 包，对应 N6 inner 约
+**10.86 Gbps**。此前同环境 `-O2` + pthread 单次峰值约 9.96 Gbps，本次约提升
+9%；但这是无网线 `fabric_network` VF-to-VF 内部交换且为高丢包峰值，不代表
+跨服务器 10G 物理口的无损能力。过载差值发生在 Open5GS 向 N6 memif 发送时，
+日志明确为 `Ring buffer full`；同时 N3 VF 有 `rx-miss`，不是 CFS throttling
+或线程中途被调度走导致。
+
+最终 perf 中约 67% 周期仍消耗在 N3、N6 各一次零超时
+`memif_poll_event -> epoll_pwait`。下一阶段优先合并或减少空轮询系统调用；单
+memif ring 满载也需要多 queue/会话分片解决。不能为了继续提高数字而绕过
+Open5GS UPF 语义。
+
 ## Open5GS 专用 memif worker + burst（2026-07-18）
 
 本阶段保留 Open5GS UPF 的全部 PFCP/PDR/FAR/QER/URR/GTP-U 语义，仅优化

@@ -9,8 +9,20 @@
 #include "n6-memif.h"
 
 static ogs_thread_t *worker;
-static ogs_thread_mutex_t rule_mutex;
+static struct {
+    unsigned int next;
+    unsigned int owner;
+} rule_lock;
 static int stopping;
+
+static void cpu_relax(void)
+{
+#if defined(__i386__) || defined(__x86_64__)
+    __asm__ __volatile__("pause");
+#else
+    __atomic_signal_fence(__ATOMIC_SEQ_CST);
+#endif
+}
 
 static bool is_stopping(void)
 {
@@ -37,14 +49,16 @@ static void dataplane_main(void *data)
 
 void upf_dataplane_init(void)
 {
-    ogs_thread_mutex_init(&rule_mutex);
+    __atomic_store_n(&rule_lock.next, 0, __ATOMIC_RELAXED);
+    __atomic_store_n(&rule_lock.owner, 0, __ATOMIC_RELAXED);
     __atomic_store_n(&stopping, 0, __ATOMIC_RELEASE);
 }
 
 void upf_dataplane_final(void)
 {
     ogs_assert(!worker);
-    ogs_thread_mutex_destroy(&rule_mutex);
+    ogs_assert(__atomic_load_n(&rule_lock.next, __ATOMIC_RELAXED) ==
+            __atomic_load_n(&rule_lock.owner, __ATOMIC_RELAXED));
 }
 
 int upf_dataplane_start(void)
@@ -72,10 +86,17 @@ void upf_dataplane_stop(void)
 
 void upf_dataplane_lock(void)
 {
-    ogs_thread_mutex_lock(&rule_mutex);
+    unsigned int ticket =
+        __atomic_fetch_add(&rule_lock.next, 1, __ATOMIC_RELAXED);
+
+    while (__atomic_load_n(&rule_lock.owner, __ATOMIC_ACQUIRE) != ticket)
+        cpu_relax();
 }
 
 void upf_dataplane_unlock(void)
 {
-    ogs_thread_mutex_unlock(&rule_mutex);
+    unsigned int owner =
+        __atomic_load_n(&rule_lock.owner, __ATOMIC_RELAXED);
+
+    __atomic_store_n(&rule_lock.owner, owner + 1, __ATOMIC_RELEASE);
 }

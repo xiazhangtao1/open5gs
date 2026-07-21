@@ -43,7 +43,9 @@ WORKDIR /open5gs
 COPY --from=vpp-libs /usr/local/include/libmemif.h /usr/local/include/libmemif.h
 COPY --from=vpp-libs /usr/local/lib/libmemif.so /usr/local/lib/libmemif.so
 COPY ./ /open5gs
-RUN meson setup build --prefix=/usr -Dupf_memif=true && ninja -C build install
+RUN meson setup build --prefix=/usr --buildtype=debugoptimized \
+        -Dupf_memif=true && \
+    ninja -C build install
 
 FROM ubuntu:22.04
 
