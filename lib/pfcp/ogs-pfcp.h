@@ -26,10 +26,10 @@
 
 #define OGS_PFCP_UDP_PORT               8805
 
-#define OGS_MAX_NUM_OF_PDR              16
-#define OGS_MAX_NUM_OF_FAR              16
-#define OGS_MAX_NUM_OF_URR              16
-#define OGS_MAX_NUM_OF_QER              4
+#define OGS_MAX_NUM_OF_PDR              24
+#define OGS_MAX_NUM_OF_FAR              24
+#define OGS_MAX_NUM_OF_URR              8
+#define OGS_MAX_NUM_OF_QER              8
 #define OGS_MAX_NUM_OF_BAR              1
 
 #define OGS_PFCP_INSIDE

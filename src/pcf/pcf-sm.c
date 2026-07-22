@@ -296,6 +296,10 @@ void pcf_state_operational(ogs_fsm_t *s, pcf_event_t *e)
                 ogs_error("[%s:%d] State machine exception",
                         pcf_ue_sm ? pcf_ue_sm->supi : "Unknown", sess->psi);
                 PCF_SESS_CLEAR(sess);
+            } else if (OGS_FSM_CHECK(&sess->sm, pcf_sm_state_deleted)) {
+                ogs_debug("[%s:%d] PCF session removed",
+                        pcf_ue_sm ? pcf_ue_sm->supi : "Unknown", sess->psi);
+                PCF_SESS_CLEAR(sess);
             }
             break;
 

@@ -31,6 +31,8 @@
 #define XCN_RESOURCE_SESSIONS "sessions"
 #define XCN_AMF_UE_INFO_URL "http://xcn-amf:9090/ue-info"
 
+static bool xcn_app_is_dedicated_bearer(pcf_app_t *app);
+
 typedef struct xcn_http_buffer_s {
     char *data;
     size_t len;
@@ -197,13 +199,10 @@ static uint64_t xcn_string_uint64(const char *value)
     return (uint64_t)number;
 }
 
-static char *xcn_supi_from_amf_tmsi(uint64_t tmsi)
+static cJSON *xcn_amf_ue_info_get(void)
 {
-    char *content = NULL, *supi = NULL;
-    cJSON *amf_info = NULL, *items = NULL, *ue = NULL;
-
-    if (!tmsi)
-        return NULL;
+    char *content = NULL;
+    cJSON *amf_info = NULL;
 
     content = xcn_http_get(XCN_AMF_UE_INFO_URL);
     if (!content)
@@ -211,10 +210,55 @@ static char *xcn_supi_from_amf_tmsi(uint64_t tmsi)
 
     amf_info = cJSON_Parse(content);
     ogs_free(content);
-    if (!amf_info) {
+    if (!amf_info)
         ogs_warn("Failed to parse AMF ue-info JSON");
-        return NULL;
+
+    return amf_info;
+}
+
+static uint64_t xcn_amf_tmsi_from_supi(cJSON *amf_info, const char *supi)
+{
+    cJSON *items = NULL, *ue = NULL;
+
+    if (!amf_info || !supi)
+        return 0;
+
+    items = cJSON_GetObjectItemCaseSensitive(amf_info, "items");
+    if (!cJSON_IsArray(items))
+        return 0;
+
+    cJSON_ArrayForEach(ue, items) {
+        const char *ue_supi = xcn_json_string(ue, "supi");
+
+        if (ue_supi && strcmp(ue_supi, supi) == 0)
+            return xcn_json_uint64(ue, "m_tmsi");
     }
+
+    return 0;
+}
+
+static void xcn_json_add_tmsi(
+        cJSON *item, cJSON *amf_info, const char *supi)
+{
+    uint64_t tmsi = xcn_amf_tmsi_from_supi(amf_info, supi);
+
+    ogs_assert(item);
+
+    if (tmsi)
+        cJSON_AddNumberToObject(item, "m_tmsi", tmsi);
+}
+
+static char *xcn_supi_from_amf_tmsi(uint64_t tmsi)
+{
+    char *supi = NULL;
+    cJSON *amf_info = NULL, *items = NULL, *ue = NULL;
+
+    if (!tmsi)
+        return NULL;
+
+    amf_info = xcn_amf_ue_info_get();
+    if (!amf_info)
+        return NULL;
 
     items = cJSON_GetObjectItemCaseSensitive(amf_info, "items");
     if (!cJSON_IsArray(items)) {
@@ -573,7 +617,8 @@ static cJSON *xcn_session_to_json(pcf_sess_t *sess)
     return item;
 }
 
-static cJSON *xcn_user_to_json(pcf_ue_sm_t *pcf_ue_sm)
+static cJSON *xcn_user_to_json(
+        pcf_ue_sm_t *pcf_ue_sm, cJSON *amf_info)
 {
     cJSON *item = NULL, *sessions = NULL;
     pcf_sess_t *sess = NULL;
@@ -585,6 +630,7 @@ static cJSON *xcn_user_to_json(pcf_ue_sm_t *pcf_ue_sm)
 
     cJSON_AddStringToObject(item, "supi", pcf_ue_sm->supi);
     cJSON_AddStringToObject(item, "imsi", xcn_supi_to_imsi(pcf_ue_sm->supi));
+    xcn_json_add_tmsi(item, amf_info, pcf_ue_sm->supi);
     cJSON_AddBoolToObject(item, "registered",
             pcf_ue_am_find_by_supi(pcf_ue_sm->supi) ? true : false);
 
@@ -2479,6 +2525,8 @@ bool pcf_xcn_dedicated_bearer_handle_create(
     const char *error_detail = NULL;
     OpenAPI_media_type_e media_type = OpenAPI_media_type_NULL;
     pcf_ue_sm_t *pcf_ue_sm = NULL;
+    pcf_app_t *app = NULL;
+    int bearer_count = 0;
 
     ogs_assert(stream);
     ogs_assert(recvmsg);
@@ -2500,6 +2548,17 @@ bool pcf_xcn_dedicated_bearer_handle_create(
     }
     pcf_ue_sm = pcf_ue_sm_find_by_id(sess->pcf_ue_sm_id);
     ogs_assert(pcf_ue_sm);
+
+    ogs_list_for_each(&sess->app_list, app) {
+        if (xcn_app_is_dedicated_bearer(app))
+            bearer_count++;
+    }
+    if (bearer_count >= OGS_MAX_NUM_OF_BEARER - 1) {
+        cJSON_Delete(item);
+        return xcn_send_error(stream, recvmsg,
+                OGS_SBI_HTTP_STATUS_CONFLICT,
+                "Maximum bearer count reached");
+    }
 
     memset(&xcn_qos_override, 0, sizeof(xcn_qos_override));
     if (!xcn_parse_qos_override(item, &xcn_qos_override, &error_detail)) {
@@ -2838,6 +2897,7 @@ bool pcf_xcn_query_handle_users(
     pcf_context_t *self = pcf_self();
     pcf_ue_am_t *pcf_ue_am = NULL;
     pcf_ue_sm_t *pcf_ue_sm = NULL;
+    cJSON *amf_info = NULL;
     const char *tmsi_string = NULL;
     char *tmsi_supi = NULL;
     int user_count = 0;
@@ -2860,7 +2920,7 @@ bool pcf_xcn_query_handle_users(
         pcf_ue_sm = pcf_ue_sm_find_by_supi(tmsi_supi);
         if (pcf_ue_sm) {
             pcf_xcn_refresh_ngap_ids_from_amf();
-            root = xcn_user_to_json(pcf_ue_sm);
+            root = xcn_user_to_json(pcf_ue_sm, NULL);
         } else {
             pcf_ue_am = pcf_ue_am_find_by_supi(tmsi_supi);
             if (!pcf_ue_am) {
@@ -2896,6 +2956,7 @@ bool pcf_xcn_query_handle_users(
     root = cJSON_CreateObject();
     ogs_assert(root);
 
+    amf_info = xcn_amf_ue_info_get();
     pcf_xcn_refresh_ngap_ids_from_amf();
 
     cJSON_AddNumberToObject(root, "registeredUserCount",
@@ -2906,7 +2967,7 @@ bool pcf_xcn_query_handle_users(
     ogs_assert(users);
 
     ogs_list_for_each(&self->pcf_ue_sm_list, pcf_ue_sm) {
-        cJSON_AddItemToArray(users, xcn_user_to_json(pcf_ue_sm));
+        cJSON_AddItemToArray(users, xcn_user_to_json(pcf_ue_sm, amf_info));
         user_count++;
     }
 
@@ -2918,6 +2979,7 @@ bool pcf_xcn_query_handle_users(
             cJSON_AddStringToObject(user, "supi", pcf_ue_am->supi);
             cJSON_AddStringToObject(user, "imsi",
                     xcn_supi_to_imsi(pcf_ue_am->supi));
+            xcn_json_add_tmsi(user, amf_info, pcf_ue_am->supi);
             cJSON_AddBoolToObject(user, "registered", true);
             sessions = cJSON_AddArrayToObject(user, "sessions");
             ogs_assert(sessions);
@@ -2926,6 +2988,8 @@ bool pcf_xcn_query_handle_users(
         }
     }
     cJSON_AddNumberToObject(root, "userCount", user_count);
+    if (amf_info)
+        cJSON_Delete(amf_info);
 
     if (xcn_send_json_response(stream, OGS_SBI_HTTP_STATUS_OK, root) == false) {
         cJSON_Delete(root);
@@ -2943,6 +3007,7 @@ bool pcf_xcn_query_handle_user(
     cJSON *root = NULL, *sessions = NULL;
     pcf_ue_sm_t *pcf_ue_sm = NULL;
     pcf_ue_am_t *pcf_ue_am = NULL;
+    cJSON *amf_info = NULL;
 
     ogs_assert(stream);
     ogs_assert(recvmsg);
@@ -2953,23 +3018,30 @@ bool pcf_xcn_query_handle_user(
                 OGS_SBI_HTTP_STATUS_BAD_REQUEST, "No SUPI");
 
     pcf_ue_sm = pcf_ue_sm_find_by_supi((char *)supi);
-    if (pcf_ue_sm) {
-        pcf_xcn_refresh_ngap_ids_from_amf();
-        root = xcn_user_to_json(pcf_ue_sm);
-    } else {
+    if (!pcf_ue_sm) {
         pcf_ue_am = pcf_ue_am_find_by_supi((char *)supi);
         if (!pcf_ue_am)
             return xcn_send_error(stream, recvmsg,
                     OGS_SBI_HTTP_STATUS_NOT_FOUND, "No SUPI");
+    }
 
+    amf_info = xcn_amf_ue_info_get();
+    if (pcf_ue_sm) {
+        pcf_xcn_refresh_ngap_ids_from_amf();
+        root = xcn_user_to_json(pcf_ue_sm, amf_info);
+    } else {
         root = cJSON_CreateObject();
         ogs_assert(root);
         cJSON_AddStringToObject(root, "supi", pcf_ue_am->supi);
         cJSON_AddStringToObject(root, "imsi", xcn_supi_to_imsi(pcf_ue_am->supi));
+        xcn_json_add_tmsi(root, amf_info, pcf_ue_am->supi);
         cJSON_AddBoolToObject(root, "registered", true);
         sessions = cJSON_AddArrayToObject(root, "sessions");
         ogs_assert(sessions);
     }
+
+    if (amf_info)
+        cJSON_Delete(amf_info);
 
     if (xcn_send_json_response(stream, OGS_SBI_HTTP_STATUS_OK, root) == false) {
         cJSON_Delete(root);
@@ -2987,6 +3059,7 @@ bool pcf_xcn_query_handle_sessions(
     cJSON *root = NULL;
     pcf_sess_t *sess = NULL;
     pcf_ue_sm_t *pcf_ue_sm = NULL;
+    cJSON *amf_info = NULL;
 
     ogs_assert(stream);
     ogs_assert(recvmsg);
@@ -3014,9 +3087,13 @@ bool pcf_xcn_query_handle_sessions(
 
     root = cJSON_CreateObject();
     ogs_assert(root);
+    amf_info = xcn_amf_ue_info_get();
     cJSON_AddStringToObject(root, "supi", pcf_ue_sm->supi);
     cJSON_AddStringToObject(root, "imsi", xcn_supi_to_imsi(pcf_ue_sm->supi));
+    xcn_json_add_tmsi(root, amf_info, pcf_ue_sm->supi);
     cJSON_AddItemToObject(root, "session", xcn_session_to_json(sess));
+    if (amf_info)
+        cJSON_Delete(amf_info);
 
     if (xcn_send_json_response(stream, OGS_SBI_HTTP_STATUS_OK, root) == false) {
         cJSON_Delete(root);

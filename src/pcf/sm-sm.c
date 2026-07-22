@@ -97,6 +97,10 @@ void pcf_sm_state_operational(ogs_fsm_t *s, pcf_event_t *e)
                             "pcf_npcf_smpolicycontrol_handle_delete() failed",
                             pcf_ue_sm->supi, sess->psi);
                         OGS_FSM_TRAN(s, pcf_sm_state_exception);
+                    } else if (pcf_sessions_number_by_snssai_and_dnn(
+                                pcf_ue_sm, &sess->s_nssai, sess->dnn) > 1 ||
+                            !sess->binding.resource_uri) {
+                        OGS_FSM_TRAN(s, pcf_sm_state_deleted);
                     }
                     break;
 
