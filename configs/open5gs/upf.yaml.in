@@ -9,6 +9,13 @@ global:
 #    peer: 64
 
 upf:
+  # Session workers require both N3 and N6 memif backends. A PFCP session is
+  # pinned to one worker; N3 TEID and N6 UE IP packets use the same owner.
+#  dataplane:
+#    session_workers:
+#      enabled: true
+#      count: 4        # 1..16
+#      queue_size: 8192
   pfcp:
     server:
       - address: 127.0.0.7

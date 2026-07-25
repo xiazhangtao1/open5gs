@@ -168,6 +168,11 @@ networking:
     ngap:
       serverAddress: 0.0.0.0
   upf:
+    dataplane:
+      sessionWorkers:
+        enabled: false
+        count: 1
+        queueSize: 8192
     gtpu:
       # Empty values are resolved to status.podIP at container startup.
       # Do not use 0.0.0.0:2152; it would also capture SMF CP-function GTP-U.
@@ -184,6 +189,7 @@ networking:
         burstSize: 256
         ringSize: 8192
         log2RingSize: 13
+        queues: 1
         # UDP checksum is optional for IPv4. Keep disabled on the high-speed
         # N3 memif path; enable only when required by a peer/network policy.
         udpChecksum: false
@@ -197,6 +203,7 @@ networking:
         burstSize: 256
         ringSize: 8192
         log2RingSize: 13
+        queues: 1
   webui:
     hostname: 0.0.0.0
     port: 9999

@@ -383,3 +383,21 @@ ambr: {
 ```
 
 SMF copies Session AMBR into PFCP QER MBR and sends it to UPF, but current Open5GS UPF data plane does not enforce `qer->mbr` with policing or shaping. Therefore bypass tests can exceed `1Gbps`.
+## Session 多 Worker 第一阶段（2026-07-25）
+
+- Open5GS 增加独立 memif dispatcher 和可配置的 `1..16` Session Worker。
+- Session 建立时采用双候选最少连接算法固定 owner；N3 按 TEID、N6 按 UE IP
+  分发，Worker 仍执行完整 PDR/FAR/QER/URR 和 GTP-U 处理。
+- 控制面使用读写屏障，PFCP/定时器修改独占写锁；数据 Worker 可并行持有读锁。
+- 每个 Worker 独占 N3/N6 memif TX ring 和批量状态，分发任务使用固定对象池，
+  不执行每包 `malloc/free`。
+- VPP 26.06 与 Open5GS 已实际协商2组 N3 和2组 N6 ring，每组8192描述符；
+  两个 Worker 均持续运行且调度策略为 `SCHED_OTHER`。
+- 进程等待 CPUManager 最终下发不含 CPU0 的 Guaranteed cpuset 后再绑核。本轮
+  Pod cpuset 为 `49-52,121-124`，Worker 0、Worker 1、dispatcher 分别实际绑定
+  CPU 49、50、51；主线程和控制线程保留完整 Pod cpuset，全部仍为 `SCHED_OTHER`。
+- 真实 UE `10.45.0.2` 建立 PFCP Session 后，从 VPP N6 注入100包，N6 memif
+  发送100包、Open5GS完成下行语义与GTP-U封装、N3 memif接收100包，无 Open5GS
+  丢包。N3 VF因 fabric物理口未接线发生ARP节流，不能作为Open5GS丢包计算。
+- 当前现场只有一个活动 Session，不能据此给出2/4 Worker吞吐扩展比；正式性能
+  验收需要至少 `max(2W,16)` 个真实 PFCP Session。

@@ -62,6 +62,12 @@ typedef struct upf_context_s {
     ogs_list_t sess_list;
 
     struct {
+        bool session_workers;
+        uint8_t worker_count;
+        uint32_t worker_queue_size;
+    } dataplane;
+
+    struct {
         bool memif;
         const char *socket_path;
         const char *local_address;
@@ -69,6 +75,7 @@ typedef struct upf_context_s {
         uint16_t buffer_size;
         uint16_t burst_size;
         uint8_t log2_ring_size;
+        uint8_t queues;
         bool udp_checksum;
     } n3;
 
@@ -79,6 +86,7 @@ typedef struct upf_context_s {
         uint16_t buffer_size;
         uint16_t burst_size;
         uint8_t log2_ring_size;
+        uint8_t queues;
     } n6;
 } upf_context_t;
 
@@ -124,6 +132,7 @@ typedef struct upf_sess_s {
     ogs_pool_id_t   *upf_n4_seid_node;  /* A node of UPF-N4-SEID */
 
     ogs_pfcp_sess_t pfcp;
+    uint8_t         owner_worker;
 
     uint64_t        upf_n4_seid;        /* UPF SEID is derived from NODE */
     struct {

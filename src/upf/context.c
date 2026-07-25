@@ -18,6 +18,7 @@
  */
 
 #include "context.h"
+#include "dataplane.h"
 #include "pfcp-path.h"
 
 static upf_context_t self;
@@ -109,11 +110,16 @@ upf_context_t *upf_self(void)
 
 static int upf_context_prepare(void)
 {
+    upf_self()->dataplane.session_workers = false;
+    upf_self()->dataplane.worker_count = 1;
+    upf_self()->dataplane.worker_queue_size = 8192;
+
     upf_self()->n3.socket_path = "/run/vpp/memif-n3.sock";
     upf_self()->n3.interface_id = 0;
     upf_self()->n3.buffer_size = 2048;
     upf_self()->n3.burst_size = 256;
     upf_self()->n3.log2_ring_size = 13;
+    upf_self()->n3.queues = 1;
     upf_self()->n3.udp_checksum = false;
 
     upf_self()->n6.socket_path = "/run/vpp/memif.sock";
@@ -121,12 +127,23 @@ static int upf_context_prepare(void)
     upf_self()->n6.buffer_size = 2048;
     upf_self()->n6.burst_size = 256;
     upf_self()->n6.log2_ring_size = 12;
+    upf_self()->n6.queues = 1;
 
     return OGS_OK;
 }
 
 static int upf_context_validation(void)
 {
+    if (upf_self()->dataplane.worker_count < 1 ||
+        upf_self()->dataplane.worker_count > 16) {
+        ogs_error("upf.dataplane.session_workers.count must be between 1 and 16");
+        return OGS_ERROR;
+    }
+    if (upf_self()->dataplane.worker_queue_size < 256 ||
+        upf_self()->dataplane.worker_queue_size > 65536) {
+        ogs_error("upf.dataplane.session_workers.queue_size must be between 256 and 65536");
+        return OGS_ERROR;
+    }
     if (ogs_list_first(&ogs_gtp_self()->gtpu_list) == NULL) {
         ogs_error("No upf.gtpu.address in '%s'", ogs_app()->file);
         return OGS_ERROR;
@@ -163,6 +180,10 @@ static int upf_context_validation(void)
             ogs_error("upf.n3.memif.log2_ring_size must be between 1 and 14");
             return OGS_ERROR;
         }
+        if (upf_self()->n3.queues < 1 || upf_self()->n3.queues > 16) {
+            ogs_error("upf.n3.memif.queues must be between 1 and 16");
+            return OGS_ERROR;
+        }
     }
     if (upf_self()->n6.memif) {
         if (!upf_self()->n6.socket_path ||
@@ -185,6 +206,21 @@ static int upf_context_validation(void)
             ogs_error("upf.n6.memif.log2_ring_size must be between 1 and 14");
             return OGS_ERROR;
         }
+        if (upf_self()->n6.queues < 1 || upf_self()->n6.queues > 16) {
+            ogs_error("upf.n6.memif.queues must be between 1 and 16");
+            return OGS_ERROR;
+        }
+    }
+    if (upf_self()->dataplane.session_workers &&
+        (!upf_self()->n3.memif || !upf_self()->n6.memif)) {
+        ogs_error("session workers require both N3 and N6 memif backends");
+        return OGS_ERROR;
+    }
+    if (upf_self()->dataplane.session_workers &&
+        (upf_self()->n3.queues != upf_self()->dataplane.worker_count ||
+         upf_self()->n6.queues != upf_self()->dataplane.worker_count)) {
+        ogs_error("N3/N6 memif queues must equal session worker count");
+        return OGS_ERROR;
     }
     return OGS_OK;
 }
@@ -223,6 +259,30 @@ int upf_context_parse_config(void)
                     /* handle config in pfcp library */
                 } else if (!strcmp(upf_key, "metrics")) {
                     /* handle config in metrics library */
+                } else if (!strcmp(upf_key, "dataplane")) {
+                    ogs_yaml_iter_t dp_iter;
+                    ogs_yaml_iter_recurse(&upf_iter, &dp_iter);
+                    while (ogs_yaml_iter_next(&dp_iter)) {
+                        const char *dp_key = ogs_yaml_iter_key(&dp_iter);
+                        if (!strcmp(dp_key, "session_workers")) {
+                            ogs_yaml_iter_t worker_iter;
+                            ogs_yaml_iter_recurse(&dp_iter, &worker_iter);
+                            while (ogs_yaml_iter_next(&worker_iter)) {
+                                const char *key = ogs_yaml_iter_key(&worker_iter);
+                                const char *v = ogs_yaml_iter_value(&worker_iter);
+                                if (!strcmp(key, "enabled"))
+                                    upf_self()->dataplane.session_workers =
+                                        ogs_yaml_iter_bool(&worker_iter);
+                                else if (!strcmp(key, "count"))
+                                    upf_self()->dataplane.worker_count = atoi(v);
+                                else if (!strcmp(key, "queue_size"))
+                                    upf_self()->dataplane.worker_queue_size = atoi(v);
+                                else
+                                    ogs_warn("unknown key `%s`", key);
+                            }
+                        } else
+                            ogs_warn("unknown key `%s`", dp_key);
+                    }
                 } else if (!strcmp(upf_key, "n3")) {
                     ogs_yaml_iter_t n3_iter;
                     ogs_yaml_iter_recurse(&upf_iter, &n3_iter);
@@ -262,6 +322,8 @@ int upf_context_parse_config(void)
                                     upf_self()->n3.burst_size = atoi(v);
                                 else if (!strcmp(key, "log2_ring_size"))
                                     upf_self()->n3.log2_ring_size = atoi(v);
+                                else if (!strcmp(key, "queues"))
+                                    upf_self()->n3.queues = atoi(v);
                                 else if (!strcmp(key, "udp_checksum"))
                                     upf_self()->n3.udp_checksum =
                                         ogs_yaml_iter_bool(&memif_iter);
@@ -308,6 +370,8 @@ int upf_context_parse_config(void)
                                     upf_self()->n6.burst_size = atoi(v);
                                 else if (!strcmp(key, "log2_ring_size"))
                                     upf_self()->n6.log2_ring_size = atoi(v);
+                                else if (!strcmp(key, "queues"))
+                                    upf_self()->n6.queues = atoi(v);
                                 else
                                     ogs_warn("unknown key `%s`", key);
                             }
@@ -353,6 +417,7 @@ upf_sess_t *upf_sess_add(ogs_pfcp_f_seid_t *cp_f_seid)
      * all these values must be put into the structure-smf_n4_f_seid
      * before creating hash */
     sess->smf_n4_f_seid.seid = cp_f_seid->seid;
+    sess->owner_worker = upf_dataplane_assign_session(cp_f_seid->seid);
     ogs_assert(OGS_OK ==
             ogs_pfcp_f_seid_to_ip(cp_f_seid, &sess->smf_n4_f_seid.ip));
 
@@ -373,6 +438,7 @@ upf_sess_t *upf_sess_add(ogs_pfcp_f_seid_t *cp_f_seid)
 int upf_sess_remove(upf_sess_t *sess)
 {
     ogs_assert(sess);
+    upf_dataplane_release_session(sess->owner_worker);
 
     upf_sess_urr_acc_remove_all(sess);
 

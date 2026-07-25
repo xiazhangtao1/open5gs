@@ -1,5 +1,24 @@
 # Open5GS UPF performance tools
 
+## Session 多 Worker
+
+UPF 可在 N3/N6 均为 memif 时按 PFCP Session 分配 `1..16` 个数据 Worker：
+
+```yaml
+upf:
+  dataplane:
+    session_workers:
+      enabled: true
+      count: 4
+      queue_size: 8192
+```
+
+N3/N6 的 `memif.queues` 必须与 `count` 相等。N3 按 TEID、N6 按 UE IP
+查找固定 Session owner；分发不绕过 PDR/FAR/QER/URR。一个 Session 只使用
+一个 Worker，因此扩展性测试必须建立至少与 Worker 数相同的独立 PFCP Session。
+Worker 使用普通 `SCHED_OTHER`，禁止把 busy-poll 分发线程改为无限制
+`SCHED_FIFO`。
+
 这些工具用于绕过 OAI UE/gNB 的空口性能限制，直接压测 Open5GS UPF 的 N6/TUN 和 N3/GTP-U 数据面。
 
 ## 工具

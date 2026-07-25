@@ -26,7 +26,7 @@ typedef struct upf_n3_tx_packet_s {
     bool ready;
 } upf_n3_tx_packet_t;
 
-static struct {
+typedef struct {
     memif_socket_handle_t socket;
     memif_conn_handle_t connection;
     struct in_addr local_addr;
@@ -40,7 +40,10 @@ static struct {
     ogs_time_t last_tx_drop_log;
     bool tx_batch;
     bool connected;
-} self;
+} upf_n3_memif_state_t;
+
+static upf_n3_memif_state_t state[16];
+#define self state[upf_dataplane_worker_id()]
 
 static void release_direct_pkbuf(ogs_pkbuf_t *pkbuf)
 {
@@ -152,18 +155,30 @@ static int handle_raw_ipv4(const void *data, uint16_t len)
     from.sin.sin_addr = ip_h->ip_src;
     from.ogs_sin_port = udp_h->uh_sport;
 
-    return upf_gtp_handle_n3_data(
-            (const uint8_t *)udp_h + sizeof(*udp_h),
+    if (upf_self()->dataplane.session_workers)
+        return upf_dataplane_submit_n3(
+                (const uint8_t *)udp_h + sizeof(*udp_h),
+                udp_len - sizeof(*udp_h), &from);
+    return upf_gtp_handle_n3_data((const uint8_t *)udp_h + sizeof(*udp_h),
             udp_len - sizeof(*udp_h), &from);
 }
 
 static int on_connect(memif_conn_handle_t connection, void *private_ctx)
 {
-    int rv = memif_refill_queue(connection, 0, UINT16_MAX, 0);
+    uint8_t i;
+    int rv;
 
-    if (rv != MEMIF_ERR_SUCCESS) {
-        ogs_error("N3 memif_refill_queue() failed: %s", memif_strerror(rv));
-        return rv;
+    for (i = 0; i < upf_self()->n3.queues; i++) {
+        rv = memif_refill_queue(connection, i, UINT16_MAX, 0);
+        if (rv != MEMIF_ERR_SUCCESS) {
+            ogs_error("N3 memif_refill_queue(%u) failed: %s",
+                    i, memif_strerror(rv));
+            return rv;
+        }
+        state[i].connection = connection;
+        state[i].socket = state[0].socket;
+        state[i].local_addr = state[0].local_addr;
+        state[i].connected = true;
     }
     self.tx_count = 0;
     self.tx_allocated = 0;
@@ -176,7 +191,9 @@ static int on_connect(memif_conn_handle_t connection, void *private_ctx)
 
 static int on_disconnect(memif_conn_handle_t connection, void *private_ctx)
 {
-    self.connected = false;
+    uint8_t i;
+    for (i = 0; i < upf_self()->n3.queues; i++)
+        state[i].connected = false;
     upf_n3_memif_tx_batch_flush();
     self.tx_allocated = 0;
     self.tx_batch_remaining = 0;
@@ -202,7 +219,8 @@ static int on_interrupt(
             return rv;
         }
 
-        upf_n6_memif_tx_batch_begin();
+        if (!upf_self()->dataplane.session_workers)
+            upf_n6_memif_tx_batch_begin();
         for (i = 0; i < count; i++) {
             if (buffers[i].flags & MEMIF_BUFFER_FLAG_NEXT) {
                 ogs_error("[DROP] Chained N3 memif buffers are unsupported");
@@ -211,7 +229,8 @@ static int on_interrupt(
             if (handle_raw_ipv4(buffers[i].data, buffers[i].len) != OGS_OK)
                 ogs_debug("[DROP] Invalid packet received from N3 memif");
         }
-        upf_n6_memif_tx_batch_flush();
+        if (!upf_self()->dataplane.session_workers)
+            upf_n6_memif_tx_batch_flush();
 
         rv = memif_refill_queue(connection, qid, count, 0);
         if (rv != MEMIF_ERR_SUCCESS) {
@@ -231,7 +250,7 @@ int upf_n3_memif_open(void)
     ogs_sockaddr_t local;
     int rv;
 
-    memset(&self, 0, sizeof(self));
+    memset(state, 0, sizeof(state));
 
     memset(&local, 0, sizeof(local));
     if (ogs_inet_pton(AF_INET, upf_self()->n3.local_address, &local) != OGS_OK)
@@ -258,8 +277,8 @@ int upf_n3_memif_open(void)
     connection_args.interface_id = upf_self()->n3.interface_id;
     connection_args.buffer_size = upf_self()->n3.buffer_size;
     connection_args.log2_ring_size = upf_self()->n3.log2_ring_size;
-    connection_args.num_s2m_rings = 1;
-    connection_args.num_m2s_rings = 1;
+    connection_args.num_s2m_rings = upf_self()->n3.queues;
+    connection_args.num_m2s_rings = upf_self()->n3.queues;
     connection_args.is_master = 0;
     connection_args.mode = MEMIF_INTERFACE_MODE_IP;
     ogs_cpystrn((char *)connection_args.interface_name, "open5gs-n3",
@@ -329,7 +348,8 @@ static bool preallocate_tx_buffers(uint16_t count)
     if (!self.connected || !count)
         return false;
 
-    rv = memif_buffer_alloc(self.connection, 0, self.tx_buffers, count,
+    rv = memif_buffer_alloc(self.connection, upf_dataplane_worker_id(),
+            self.tx_buffers, count,
             &allocated, upf_self()->n3.buffer_size);
     if ((rv != MEMIF_ERR_SUCCESS && rv != MEMIF_ERR_NOBUF_RING &&
             rv != MEMIF_ERR_NOBUF) || !allocated)
@@ -433,7 +453,7 @@ void upf_n3_memif_tx_batch_flush(void)
         self.tx_buffers[i].len = total_len;
     }
 
-    rv = memif_tx_burst(self.connection, 0,
+    rv = memif_tx_burst(self.connection, upf_dataplane_worker_id(),
             self.tx_buffers, self.tx_count, &sent);
     if (sent != self.tx_count)
         log_tx_drop(memif_strerror(rv), self.tx_count - sent);

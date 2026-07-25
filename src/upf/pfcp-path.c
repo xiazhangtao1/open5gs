@@ -18,6 +18,7 @@
  */
 
 #include "context.h"
+#include "dataplane.h"
 
 #include "pfcp-path.h"
 #include "n4-build.h"
@@ -356,6 +357,7 @@ int upf_pfcp_send_session_report_request(
     ogs_pfcp_header_t h;
     ogs_pfcp_xact_t *xact = NULL;
 
+    upf_dataplane_report_lock();
     upf_metrics_inst_global_inc(UPF_METR_GLOB_CTR_SM_N4SESSIONREPORT);
 
     ogs_assert(sess);
@@ -369,18 +371,21 @@ int upf_pfcp_send_session_report_request(
             sess->pfcp_node, sess_timeout, OGS_UINT_TO_POINTER(sess->id));
     if (!xact) {
         ogs_error("ogs_pfcp_xact_local_create() failed");
+        upf_dataplane_report_unlock();
         return OGS_ERROR;
     }
 
     n4buf = ogs_pfcp_build_session_report_request(h.type, report);
     if (!n4buf) {
         ogs_error("ogs_pfcp_build_session_report_request() failed");
+        upf_dataplane_report_unlock();
         return OGS_ERROR;
     }
 
     rv = ogs_pfcp_xact_update_tx(xact, &h, n4buf);
     if (rv != OGS_OK) {
         ogs_error("ogs_pfcp_xact_update_tx() failed");
+        upf_dataplane_report_unlock();
         return OGS_ERROR;
     }
 
@@ -388,5 +393,6 @@ int upf_pfcp_send_session_report_request(
     rv = ogs_pfcp_xact_commit(xact);
     ogs_expect(rv == OGS_OK);
 
+    upf_dataplane_report_unlock();
     return rv;
 }

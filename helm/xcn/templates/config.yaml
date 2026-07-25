@@ -150,6 +150,11 @@ data:
       max:
         ue: 1024
     upf:
+      dataplane:
+        session_workers:
+          enabled: {{ .Values.networking.upf.dataplane.sessionWorkers.enabled }}
+          count: {{ .Values.networking.upf.dataplane.sessionWorkers.count }}
+          queue_size: {{ .Values.networking.upf.dataplane.sessionWorkers.queueSize }}
       pfcp:
         server:
           - address: 127.0.0.7
@@ -168,6 +173,7 @@ data:
           buffer_size: {{ .Values.networking.upf.n3.memif.bufferSize }}
           burst_size: {{ .Values.networking.upf.n3.memif.burstSize }}
           log2_ring_size: {{ .Values.networking.upf.n3.memif.log2RingSize }}
+          queues: {{ .Values.networking.upf.n3.memif.queues }}
           udp_checksum: {{ .Values.networking.upf.n3.memif.udpChecksum }}
       n6:
         backend: {{ .Values.networking.upf.n6.backend | quote }}
@@ -177,6 +183,7 @@ data:
           buffer_size: {{ .Values.networking.upf.n6.memif.bufferSize }}
           burst_size: {{ .Values.networking.upf.n6.memif.burstSize }}
           log2_ring_size: {{ .Values.networking.upf.n6.memif.log2RingSize }}
+          queues: {{ .Values.networking.upf.n6.memif.queues }}
       session:
         - subnet: 10.45.0.0/16
           gateway: 10.45.0.1
@@ -228,10 +235,10 @@ data:
     }
   vpp-cli-commands.conf.template: |
     create memif socket id {{ .Values.networking.upf.n3.memif.socketId }} filename {{ .Values.networking.upf.n3.memif.socket }}
-    create interface memif id {{ .Values.networking.upf.n3.memif.id }} socket-id {{ .Values.networking.upf.n3.memif.socketId }} master mode ip ring-size {{ .Values.networking.upf.n3.memif.ringSize }} buffer-size {{ .Values.networking.upf.n3.memif.bufferSize }}
+    create interface memif id {{ .Values.networking.upf.n3.memif.id }} socket-id {{ .Values.networking.upf.n3.memif.socketId }} master mode ip ring-size {{ .Values.networking.upf.n3.memif.ringSize }} buffer-size {{ .Values.networking.upf.n3.memif.bufferSize }} rx-queues {{ .Values.networking.upf.n3.memif.queues }} tx-queues {{ .Values.networking.upf.n3.memif.queues }}
     set interface state memif{{ .Values.networking.upf.n3.memif.socketId }}/{{ .Values.networking.upf.n3.memif.id }} up
     create memif socket id {{ .Values.networking.upf.n6.memif.socketId }} filename {{ .Values.networking.upf.n6.memif.socket }}
-    create interface memif id {{ .Values.networking.upf.n6.memif.id }} socket-id {{ .Values.networking.upf.n6.memif.socketId }} master mode ip ring-size {{ .Values.networking.upf.n6.memif.ringSize }} buffer-size {{ .Values.networking.upf.n6.memif.bufferSize }}
+    create interface memif id {{ .Values.networking.upf.n6.memif.id }} socket-id {{ .Values.networking.upf.n6.memif.socketId }} master mode ip ring-size {{ .Values.networking.upf.n6.memif.ringSize }} buffer-size {{ .Values.networking.upf.n6.memif.bufferSize }} rx-queues {{ .Values.networking.upf.n6.memif.queues }} tx-queues {{ .Values.networking.upf.n6.memif.queues }}
     set interface state memif{{ .Values.networking.upf.n6.memif.socketId }}/{{ .Values.networking.upf.n6.memif.id }} up
     set interface ip address memif{{ .Values.networking.upf.n6.memif.socketId }}/{{ .Values.networking.upf.n6.memif.id }} {{ .Values.vpp.n6.interfaceAddress }}
     set interface state dpdk-n3 up
