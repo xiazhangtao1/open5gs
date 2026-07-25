@@ -80,14 +80,14 @@ static int on_interrupt(
             return rv;
         }
 
-        upf_n3_memif_tx_batch_begin();
+        upf_n3_memif_tx_batch_begin(count);
         for (i = 0; i < count; i++) {
             if (buffers[i].flags & MEMIF_BUFFER_FLAG_NEXT) {
                 ogs_error("[DROP] Chained N6 memif buffers are not supported");
                 continue;
             }
-            if (upf_gtp_handle_n6_data(buffers[i].data, buffers[i].len) !=
-                    OGS_OK)
+            if (upf_gtp_handle_n6_data(
+                        buffers[i].data, buffers[i].len) != OGS_OK)
                 ogs_error("[DROP] Invalid packet received from N6 memif");
         }
         upf_n3_memif_tx_batch_flush();

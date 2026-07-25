@@ -16,7 +16,7 @@ int upf_n3_memif_open(void);
 void upf_n3_memif_close(void);
 int upf_n3_memif_poll(void);
 void upf_n3_memif_cancel_poll(void);
-void upf_n3_memif_tx_batch_begin(void);
+void upf_n3_memif_tx_batch_begin(uint16_t expected);
 void upf_n3_memif_tx_batch_flush(void);
 ogs_pkbuf_t *upf_n3_memif_prepare_gtpu(
         const void *payload, uint16_t payload_len, uint8_t gtpu_headroom);
