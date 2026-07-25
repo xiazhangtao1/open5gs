@@ -28,8 +28,30 @@ VF 的性能限制。`pg0 rx = memif1/0 tx` 表示所有发生包均交给 Open5
 | 1.5G | 1,313,020 | 1,222,953 | 6.860% | 1.397G |
 | 2.0G | 1,750,700 | 1,606,976 | 8.210% | 1.836G |
 
-本轮确认的最高零丢包档为 **550 Mbps**。600M以上单次结果受 VPP packet-generator
-burst 节奏影响而并非严格单调，但均已出现 Open5GS 段丢包，不能作为稳定能力。
+在 packet-generator 默认 `maxframe=256` 的这组特定 burst 条件下，最高零丢包
+档为 **550 Mbps**。600M以上结果并非严格单调，不能与下文使用独立 VCL/VF
+均匀发生器测得的旧单 Worker 1.2G零丢包结果直接横向比较，也不能据此认定
+单 Worker 的绝对能力下降到550M。
+
+### 发包节奏和 Session 数复核
+
+为限制补偿性突发，另将每条 packet-generator 流的 `maxframe` 设置为
+`ceil(该流 PPS / 100000)`，即限制为每10μs目标包数的向上取整。VPP仍使用
+时间累加器控制平均速率，该设置限制的是每次 graph 调用的最大包数，不保证
+Linux/VPP调度严格每10μs唤醒一次。
+
+| 单 Worker负载 | 流量命中 | maxframe | N6输入 | N3输出 | 丢包率 |
+|---:|---|---:|---:|---:|---:|
+| 600M | 单 Session | 1 | 525,210 | 512,174 | 2.482% |
+| 600M | 双 Session各半 | 1/1 | 525,210 | 505,922 | 3.672% |
+| 1.2G | 单 Session | 2 | 1,050,420 | 1,024,690 | 2.449% |
+| 1.2G | 双 Session各半 | 1/1 | 1,050,420 | 999,654 | 4.833% |
+
+细粒度平滑没有恢复旧路径的1.2G零丢包，反而使 worker 更难积累批量。双流比
+单流进一步增加小 batch 交错，但单 Session流同样丢包，说明主要退化来自新
+`dispatcher -> payload copy -> task queue -> worker` 路径破坏原有 memif burst
+边界，而不是建立两个 PFCP Session本身。1.2G双流还观察到1,912次 N6 memif
+`no free tx slots`，说明小批量处理不及时已向输入 ring 形成反压。
 
 ### 双 Worker / 双 N3、N6 memif ring
 
