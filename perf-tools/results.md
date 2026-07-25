@@ -1,5 +1,45 @@
 # UPF performance results
 
+## Session Worker 第一阶段批量分类与投递（2026-07-25）
+
+本阶段不实现 descriptor lease，memif RX buffer 仍在 dispatcher 完成 payload
+复制后立即 refill。修改只涉及调度方式：
+
+- 一个 N3/N6 `memif_rx_burst()` 只获取一次规则读锁并完成全部 Session 归属
+  查询；
+- N3 继续按 GTP-U TEID、N6 继续按 UE IP 找到固定 `owner_worker`；
+- dispatcher 按 owner 整理索引，每个 worker 每个 RX burst 只入队一个 batch；
+- 每个 worker 使用固定大小 SPSC 报文环和预分配 batch 描述符，热路径无
+  `malloc`；
+- worker 收到第一个 batch 后，非阻塞合并队列中已经到达的 batch，最多累计
+  256 包，再统一获取规则读锁并执行 N3/N6 TX begin/flush。这里不等待凑满
+  256 包，队列暂时为空就立即处理；
+- PDR/FAR/QER/URR、PFCP Session、GTP-U 封装/解封装仍执行原处理函数，未增加
+  fast path，也未放宽任何规则条件。
+
+测试仍使用同一 OAI UE 的两个真实 PDU/PFCP Session（`10.45.0.2`、
+`10.45.0.3`），inner IPv4 UDP 1428 bytes，两条流各承担一半负载。下表采用
+每条流 `maxframe=ceil(PPS/100000)` 的约 10μs 小批量节奏，每档10秒。
+
+| Worker / ring | 目标 inner | N6 memif 输入 | N3 memif 输出 | Open5GS 段丢包 |
+|---:|---:|---:|---:|---:|
+| 1 / 1 | 600M | 525,210 | 525,210 | 0 |
+| 1 / 1 | 1.2G | 1,050,420 | 1,041,590 | 0.841% |
+| 2 / 2 | 600M | 525,210 | 525,210 | 0 |
+| 2 / 2 | 1.2G | 1,050,420 | 1,043,720 | 0.638% |
+| 2 / 2 | 2.0G | 1,750,700 | 1,704,138 | 2.660% |
+
+旧逐包 dispatcher 路径在同一双 Session/10μs口径下，单 Worker 600M 和1.2G
+分别丢3.672%和4.833%；新实现分别降为0和0.841%。大 burst 口径下，新单
+Worker 1.2G、2.0G分别丢1.060%、2.608%，旧实现分别为2.641%、8.210%。
+
+压力测试后正常停止 UPF，worker0 统计 `2,980,116 packets / 0 drops`，
+worker1 为 `2,977,514 / 0 drops`，确认 dispatcher 报文环和 batch 队列没有
+丢包。剩余端口差值发生在 worker 完整 UPF 处理后的 N3 TX buffer/ring 节奏；
+1.2G 双 Worker 测试同时记录到223次 VPP N6输入侧
+`memif1/0-tx no free tx slots`。因此第一阶段已降低分类、任务池原子操作、
+队列唤醒和锁开销，但尚未消除 payload copy，也不能据此宣称达到同机10G。
+
 ## 双 Session 下行：单 Worker 与双 Worker 对比（2026-07-25）
 
 测试使用同一个 OAI UE 建立两个真实 PDU/PFCP Session，地址为 `10.45.0.2`

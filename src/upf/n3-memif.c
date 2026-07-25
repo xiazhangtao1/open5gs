@@ -108,7 +108,8 @@ static uint16_t udp_checksum(const struct ip *ip_h,
     return checksum_finish(sum);
 }
 
-static int handle_raw_ipv4(const void *data, uint16_t len)
+static int parse_raw_ipv4(const void *data, uint16_t len,
+        upf_dataplane_packet_t *packet)
 {
     const struct ip *ip_h = data;
     const struct udphdr *udp_h;
@@ -155,12 +156,10 @@ static int handle_raw_ipv4(const void *data, uint16_t len)
     from.sin.sin_addr = ip_h->ip_src;
     from.ogs_sin_port = udp_h->uh_sport;
 
-    if (upf_self()->dataplane.session_workers)
-        return upf_dataplane_submit_n3(
-                (const uint8_t *)udp_h + sizeof(*udp_h),
-                udp_len - sizeof(*udp_h), &from);
-    return upf_gtp_handle_n3_data((const uint8_t *)udp_h + sizeof(*udp_h),
-            udp_len - sizeof(*udp_h), &from);
+    packet->data = (const uint8_t *)udp_h + sizeof(*udp_h);
+    packet->len = udp_len - sizeof(*udp_h);
+    memcpy(&packet->from, &from, sizeof(packet->from));
+    return OGS_OK;
 }
 
 static int on_connect(memif_conn_handle_t connection, void *private_ctx)
@@ -208,6 +207,8 @@ static int on_interrupt(
     memif_buffer_t buffers[UPF_MEMIF_MAX_BURST];
     uint16_t count = 0;
     uint16_t limit = upf_self()->n3.burst_size;
+    upf_dataplane_packet_t packets[UPF_MEMIF_MAX_BURST];
+    uint16_t packet_count;
     int rv;
     int i;
 
@@ -221,15 +222,27 @@ static int on_interrupt(
 
         if (!upf_self()->dataplane.session_workers)
             upf_n6_memif_tx_batch_begin();
+        packet_count = 0;
         for (i = 0; i < count; i++) {
             if (buffers[i].flags & MEMIF_BUFFER_FLAG_NEXT) {
                 ogs_error("[DROP] Chained N3 memif buffers are unsupported");
                 continue;
             }
-            if (handle_raw_ipv4(buffers[i].data, buffers[i].len) != OGS_OK)
+            if (parse_raw_ipv4(buffers[i].data, buffers[i].len,
+                        &packets[packet_count]) != OGS_OK) {
+                ogs_debug("[DROP] Invalid packet received from N3 memif");
+                continue;
+            }
+            if (upf_self()->dataplane.session_workers)
+                packet_count++;
+            else if (upf_gtp_handle_n3_data(packets[0].data,
+                        packets[0].len, &packets[0].from) != OGS_OK)
                 ogs_debug("[DROP] Invalid packet received from N3 memif");
         }
-        if (!upf_self()->dataplane.session_workers)
+        if (upf_self()->dataplane.session_workers && packet_count &&
+            upf_dataplane_submit_n3_batch(packets, packet_count) != OGS_OK)
+            ogs_debug("[DROP] N3 memif batch was not fully dispatched");
+        else if (!upf_self()->dataplane.session_workers)
             upf_n6_memif_tx_batch_flush();
 
         rv = memif_refill_queue(connection, qid, count, 0);

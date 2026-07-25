@@ -79,6 +79,8 @@ static int on_interrupt(
     memif_buffer_t buffers[UPF_MEMIF_MAX_BURST];
     uint16_t count = 0;
     uint16_t limit = upf_self()->n6.burst_size;
+    upf_dataplane_packet_t packets[UPF_MEMIF_MAX_BURST];
+    uint16_t packet_count;
     int rv;
     int i;
 
@@ -92,19 +94,25 @@ static int on_interrupt(
 
         if (!upf_self()->dataplane.session_workers)
             upf_n3_memif_tx_batch_begin(count);
+        packet_count = 0;
         for (i = 0; i < count; i++) {
             if (buffers[i].flags & MEMIF_BUFFER_FLAG_NEXT) {
                 ogs_error("[DROP] Chained N6 memif buffers are not supported");
                 continue;
             }
-            if ((upf_self()->dataplane.session_workers ?
-                    upf_dataplane_submit_n6(
-                        buffers[i].data, buffers[i].len) :
-                    upf_gtp_handle_n6_data(
-                        buffers[i].data, buffers[i].len)) != OGS_OK)
+            if (upf_self()->dataplane.session_workers) {
+                packets[packet_count].data = buffers[i].data;
+                packets[packet_count].len = buffers[i].len;
+                packet_count++;
+            } else if (upf_gtp_handle_n6_data(
+                        buffers[i].data, buffers[i].len) != OGS_OK) {
                 ogs_error("[DROP] Invalid packet received from N6 memif");
+            }
         }
-        if (!upf_self()->dataplane.session_workers)
+        if (upf_self()->dataplane.session_workers && packet_count &&
+            upf_dataplane_submit_n6_batch(packets, packet_count) != OGS_OK)
+            ogs_debug("[DROP] N6 memif batch was not fully dispatched");
+        else if (!upf_self()->dataplane.session_workers)
             upf_n3_memif_tx_batch_flush();
 
         rv = memif_refill_queue(connection, qid, count, 0);

@@ -33,12 +33,20 @@ typedef struct {
 } upf_work_t;
 
 typedef struct {
+    uint64_t start;
+    uint16_t count;
+} upf_work_batch_t;
+
+typedef struct {
     uint8_t id;
     ogs_thread_t *thread;
     ogs_queue_t *queue;
     ogs_queue_t *free_queue;
     void *task_pool;
+    void *batch_pool;
     size_t task_size;
+    uint64_t write_seq;
+    uint64_t read_seq;
     uint64_t packets;
     uint64_t drops;
 } upf_worker_t;
@@ -131,48 +139,92 @@ static void pin_current_thread_when_ready(
 static void session_worker_main(void *data)
 {
     upf_worker_t *worker = data;
-    upf_work_t *batch[256];
+    upf_work_batch_t *pending = NULL;
 
     tls_worker_id = worker->id;
     pin_current_thread_when_ready(worker->id, "session-worker");
     ogs_info("UPF session worker %u started", worker->id);
     while (!is_stopping()) {
-        upf_work_t *work = NULL;
-        unsigned int count = 0;
+        upf_work_batch_t *batches[UPF_DATAPLANE_MAX_BURST];
+        unsigned int batch_count = 0;
+        unsigned int packet_count = 0;
         unsigned int n6_count = 0;
         unsigned int i;
-        int rv = ogs_queue_pop(worker->queue, (void **)&work);
+        int rv;
 
-        if (rv != OGS_OK || !work)
-            break;
+        if (pending) {
+            batches[batch_count++] = pending;
+            packet_count = pending->count;
+            pending = NULL;
+        } else {
+            rv = ogs_queue_pop(worker->queue, (void **)&batches[0]);
+            if (rv != OGS_OK || !batches[0])
+                break;
+            packet_count = batches[0]->count;
+            batch_count = 1;
+        }
 
-        batch[count++] = work;
-        while (count < 256 &&
-                ogs_queue_trypop(worker->queue,
-                    (void **)&batch[count]) == OGS_OK)
-            count++;
-        for (i = 0; i < count; i++)
-            if (batch[i]->type == UPF_WORK_N6)
-                n6_count++;
+        while (batch_count < UPF_DATAPLANE_MAX_BURST &&
+                packet_count < UPF_DATAPLANE_MAX_BURST) {
+            upf_work_batch_t *next = NULL;
+
+            if (ogs_queue_trypop(worker->queue, (void **)&next) != OGS_OK)
+                break;
+            if (packet_count + next->count > UPF_DATAPLANE_MAX_BURST) {
+                pending = next;
+                break;
+            }
+            batches[batch_count++] = next;
+            packet_count += next->count;
+        }
+
+        for (i = 0; i < batch_count; i++) {
+            upf_work_batch_t *batch = batches[i];
+            unsigned int j;
+
+            for (j = 0; j < batch->count; j++) {
+                uint64_t seq = batch->start + j;
+                upf_work_t *work = (upf_work_t *)(
+                        (uint8_t *)worker->task_pool +
+                        (seq % upf_self()->dataplane.worker_queue_size) *
+                        worker->task_size);
+                if (work->type == UPF_WORK_N6)
+                    n6_count++;
+            }
+        }
 
         upf_dataplane_read_lock();
         upf_n6_memif_tx_batch_begin();
         upf_n3_memif_tx_batch_begin(n6_count);
-        for (i = 0; i < count; i++) {
-            work = batch[i];
-            if (work->type == UPF_WORK_N3)
-                upf_gtp_handle_n3_data(
-                        work->data, work->len, &work->from);
-            else
-                upf_gtp_handle_n6_data(work->data, work->len);
+        for (i = 0; i < batch_count; i++) {
+            upf_work_batch_t *batch = batches[i];
+            unsigned int j;
+
+            for (j = 0; j < batch->count; j++) {
+                uint64_t seq = batch->start + j;
+                upf_work_t *work = (upf_work_t *)(
+                        (uint8_t *)worker->task_pool +
+                        (seq % upf_self()->dataplane.worker_queue_size) *
+                        worker->task_size);
+                if (work->type == UPF_WORK_N3)
+                    upf_gtp_handle_n3_data(
+                            work->data, work->len, &work->from);
+                else
+                    upf_gtp_handle_n6_data(work->data, work->len);
+            }
         }
         upf_n6_memif_tx_batch_flush();
         upf_n3_memif_tx_batch_flush();
         upf_dataplane_read_unlock();
-        worker->packets += count;
-        for (i = 0; i < count; i++)
+        worker->packets += packet_count;
+        for (i = 0; i < batch_count; i++) {
+            upf_work_batch_t *batch = batches[i];
+
+            __atomic_store_n(&worker->read_seq,
+                    batch->start + batch->count, __ATOMIC_RELEASE);
             ogs_assert(ogs_queue_trypush(
-                        worker->free_queue, batch[i]) == OGS_OK);
+                        worker->free_queue, batch) == OGS_OK);
+        }
     }
     ogs_info("UPF session worker %u stopped [packets:%llu drops:%llu]",
             worker->id, (unsigned long long)worker->packets,
@@ -201,7 +253,7 @@ static void dispatcher_main(void *data)
     ogs_info("UPF memif dispatcher stopped");
 }
 
-static uint8_t owner_from_n3(const void *data, size_t len)
+static uint8_t owner_from_n3_locked(const void *data, size_t len)
 {
     const uint8_t *p = data;
     uint32_t teid;
@@ -216,7 +268,6 @@ static uint8_t owner_from_n3(const void *data, size_t len)
     if (!teid)
         return 0;
 
-    upf_dataplane_read_lock();
     object = ogs_pfcp_object_find_by_teid(teid);
     if (object) {
         if (object->type == OGS_PFCP_OBJ_SESS_TYPE)
@@ -227,17 +278,15 @@ static uint8_t owner_from_n3(const void *data, size_t len)
             sess = UPF_SESS(pfcp_sess);
     }
     teid = sess ? sess->owner_worker : 0;
-    upf_dataplane_read_unlock();
     return (uint8_t)teid;
 }
 
-static uint8_t owner_from_n6(const void *data, size_t len)
+static uint8_t owner_from_n6_locked(const void *data, size_t len)
 {
     const uint8_t *p = data;
     upf_sess_t *sess = NULL;
     uint8_t owner = 0;
 
-    upf_dataplane_read_lock();
     if (len >= sizeof(struct ip) && (p[0] >> 4) == 4) {
         uint32_t addr;
         memcpy(&addr, p + 16, sizeof(addr));
@@ -249,53 +298,132 @@ static uint8_t owner_from_n6(const void *data, size_t len)
     }
     if (sess)
         owner = sess->owner_worker;
-    upf_dataplane_read_unlock();
     return owner;
 }
 
-static int submit_work(upf_work_type_t type, uint8_t owner,
-        const void *data, size_t len, const ogs_sockaddr_t *from)
+static int submit_batch(upf_work_type_t type,
+        const upf_dataplane_packet_t packets[], uint16_t count)
 {
-    upf_work_t *work;
-    int rv;
+    uint16_t indices[UPF_MAX_WORKERS][UPF_DATAPLANE_MAX_BURST];
+    uint16_t owner_count[UPF_MAX_WORKERS] = { 0 };
+    uint8_t worker_count = upf_self()->dataplane.worker_count;
+    uint16_t accepted = 0;
+    uint16_t i;
+    uint8_t owner;
+    int result = OGS_OK;
 
-    if (!data || !len || owner >= upf_self()->dataplane.worker_count)
+    if (!packets || !count || count > UPF_DATAPLANE_MAX_BURST)
         return OGS_ERROR;
-    if (sizeof(*work) + len > workers[owner].task_size)
-        return OGS_ERROR;
-    rv = ogs_queue_trypop(workers[owner].free_queue, (void **)&work);
-    if (rv != OGS_OK) {
-        workers[owner].drops++;
-        return OGS_ERROR;
-    }
-    memset(work, 0, sizeof(*work));
-    work->type = type;
-    work->len = len;
-    if (from)
-        memcpy(&work->from, from, sizeof(*from));
-    memcpy(work->data, data, len);
 
-    rv = ogs_queue_trypush(workers[owner].queue, work);
-    if (rv != OGS_OK) {
-        workers[owner].drops++;
-        ogs_assert(ogs_queue_trypush(
-                    workers[owner].free_queue, work) == OGS_OK);
-        return OGS_ERROR;
+    /*
+     * Session rules are stable for this complete RX burst. Grouping indices
+     * preserves packet order within each session owner.
+     */
+    upf_dataplane_read_lock();
+    for (i = 0; i < count; i++) {
+        if (!packets[i].data || !packets[i].len) {
+            result = OGS_ERROR;
+            continue;
+        }
+        owner = type == UPF_WORK_N3 ?
+            owner_from_n3_locked(packets[i].data, packets[i].len) :
+            owner_from_n6_locked(packets[i].data, packets[i].len);
+        if (owner >= worker_count ||
+            sizeof(upf_work_t) + packets[i].len >
+                workers[owner].task_size) {
+            result = OGS_ERROR;
+            continue;
+        }
+        indices[owner][owner_count[owner]++] = i;
+        accepted++;
     }
-    return OGS_OK;
+    upf_dataplane_read_unlock();
+
+    for (owner = 0; owner < worker_count; owner++) {
+        upf_worker_t *worker = &workers[owner];
+        upf_work_batch_t *batch;
+        uint64_t read_seq;
+        uint64_t start;
+        uint16_t j;
+
+        if (!owner_count[owner])
+            continue;
+        read_seq = __atomic_load_n(&worker->read_seq, __ATOMIC_ACQUIRE);
+        if (worker->write_seq - read_seq >
+                upf_self()->dataplane.worker_queue_size -
+                owner_count[owner] ||
+            ogs_queue_trypop(
+                worker->free_queue, (void **)&batch) != OGS_OK) {
+            worker->drops += owner_count[owner];
+            result = OGS_ERROR;
+            continue;
+        }
+
+        start = worker->write_seq;
+        for (j = 0; j < owner_count[owner]; j++) {
+            const upf_dataplane_packet_t *packet =
+                &packets[indices[owner][j]];
+            uint64_t seq = start + j;
+            upf_work_t *work = (upf_work_t *)(
+                    (uint8_t *)worker->task_pool +
+                    (seq % upf_self()->dataplane.worker_queue_size) *
+                    worker->task_size);
+
+            work->type = type;
+            work->len = packet->len;
+            if (type == UPF_WORK_N3)
+                memcpy(&work->from, &packet->from, sizeof(work->from));
+            memcpy(work->data, packet->data, packet->len);
+        }
+        batch->start = start;
+        batch->count = owner_count[owner];
+        worker->write_seq = start + owner_count[owner];
+        if (ogs_queue_trypush(worker->queue, batch) != OGS_OK) {
+            worker->write_seq = start;
+            worker->drops += owner_count[owner];
+            ogs_assert(ogs_queue_trypush(
+                        worker->free_queue, batch) == OGS_OK);
+            result = OGS_ERROR;
+            continue;
+        }
+    }
+
+    return accepted == count ? result : OGS_ERROR;
 }
 
 int upf_dataplane_submit_n3(
         const void *data, size_t len, const ogs_sockaddr_t *from)
 {
-    return submit_work(UPF_WORK_N3, owner_from_n3(data, len),
-            data, len, from);
+    upf_dataplane_packet_t packet = {
+        .data = data,
+        .len = len,
+    };
+
+    if (from)
+        memcpy(&packet.from, from, sizeof(packet.from));
+    return submit_batch(UPF_WORK_N3, &packet, 1);
 }
 
 int upf_dataplane_submit_n6(const void *data, size_t len)
 {
-    return submit_work(UPF_WORK_N6, owner_from_n6(data, len),
-            data, len, NULL);
+    upf_dataplane_packet_t packet = {
+        .data = data,
+        .len = len,
+    };
+
+    return submit_batch(UPF_WORK_N6, &packet, 1);
+}
+
+int upf_dataplane_submit_n3_batch(
+        const upf_dataplane_packet_t packets[], uint16_t count)
+{
+    return submit_batch(UPF_WORK_N3, packets, count);
+}
+
+int upf_dataplane_submit_n6_batch(
+        const upf_dataplane_packet_t packets[], uint16_t count)
+{
+    return submit_batch(UPF_WORK_N6, packets, count);
 }
 
 void upf_dataplane_init(void)
@@ -334,13 +462,20 @@ int upf_dataplane_start(void)
         workers[i].task_pool = ogs_calloc(
                 upf_self()->dataplane.worker_queue_size,
                 workers[i].task_size);
+        workers[i].batch_pool = ogs_calloc(
+                upf_self()->dataplane.worker_queue_size,
+                sizeof(upf_work_batch_t));
         if (!workers[i].queue || !workers[i].free_queue ||
-            !workers[i].task_pool)
+            !workers[i].task_pool || !workers[i].batch_pool)
             goto fail;
+        workers[i].write_seq = 0;
+        __atomic_store_n(&workers[i].read_seq, 0, __ATOMIC_RELEASE);
+        workers[i].packets = 0;
+        workers[i].drops = 0;
         for (j = 0; j < upf_self()->dataplane.worker_queue_size; j++)
             ogs_assert(ogs_queue_trypush(workers[i].free_queue,
-                        (uint8_t *)workers[i].task_pool +
-                        j * workers[i].task_size) == OGS_OK);
+                        (upf_work_batch_t *)workers[i].batch_pool + j)
+                    == OGS_OK);
         workers[i].thread = ogs_thread_create(session_worker_main, &workers[i]);
         if (!workers[i].thread)
             goto fail;
@@ -385,6 +520,10 @@ void upf_dataplane_stop(void)
         if (workers[i].task_pool) {
             ogs_free(workers[i].task_pool);
             workers[i].task_pool = NULL;
+        }
+        if (workers[i].batch_pool) {
+            ogs_free(workers[i].batch_pool);
+            workers[i].batch_pool = NULL;
         }
     }
 }
