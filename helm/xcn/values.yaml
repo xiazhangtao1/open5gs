@@ -176,7 +176,6 @@ networking:
         enabled: false
         count: 1
         queueSize: 8192
-        busyPollUs: 20
     gtpu:
       # Empty values are resolved to status.podIP at container startup.
       # Do not use 0.0.0.0:2152; it would also capture SMF CP-function GTP-U.

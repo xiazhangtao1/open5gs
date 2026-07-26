@@ -20,7 +20,6 @@
 
 #if HAVE_LIBMEMIF
 #include <errno.h>
-#include <poll.h>
 #include <sys/epoll.h>
 #include <sys/eventfd.h>
 #include <unistd.h>
@@ -49,29 +48,18 @@ typedef struct {
 typedef struct {
     uint8_t id;
     ogs_thread_t *thread;
+    ogs_queue_t *queue;
+    ogs_queue_t *free_queue;
     void *task_pool;
-    upf_work_batch_t *batch_ring;
+    void *batch_pool;
     size_t task_size;
-    /* Keep producer- and consumer-owned cursors on separate cache lines. */
-    uint64_t write_seq __attribute__((aligned(64)));
-    uint64_t batch_write_seq;
-    uint8_t producer_cursor_pad[48];
+    uint64_t write_seq;
     uint64_t read_seq;
-    uint64_t batch_read_seq;
-    uint8_t consumer_cursor_pad[48];
     uint64_t packets;
     uint64_t drops;
-    uint64_t ring_full_batches;
+    uint64_t queue_full_batches;
+    uint64_t queue_push_failures;
     uint64_t queue_high_water;
-    uint64_t batch_high_water;
-#if HAVE_LIBMEMIF
-    int wake_fd;
-    unsigned int sleeping;
-    uint64_t wake_signals;
-    uint64_t wake_events;
-    uint64_t sleeps;
-    uint64_t busy_loops;
-#endif
 } upf_worker_t;
 
 static ogs_thread_t *dispatcher;
@@ -169,185 +157,50 @@ static void pin_current_thread_when_ready(
     ogs_warn("CPUManager cpuset not ready for %s; using pod cpuset", name);
 }
 
-static bool worker_batch_ring_empty(upf_worker_t *worker)
-{
-    uint64_t head = __atomic_load_n(
-            &worker->batch_read_seq, __ATOMIC_ACQUIRE);
-    uint64_t tail = __atomic_load_n(
-            &worker->batch_write_seq, __ATOMIC_ACQUIRE);
-
-    return head == tail;
-}
-
-static bool worker_batch_push(
-        upf_worker_t *worker, uint64_t start, uint16_t count)
-{
-    uint64_t head = __atomic_load_n(
-            &worker->batch_read_seq, __ATOMIC_ACQUIRE);
-    uint64_t tail = __atomic_load_n(
-            &worker->batch_write_seq, __ATOMIC_RELAXED);
-    uint64_t depth;
-    upf_work_batch_t *batch;
-
-    if (tail - head >= upf_self()->dataplane.worker_queue_size)
-        return false;
-
-    batch = &worker->batch_ring[
-        tail % upf_self()->dataplane.worker_queue_size];
-    batch->start = start;
-    batch->count = count;
-    __atomic_store_n(
-            &worker->batch_write_seq, tail + 1, __ATOMIC_RELEASE);
-
-    depth = tail + 1 - head;
-    if (depth > worker->batch_high_water)
-        worker->batch_high_water = depth;
-
-#if HAVE_LIBMEMIF
-    /*
-     * The consumer sets sleeping before rechecking the ring. Publishing the
-     * batch first and fencing before loading sleeping prevents a lost wake-up.
-     */
-    __atomic_thread_fence(__ATOMIC_SEQ_CST);
-    if (__atomic_load_n(&worker->sleeping, __ATOMIC_ACQUIRE)) {
-        uint64_t value = 1;
-
-        if (write(worker->wake_fd, &value, sizeof(value)) == sizeof(value))
-            worker->wake_signals++;
-        else if (errno != EAGAIN)
-            ogs_warn("UPF worker %u wake failed: %s",
-                    worker->id, strerror(errno));
-    }
-#endif
-    return true;
-}
-
-static bool worker_batch_pop(
-        upf_worker_t *worker, upf_work_batch_t *batch)
-{
-    uint64_t head = __atomic_load_n(
-            &worker->batch_read_seq, __ATOMIC_RELAXED);
-    uint64_t tail = __atomic_load_n(
-            &worker->batch_write_seq, __ATOMIC_ACQUIRE);
-
-    if (head == tail)
-        return false;
-
-    *batch = worker->batch_ring[
-        head % upf_self()->dataplane.worker_queue_size];
-    __atomic_store_n(
-            &worker->batch_read_seq, head + 1, __ATOMIC_RELEASE);
-    return true;
-}
-
-static void worker_cpu_relax(void)
-{
-#if defined(__x86_64__) || defined(__i386__)
-    __asm__ volatile("pause");
-#elif defined(__aarch64__) || defined(__arm__)
-    __asm__ volatile("yield");
-#else
-    __asm__ volatile("" ::: "memory");
-#endif
-}
-
-static void worker_wait_for_batch(upf_worker_t *worker)
-{
-#if HAVE_LIBMEMIF
-    struct pollfd pfd;
-    int rv;
-
-    __atomic_store_n(&worker->sleeping, 1, __ATOMIC_RELEASE);
-    __atomic_thread_fence(__ATOMIC_SEQ_CST);
-    if (!worker_batch_ring_empty(worker) || is_stopping()) {
-        __atomic_store_n(&worker->sleeping, 0, __ATOMIC_RELEASE);
-        return;
-    }
-
-    memset(&pfd, 0, sizeof(pfd));
-    pfd.fd = worker->wake_fd;
-    pfd.events = POLLIN;
-    __atomic_fetch_add(&worker->sleeps, 1, __ATOMIC_RELAXED);
-    do {
-        rv = poll(&pfd, 1, -1);
-    } while (rv < 0 && errno == EINTR && !is_stopping());
-
-    if (rv > 0 && (pfd.revents & POLLIN)) {
-        uint64_t value;
-
-        if (read(worker->wake_fd, &value, sizeof(value)) == sizeof(value))
-            __atomic_fetch_add(
-                    &worker->wake_events, value, __ATOMIC_RELAXED);
-    } else if (rv < 0 && !is_stopping()) {
-        ogs_warn("UPF worker %u poll failed: %s",
-                worker->id, strerror(errno));
-        ogs_msleep(1);
-    }
-    __atomic_store_n(&worker->sleeping, 0, __ATOMIC_RELEASE);
-#else
-    ogs_msleep(1);
-#endif
-}
-
 static void session_worker_main(void *data)
 {
     upf_worker_t *worker = data;
-    upf_work_batch_t pending;
-    bool has_pending = false;
-    ogs_time_t busy_until = 0;
-    uint64_t busy_loops = 0;
+    upf_work_batch_t *pending = NULL;
 
     tls_worker_id = worker->id;
     pin_current_thread_when_ready(worker->id, "session-worker");
     ogs_info("UPF session worker %u started", worker->id);
     while (!is_stopping()) {
-        upf_work_batch_t batches[UPF_DATAPLANE_MAX_BURST];
+        upf_work_batch_t *batches[UPF_DATAPLANE_MAX_BURST];
         unsigned int batch_count = 0;
         unsigned int packet_count = 0;
         unsigned int n6_count = 0;
         unsigned int i;
+        int rv;
 
-        if (has_pending) {
+        if (pending) {
             batches[batch_count++] = pending;
-            packet_count = pending.count;
-            has_pending = false;
-        } else if (worker_batch_pop(worker, &batches[0])) {
-            packet_count = batches[0].count;
-            batch_count = 1;
+            packet_count = pending->count;
+            pending = NULL;
         } else {
-            if (busy_until &&
-                ogs_get_monotonic_time() < busy_until) {
-                worker_cpu_relax();
-                busy_loops++;
-                continue;
-            }
-            if (busy_loops) {
-                __atomic_fetch_add(&worker->busy_loops,
-                        busy_loops, __ATOMIC_RELAXED);
-                busy_loops = 0;
-            }
-            busy_until = 0;
-            worker_wait_for_batch(worker);
-            continue;
+            rv = ogs_queue_pop(worker->queue, (void **)&batches[0]);
+            if (rv != OGS_OK || !batches[0])
+                break;
+            packet_count = batches[0]->count;
+            batch_count = 1;
         }
 
         while (batch_count < UPF_DATAPLANE_MAX_BURST &&
                 packet_count < UPF_DATAPLANE_MAX_BURST) {
-            upf_work_batch_t next;
+            upf_work_batch_t *next = NULL;
 
-            if (!worker_batch_pop(worker, &next))
+            if (ogs_queue_trypop(worker->queue, (void **)&next) != OGS_OK)
                 break;
-            if (packet_count + next.count > UPF_DATAPLANE_MAX_BURST) {
+            if (packet_count + next->count > UPF_DATAPLANE_MAX_BURST) {
                 pending = next;
-                has_pending = true;
                 break;
             }
             batches[batch_count++] = next;
-            packet_count += next.count;
+            packet_count += next->count;
         }
 
         for (i = 0; i < batch_count; i++) {
-            upf_work_batch_t *batch = &batches[i];
+            upf_work_batch_t *batch = batches[i];
             unsigned int j;
 
             for (j = 0; j < batch->count; j++) {
@@ -365,7 +218,7 @@ static void session_worker_main(void *data)
         upf_n6_memif_tx_batch_begin();
         upf_n3_memif_tx_batch_begin(n6_count);
         for (i = 0; i < batch_count; i++) {
-            upf_work_batch_t *batch = &batches[i];
+            upf_work_batch_t *batch = batches[i];
             unsigned int j;
 
             for (j = 0; j < batch->count; j++) {
@@ -387,17 +240,14 @@ static void session_worker_main(void *data)
         __atomic_fetch_add(&worker->packets,
                 packet_count, __ATOMIC_RELAXED);
         for (i = 0; i < batch_count; i++) {
-            upf_work_batch_t *batch = &batches[i];
+            upf_work_batch_t *batch = batches[i];
 
             __atomic_store_n(&worker->read_seq,
                     batch->start + batch->count, __ATOMIC_RELEASE);
+            ogs_assert(ogs_queue_trypush(
+                        worker->free_queue, batch) == OGS_OK);
         }
-        busy_until = ogs_get_monotonic_time() +
-            upf_self()->dataplane.worker_busy_poll_us;
     }
-    if (busy_loops)
-        __atomic_fetch_add(&worker->busy_loops,
-                busy_loops, __ATOMIC_RELAXED);
     ogs_info("UPF session worker %u stopped [packets:%llu drops:%llu]",
             worker->id, (unsigned long long)worker->packets,
             (unsigned long long)worker->drops);
@@ -518,38 +368,18 @@ static void dispatcher_main(void *data)
             for (i = 0; i < upf_self()->dataplane.worker_count; i++) {
                 uint64_t read_seq = __atomic_load_n(
                         &workers[i].read_seq, __ATOMIC_ACQUIRE);
-                uint64_t batch_read_seq = __atomic_load_n(
-                        &workers[i].batch_read_seq, __ATOMIC_ACQUIRE);
-                uint64_t batch_write_seq = __atomic_load_n(
-                        &workers[i].batch_write_seq, __ATOMIC_ACQUIRE);
 
                 ogs_info("UPF worker %u stats "
-                        "[packets:%llu drops:%llu task-depth:%llu "
-                        "task-high:%llu batch-depth:%llu batch-high:%llu "
-                        "ring-full:%llu busy-loops:%llu sleeps:%llu "
-                        "wake-signals:%llu wake-events:%llu]",
+                        "[packets:%llu drops:%llu queue-depth:%llu "
+                        "queue-high:%llu queue-full:%llu push-fail:%llu]",
                         i,
                         (unsigned long long)__atomic_load_n(
                             &workers[i].packets, __ATOMIC_RELAXED),
                         (unsigned long long)workers[i].drops,
                         (unsigned long long)(workers[i].write_seq - read_seq),
                         (unsigned long long)workers[i].queue_high_water,
-                        (unsigned long long)(
-                            batch_write_seq - batch_read_seq),
-                        (unsigned long long)workers[i].batch_high_water,
-                        (unsigned long long)workers[i].ring_full_batches,
-#if HAVE_LIBMEMIF
-                        (unsigned long long)__atomic_load_n(
-                            &workers[i].busy_loops, __ATOMIC_RELAXED),
-                        (unsigned long long)__atomic_load_n(
-                            &workers[i].sleeps, __ATOMIC_RELAXED),
-                        (unsigned long long)workers[i].wake_signals,
-                        (unsigned long long)__atomic_load_n(
-                            &workers[i].wake_events, __ATOMIC_RELAXED)
-#else
-                        0ULL, 0ULL, 0ULL, 0ULL
-#endif
-                        );
+                        (unsigned long long)workers[i].queue_full_batches,
+                        (unsigned long long)workers[i].queue_push_failures);
             }
             last_stats = ogs_get_monotonic_time();
         }
@@ -648,26 +478,21 @@ static int submit_batch(upf_work_type_t type,
 
     for (owner = 0; owner < worker_count; owner++) {
         upf_worker_t *worker = &workers[owner];
+        upf_work_batch_t *batch;
         uint64_t read_seq;
-        uint64_t batch_read_seq;
-        uint64_t batch_write_seq;
         uint64_t start;
         uint16_t j;
 
         if (!owner_count[owner])
             continue;
         read_seq = __atomic_load_n(&worker->read_seq, __ATOMIC_ACQUIRE);
-        batch_read_seq = __atomic_load_n(
-                &worker->batch_read_seq, __ATOMIC_ACQUIRE);
-        batch_write_seq = __atomic_load_n(
-                &worker->batch_write_seq, __ATOMIC_RELAXED);
         if (worker->write_seq - read_seq >
                 upf_self()->dataplane.worker_queue_size -
                 owner_count[owner] ||
-            batch_write_seq - batch_read_seq >=
-                upf_self()->dataplane.worker_queue_size) {
+            ogs_queue_trypop(
+                worker->free_queue, (void **)&batch) != OGS_OK) {
             worker->drops += owner_count[owner];
-            worker->ring_full_batches++;
+            worker->queue_full_batches++;
             result = OGS_ERROR;
             continue;
         }
@@ -688,11 +513,20 @@ static int submit_batch(upf_work_type_t type,
                 memcpy(&work->from, &packet->from, sizeof(work->from));
             memcpy(work->data, packet->data, packet->len);
         }
+        batch->start = start;
+        batch->count = owner_count[owner];
         worker->write_seq = start + owner_count[owner];
         if (worker->write_seq - read_seq > worker->queue_high_water)
             worker->queue_high_water = worker->write_seq - read_seq;
-        ogs_assert(worker_batch_push(
-                    worker, start, owner_count[owner]) == true);
+        if (ogs_queue_trypush(worker->queue, batch) != OGS_OK) {
+            worker->write_seq = start;
+            worker->drops += owner_count[owner];
+            worker->queue_push_failures++;
+            ogs_assert(ogs_queue_trypush(
+                        worker->free_queue, batch) == OGS_OK);
+            result = OGS_ERROR;
+            continue;
+        }
         if (submitted)
             *submitted += owner_count[owner];
     }
@@ -828,18 +662,9 @@ void upf_dataplane_wake(void)
 
 void upf_dataplane_init(void)
 {
-    uint8_t i;
-
     pthread_rwlock_init(&rule_lock, NULL);
     pthread_mutex_init(&report_lock, NULL);
     memset(owned_sessions, 0, sizeof(owned_sessions));
-    memset(workers, 0, sizeof(workers));
-#if HAVE_LIBMEMIF
-    for (i = 0; i < UPF_MAX_WORKERS; i++)
-        workers[i].wake_fd = -1;
-#else
-    (void)i;
-#endif
     __atomic_store_n(&stopping, 0, __ATOMIC_RELEASE);
 }
 
@@ -863,6 +688,7 @@ void upf_dataplane_final(void)
 int upf_dataplane_start(void)
 {
     uint8_t i;
+    uint32_t j;
     size_t max_packet_size = upf_self()->n3.buffer_size;
 
     ogs_assert(!dispatcher);
@@ -881,40 +707,30 @@ int upf_dataplane_start(void)
     for (i = 0; i < upf_self()->dataplane.worker_count; i++) {
         workers[i].id = i;
         workers[i].task_size = sizeof(upf_work_t) + max_packet_size;
+        workers[i].queue =
+            ogs_queue_create(upf_self()->dataplane.worker_queue_size);
+        workers[i].free_queue =
+            ogs_queue_create(upf_self()->dataplane.worker_queue_size);
         workers[i].task_pool = ogs_calloc(
                 upf_self()->dataplane.worker_queue_size,
                 workers[i].task_size);
-        workers[i].batch_ring = ogs_calloc(
+        workers[i].batch_pool = ogs_calloc(
                 upf_self()->dataplane.worker_queue_size,
                 sizeof(upf_work_batch_t));
-        if (!workers[i].task_pool || !workers[i].batch_ring)
+        if (!workers[i].queue || !workers[i].free_queue ||
+            !workers[i].task_pool || !workers[i].batch_pool)
             goto fail;
-#if HAVE_LIBMEMIF
-        workers[i].wake_fd = eventfd(0, EFD_NONBLOCK | EFD_CLOEXEC);
-        if (workers[i].wake_fd < 0) {
-            ogs_error("eventfd(worker %u) failed: %s",
-                    i, strerror(errno));
-            goto fail;
-        }
-#endif
         workers[i].write_seq = 0;
         __atomic_store_n(&workers[i].read_seq, 0, __ATOMIC_RELEASE);
-        __atomic_store_n(
-                &workers[i].batch_write_seq, 0, __ATOMIC_RELEASE);
-        __atomic_store_n(
-                &workers[i].batch_read_seq, 0, __ATOMIC_RELEASE);
         workers[i].packets = 0;
         workers[i].drops = 0;
-        workers[i].ring_full_batches = 0;
+        workers[i].queue_full_batches = 0;
+        workers[i].queue_push_failures = 0;
         workers[i].queue_high_water = 0;
-        workers[i].batch_high_water = 0;
-#if HAVE_LIBMEMIF
-        __atomic_store_n(&workers[i].sleeping, 0, __ATOMIC_RELEASE);
-        workers[i].wake_signals = 0;
-        __atomic_store_n(&workers[i].wake_events, 0, __ATOMIC_RELAXED);
-        __atomic_store_n(&workers[i].sleeps, 0, __ATOMIC_RELAXED);
-        __atomic_store_n(&workers[i].busy_loops, 0, __ATOMIC_RELAXED);
-#endif
+        for (j = 0; j < upf_self()->dataplane.worker_queue_size; j++)
+            ogs_assert(ogs_queue_trypush(workers[i].free_queue,
+                        (upf_work_batch_t *)workers[i].batch_pool + j)
+                    == OGS_OK);
         workers[i].thread = ogs_thread_create(session_worker_main, &workers[i]);
         if (!workers[i].thread)
             goto fail;
@@ -935,39 +751,33 @@ void upf_dataplane_stop(void)
 
     __atomic_store_n(&stopping, 1, __ATOMIC_RELEASE);
     upf_dataplane_wake();
-#if HAVE_LIBMEMIF
-    for (i = 0; i < UPF_MAX_WORKERS; i++) {
-        uint64_t value = 1;
-
-        if (workers[i].wake_fd >= 0 &&
-            write(workers[i].wake_fd, &value, sizeof(value)) < 0 &&
-            errno != EAGAIN)
-            ogs_warn("UPF worker %u stop wake failed: %s",
-                    i, strerror(errno));
-    }
-#endif
     if (dispatcher) {
         ogs_thread_destroy(dispatcher);
         dispatcher = NULL;
     }
     for (i = 0; i < UPF_MAX_WORKERS; i++) {
+        if (workers[i].queue)
+            ogs_queue_term(workers[i].queue);
         if (workers[i].thread) {
             ogs_thread_destroy(workers[i].thread);
             workers[i].thread = NULL;
         }
-#if HAVE_LIBMEMIF
-        if (workers[i].wake_fd >= 0) {
-            close(workers[i].wake_fd);
-            workers[i].wake_fd = -1;
+        if (workers[i].queue) {
+            ogs_queue_destroy(workers[i].queue);
+            workers[i].queue = NULL;
         }
-#endif
+        if (workers[i].free_queue) {
+            ogs_queue_term(workers[i].free_queue);
+            ogs_queue_destroy(workers[i].free_queue);
+            workers[i].free_queue = NULL;
+        }
         if (workers[i].task_pool) {
             ogs_free(workers[i].task_pool);
             workers[i].task_pool = NULL;
         }
-        if (workers[i].batch_ring) {
-            ogs_free(workers[i].batch_ring);
-            workers[i].batch_ring = NULL;
+        if (workers[i].batch_pool) {
+            ogs_free(workers[i].batch_pool);
+            workers[i].batch_pool = NULL;
         }
     }
 }

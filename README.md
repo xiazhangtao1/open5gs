@@ -38,31 +38,6 @@ Open5GS N3/N6 memif 段，不包含未插网线的 fabric VF 后续 ARP/NAT 丢�
 4G 或 10G。当前严格零丢包只确认到下行 1.2G；上行 1.2G 的最低实测丢包为
 0.117%。后续必须同时报告目标速率、实际提交速率、实际输出和丢包率。
 
-### SPSC ring 与混合轮询 A/B（2026-07-26）
-
-Dispatcher 到每个 Session Worker 的 `ogs_queue + mutex + pthread_cond` 已替换
-为每 Worker 独占的固定容量 SPSC batch ring。Worker 在处理后有界 busy-poll，
-空闲后通过 eventfd 睡眠，默认窗口为 20us；Session owner、控制面读写屏障、
-包序和完整 PDR/FAR/QER/URR/GTP-U 处理均未改变。
-
-同一最终镜像、两个真实 Session、8192 ring、10us 发包、目标 1.2G 的等待策略
-A/B 如下。“输入”仍以实际进入 Open5GS 的 memif 包计数为准；上行 TEID 取自
-真实 UE 发出的 GTP-U 包，未使用下行 gNB TEID。
-
-| busy-poll | 方向 | 实际输入包 | 输出包 | Open5GS 段丢包 | 实际输出 |
-|---:|---|---:|---:|---:|---:|
-| 0us | 下行 | 899,483 | 899,483 | 0 | 1.028G |
-| 0us | 上行 | 894,571 | 894,571 | 0 | 1.022G |
-| 20us | 下行 | 1,050,420 | 1,037,168 | 1.262% | 1.185G |
-| 20us | 上行 | 1,050,420 | 1,033,922 | 1.571% | 1.181G |
-| 50us | 下行 | 1,006,854 | 1,000,943 | 0.587% | 1.143G |
-| 50us | 上行 | 1,050,420 | 947,177 | 9.829% | 1.082G |
-
-本轮 20us 的实际输出最高，因此作为默认值；0us 虽在较低实际提交速率下零丢包，
-不能据此宣称其 1.2G 零丢包。三档测试中 Worker SPSC `ring-full/drop` 均为零，
-证明已消除 mutex/cond 队列及其频繁主动切换，但没有证明稳定吞吐超过改造前
-基线。窗口过大会减少睡眠产生的隐式批量聚合，不能假定 busy-poll 越久吞吐越高。
-
 ### 已确认的瓶颈与排除项
 
 - VPP/memif 本身不是当前 3～4G 完整 UPF 路径的带宽上限。同 Pod、两个 qid、
@@ -76,11 +51,11 @@ A/B 如下。“输入”仍以实际进入 Open5GS 的 memif 包计数为准；
 - 两个 Session 已固定归属两个 Worker，但 N3、N6 的 RX 流量实际上都只进入
   qid 1，qid 0 为零。Session 多 Worker 已实现，入口多队列分流尚未实现；
   round-robin 调度不能把一个已有 qid 的流量拆到另一个 qid。
-- 改造前 4G/10us 下两个 Session Worker 仅使用约 45% CPU，非主动上下文切换
-  约 3～6 次/秒，不是 CFS 把工作线程频繁抢占；每个 Worker 约 58K 次/秒的
-  主动切换来自小 burst 下反复 `pthread_cond_wait`/唤醒。当前已改为 SPSC +
-  eventfd 混合轮询且 ring 无丢包，剩余问题转为小批量处理与 TX buffer
-  申请/flush 节奏，而不是 Worker 队列锁竞争。
+- 4G/10us 下两个 Session Worker 仅使用约 45% CPU，非主动上下文切换约
+  3～6 次/秒，不是 CFS 把工作线程频繁抢占。每个 Worker 主动切换约
+  58K 次/秒，原因是 RX 平均 burst 约 2 包时反复执行
+  `pthread_cond_wait`/唤醒；当前首要瓶颈是 dispatcher 到 Worker 的小批量
+  投递和睡眠/唤醒节奏。
 - 将 memif ring 从 8192 增至 16384 没有提高吞吐，反而令单个有效 qid 的
   pending 达到约 400ms，部分档位只提交目标包数的 63%～75%。部署已恢复
   8192；当前 libmemif 还限制 `log2_ring_size <= 14`，不应继续尝试 32768。
@@ -103,13 +78,12 @@ A/B 如下。“输入”仍以实际进入 Open5GS 的 memif 包计数为准；
 | 2026-07-26 | 统一 epoll 与运行时计数 | dispatcher、Worker queue、RX/refill 和 epoll 均无丢包；压力差值定位到 TX allocation/ring 可用性。 |
 | 2026-07-26 | ring 8192/16384、10us/burst256 A/B | 8192 明显更适合当前单有效 qid；均匀 10us 在部分档位更好，但发包节奏不是唯一瓶颈。 |
 | 2026-07-26 | 裸 memif、VPP placement、drop route 隔离 | 排除 VPP/memif 裸带宽、VPP queue placement 和无网线 ARP 为主要瓶颈，责任收敛到 Open5GS 生产/消费节奏。 |
-| 2026-07-26 | 每 Worker SPSC ring、eventfd 混合轮询 | Worker ring/drop 为零，消除 mutex/cond 高频唤醒；0/20/50us 中 20us 实际输出最高，但未超过此前稳定基线，后续应优化小批量 TX 节奏。 |
 
 ### 下一步优化优先级
 
-1. 在不改变 Session 包序和 UPF 语义的前提下，对 Worker 的小 batch 增加有界
-   自适应聚合，或按 batch 复用 TX 申请/flush，避免 busy-poll 到包后立即处理
-   单包而降低 TX ring 利用率；必须设置包数和微秒级上限。
+1. 将 dispatcher 到每个 Worker 的 `ogs_queue + mutex + pthread_cond` 改为固定
+   容量 SPSC batch ring；Worker 采用短时间有界 busy-poll 后再睡眠，降低小
+   burst 下每包唤醒。必须保持 Session owner、包序、停止排空和完整 UPF 语义。
 2. 对短时 `memif_buffer_alloc()` 不足增加微秒级有界重试/延后 flush，不允许
    无限自旋，也不能让一个方向饿死另一个方向。
 3. 实现真实入口多 qid：N3 按 TEID、N6 按 UE IP 分流，并使
