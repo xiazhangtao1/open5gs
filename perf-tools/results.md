@@ -753,3 +753,104 @@ IPv4、10us发包、目标1.2G的有效结果：
 回退镜像`sha256:8eb5e0c9e1964d77601322b618597a23f763f28c0da6abcebbb8f8ad3c150dab`
 部署后，两个真实Session重新建立；100M/2秒下行输入/输出均为17,506包，
 Worker分别处理8,754/8,752包，`queue-full/push-fail/drop=0`。
+
+## 双 dispatcher + descriptor lease（2026-07-27）
+
+本轮实现以下数据面结构，未修改 VPP 源码：
+
+- N3、N6 各一个专用 dispatcher、epoll 和 CPU；
+- N3 按 TEID、N6 按 UE IP 查找 Session owner；
+- 普通 G-PDU/IP 报文由 dispatcher 向 Worker 传递 memif RX descriptor 引用，
+  不再复制到 task payload；
+- Worker 继续执行原来的 PDR/FAR/QER/URR、GTP-U 封装/解封装和批量 TX；
+- Worker 完成后标记 completion，入口 dispatcher 按 RX sequence 批量
+  `memif_refill_queue()`；
+- generation ID 隔离断线前后的旧 completion；控制/异常报文采用复制回退；
+- 两个方向可同时向同一 Session Worker 投递，因此用短临界区保护每个 Worker
+  的 task/batch 发布；每个 Worker 仍独占对应的 N3/N6 TX qid。
+
+最终验证镜像为`xcn-runtime:descriptor-lease-final`
+（Docker image ID `sha256:80b385b5d86ab80899daf8f0da5fb977a49564faabaf6be12fdff9921576b45e`）。
+
+功能冒烟使用两个真实 PFCP Session（`10.45.0.2`、`10.45.0.3`）：
+100M、2秒下行输入/输出均为17,506包，两个 Worker 分别处理8,752/8,754包；
+dispatcher、Worker queue、refill、TX 均无错误，N6最大在途140，测试结束
+`in-flight=0`。这证明 descriptor 生命周期和原 UPF 语义路径可以正常闭环。
+
+### 下行压力结果
+
+两个 Session、两个 Worker、两个配置 qid（入口仍只有 qid 1 有流量）、
+8192-entry ring、1428-byte inner IPv4、每档10秒。输入/输出均取 VPP memif
+接口实际计数，不使用目标包数替代实际提交数。
+
+`busy_poll_us=20`：
+
+| 节奏 | 目标 | 实际输入 | 输出 | Open5GS段丢包 |
+|---|---:|---:|---:|---:|
+| 10us | 1.2G | 1,050,420 | 1,050,420 | 0 |
+| 10us | 2.0G | 1,750,700 | 1,725,778 | 1.424% |
+| 10us | 4.0G | 3,501,400 | 3,391,246 | 3.146% |
+| burst256 | 1.2G | 1,050,420 | 1,048,176 | 0.214% |
+| burst256 | 2.0G | 1,703,378 | 1,700,468 | 0.171% |
+| burst256 | 4.0G | 3,501,400 | 3,436,804 | 1.845% |
+
+2.0G burst256 的发生器只实际提交1,703,378包，因此不能记为“2G仅丢
+0.171%”。当前严格零丢包仍只确认到下行1.2G/10us，descriptor lease 没有
+把稳定能力直接提升到2G。
+
+### Worker 等待策略 A/B
+
+下表为相同 descriptor-lease 版本的下行10us结果。4G档位若发生器未发满，
+“实际输入”按实际 memif TX 计数记录。
+
+| 模式 | 目标 | 实际输入 | 输出 | Open5GS段丢包 |
+|---|---:|---:|---:|---:|
+| 阻塞（0） | 1.2G | 1,050,420 | 1,046,059 | 0.415% |
+| 阻塞（0） | 2.0G | 1,750,700 | 1,714,796 | 2.051% |
+| 阻塞（0） | 4.0G | 3,435,663 | 3,253,457 | 5.304% |
+| 混合轮询（20us） | 1.2G | 1,050,420 | 1,050,420 | 0 |
+| 混合轮询（20us） | 2.0G | 1,750,700 | 1,725,778 | 1.424% |
+| 混合轮询（20us） | 4.0G | 3,501,400 | 3,391,246 | 3.146% |
+| 持续忙轮询（-1） | 1.2G | 1,050,420 | 1,045,951 | 0.425% |
+| 持续忙轮询（-1） | 2.0G | 1,750,700 | 1,745,831 | 0.278% |
+| 持续忙轮询（-1） | 4.0G | 3,358,789 | 3,286,186 | 2.162% |
+
+持续忙轮询的5秒重复测试也存在波动：1.2G三次丢包
+`0/0/0.327%`，2G三次为`0.090/0.187/0.951%`。它能降低部分档位的唤醒
+延迟，但会令部分档位和发生器提交率变差，不能解决 descriptor 回收和 TX
+buffer allocation 压力，因此最终运行配置恢复20us混合轮询，所有线程继续
+使用`SCHED_OTHER`。
+
+### 上行与剩余限制
+
+上行使用本轮真实 Session 建立产生的两组 UL TEID；每次 UPF/gNB 重建后重新
+获取。20us混合轮询的实际 Open5GS memif 段结果为：
+
+| 节奏 | 目标 | 实际输入 | 输出 | Open5GS段丢包 |
+|---|---:|---:|---:|---:|
+| 10us | 1.2G | 967,934 | 961,352 | 0.680% |
+| 10us | 2.0G | 1,737,634 | 1,669,070 | 3.946% |
+| 10us | 4.0G | 3,289,028 | 3,126,680 | 4.936% |
+| burst256 | 1.2G | 897,148 | 895,004 | 0.239% |
+| burst256 | 2.0G | 1,551,001 | 1,551,001 | 0 |
+| burst256 | 4.0G | 2,871,613 | 2,818,561 | 1.847% |
+
+这些上行档位发生器均不同程度未发满，尤其 burst 模式，不能作为目标速率的
+稳定能力声明；这里只用于定位 Open5GS 段。
+
+运行计数确认：
+
+- dispatcher drop、Worker queue-full/push-fail/drop、RX/refill/stale 均为0；
+- 两个 Worker 处理包数近似各50%，每个 Worker 使用独立 TX qid；
+- N3 RX `in-flight-max=8192`，达到当前单个有效入口 ring 上限；
+- 压力差值对应输出方向 `memif_buffer_alloc()` 短分配/失败，或 VPP入口
+  `no free tx slots`，不是 `memif_tx_burst()` 成功后继续丢包；
+- 入口仍只有 qid 1 工作。单 qid 的 descriptor 必须按原 RX 顺序 refill，
+  两个 Session 跨 Worker 完成时会形成有序回收的 head-of-line。
+
+因此本轮完成了“消除 dispatcher payload copy”的目标，但没有解决单有效入口
+qid、跨 Worker 有序回收和输出 TX ring 可用性的根因。下一步若继续优化，应先
+减少 completion 扫描/epoll 空轮询开销并实现有界的完成批量回收；更根本的扩展
+仍需要利用 VPP 现有能力将不同 Session 导入不同 RX qid，使
+`RX qid -> owner Worker -> TX qid` 对齐。不能通过无限忙轮询或继续增大单 ring
+来替代真实多 qid 分流。

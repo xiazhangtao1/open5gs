@@ -65,6 +65,7 @@ typedef struct upf_context_s {
         bool session_workers;
         uint8_t worker_count;
         uint32_t worker_queue_size;
+        int32_t worker_busy_poll_us;
         uint32_t io_packet_budget;
         uint32_t io_time_budget_us;
         uint32_t stats_interval;

@@ -18,6 +18,11 @@ typedef struct {
     const void *data;
     size_t len;
     ogs_sockaddr_t from;
+    void (*complete)(uint16_t qid, uint64_t sequence, uint32_t generation);
+    uint64_t sequence;
+    uint32_t generation;
+    uint16_t qid;
+    bool force_copy;
 } upf_dataplane_packet_t;
 
 #ifdef __cplusplus
@@ -49,7 +54,9 @@ int upf_dataplane_submit_n6_batch(
         uint16_t *submitted);
 
 #if HAVE_LIBMEMIF
-int upf_dataplane_memif_fd_update(
+int upf_dataplane_n3_memif_fd_update(
+        memif_fd_event_t fde, void *private_ctx);
+int upf_dataplane_n6_memif_fd_update(
         memif_fd_event_t fde, void *private_ctx);
 #endif
 void upf_dataplane_wake(void);

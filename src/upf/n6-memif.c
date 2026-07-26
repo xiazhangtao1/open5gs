@@ -15,6 +15,13 @@
 
 #define UPF_MEMIF_MAX_BURST 256
 #define UPF_MEMIF_MAX_QUEUES 16
+#define UPF_MEMIF_MAX_RING_SIZE (1U << 14)
+
+typedef struct {
+    uint64_t sequence;
+    uint32_t generation;
+    uint8_t done;
+} upf_n6_lease_t;
 
 typedef struct {
     bool pending;
@@ -28,9 +35,18 @@ typedef struct {
     uint64_t dispatch_drops;
     uint64_t rx_errors;
     uint64_t refill_errors;
+    uint64_t refill_calls;
+    uint64_t refill_packets;
+    uint64_t completion_stale;
+    uint64_t in_flight_max;
     uint64_t pending_max_us;
+    uint64_t next_sequence;
+    uint64_t refill_sequence;
+    uint32_t generation;
+    uint32_t in_flight;
     uint16_t burst_min;
     uint16_t burst_max;
+    upf_n6_lease_t leases[UPF_MEMIF_MAX_RING_SIZE];
 } upf_n6_rx_queue_t;
 
 typedef struct {
@@ -57,6 +73,112 @@ static upf_n6_memif_state_t state[16];
 static upf_n6_rx_queue_t rx_queue[UPF_MEMIF_MAX_QUEUES];
 static uint8_t rx_rr_qid;
 #define self state[upf_dataplane_worker_id()]
+
+static void reset_lease_queue(upf_n6_rx_queue_t *queue)
+{
+    __atomic_add_fetch(&queue->generation, 1, __ATOMIC_ACQ_REL);
+    queue->next_sequence = 0;
+    queue->refill_sequence = 0;
+    queue->in_flight = 0;
+}
+
+static void reserve_lease(
+        upf_n6_rx_queue_t *queue, uint16_t qid,
+        upf_dataplane_packet_t *packet)
+{
+    uint32_t ring_size = 1U << upf_self()->n6.log2_ring_size;
+    uint64_t sequence = queue->next_sequence++;
+    upf_n6_lease_t *lease = &queue->leases[sequence % ring_size];
+
+    __atomic_store_n(&lease->sequence, sequence, __ATOMIC_RELAXED);
+    __atomic_store_n(
+            &lease->generation, queue->generation, __ATOMIC_RELAXED);
+    __atomic_store_n(&lease->done, 0, __ATOMIC_RELEASE);
+    queue->in_flight++;
+    if (queue->in_flight > queue->in_flight_max)
+        queue->in_flight_max = queue->in_flight;
+
+    packet->complete = upf_n6_memif_complete;
+    packet->sequence = sequence;
+    packet->generation = queue->generation;
+    packet->qid = qid;
+}
+
+static int drain_queue_completions(uint16_t qid)
+{
+    upf_n6_rx_queue_t *queue = &rx_queue[qid];
+    uint32_t ring_size = 1U << upf_self()->n6.log2_ring_size;
+    uint16_t count = 0;
+    int rv;
+
+    while (queue->refill_sequence < queue->next_sequence &&
+            count < UINT16_MAX) {
+        upf_n6_lease_t *lease =
+            &queue->leases[queue->refill_sequence % ring_size];
+
+        if (!__atomic_load_n(&lease->done, __ATOMIC_ACQUIRE) ||
+            __atomic_load_n(&lease->sequence, __ATOMIC_RELAXED) !=
+                queue->refill_sequence ||
+            __atomic_load_n(&lease->generation, __ATOMIC_RELAXED) !=
+                queue->generation)
+            break;
+        count++;
+        queue->refill_sequence++;
+    }
+    if (!count)
+        return OGS_OK;
+
+    rv = memif_refill_queue(state[qid].connection, qid, count, 0);
+    if (rv != MEMIF_ERR_SUCCESS) {
+        queue->refill_sequence -= count;
+        queue->refill_errors++;
+        ogs_error("N6 memif_refill_queue(qid:%u count:%u) failed: %s",
+                qid, count, memif_strerror(rv));
+        return OGS_ERROR;
+    }
+    queue->refill_calls++;
+    queue->refill_packets += count;
+    ogs_assert(queue->in_flight >= count);
+    queue->in_flight -= count;
+    return OGS_OK;
+}
+
+void upf_n6_memif_complete(
+        uint16_t qid, uint64_t sequence, uint32_t generation)
+{
+    upf_n6_rx_queue_t *queue;
+    upf_n6_lease_t *lease;
+    uint32_t ring_size;
+
+    if (qid >= upf_self()->n6.queues)
+        return;
+    queue = &rx_queue[qid];
+    if (__atomic_load_n(&queue->generation, __ATOMIC_ACQUIRE) != generation) {
+        __atomic_fetch_add(
+                &queue->completion_stale, 1, __ATOMIC_RELAXED);
+        return;
+    }
+    ring_size = 1U << upf_self()->n6.log2_ring_size;
+    lease = &queue->leases[sequence % ring_size];
+    if (__atomic_load_n(&lease->sequence, __ATOMIC_RELAXED) != sequence ||
+        __atomic_load_n(&lease->generation, __ATOMIC_RELAXED) != generation ||
+        __atomic_load_n(&queue->generation, __ATOMIC_ACQUIRE) != generation) {
+        __atomic_fetch_add(
+                &queue->completion_stale, 1, __ATOMIC_RELAXED);
+        return;
+    }
+    __atomic_store_n(&lease->done, 1, __ATOMIC_RELEASE);
+}
+
+void upf_n6_memif_drain_completions(void)
+{
+    uint8_t qid;
+
+    if (!state[0].connection)
+        return;
+    for (qid = 0; qid < upf_self()->n6.queues; qid++)
+        drain_queue_completions(qid);
+}
 
 static void log_tx_drop(const char *reason, uint16_t count)
 {
@@ -91,6 +213,7 @@ static int on_connect(memif_conn_handle_t connection, void *private_ctx)
         state[i].connected = true;
         rx_queue[i].pending = false;
         rx_queue[i].pending_since = 0;
+        reset_lease_queue(&rx_queue[i]);
     }
     ogs_info("N6 memif connected [socket:%s id:%u]",
             upf_self()->n6.socket_path, upf_self()->n6.interface_id);
@@ -107,6 +230,7 @@ static int on_disconnect(memif_conn_handle_t connection, void *private_ctx)
         state[i].connected = false;
         rx_queue[i].pending = false;
         rx_queue[i].pending_since = 0;
+        reset_lease_queue(&rx_queue[i]);
     }
     ogs_warn("N6 memif disconnected [socket:%s id:%u]",
             upf_self()->n6.socket_path, upf_self()->n6.interface_id);
@@ -157,6 +281,9 @@ static int service_queue(
         if (requested > UPF_MEMIF_MAX_BURST)
             requested = UPF_MEMIF_MAX_BURST;
         count = 0;
+        if (upf_self()->dataplane.session_workers &&
+            drain_queue_completions(qid) != OGS_OK)
+            return OGS_ERROR;
         rv = memif_rx_burst(
                 state[qid].connection, qid, buffers, requested, &count);
         if (rv != MEMIF_ERR_SUCCESS && rv != MEMIF_ERR_NOBUF) {
@@ -182,14 +309,26 @@ static int service_queue(
             upf_n3_memif_tx_batch_begin(count);
         packet_count = 0;
         for (i = 0; i < count; i++) {
+            upf_dataplane_packet_t packet = { 0 };
+
+            if (upf_self()->dataplane.session_workers)
+                reserve_lease(queue, qid, &packet);
             if (buffers[i].flags & MEMIF_BUFFER_FLAG_NEXT) {
                 ogs_error("[DROP] Chained N6 memif buffers are not supported");
                 queue->invalid_packets++;
+                if (packet.complete)
+                    packet.complete(packet.qid,
+                            packet.sequence, packet.generation);
                 continue;
             }
             if (upf_self()->dataplane.session_workers) {
-                packets[packet_count].data = buffers[i].data;
-                packets[packet_count].len = buffers[i].len;
+                packet.data = buffers[i].data;
+                packet.len = buffers[i].len;
+                if (packet.len < 1 ||
+                    ((((const uint8_t *)packet.data)[0] >> 4) != 4 &&
+                     (((const uint8_t *)packet.data)[0] >> 4) != 6))
+                    packet.force_copy = true;
+                packets[packet_count] = packet;
                 packet_count++;
             } else if (upf_gtp_handle_n6_data(
                         buffers[i].data, buffers[i].len) != OGS_OK) {
@@ -207,14 +346,19 @@ static int service_queue(
             upf_n3_memif_tx_batch_flush();
         }
 
-        rv = memif_refill_queue(state[qid].connection, qid, count, 0);
-        if (rv != MEMIF_ERR_SUCCESS) {
-            queue->refill_errors++;
-            queue->pending = false;
-            queue->pending_since = 0;
-            ogs_error("memif_refill_queue(qid:%u count:%u) failed: %s",
-                    qid, count, memif_strerror(rv));
-            return OGS_ERROR;
+        if (upf_self()->dataplane.session_workers) {
+            if (drain_queue_completions(qid) != OGS_OK)
+                return OGS_ERROR;
+        } else {
+            rv = memif_refill_queue(state[qid].connection, qid, count, 0);
+            if (rv != MEMIF_ERR_SUCCESS) {
+                queue->refill_errors++;
+                queue->pending = false;
+                queue->pending_since = 0;
+                ogs_error("N6 memif_refill_queue(qid:%u count:%u) failed: %s",
+                        qid, count, memif_strerror(rv));
+                return OGS_ERROR;
+            }
         }
 
         more = count == requested;
@@ -257,7 +401,7 @@ int upf_n6_memif_open(void)
             sizeof(socket_args.app_name));
     socket_args.connection_request_timer.it_value.tv_sec = 1;
     socket_args.connection_request_timer.it_interval.tv_sec = 1;
-    socket_args.on_control_fd_update = upf_dataplane_memif_fd_update;
+    socket_args.on_control_fd_update = upf_dataplane_n6_memif_fd_update;
 
     rv = memif_create_socket(&self.socket, &socket_args, NULL);
     if (rv != MEMIF_ERR_SUCCESS) {
@@ -310,7 +454,7 @@ bool upf_n6_memif_has_pending(void)
     uint8_t i;
 
     for (i = 0; i < upf_self()->n6.queues; i++)
-        if (rx_queue[i].pending)
+        if (rx_queue[i].pending || rx_queue[i].in_flight)
             return true;
     return false;
 }
@@ -321,6 +465,8 @@ int upf_n6_memif_service(
     uint8_t queues = upf_self()->n6.queues;
     uint8_t offset;
 
+    if (upf_self()->dataplane.session_workers)
+        upf_n6_memif_drain_completions();
     for (offset = 0; offset < queues; offset++) {
         uint8_t qid = (rx_rr_qid + offset) % queues;
 
@@ -348,7 +494,8 @@ void upf_n6_memif_log_stats(void)
                 "burst-size(min/avg/max):%u/%llu/%u full:%llu "
                 "budget-yield:%llu pending:%s pending-us:%lld max-us:%llu "
                 "invalid:%llu dispatch-drop:%llu rx-error:%llu "
-                "refill-error:%llu]",
+                "refill-error:%llu refill-call:%llu refill-packets:%llu "
+                "in-flight:%u in-flight-max:%llu stale:%llu]",
                 i, (unsigned long long)queue->interrupts,
                 (unsigned long long)queue->bursts,
                 (unsigned long long)queue->packets,
@@ -360,7 +507,12 @@ void upf_n6_memif_log_stats(void)
                 (unsigned long long)queue->invalid_packets,
                 (unsigned long long)queue->dispatch_drops,
                 (unsigned long long)queue->rx_errors,
-                (unsigned long long)queue->refill_errors);
+                (unsigned long long)queue->refill_errors,
+                (unsigned long long)queue->refill_calls,
+                (unsigned long long)queue->refill_packets,
+                queue->in_flight,
+                (unsigned long long)queue->in_flight_max,
+                (unsigned long long)queue->completion_stale);
         ogs_info("N6 memif TX qid:%u stats "
                 "[send-request:%llu alloc-call:%llu "
                 "alloc-request:%llu alloc-granted:%llu "

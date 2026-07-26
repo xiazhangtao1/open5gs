@@ -14,19 +14,28 @@ upf:
       enabled: true
       count: 4
       queue_size: 8192
+      busy_poll_us: 20
 ```
 
 N3/N6 的 `memif.queues` 必须与 `count` 相等。N3 按 TEID、N6 按 UE IP
 查找固定 Session owner；分发不绕过 PDR/FAR/QER/URR。一个 Session 只使用
 一个 Worker，因此扩展性测试必须建立至少与 Worker 数相同的独立 PFCP Session。
-Worker 使用普通 `SCHED_OTHER`，禁止把 busy-poll 分发线程改为无限制
-`SCHED_FIFO`。
+Worker 使用普通 `SCHED_OTHER`。`busy_poll_us=0` 表示空闲时阻塞，正数表示
+处理完一批后继续轮询指定微秒，`-1` 表示持续忙轮询；当前实测默认使用
+`20us`。禁止把 busy-poll 线程改为 `SCHED_FIFO`。
 
-N3/N6 libmemif fd 由同一个外部 epoll 管理。Dispatcher 在每个 qid
-每轮最多处理 `io_packet_budget` 个包或 `io_time_budget_us` 微秒，
-并在 N3/N6/qid 之间 round-robin。`stats_interval` 指定累计运行时统计
-的日志周期（秒），包括 burst、pending、dispatch drop、queue high-water
-和 memif TX ring-full。
+N3/N6 各有一个专用 dispatcher 和外部 epoll，避免两个方向在同一入口线程
+互相阻塞。Dispatcher 在每个 qid 每轮最多处理 `io_packet_budget` 个包或
+`io_time_budget_us` 微秒，并在 qid 之间 round-robin。普通 G-PDU/IP 报文
+以 descriptor lease 交给 Session Worker，不再在 dispatcher 复制 payload；
+Worker 完成完整 UPF 处理后，由原 dispatcher 按 RX 顺序批量 refill。
+控制报文、异常报文和 chained buffer 保持复制/回退处理。
+
+`stats_interval` 指定累计运行时统计的日志周期（秒），除 burst、pending、
+dispatch drop、queue high-water 和 memif TX ring-full 外，还包含
+`in-flight`、`in-flight-max`、`refill-call`、`refill-packets` 和 `stale`。
+`in-flight-max` 达到 memif ring 大小时，表示 descriptor 有序回收已成为入口
+反压点；不能把这种情况简单归因于 Worker 睡眠。
 
 这些工具用于绕过 OAI UE/gNB 的空口性能限制，直接压测 Open5GS UPF 的 N6/TUN 和 N3/GTP-U 数据面。
 
@@ -168,6 +177,9 @@ memif2/0 tx packets >= memif1/0 rx packets = dpdk-n6 tx packets
 两者差值表示 Open5GS 处理或 memif ring 压力；`memif1/0` 与 `dpdk-n6` 的差值
 表示 VPP NAT/转发压力。检查 `show errors` 中的 `no free tx slots`、NAT handoff
 congestion 和 VF `rx-miss`。每次 UE/UPF 重建后都必须重新抓取 UL TEID。
+使用 VPP packet-generator 在上下行测试之间切换时，必须先删除前一方向的所有
+stream；仅执行 `packet-generator disable` 不会删除未完成的 stream，下一次
+`enable` 会继续发送并污染接口计数。
 
 计数方式：
 
