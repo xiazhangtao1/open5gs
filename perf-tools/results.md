@@ -725,3 +725,31 @@ SMF copies Session AMBR into PFCP QER MBR and sends it to UPF, but current Open5
   丢包。N3 VF因 fabric物理口未接线发生ARP节流，不能作为Open5GS丢包计算。
 - 当前现场只有一个活动 Session，不能据此给出2/4 Worker吞吐扩展比；正式性能
   验收需要至少 `max(2W,16)` 个真实 PFCP Session。
+
+## SPSC batch ring 与 busy-poll 回退结论（2026-07-26）
+
+曾将每 Worker 的 `ogs_queue + mutex + pthread_cond` 替换为独占 SPSC batch
+ring，并测试0/20/50us混合轮询。两个真实Session、8192 ring、1428-byte inner
+IPv4、10us发包、目标1.2G的有效结果：
+
+| busy-poll | 方向 | 实际输入 | 输出 | Open5GS段丢包 | 实际输出 |
+|---:|---|---:|---:|---:|---:|
+| 0us | 下行 | 899,483 | 899,483 | 0 | 1.028G |
+| 0us | 上行 | 894,571 | 894,571 | 0 | 1.022G |
+| 20us | 下行 | 1,050,420 | 1,037,168 | 1.262% | 1.185G |
+| 20us | 上行 | 1,050,420 | 1,033,922 | 1.571% | 1.181G |
+| 50us | 下行 | 1,006,854 | 1,000,943 | 0.587% | 1.143G |
+| 50us | 上行 | 1,050,420 | 947,177 | 9.829% | 1.082G |
+
+0us发生器未实际提交满1.2G，不能记为1.2G零丢包。20us在双Session 1.2G时
+已覆盖约19us的平均单Session包间隔，持续流量下接近一直忙轮询，但仍低于原路径
+下行1.2G零丢包、上行约0.117%丢包的基线。Worker ring/drop虽为零，快速消费
+小batch却减少了原睡眠形成的隐式聚合，恶化后续TX buffer申请/flush节奏。
+
+因此提交`3fd65501a`已由`ce76310e8`回退，运行配置恢复原队列/条件变量路径。
+结论是不能将“减少锁和唤醒”等同于吞吐提升，也不应继续尝试无限忙轮询；后续
+必须先观测并优化实际batch大小与TX申请/flush节奏。
+
+回退镜像`sha256:8eb5e0c9e1964d77601322b618597a23f763f28c0da6abcebbb8f8ad3c150dab`
+部署后，两个真实Session重新建立；100M/2秒下行输入/输出均为17,506包，
+Worker分别处理8,754/8,752包，`queue-full/push-fail/drop=0`。

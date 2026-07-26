@@ -78,12 +78,13 @@ Open5GS N3/N6 memif 段，不包含未插网线的 fabric VF 后续 ARP/NAT 丢�
 | 2026-07-26 | 统一 epoll 与运行时计数 | dispatcher、Worker queue、RX/refill 和 epoll 均无丢包；压力差值定位到 TX allocation/ring 可用性。 |
 | 2026-07-26 | ring 8192/16384、10us/burst256 A/B | 8192 明显更适合当前单有效 qid；均匀 10us 在部分档位更好，但发包节奏不是唯一瓶颈。 |
 | 2026-07-26 | 裸 memif、VPP placement、drop route 隔离 | 排除 VPP/memif 裸带宽、VPP queue placement 和无网线 ARP 为主要瓶颈，责任收敛到 Open5GS 生产/消费节奏。 |
+| 2026-07-26 | SPSC ring、0/20/50us busy-poll A/B（已回退） | 20us 下行/上行仅输出1.185G/1.181G，段丢包1.262%/1.571%，低于原基线；持续流量时20us已近似全忙轮询，说明单纯去锁和无限忙轮询不能解决TX小批次问题。 |
 
 ### 下一步优化优先级
 
-1. 将 dispatcher 到每个 Worker 的 `ogs_queue + mutex + pthread_cond` 改为固定
-   容量 SPSC batch ring；Worker 采用短时间有界 busy-poll 后再睡眠，降低小
-   burst 下每包唤醒。必须保持 Session owner、包序、停止排空和完整 UPF 语义。
+1. 保留当前 `ogs_queue + pthread_cond` 路径，先统计每次 Worker 实际合并包数、
+   N3/N6 TX alloc/flush 次数及失败率，再设计有严格包数/时间上限的自适应微批
+   聚合。SPSC + busy-poll 已实测回退，不应直接重做或改为无限忙轮询。
 2. 对短时 `memif_buffer_alloc()` 不足增加微秒级有界重试/延后 flush，不允许
    无限自旋，也不能让一个方向饿死另一个方向。
 3. 实现真实入口多 qid：N3 按 TEID、N6 按 UE IP 分流，并使
