@@ -48,6 +48,25 @@ dispatch drop、queue high-water 和 memif TX ring-full 外，还包含
 - `scripts/du_diag.sh`: UPF 容器内上下行并发统计脚本。
 - `scripts/run_ul_once.sh`: 本机协调脚本，同时启动 UPF 侧上行统计和 gNB 侧 GTP-U 注入。
 - `scripts/run_du_once.sh`: 本机协调脚本，同时启动 UPF 侧上下行统计/下行发包和 gNB 侧上行注入。
+- `scripts/run_pg_dl_multi.sh`: VPP packet-generator 多 Session 下行发生器，
+  将总速率平均分配到 `1..16` 个 UE IPv4。
+- `scripts/run_pg_ul_multi.sh`: VPP packet-generator 多 Session 上行发生器，
+  将总速率平均分配到 `1..16` 个当前 Session GTP-U pcap。
+
+多 Session 脚本默认按每 10us 计算一次 `maxframe`，设置
+`PACING_10US=0` 可切换为 `maxframe=256` 的原突发方式。例如：
+
+```bash
+PACING_10US=1 perf-tools/scripts/run_pg_dl_multi.sh \
+  "$POD" 4000 5 10.45.0.8 10.45.0.9 10.45.0.10
+
+PACING_10US=0 perf-tools/scripts/run_pg_ul_multi.sh \
+  "$POD" 4000 5 /tmp/session1.pcap /tmp/session2.pcap /tmp/session3.pcap
+```
+
+脚本输出的 `expected` 是目标包数，性能结论必须使用 `show interface` 中
+实际送入和输出的 memif 包数；packet-generator 未达到 `expected` 时不能按
+目标速率声明核心网吞吐。
 
 ## 编译
 

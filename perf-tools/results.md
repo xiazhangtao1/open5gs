@@ -854,3 +854,84 @@ qid、跨 Worker 有序回收和输出 TX ring 可用性的根因。下一步若
 仍需要利用 VPP 现有能力将不同 Session 导入不同 RX qid，使
 `RX qid -> owner Worker -> TX qid` 对齐。不能通过无限忙轮询或继续增大单 ring
 来替代真实多 qid 分流。
+
+## 六 Session / 六 Worker（2026-07-27）
+
+为避免少量 Session 在原“两候选最少连接”算法下只覆盖部分 Worker，新 Session
+owner 改为从全部 Worker 中选择当前 Session 数最少者，SEID 仅用于相同负载时
+打散起始位置。该修改只决定 Session 固定归属，不改变 PDR/FAR/QER/URR、GTP-U
+封装/解封装或 PFCP 语义。
+
+验证镜像为 `xcn-runtime:six-worker-balance`，Docker image ID
+`sha256:dc47f8c2c1a064f690fbdc9f37dd57094e4c320d3cbc97186efb3f7d040939ea`。
+配置如下：
+
+- 6 个 PFCP Session、6 个 Session Worker；
+- N3/N6 均配置 6 个 memif qid、8192-entry ring；
+- N3/N6 各一个专用 dispatcher，Worker `busy_poll_us=20`；
+- UPF Guaranteed Pod 获得 8 个独占逻辑 CPU，线程为 `SCHED_OTHER`；
+- 1428-byte inner IPv4，单方向5秒，内部 VPP packet-generator；
+- 测试不经过未插网线的 fabric 物理口，ARP/NAT/VF 下游计数不计入
+  Open5GS memif 段丢包。
+
+OAI UE 同时请求6个 Session 时，gNB 和 UPF 均成功建立6组 DRB/TEID/PFCP
+Session，但 UE 只接受4个 NAS PDU Session Accept，另2个因并发下行 NAS
+完整性计数失败被丢弃。顺序 telnet 追加到第3个 Session 时当前 OAI UE 镜像
+还会触发 stack buffer overflow。因此下表是“核心网内已有6个真实 PFCP
+Session，发生器绕开 UE/gNB 空口”的 UPF 性能，不代表 OAI UE 已能稳定暴露
+6个业务 TUN。
+
+100M冒烟输入/输出均为26,259包。Worker 0..5 分别处理
+`4377/4377/4377/4377/4374/4377` 包，六个 N3 TX qid 均有对应流量，
+dispatcher/Worker/TX 均零 drop，证明6个 Session 已一一归属6个 Worker。
+
+### 下行
+
+`memif1/0 tx` 为 N6 实际送入，`memif2/0 rx` 为 N3 实际输出：
+
+| 节奏 | 目标 | 实际送入 | 实际输出吞吐 | 段丢包 |
+|---|---:|---:|---:|---:|
+| 10us | 1.2G | 1.2000G | 1.2000G | 0 |
+| 10us | 2.0G | 1.9999G | 1.9999G | 0 |
+| 10us | 4.0G | 4.0000G | 3.9901G | 0.2471% |
+| 10us | 6.0G | 6.0000G | 5.8624G | 2.2935% |
+| 10us | 8.0G | 8.0000G | 7.6638G | 4.2031% |
+| burst256 | 1.2G | 1.2000G | 1.2000G | 0 |
+| burst256 | 2.0G | 2.0000G | 2.0000G | 0 |
+| burst256 | 4.0G | 4.0000G | 3.9632G | 0.9212% |
+| burst256 | 6.0G | 6.0000G | 5.9931G | 0.1151% |
+| burst256 | 8.0G | 8.0000G | 7.8513G | 1.8590% |
+
+短测存在调度波动，不能据单次 burst256 6G 的0.1151%认定稳定6G。10秒
+10us复测中发生器没有跑满目标：4G档实际送入3.414G、输出3.414G，仅丢127包
+（0.0043%）。因此当前可严格声明的下行零丢包能力为2G；约3.4G可达到近零
+丢包，但稳定边界仍需多轮长测。
+
+### 上行
+
+`memif2/0 tx` 为 N3 实际送入，`memif1/0 rx` 为 N6 实际输出：
+
+| 节奏 | 目标 | 实际送入 | 实际输出吞吐 | 段丢包 |
+|---|---:|---:|---:|---:|
+| 10us | 1.2G | 1.2000G | 1.2000G | 0 |
+| 10us | 2.0G | 2.0000G | 2.0000G | 0 |
+| 10us | 4.0G | 4.0000G | 4.0000G | 0 |
+| 10us | 6.0G | 5.9995G | 5.9609G | 0.6429% |
+| 10us | 8.0G | 6.9267G | 6.8957G | 0.4469% |
+| burst256 | 1.2G | 1.2000G | 1.2000G | 0 |
+| burst256 | 2.0G | 2.0000G | 2.0000G | 0 |
+| burst256 | 4.0G | 4.0000G | 3.9489G | 1.2773% |
+| burst256 | 6.0G | 6.0000G | 5.9436G | 0.9397% |
+| burst256 | 8.0G | 8.0000G | 7.8963G | 1.2958% |
+
+当前可严格声明的上行零丢包能力为4G。8G burst256 已实际送满，但有1.2958%
+段丢包；10us 8G档只送入6.9267G，不能作为8G验证。
+
+累计计数显示六个 Worker 各处理约721万包且 `drop/queue-full/push-fail=0`，
+负载近似均分；但 N3 和 N6 仍都只有 RX qid 1 有流量，其
+`in-flight-max=8192` 均达到 ring 上限，其余5个 RX qid 为0。压力档的差值
+对应 VPP 入口 `no free tx slots`，不是 Worker 执行完整 UPF 语义时主动丢包。
+因此六 Worker 已解决 Session 处理核并行问题，当前首要限制转为单有效入口
+qid 的 descriptor 有序回收/反压。将 `in-flight-max` 改成16M没有意义：
+descriptor 数受当前8192-entry memif ring约束，除非真正把 Session 流量分散到
+多个 RX qid。

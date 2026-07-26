@@ -72,6 +72,12 @@ Open5GS N3/N6 memif 段，不包含未插网线的 fabric VF 后续 ARP/NAT 丢�
 - descriptor lease压力下N3 RX `in-flight-max=8192`，已触及单个有效qid的
   ring上限。dispatcher/Worker queue/refill/stale均无错误；剩余反压来自单qid
   跨Worker完成后的有序refill，以及输出TX buffer allocation可用性。
+- 六个PFCP Session已验证可一一归属六个Worker：下行2G、上行4G可零丢包，
+  下行4G约0.247%、上行6G约0.643%（10us、5秒）。六个Worker均无内部drop，
+  但N3/N6仍只有RX qid 1工作且`in-flight-max=8192`，入口单qid已成为主要限制。
+- OAI UE同时请求六个Session时，gNB/UPF能建立六组DRB/TEID/PFCP Session，
+  但当前UE有并发NAS完整性计数问题，只创建四个业务TUN；六Session性能数据由
+  内部发生器绕开UE/gNB获得，不能等同于OAI UE六接口业务已验证。
 - `busy_poll_us=0/20/-1`实测中，20us比纯阻塞稳定；持续忙轮询虽把一次2G下行
   丢包降到0.278%，但1.2G/4G和重复测试波动，且不能避免ring耗尽。因此默认
   保持20us、`SCHED_OTHER`，不采用无限忙轮询。
@@ -91,6 +97,7 @@ Open5GS N3/N6 memif 段，不包含未插网线的 fabric VF 后续 ARP/NAT 丢�
 | 2026-07-26 | 裸 memif、VPP placement、drop route 隔离 | 排除 VPP/memif 裸带宽、VPP queue placement 和无网线 ARP 为主要瓶颈，责任收敛到 Open5GS 生产/消费节奏。 |
 | 2026-07-26 | SPSC ring、0/20/50us busy-poll A/B（已回退） | 20us 下行/上行仅输出1.185G/1.181G，段丢包1.262%/1.571%，低于原基线；持续流量时20us已近似全忙轮询，说明单纯去锁和无限忙轮询不能解决TX小批次问题。 |
 | 2026-07-27 | N3/N6专用dispatcher、descriptor lease、0/20/-1 A/B | 消除了dispatcher payload copy且100M功能零丢包；1.2G下行仍是零丢包边界。持续忙轮询收益不稳定，压力转移到单入口qid的有序completion/refill和输出TX allocation。 |
+| 2026-07-27 | 六Session/六Worker全局最少连接分配 | 六个Session实际均分到六个Worker；下行2G、上行4G零丢包，4G下行约0.247%、6G上行约0.643%。六Worker内部无drop，N3/N6单有效RX qid均触及8192 in-flight上限。 |
 
 ### 下一步优化优先级
 

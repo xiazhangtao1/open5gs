@@ -1018,19 +1018,23 @@ uint8_t upf_dataplane_assign_session(uint64_t seid)
 {
     uint8_t count = upf_self()->dataplane.worker_count;
     uint64_t mixed = seid ^ (seid >> 33) ^ (seid << 11);
-    uint8_t first = mixed % count;
-    uint8_t second = (mixed >> 17) % count;
-    unsigned int first_count;
-    unsigned int second_count;
-    uint8_t owner;
+    uint8_t start = mixed % count;
+    uint8_t owner = start;
+    unsigned int owner_count;
+    uint8_t offset;
 
-    if (second == first && count > 1)
-        second = (second + 1) % count;
-    first_count = __atomic_load_n(
-            &owned_sessions[first], __ATOMIC_RELAXED);
-    second_count = __atomic_load_n(
-            &owned_sessions[second], __ATOMIC_RELAXED);
-    owner = second_count < first_count ? second : first;
+    owner_count = __atomic_load_n(
+            &owned_sessions[owner], __ATOMIC_RELAXED);
+    for (offset = 1; offset < count; offset++) {
+        uint8_t candidate = (start + offset) % count;
+        unsigned int candidate_count = __atomic_load_n(
+                &owned_sessions[candidate], __ATOMIC_RELAXED);
+
+        if (candidate_count < owner_count) {
+            owner = candidate;
+            owner_count = candidate_count;
+        }
+    }
     __atomic_fetch_add(&owned_sessions[owner], 1, __ATOMIC_RELAXED);
     return owner;
 }
