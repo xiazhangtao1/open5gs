@@ -14,13 +14,18 @@ upf:
       enabled: true
       count: 4
       queue_size: 8192
+      busy_poll_us: 20
 ```
 
 N3/N6 的 `memif.queues` 必须与 `count` 相等。N3 按 TEID、N6 按 UE IP
 查找固定 Session owner；分发不绕过 PDR/FAR/QER/URR。一个 Session 只使用
 一个 Worker，因此扩展性测试必须建立至少与 Worker 数相同的独立 PFCP Session。
-Worker 使用普通 `SCHED_OTHER`，禁止把 busy-poll 分发线程改为无限制
-`SCHED_FIFO`。
+Dispatcher 与每个 Worker 之间使用每 Worker 独占的 SPSC batch ring。Worker
+处理完一批后在 `busy_poll_us` 指定的有界窗口内轮询新 batch（默认
+20 微秒），窗口内没有新任务才通过 eventfd 睡眠；设为 0 可关闭混合轮询。
+混合轮询优先降低低负载唤醒延迟，但也可能减少高负载下由睡眠产生的隐式批量
+聚合，吞吐测试应至少对 `0/20` 做 A/B，不能假定窗口越大吞吐越高。
+Worker 使用普通 `SCHED_OTHER`，禁止改为无限制 `SCHED_FIFO`。
 
 N3/N6 libmemif fd 由同一个外部 epoll 管理。Dispatcher 在每个 qid
 每轮最多处理 `io_packet_budget` 个包或 `io_time_budget_us` 微秒，

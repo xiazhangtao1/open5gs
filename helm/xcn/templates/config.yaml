@@ -158,6 +158,7 @@ data:
           enabled: {{ .Values.networking.upf.dataplane.sessionWorkers.enabled }}
           count: {{ .Values.networking.upf.dataplane.sessionWorkers.count }}
           queue_size: {{ .Values.networking.upf.dataplane.sessionWorkers.queueSize }}
+          busy_poll_us: {{ if hasKey .Values.networking.upf.dataplane.sessionWorkers "busyPollUs" }}{{ .Values.networking.upf.dataplane.sessionWorkers.busyPollUs }}{{ else }}20{{ end }}
       pfcp:
         server:
           - address: 127.0.0.7

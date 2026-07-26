@@ -113,6 +113,7 @@ static int upf_context_prepare(void)
     upf_self()->dataplane.session_workers = false;
     upf_self()->dataplane.worker_count = 1;
     upf_self()->dataplane.worker_queue_size = 8192;
+    upf_self()->dataplane.worker_busy_poll_us = 20;
     upf_self()->dataplane.io_packet_budget = 1024;
     upf_self()->dataplane.io_time_budget_us = 50;
     upf_self()->dataplane.stats_interval = 10;
@@ -145,6 +146,10 @@ static int upf_context_validation(void)
     if (upf_self()->dataplane.worker_queue_size < 256 ||
         upf_self()->dataplane.worker_queue_size > 65536) {
         ogs_error("upf.dataplane.session_workers.queue_size must be between 256 and 65536");
+        return OGS_ERROR;
+    }
+    if (upf_self()->dataplane.worker_busy_poll_us > 1000) {
+        ogs_error("upf.dataplane.session_workers.busy_poll_us must be between 0 and 1000");
         return OGS_ERROR;
     }
     if (upf_self()->dataplane.io_packet_budget < 1 ||
@@ -295,6 +300,8 @@ int upf_context_parse_config(void)
                                     upf_self()->dataplane.worker_count = atoi(v);
                                 else if (!strcmp(key, "queue_size"))
                                     upf_self()->dataplane.worker_queue_size = atoi(v);
+                                else if (!strcmp(key, "busy_poll_us"))
+                                    upf_self()->dataplane.worker_busy_poll_us = atoi(v);
                                 else
                                     ogs_warn("unknown key `%s`", key);
                             }

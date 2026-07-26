@@ -725,3 +725,52 @@ SMF copies Session AMBR into PFCP QER MBR and sends it to UPF, but current Open5
   丢包。N3 VF因 fabric物理口未接线发生ARP节流，不能作为Open5GS丢包计算。
 - 当前现场只有一个活动 Session，不能据此给出2/4 Worker吞吐扩展比；正式性能
   验收需要至少 `max(2W,16)` 个真实 PFCP Session。
+
+## 每 Worker SPSC batch ring 与混合轮询（2026-07-26）
+
+实现内容：
+
+- Dispatcher 到每个 Worker 的 `ogs_queue + mutex + pthread_cond` 替换为固定
+  容量单生产者/单消费者 batch ring。
+- batch 描述符直接存放在 ring；payload 仍使用既有固定 task pool，Worker
+  完成处理后才发布 `read_seq`，避免覆盖尚未消费的 payload。
+- producer/consumer cursor 分离到不同 cache line，发布和消费分别使用
+  release/acquire；Session owner 保证每个 ring 只有一个 producer 和 consumer。
+- Worker 处理后在配置的 `busy_poll_us` 内使用 CPU relax 轮询，超时后通过
+  nonblocking eventfd + poll 睡眠；睡眠标志发布后重新检查 ring，避免 lost wake。
+- 停止时先设置 stopping，再唤醒 dispatcher 和全部 Worker，join 后关闭 eventfd
+  和释放 ring。全部线程保持 `SCHED_OTHER`，CPUManager 机制未改变。
+
+测试条件：
+
+- 镜像：`xcn-runtime:spsc-busy-poll-dev`
+- 两个真实 PDU/PFCP Session：`10.45.0.2`、`10.45.0.3`
+- 两个 Session Worker、两个 N3/N6 qid、8192-entry ring
+- 1428-byte inner IPv4、10us pacing、每档 10 秒、目标 1.2G
+- 上行 TEID 由 host tcpdump 抓取真实 UE→UPF GTP-U 包获得；下行输出包中的
+  gNB TEID 不能反向用于上行注入，否则只会测到 GTP-U Error Indication。
+
+| busy-poll | 方向 | 发生器目标包 | 实际 Open5GS 输入 | 输出 | 段丢包 | payload 输出 |
+|---:|---|---:|---:|---:|---:|---:|
+| 0us | 下行 | 1,050,420 | 899,483 | 899,483 | 0 | 1.028G |
+| 0us | 上行 | 1,050,420 | 894,571 | 894,571 | 0 | 1.022G |
+| 20us | 下行 | 1,050,420 | 1,050,420 | 1,037,168 | 1.262% | 1.185G |
+| 20us | 上行 | 1,050,420 | 1,050,420 | 1,033,922 | 1.571% | 1.181G |
+| 50us | 下行 | 1,050,420 | 1,006,854 | 1,000,943 | 0.587% | 1.143G |
+| 50us | 上行 | 1,050,420 | 1,050,420 | 947,177 | 9.829% | 1.082G |
+
+所有档位的 Worker `ring-full`、Worker drop、dispatcher drop 均为零。20us
+实际输出最高，最终 Helm 配置恢复为20us。0us 的 Open5GS 段虽零丢包，但发生器
+只实际送入约1.02G，不能记为1.2G零丢包。50us 上行回退说明过长 busy-poll
+可能令 Worker 更快消费小 batch，减少原睡眠路径形成的隐式聚合，继而恶化
+TX buffer allocation/flush 节奏。
+
+结论：SPSC ring 功能和并发模型验证通过，移除了通用队列锁及条件变量高频唤醒，
+但本轮没有证明稳定吞吐超过改造前基线。下一步应优先做有严格包数/时间上限的
+自适应微批聚合，并继续以 TX alloc-granted、batch size 和 pending time 定位，
+不能仅延长 busy-poll 窗口。
+
+最终加入 lost-wakeup 顺序一致性 fence、强制重建并部署
+`sha256:a90f2c0c26e9c0016b5283529efa2461cb30a15f0f979f438407c09ebdddee52`
+后，100M/2秒下行 smoke 输入/输出均为17,506包，两个 Worker 各处理
+8,754/8,752包，`ring-full/drop=0`，证明睡眠 Worker 可被稳定唤醒。
