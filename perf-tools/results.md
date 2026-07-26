@@ -139,6 +139,76 @@ slots`。更大的 ring 扩大了单个有效 RX qid 的排队和突发，不能
 均为 8192。32768 未测试：当前 libmemif 配置边界明确要求
 `log2_ring_size <= 14`，强行放宽会超出已验证范围。
 
+## VPP/memif 与 Open5GS 责任隔离（2026-07-26）
+
+本轮不修改UPF语义代码，在相同Pod、VPP 26.06、2 qid、8192-entry ring和
+1428-byte IPv4包条件下，分别测试完整UPF路径、VPP queue placement和裸
+libmemif slave TX→VPP RX。
+
+### VPP queue placement
+
+正式配置中队列并未挤在同一VPP worker：
+
+- N6 `memif1/0` RX qid 0/1分别位于`vpp_wk_1`、`vpp_wk_2`；
+- N3 `memif2/0` RX qid 0/1分别位于`vpp_wk_3`、`vpp_wk_4`；
+- Open5GS和VPP使用不同的Guaranteed CPU cpuset，全部为`SCHED_OTHER`。
+
+将N3两个RX qid临时迁移到`vpp_wk_5`、`vpp_wk_6`后，4G/10us下行两次输出
+分别为2,964,811和3,113,619包，未优于原placement下同轮约3.18M～3.25M包。
+测试后已恢复原placement。因此简单更换VPP RX worker不能解释或消除当前差值。
+
+完整路径中途连续执行`show memif`会触发VPP CLI worker barrier，曾观察到单
+ring瞬时积压7,218个描述符，并显著放大丢包；该组受干扰数据不用于吞吐结论。
+无中途CLI的测试结束后，N3两个slave-to-master ring均为`head == tail`，VPP
+能够把已提交描述符排空。
+
+### 裸memif同方向对照
+
+在当前VPP容器临时创建额外master memif，由UPF容器内临时libmemif客户端使用
+两个CPU、两个slave TX qid，执行与Open5GS TX相同方向的
+`memif_buffer_alloc(N) → payload copy → memif_tx_burst(N)`。VPP完成IPv4
+input/lookup后走临时drop路由；测试接口、socket、路由和客户端随后全部删除。
+
+| 持续时间 | libmemif TX提交 | VPP RX | VPP接收率 | payload吞吐 | tx-short |
+|---:|---:|---:|---:|---:|---:|
+| 2s | 29,227,520 | 29,218,560 | 99.969% | 166.948G | 0 |
+| 10s | 176,116,480 | 176,111,872 | 99.997% | 201.195G | 0 |
+
+最大压力下裸客户端也频繁得到`alloc-short/alloc-zero`，说明allocation短缺本身
+只表示生产者瞬时追上ring；客户端重试后仍能持续远超10G，所有获得的buffer
+均满足`tx-request == tx-sent`。因此VPP/memif裸消费能力不是当前3～4G完整UPF
+结果的带宽上限。
+
+为排除无网线fabric口的ARP异常路径，另在N3 FIB 10中临时为当前gNB
+`172.30.180.7/32`安装drop路由。4G/10us两次N3 memif输出为3,169,944和
+3,153,437包，与原ARP路径同一波动范围，没有恢复到完整3,501,400包；测试后
+已删除drop路由。无网线ARP会增加VPP后续graph成本，但不是主要差值来源。
+
+### Open5GS线程与队列证据
+
+4G/10us压测约14.95秒的`/proc`线程差分：
+
+| 线程 | 绑定 | CPU | 主动上下文切换 | 非主动上下文切换 |
+|---|---:|---:|---:|---:|
+| Session worker 0 | CPU45 | 45.8% | 869,181（约58.1K/s） | 85 |
+| Session worker 1 | CPU46 | 44.4% | 875,606（约58.6K/s） | 41 |
+| memif dispatcher | CPU47 | 63.8% | 208,009（约13.9K/s） | 77 |
+
+两个worker并未被CFS持续抢占，也没有跑满CPU；非主动切换仅约3～6次/秒。
+大量切换是线程主动阻塞/唤醒。运行计数中N6只有qid 1收包，累计平均RX burst
+约2包。dispatcher几乎每个小burst都按Session owner向两个`ogs_queue`投递；
+worker空队列时阻塞在`ogs_queue_pop()`的`pthread_cond_wait`，收到小batch后
+唤醒，处理并flush TX，再次睡眠。累计约4.3M次worker主动切换与上述模型吻合。
+
+责任结论：
+
+- VPP/memif可持续消费能力已在同配置下确认远高于10G；
+- 当前VPP RX placement合理，迁移worker无收益；
+- `memif_tx_burst()`已提交包不继续丢；
+- allocation短缺是Open5GS小burst睡眠/唤醒和不连续TX输出追上ring的表象；
+- 当前首要优化对象是Open5GS的dispatcher→worker投递/唤醒模型，以及短时
+  allocation不足时的有界重试，而不是继续扩大ring或修改VPP源码。
+
 ## Session Worker 第一阶段批量分类与投递（2026-07-25）
 
 本阶段不实现 descriptor lease，memif RX buffer 仍在 dispatcher 完成 payload
