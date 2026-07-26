@@ -54,9 +54,16 @@ typedef struct {
     uint16_t tx_allocated;
     uint16_t tx_batch_remaining;
     uint16_t ip_id;
+    uint64_t tx_send_requests;
+    uint64_t tx_alloc_calls;
+    uint64_t tx_alloc_requested;
+    uint64_t tx_alloc_granted;
     uint64_t tx_drops;
     uint64_t tx_ring_full;
     uint64_t tx_alloc_failures;
+    uint64_t tx_burst_calls;
+    uint64_t tx_burst_requested;
+    uint64_t tx_burst_sent;
     ogs_time_t last_tx_drop_log;
     bool tx_batch;
     bool connected;
@@ -465,9 +472,6 @@ int upf_n3_memif_service(
 
 void upf_n3_memif_log_stats(void)
 {
-    uint64_t tx_drops = 0;
-    uint64_t tx_ring_full = 0;
-    uint64_t tx_alloc_failures = 0;
     uint8_t i;
 
     for (i = 0; i < upf_self()->n3.queues; i++) {
@@ -495,16 +499,33 @@ void upf_n3_memif_log_stats(void)
                 (unsigned long long)queue->dispatch_drops,
                 (unsigned long long)queue->rx_errors,
                 (unsigned long long)queue->refill_errors);
-        tx_drops += __atomic_load_n(&state[i].tx_drops, __ATOMIC_RELAXED);
-        tx_ring_full += __atomic_load_n(
-                &state[i].tx_ring_full, __ATOMIC_RELAXED);
-        tx_alloc_failures += __atomic_load_n(
-                &state[i].tx_alloc_failures, __ATOMIC_RELAXED);
+        ogs_info("N3 memif TX qid:%u stats "
+                "[send-request:%llu alloc-call:%llu "
+                "alloc-request:%llu alloc-granted:%llu "
+                "alloc-short:%llu alloc-fail:%llu "
+                "tx-call:%llu tx-request:%llu tx-sent:%llu drop:%llu]",
+                i,
+                (unsigned long long)__atomic_load_n(
+                    &state[i].tx_send_requests, __ATOMIC_RELAXED),
+                (unsigned long long)__atomic_load_n(
+                    &state[i].tx_alloc_calls, __ATOMIC_RELAXED),
+                (unsigned long long)__atomic_load_n(
+                    &state[i].tx_alloc_requested, __ATOMIC_RELAXED),
+                (unsigned long long)__atomic_load_n(
+                    &state[i].tx_alloc_granted, __ATOMIC_RELAXED),
+                (unsigned long long)__atomic_load_n(
+                    &state[i].tx_ring_full, __ATOMIC_RELAXED),
+                (unsigned long long)__atomic_load_n(
+                    &state[i].tx_alloc_failures, __ATOMIC_RELAXED),
+                (unsigned long long)__atomic_load_n(
+                    &state[i].tx_burst_calls, __ATOMIC_RELAXED),
+                (unsigned long long)__atomic_load_n(
+                    &state[i].tx_burst_requested, __ATOMIC_RELAXED),
+                (unsigned long long)__atomic_load_n(
+                    &state[i].tx_burst_sent, __ATOMIC_RELAXED),
+                (unsigned long long)__atomic_load_n(
+                    &state[i].tx_drops, __ATOMIC_RELAXED));
     }
-    ogs_info("N3 memif TX stats [drop:%llu ring-full:%llu alloc-fail:%llu]",
-            (unsigned long long)tx_drops,
-            (unsigned long long)tx_ring_full,
-            (unsigned long long)tx_alloc_failures);
 }
 
 static bool preallocate_tx_buffers(uint16_t count)
@@ -518,11 +539,15 @@ static bool preallocate_tx_buffers(uint16_t count)
     if (!self.connected || !count)
         return false;
 
+    __atomic_fetch_add(&self.tx_alloc_calls, 1, __ATOMIC_RELAXED);
+    __atomic_fetch_add(
+            &self.tx_alloc_requested, count, __ATOMIC_RELAXED);
     rv = memif_buffer_alloc(self.connection, upf_dataplane_worker_id(),
             self.tx_buffers, count,
             &allocated, upf_self()->n3.buffer_size);
-    if (rv == MEMIF_ERR_NOBUF_RING || rv == MEMIF_ERR_NOBUF ||
-        allocated < count)
+    __atomic_fetch_add(
+            &self.tx_alloc_granted, allocated, __ATOMIC_RELAXED);
+    if (allocated < count)
         __atomic_fetch_add(&self.tx_ring_full,
                 count - allocated, __ATOMIC_RELAXED);
     if ((rv != MEMIF_ERR_SUCCESS && rv != MEMIF_ERR_NOBUF_RING &&
@@ -588,8 +613,10 @@ void upf_n3_memif_tx_batch_flush(void)
     if (!self.tx_count)
         return;
 
-    if (!self.connected)
+    if (!self.connected) {
+        log_tx_drop("disconnected", self.tx_count);
         goto cleanup;
+    }
 
     for (i = 0; i < self.tx_count; i++) {
         ogs_pkbuf_t *gtpu = self.tx_packets[i].pkbuf;
@@ -629,8 +656,12 @@ void upf_n3_memif_tx_batch_flush(void)
         self.tx_buffers[i].len = total_len;
     }
 
+    __atomic_fetch_add(&self.tx_burst_calls, 1, __ATOMIC_RELAXED);
+    __atomic_fetch_add(
+            &self.tx_burst_requested, self.tx_count, __ATOMIC_RELAXED);
     rv = memif_tx_burst(self.connection, upf_dataplane_worker_id(),
             self.tx_buffers, self.tx_count, &sent);
+    __atomic_fetch_add(&self.tx_burst_sent, sent, __ATOMIC_RELAXED);
     if (sent != self.tx_count)
         log_tx_drop(memif_strerror(rv), self.tx_count - sent);
     else if (rv != MEMIF_ERR_SUCCESS)
@@ -708,15 +739,21 @@ int upf_n3_memif_send_gtpu(
     ogs_assert(gtpu);
     ogs_assert(to);
 
-    if (!self.connected || to->ogs_sa_family != AF_INET)
+    __atomic_fetch_add(&self.tx_send_requests, 1, __ATOMIC_RELAXED);
+    if (!self.connected || to->ogs_sa_family != AF_INET) {
+        log_tx_drop("disconnected or non-IPv4 peer", 1);
         return OGS_ERROR;
-    if (gtpu->len > UINT16_MAX - sizeof(struct ip) - sizeof(struct udphdr))
+    }
+    if (gtpu->len > UINT16_MAX - sizeof(struct ip) - sizeof(struct udphdr)) {
+        log_tx_drop("packet length overflow", 1);
         return OGS_ERROR;
+    }
 
     total_len = sizeof(struct ip) + sizeof(struct udphdr) + gtpu->len;
     if (total_len > upf_self()->n3.buffer_size) {
         ogs_warn("[DROP] N3 packet length %u exceeds memif buffer %u",
                 total_len, upf_self()->n3.buffer_size);
+        log_tx_drop("packet too large", 1);
         return OGS_ERROR;
     }
 
@@ -731,8 +768,10 @@ int upf_n3_memif_send_gtpu(
         return OGS_OK;
     }
 
-    if (!ensure_tx_buffer())
+    if (!ensure_tx_buffer()) {
+        log_tx_drop("buffer allocation failed", 1);
         return OGS_ERROR;
+    }
 
     {
         upf_n3_tx_packet_t *packet = &self.tx_packets[self.tx_count];

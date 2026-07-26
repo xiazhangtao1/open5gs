@@ -38,9 +38,16 @@ typedef struct {
     memif_conn_handle_t connection;
     ogs_pkbuf_t *tx_packets[UPF_MEMIF_MAX_BURST];
     uint16_t tx_count;
+    uint64_t tx_send_requests;
+    uint64_t tx_alloc_calls;
+    uint64_t tx_alloc_requested;
+    uint64_t tx_alloc_granted;
     uint64_t tx_drops;
     uint64_t tx_ring_full;
     uint64_t tx_alloc_failures;
+    uint64_t tx_burst_calls;
+    uint64_t tx_burst_requested;
+    uint64_t tx_burst_sent;
     ogs_time_t last_tx_drop_log;
     bool tx_batch;
     bool connected;
@@ -327,9 +334,6 @@ int upf_n6_memif_service(
 
 void upf_n6_memif_log_stats(void)
 {
-    uint64_t tx_drops = 0;
-    uint64_t tx_ring_full = 0;
-    uint64_t tx_alloc_failures = 0;
     uint8_t i;
 
     for (i = 0; i < upf_self()->n6.queues; i++) {
@@ -357,16 +361,33 @@ void upf_n6_memif_log_stats(void)
                 (unsigned long long)queue->dispatch_drops,
                 (unsigned long long)queue->rx_errors,
                 (unsigned long long)queue->refill_errors);
-        tx_drops += __atomic_load_n(&state[i].tx_drops, __ATOMIC_RELAXED);
-        tx_ring_full += __atomic_load_n(
-                &state[i].tx_ring_full, __ATOMIC_RELAXED);
-        tx_alloc_failures += __atomic_load_n(
-                &state[i].tx_alloc_failures, __ATOMIC_RELAXED);
+        ogs_info("N6 memif TX qid:%u stats "
+                "[send-request:%llu alloc-call:%llu "
+                "alloc-request:%llu alloc-granted:%llu "
+                "alloc-short:%llu alloc-fail:%llu "
+                "tx-call:%llu tx-request:%llu tx-sent:%llu drop:%llu]",
+                i,
+                (unsigned long long)__atomic_load_n(
+                    &state[i].tx_send_requests, __ATOMIC_RELAXED),
+                (unsigned long long)__atomic_load_n(
+                    &state[i].tx_alloc_calls, __ATOMIC_RELAXED),
+                (unsigned long long)__atomic_load_n(
+                    &state[i].tx_alloc_requested, __ATOMIC_RELAXED),
+                (unsigned long long)__atomic_load_n(
+                    &state[i].tx_alloc_granted, __ATOMIC_RELAXED),
+                (unsigned long long)__atomic_load_n(
+                    &state[i].tx_ring_full, __ATOMIC_RELAXED),
+                (unsigned long long)__atomic_load_n(
+                    &state[i].tx_alloc_failures, __ATOMIC_RELAXED),
+                (unsigned long long)__atomic_load_n(
+                    &state[i].tx_burst_calls, __ATOMIC_RELAXED),
+                (unsigned long long)__atomic_load_n(
+                    &state[i].tx_burst_requested, __ATOMIC_RELAXED),
+                (unsigned long long)__atomic_load_n(
+                    &state[i].tx_burst_sent, __ATOMIC_RELAXED),
+                (unsigned long long)__atomic_load_n(
+                    &state[i].tx_drops, __ATOMIC_RELAXED));
     }
-    ogs_info("N6 memif TX stats [drop:%llu ring-full:%llu alloc-fail:%llu]",
-            (unsigned long long)tx_drops,
-            (unsigned long long)tx_ring_full,
-            (unsigned long long)tx_alloc_failures);
 }
 
 void upf_n6_memif_tx_batch_begin(void)
@@ -398,23 +419,25 @@ void upf_n6_memif_tx_batch_flush(void)
             max_len = self.tx_packets[i]->len;
     }
 
+    __atomic_fetch_add(&self.tx_alloc_calls, 1, __ATOMIC_RELAXED);
+    __atomic_fetch_add(
+            &self.tx_alloc_requested, self.tx_count, __ATOMIC_RELAXED);
     rv = memif_buffer_alloc(self.connection, upf_dataplane_worker_id(),
             buffers, self.tx_count,
             &allocated, max_len);
+    __atomic_fetch_add(
+            &self.tx_alloc_granted, allocated, __ATOMIC_RELAXED);
+    if (allocated < self.tx_count)
+        __atomic_fetch_add(&self.tx_ring_full,
+                self.tx_count - allocated, __ATOMIC_RELAXED);
     if ((rv != MEMIF_ERR_SUCCESS && rv != MEMIF_ERR_NOBUF_RING &&
             rv != MEMIF_ERR_NOBUF) || !allocated) {
         if (rv != MEMIF_ERR_NOBUF_RING && rv != MEMIF_ERR_NOBUF)
             ogs_error("memif_buffer_alloc() failed: %s", memif_strerror(rv));
         __atomic_fetch_add(&self.tx_alloc_failures, 1, __ATOMIC_RELAXED);
-        if (rv == MEMIF_ERR_NOBUF_RING || rv == MEMIF_ERR_NOBUF)
-            __atomic_fetch_add(&self.tx_ring_full,
-                    self.tx_count, __ATOMIC_RELAXED);
         log_tx_drop(memif_strerror(rv), self.tx_count);
         goto cleanup;
     }
-    if (allocated != self.tx_count)
-        __atomic_fetch_add(&self.tx_ring_full,
-                self.tx_count - allocated, __ATOMIC_RELAXED);
 
     for (i = 0; i < allocated; i++) {
         memcpy(buffers[i].data, self.tx_packets[i]->data,
@@ -422,8 +445,12 @@ void upf_n6_memif_tx_batch_flush(void)
         buffers[i].len = self.tx_packets[i]->len;
     }
 
+    __atomic_fetch_add(&self.tx_burst_calls, 1, __ATOMIC_RELAXED);
+    __atomic_fetch_add(
+            &self.tx_burst_requested, allocated, __ATOMIC_RELAXED);
     rv = memif_tx_burst(self.connection, upf_dataplane_worker_id(),
             buffers, allocated, &sent);
+    __atomic_fetch_add(&self.tx_burst_sent, sent, __ATOMIC_RELAXED);
     if (sent != allocated) {
         if (rv != MEMIF_ERR_NOBUF_RING && rv != MEMIF_ERR_NOBUF)
             ogs_error("memif_tx_burst() failed: %s", memif_strerror(rv));
@@ -446,6 +473,7 @@ int upf_n6_memif_send(const ogs_pkbuf_t *pkbuf)
 
     ogs_assert(pkbuf);
 
+    __atomic_fetch_add(&self.tx_send_requests, 1, __ATOMIC_RELAXED);
     if (pkbuf->len > upf_self()->n6.buffer_size || pkbuf->len > UINT16_MAX) {
         log_tx_drop("packet too large", 1);
         return OGS_ERROR;
