@@ -151,6 +151,9 @@ data:
         ue: 1024
     upf:
       dataplane:
+        io_packet_budget: {{ default 1024 .Values.networking.upf.dataplane.ioPacketBudget }}
+        io_time_budget_us: {{ default 50 .Values.networking.upf.dataplane.ioTimeBudgetUs }}
+        stats_interval: {{ default 10 .Values.networking.upf.dataplane.statsInterval }}
         session_workers:
           enabled: {{ .Values.networking.upf.dataplane.sessionWorkers.enabled }}
           count: {{ .Values.networking.upf.dataplane.sessionWorkers.count }}

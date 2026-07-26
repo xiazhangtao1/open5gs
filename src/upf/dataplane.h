@@ -10,6 +10,10 @@
 
 #define UPF_DATAPLANE_MAX_BURST 256
 
+#if HAVE_LIBMEMIF
+#include <libmemif.h>
+#endif
+
 typedef struct {
     const void *data;
     size_t len;
@@ -38,9 +42,17 @@ int upf_dataplane_submit_n3(
         const void *data, size_t len, const ogs_sockaddr_t *from);
 int upf_dataplane_submit_n6(const void *data, size_t len);
 int upf_dataplane_submit_n3_batch(
-        const upf_dataplane_packet_t packets[], uint16_t count);
+        const upf_dataplane_packet_t packets[], uint16_t count,
+        uint16_t *submitted);
 int upf_dataplane_submit_n6_batch(
-        const upf_dataplane_packet_t packets[], uint16_t count);
+        const upf_dataplane_packet_t packets[], uint16_t count,
+        uint16_t *submitted);
+
+#if HAVE_LIBMEMIF
+int upf_dataplane_memif_fd_update(
+        memif_fd_event_t fde, void *private_ctx);
+#endif
+void upf_dataplane_wake(void);
 
 #ifdef __cplusplus
 }

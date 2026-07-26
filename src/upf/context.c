@@ -113,6 +113,9 @@ static int upf_context_prepare(void)
     upf_self()->dataplane.session_workers = false;
     upf_self()->dataplane.worker_count = 1;
     upf_self()->dataplane.worker_queue_size = 8192;
+    upf_self()->dataplane.io_packet_budget = 1024;
+    upf_self()->dataplane.io_time_budget_us = 50;
+    upf_self()->dataplane.stats_interval = 10;
 
     upf_self()->n3.socket_path = "/run/vpp/memif-n3.sock";
     upf_self()->n3.interface_id = 0;
@@ -142,6 +145,21 @@ static int upf_context_validation(void)
     if (upf_self()->dataplane.worker_queue_size < 256 ||
         upf_self()->dataplane.worker_queue_size > 65536) {
         ogs_error("upf.dataplane.session_workers.queue_size must be between 256 and 65536");
+        return OGS_ERROR;
+    }
+    if (upf_self()->dataplane.io_packet_budget < 1 ||
+        upf_self()->dataplane.io_packet_budget > 65536) {
+        ogs_error("upf.dataplane.io_packet_budget must be between 1 and 65536");
+        return OGS_ERROR;
+    }
+    if (upf_self()->dataplane.io_time_budget_us < 1 ||
+        upf_self()->dataplane.io_time_budget_us > OGS_USEC_PER_SEC) {
+        ogs_error("upf.dataplane.io_time_budget_us must be between 1 and 1000000");
+        return OGS_ERROR;
+    }
+    if (upf_self()->dataplane.stats_interval < 1 ||
+        upf_self()->dataplane.stats_interval > 3600) {
+        ogs_error("upf.dataplane.stats_interval must be between 1 and 3600");
         return OGS_ERROR;
     }
     if (ogs_list_first(&ogs_gtp_self()->gtpu_list) == NULL) {
@@ -280,6 +298,15 @@ int upf_context_parse_config(void)
                                 else
                                     ogs_warn("unknown key `%s`", key);
                             }
+                        } else if (!strcmp(dp_key, "io_packet_budget")) {
+                            const char *v = ogs_yaml_iter_value(&dp_iter);
+                            upf_self()->dataplane.io_packet_budget = atoi(v);
+                        } else if (!strcmp(dp_key, "io_time_budget_us")) {
+                            const char *v = ogs_yaml_iter_value(&dp_iter);
+                            upf_self()->dataplane.io_time_budget_us = atoi(v);
+                        } else if (!strcmp(dp_key, "stats_interval")) {
+                            const char *v = ogs_yaml_iter_value(&dp_iter);
+                            upf_self()->dataplane.stats_interval = atoi(v);
                         } else
                             ogs_warn("unknown key `%s`", dp_key);
                     }

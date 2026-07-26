@@ -15,8 +15,9 @@ extern "C" {
 
 int upf_n6_memif_open(void);
 void upf_n6_memif_close(void);
-int upf_n6_memif_poll(void);
-void upf_n6_memif_cancel_poll(void);
+bool upf_n6_memif_has_pending(void);
+int upf_n6_memif_service(uint32_t packet_budget, uint32_t time_budget_us);
+void upf_n6_memif_log_stats(void);
 void upf_n6_memif_tx_batch_begin(void);
 void upf_n6_memif_tx_batch_flush(void);
 int upf_n6_memif_send(const ogs_pkbuf_t *pkbuf);

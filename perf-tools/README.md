@@ -7,6 +7,9 @@ UPF 可在 N3/N6 均为 memif 时按 PFCP Session 分配 `1..16` 个数据 Worke
 ```yaml
 upf:
   dataplane:
+    io_packet_budget: 1024
+    io_time_budget_us: 50
+    stats_interval: 10
     session_workers:
       enabled: true
       count: 4
@@ -18,6 +21,12 @@ N3/N6 的 `memif.queues` 必须与 `count` 相等。N3 按 TEID、N6 按 UE IP
 一个 Worker，因此扩展性测试必须建立至少与 Worker 数相同的独立 PFCP Session。
 Worker 使用普通 `SCHED_OTHER`，禁止把 busy-poll 分发线程改为无限制
 `SCHED_FIFO`。
+
+N3/N6 libmemif fd 由同一个外部 epoll 管理。Dispatcher 在每个 qid
+每轮最多处理 `io_packet_budget` 个包或 `io_time_budget_us` 微秒，
+并在 N3/N6/qid 之间 round-robin。`stats_interval` 指定累计运行时统计
+的日志周期（秒），包括 burst、pending、dispatch drop、queue high-water
+和 memif TX ring-full。
 
 这些工具用于绕过 OAI UE/gNB 的空口性能限制，直接压测 Open5GS UPF 的 N6/TUN 和 N3/GTP-U 数据面。
 

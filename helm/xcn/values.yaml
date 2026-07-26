@@ -169,6 +169,9 @@ networking:
       serverAddress: 0.0.0.0
   upf:
     dataplane:
+      ioPacketBudget: 1024
+      ioTimeBudgetUs: 50
+      statsInterval: 10
       sessionWorkers:
         enabled: false
         count: 1

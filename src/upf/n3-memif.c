@@ -18,6 +18,24 @@
 #define UPF_MEMIF_MAX_BURST 256
 #define UPF_MEMIF_TX_CHUNK 64
 #define UPF_GTPU_PORT 2152
+#define UPF_MEMIF_MAX_QUEUES 16
+
+typedef struct {
+    bool pending;
+    ogs_time_t pending_since;
+    uint64_t interrupts;
+    uint64_t bursts;
+    uint64_t packets;
+    uint64_t full_bursts;
+    uint64_t budget_yields;
+    uint64_t invalid_packets;
+    uint64_t dispatch_drops;
+    uint64_t rx_errors;
+    uint64_t refill_errors;
+    uint64_t pending_max_us;
+    uint16_t burst_min;
+    uint16_t burst_max;
+} upf_n3_rx_queue_t;
 
 typedef struct upf_n3_tx_packet_s {
     ogs_pkbuf_t *pkbuf;
@@ -37,12 +55,16 @@ typedef struct {
     uint16_t tx_batch_remaining;
     uint16_t ip_id;
     uint64_t tx_drops;
+    uint64_t tx_ring_full;
+    uint64_t tx_alloc_failures;
     ogs_time_t last_tx_drop_log;
     bool tx_batch;
     bool connected;
 } upf_n3_memif_state_t;
 
 static upf_n3_memif_state_t state[16];
+static upf_n3_rx_queue_t rx_queue[UPF_MEMIF_MAX_QUEUES];
+static uint8_t rx_rr_qid;
 #define self state[upf_dataplane_worker_id()]
 
 static void release_direct_pkbuf(ogs_pkbuf_t *pkbuf)
@@ -58,12 +80,13 @@ static void log_tx_drop(const char *reason, uint16_t count)
     ogs_assert(reason);
     ogs_assert(count);
 
-    self.tx_drops += count;
+    __atomic_fetch_add(&self.tx_drops, count, __ATOMIC_RELAXED);
     if (!self.last_tx_drop_log ||
         now - self.last_tx_drop_log >= ogs_time_from_sec(1)) {
         ogs_warn("[DROP] N3 memif TX failed "
                 "[%s dropped:%u total:%llu]",
-                reason, count, (unsigned long long)self.tx_drops);
+                reason, count, (unsigned long long)__atomic_load_n(
+                    &self.tx_drops, __ATOMIC_RELAXED));
         self.last_tx_drop_log = now;
     }
 }
@@ -167,6 +190,7 @@ static int on_connect(memif_conn_handle_t connection, void *private_ctx)
     uint8_t i;
     int rv;
 
+    (void)private_ctx;
     for (i = 0; i < upf_self()->n3.queues; i++) {
         rv = memif_refill_queue(connection, i, UINT16_MAX, 0);
         if (rv != MEMIF_ERR_SUCCESS) {
@@ -178,6 +202,8 @@ static int on_connect(memif_conn_handle_t connection, void *private_ctx)
         state[i].socket = state[0].socket;
         state[i].local_addr = state[0].local_addr;
         state[i].connected = true;
+        rx_queue[i].pending = false;
+        rx_queue[i].pending_since = 0;
     }
     self.tx_count = 0;
     self.tx_allocated = 0;
@@ -191,8 +217,14 @@ static int on_connect(memif_conn_handle_t connection, void *private_ctx)
 static int on_disconnect(memif_conn_handle_t connection, void *private_ctx)
 {
     uint8_t i;
-    for (i = 0; i < upf_self()->n3.queues; i++)
+
+    (void)connection;
+    (void)private_ctx;
+    for (i = 0; i < upf_self()->n3.queues; i++) {
         state[i].connected = false;
+        rx_queue[i].pending = false;
+        rx_queue[i].pending_since = 0;
+    }
     upf_n3_memif_tx_batch_flush();
     self.tx_allocated = 0;
     self.tx_batch_remaining = 0;
@@ -204,21 +236,67 @@ static int on_disconnect(memif_conn_handle_t connection, void *private_ctx)
 static int on_interrupt(
         memif_conn_handle_t connection, void *private_ctx, uint16_t qid)
 {
+    upf_n3_rx_queue_t *queue;
+
+    (void)connection;
+    (void)private_ctx;
+    if (qid >= upf_self()->n3.queues || qid >= UPF_MEMIF_MAX_QUEUES) {
+        ogs_error("Invalid N3 memif RX qid:%u", qid);
+        return MEMIF_ERR_QID;
+    }
+
+    queue = &rx_queue[qid];
+    queue->interrupts++;
+    if (!queue->pending) {
+        queue->pending = true;
+        queue->pending_since = ogs_get_monotonic_time();
+    }
+    return MEMIF_ERR_SUCCESS;
+}
+
+static int service_queue(
+        uint16_t qid, uint32_t packet_budget, uint32_t time_budget_us)
+{
+    upf_n3_rx_queue_t *queue = &rx_queue[qid];
     memif_buffer_t buffers[UPF_MEMIF_MAX_BURST];
-    uint16_t count = 0;
-    uint16_t limit = upf_self()->n3.burst_size;
     upf_dataplane_packet_t packets[UPF_MEMIF_MAX_BURST];
+    ogs_time_t started = ogs_get_monotonic_time();
+    uint32_t processed = 0;
+    uint16_t requested;
+    uint16_t count;
     uint16_t packet_count;
+    uint16_t submitted;
+    bool more = true;
     int rv;
     int i;
 
     do {
-        rv = memif_rx_burst(connection, qid, buffers, limit, &count);
+        requested = upf_self()->n3.burst_size;
+        if (requested > packet_budget - processed)
+            requested = packet_budget - processed;
+        if (requested > UPF_MEMIF_MAX_BURST)
+            requested = UPF_MEMIF_MAX_BURST;
+        count = 0;
+        rv = memif_rx_burst(
+                state[qid].connection, qid, buffers, requested, &count);
         if (rv != MEMIF_ERR_SUCCESS && rv != MEMIF_ERR_NOBUF) {
+            queue->rx_errors++;
+            queue->pending = false;
+            queue->pending_since = 0;
             ogs_error("N3 memif_rx_burst(qid:%u) failed: %s",
                     qid, memif_strerror(rv));
-            return rv;
+            return OGS_ERROR;
         }
+
+        if (!queue->bursts || count < queue->burst_min)
+            queue->burst_min = count;
+        queue->bursts++;
+        queue->packets += count;
+        processed += count;
+        if (count > queue->burst_max)
+            queue->burst_max = count;
+        if (count == requested)
+            queue->full_bursts++;
 
         if (!upf_self()->dataplane.session_workers)
             upf_n6_memif_tx_batch_begin();
@@ -226,11 +304,13 @@ static int on_interrupt(
         for (i = 0; i < count; i++) {
             if (buffers[i].flags & MEMIF_BUFFER_FLAG_NEXT) {
                 ogs_error("[DROP] Chained N3 memif buffers are unsupported");
+                queue->invalid_packets++;
                 continue;
             }
             if (parse_raw_ipv4(buffers[i].data, buffers[i].len,
                         &packets[packet_count]) != OGS_OK) {
                 ogs_debug("[DROP] Invalid packet received from N3 memif");
+                queue->invalid_packets++;
                 continue;
             }
             if (upf_self()->dataplane.session_workers)
@@ -239,21 +319,47 @@ static int on_interrupt(
                         packets[0].len, &packets[0].from) != OGS_OK)
                 ogs_debug("[DROP] Invalid packet received from N3 memif");
         }
-        if (upf_self()->dataplane.session_workers && packet_count &&
-            upf_dataplane_submit_n3_batch(packets, packet_count) != OGS_OK)
-            ogs_debug("[DROP] N3 memif batch was not fully dispatched");
-        else if (!upf_self()->dataplane.session_workers)
+        if (upf_self()->dataplane.session_workers && packet_count) {
+            submitted = 0;
+            if (upf_dataplane_submit_n3_batch(
+                        packets, packet_count, &submitted) != OGS_OK)
+                ogs_debug("[DROP] N3 memif batch was not fully dispatched");
+            queue->dispatch_drops += packet_count - submitted;
+        } else if (!upf_self()->dataplane.session_workers) {
             upf_n6_memif_tx_batch_flush();
+        }
 
-        rv = memif_refill_queue(connection, qid, count, 0);
+        rv = memif_refill_queue(state[qid].connection, qid, count, 0);
         if (rv != MEMIF_ERR_SUCCESS) {
+            queue->refill_errors++;
+            queue->pending = false;
+            queue->pending_since = 0;
             ogs_error("N3 memif_refill_queue(qid:%u count:%u) failed: %s",
                     qid, count, memif_strerror(rv));
-            return rv;
+            return OGS_ERROR;
         }
-    } while (count == limit);
 
-    return MEMIF_ERR_SUCCESS;
+        more = count == requested;
+    } while (more && processed < packet_budget &&
+            ogs_get_monotonic_time() - started < (ogs_time_t)time_budget_us);
+
+    if (more) {
+        ogs_time_t pending_us =
+            ogs_get_monotonic_time() - queue->pending_since;
+
+        queue->budget_yields++;
+        if (pending_us > (ogs_time_t)queue->pending_max_us)
+            queue->pending_max_us = pending_us;
+    } else {
+        ogs_time_t pending_us =
+            ogs_get_monotonic_time() - queue->pending_since;
+
+        if (pending_us > (ogs_time_t)queue->pending_max_us)
+            queue->pending_max_us = pending_us;
+        queue->pending = false;
+        queue->pending_since = 0;
+    }
+    return OGS_OK;
 }
 
 int upf_n3_memif_open(void)
@@ -264,6 +370,8 @@ int upf_n3_memif_open(void)
     int rv;
 
     memset(state, 0, sizeof(state));
+    memset(rx_queue, 0, sizeof(rx_queue));
+    rx_rr_qid = 0;
 
     memset(&local, 0, sizeof(local));
     if (ogs_inet_pton(AF_INET, upf_self()->n3.local_address, &local) != OGS_OK)
@@ -277,6 +385,7 @@ int upf_n3_memif_open(void)
             sizeof(socket_args.app_name));
     socket_args.connection_request_timer.it_value.tv_sec = 1;
     socket_args.connection_request_timer.it_interval.tv_sec = 1;
+    socket_args.on_control_fd_update = upf_dataplane_memif_fd_update;
 
     rv = memif_create_socket(&self.socket, &socket_args, NULL);
     if (rv != MEMIF_ERR_SUCCESS) {
@@ -327,27 +436,75 @@ void upf_n3_memif_close(void)
 
 }
 
-int upf_n3_memif_poll(void)
+bool upf_n3_memif_has_pending(void)
 {
-    int rv;
+    uint8_t i;
 
-    if (!self.socket)
-        return OGS_DONE;
-
-    rv = memif_poll_event(self.socket, 0);
-    if (rv == MEMIF_ERR_SUCCESS || rv == MEMIF_ERR_AGAIN)
-        return OGS_OK;
-    if (rv == MEMIF_ERR_POLL_CANCEL)
-        return OGS_DONE;
-
-    ogs_error("N3 memif_poll_event() failed: %s", memif_strerror(rv));
-    return OGS_ERROR;
+    for (i = 0; i < upf_self()->n3.queues; i++)
+        if (rx_queue[i].pending)
+            return true;
+    return false;
 }
 
-void upf_n3_memif_cancel_poll(void)
+int upf_n3_memif_service(
+        uint32_t packet_budget, uint32_t time_budget_us)
 {
-    if (self.socket)
-        memif_cancel_poll_event(self.socket);
+    uint8_t queues = upf_self()->n3.queues;
+    uint8_t offset;
+
+    for (offset = 0; offset < queues; offset++) {
+        uint8_t qid = (rx_rr_qid + offset) % queues;
+
+        if (!rx_queue[qid].pending)
+            continue;
+        rx_rr_qid = (qid + 1) % queues;
+        return service_queue(qid, packet_budget, time_budget_us);
+    }
+    return OGS_OK;
+}
+
+void upf_n3_memif_log_stats(void)
+{
+    uint64_t tx_drops = 0;
+    uint64_t tx_ring_full = 0;
+    uint64_t tx_alloc_failures = 0;
+    uint8_t i;
+
+    for (i = 0; i < upf_self()->n3.queues; i++) {
+        upf_n3_rx_queue_t *queue = &rx_queue[i];
+        uint64_t average = queue->bursts ?
+            queue->packets / queue->bursts : 0;
+        ogs_time_t pending_us = queue->pending ?
+            ogs_get_monotonic_time() - queue->pending_since : 0;
+
+        ogs_info("N3 memif RX qid:%u stats "
+                "[interrupt:%llu burst:%llu packets:%llu "
+                "burst-size(min/avg/max):%u/%llu/%u full:%llu "
+                "budget-yield:%llu pending:%s pending-us:%lld max-us:%llu "
+                "invalid:%llu dispatch-drop:%llu rx-error:%llu "
+                "refill-error:%llu]",
+                i, (unsigned long long)queue->interrupts,
+                (unsigned long long)queue->bursts,
+                (unsigned long long)queue->packets,
+                queue->burst_min, (unsigned long long)average,
+                queue->burst_max, (unsigned long long)queue->full_bursts,
+                (unsigned long long)queue->budget_yields,
+                queue->pending ? "yes" : "no", (long long)pending_us,
+                (unsigned long long)queue->pending_max_us,
+                (unsigned long long)queue->invalid_packets,
+                (unsigned long long)queue->dispatch_drops,
+                (unsigned long long)queue->rx_errors,
+                (unsigned long long)queue->refill_errors);
+        tx_drops += __atomic_load_n(&state[i].tx_drops, __ATOMIC_RELAXED);
+        tx_ring_full += __atomic_load_n(
+                &state[i].tx_ring_full, __ATOMIC_RELAXED);
+        tx_alloc_failures += __atomic_load_n(
+                &state[i].tx_alloc_failures, __ATOMIC_RELAXED);
+    }
+    ogs_info("N3 memif TX stats [drop:%llu ring-full:%llu alloc-fail:%llu]",
+            (unsigned long long)tx_drops,
+            (unsigned long long)tx_ring_full,
+            (unsigned long long)tx_alloc_failures);
 }
 
 static bool preallocate_tx_buffers(uint16_t count)
@@ -364,9 +521,15 @@ static bool preallocate_tx_buffers(uint16_t count)
     rv = memif_buffer_alloc(self.connection, upf_dataplane_worker_id(),
             self.tx_buffers, count,
             &allocated, upf_self()->n3.buffer_size);
+    if (rv == MEMIF_ERR_NOBUF_RING || rv == MEMIF_ERR_NOBUF ||
+        allocated < count)
+        __atomic_fetch_add(&self.tx_ring_full,
+                count - allocated, __ATOMIC_RELAXED);
     if ((rv != MEMIF_ERR_SUCCESS && rv != MEMIF_ERR_NOBUF_RING &&
-            rv != MEMIF_ERR_NOBUF) || !allocated)
+            rv != MEMIF_ERR_NOBUF) || !allocated) {
+        __atomic_fetch_add(&self.tx_alloc_failures, 1, __ATOMIC_RELAXED);
         return false;
+    }
 
     self.tx_allocated = allocated;
     return true;
@@ -608,12 +771,20 @@ void upf_n3_memif_close(void)
 {
 }
 
-int upf_n3_memif_poll(void)
+bool upf_n3_memif_has_pending(void)
 {
-    return OGS_DONE;
+    return false;
 }
 
-void upf_n3_memif_cancel_poll(void)
+int upf_n3_memif_service(
+        uint32_t packet_budget, uint32_t time_budget_us)
+{
+    (void)packet_budget;
+    (void)time_budget_us;
+    return OGS_OK;
+}
+
+void upf_n3_memif_log_stats(void)
 {
 }
 

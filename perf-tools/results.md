@@ -1,5 +1,31 @@
 # UPF performance results
 
+## 统一外部 epoll 与公平 I/O 预算（2026-07-26）
+
+N3/N6 两个 libmemif socket 改由同一个外部 epoll 管理，仍保留单 dispatcher
+和单生产者模型。libmemif 中断回调只标记 qid pending；dispatcher 在 N3/N6
+之间交替优先，并在每个方向内部 round-robin 选择 qid。每个 qid 每轮默认最多
+处理 1024 包或 50 微秒，Session owner、worker 队列以及
+PDR/FAR/QER/URR/GTP-U 原处理函数均未改变。
+
+运行时累计统计包括 epoll wait/event/error、每 qid interrupt/burst/包数、
+burst min/avg/max、预算让出、当前及最大 pending 时间、解析和 dispatch 丢包、
+refill 错误、worker queue depth/high-water/full/push-fail，以及 N3/N6 TX
+ring-full/alloc-fail/drop。
+
+实际部署使用两个真实 PDU/PFCP Session（`10.45.0.2`、`10.45.0.3`）和两个
+Session Worker。VPP packet-generator 从 N6 以约 10 微秒节奏注入 100 Mbps、
+2 秒、1428-byte IPv4 UDP：
+
+| N6 注入 | N6 RX 计数 | Worker 0/1 | N3 输出 | Open5GS 丢包 |
+|---:|---:|---:|---:|---:|
+| 17,506 | 17,506 | 8,752 / 8,754 | 17,506 | 0 |
+
+本轮 `dispatch-drop=0`、两个 worker 的 `queue-full/push-fail=0`、N3/N6
+`TX drop/ring-full/alloc-fail=0`、`rx-error/refill-error=0`、epoll error=0；
+N6 qid 最大 pending 为 48 微秒。测试后已禁用并删除临时 packet-generator
+流和接口。
+
 ## Session Worker 第一阶段批量分类与投递（2026-07-25）
 
 本阶段不实现 descriptor lease，memif RX buffer 仍在 dispatcher 完成 payload

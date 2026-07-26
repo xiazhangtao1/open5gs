@@ -18,7 +18,15 @@
 #include <pthread.h>
 #include <sched.h>
 
+#if HAVE_LIBMEMIF
+#include <errno.h>
+#include <sys/epoll.h>
+#include <sys/eventfd.h>
+#include <unistd.h>
+#endif
+
 #define UPF_MAX_WORKERS 16
+#define UPF_EPOLL_MAX_EVENTS 32
 
 typedef enum {
     UPF_WORK_N3,
@@ -49,6 +57,9 @@ typedef struct {
     uint64_t read_seq;
     uint64_t packets;
     uint64_t drops;
+    uint64_t queue_full_batches;
+    uint64_t queue_push_failures;
+    uint64_t queue_high_water;
 } upf_worker_t;
 
 static ogs_thread_t *dispatcher;
@@ -58,6 +69,16 @@ static pthread_mutex_t report_lock;
 static unsigned int owned_sessions[UPF_MAX_WORKERS];
 static int stopping;
 static __thread uint8_t tls_worker_id;
+
+#if HAVE_LIBMEMIF
+static int dispatcher_epoll_fd = -1;
+static int dispatcher_wake_fd = -1;
+static uint8_t dispatcher_wake_token;
+static uint64_t epoll_waits;
+static uint64_t epoll_events;
+static uint64_t epoll_errors;
+static uint64_t epoll_wakeups;
+#endif
 
 static bool is_stopping(void)
 {
@@ -216,7 +237,8 @@ static void session_worker_main(void *data)
         upf_n6_memif_tx_batch_flush();
         upf_n3_memif_tx_batch_flush();
         upf_dataplane_read_unlock();
-        worker->packets += packet_count;
+        __atomic_fetch_add(&worker->packets,
+                packet_count, __ATOMIC_RELAXED);
         for (i = 0; i < batch_count; i++) {
             upf_work_batch_t *batch = batches[i];
 
@@ -233,22 +255,134 @@ static void session_worker_main(void *data)
 
 static void dispatcher_main(void *data)
 {
-    int n3_rv;
-    int n6_rv;
+    ogs_time_t last_stats = ogs_get_monotonic_time();
+    bool n6_first = false;
 
     tls_worker_id = 0;
     pin_current_thread_when_ready(
             upf_self()->dataplane.worker_count, "memif-dispatcher");
     ogs_info("UPF memif dispatcher started");
     while (!is_stopping()) {
-        if (!upf_self()->dataplane.session_workers)
-            upf_dataplane_read_lock();
-        n3_rv = upf_n3_memif_poll();
-        n6_rv = upf_n6_memif_poll();
-        if (!upf_self()->dataplane.session_workers)
-            upf_dataplane_read_unlock();
-        if (n3_rv == OGS_DONE && n6_rv == OGS_DONE)
-            ogs_usleep(1000);
+#if HAVE_LIBMEMIF
+        struct epoll_event events[UPF_EPOLL_MAX_EVENTS];
+        bool pending =
+            upf_n3_memif_has_pending() || upf_n6_memif_has_pending();
+        int timeout_ms = pending ? 0 : 1000;
+        int count;
+        int i;
+
+        count = epoll_wait(dispatcher_epoll_fd,
+                events, OGS_ARRAY_SIZE(events), timeout_ms);
+        epoll_waits++;
+        if (count < 0) {
+            if (errno == EINTR)
+                continue;
+            epoll_errors++;
+            ogs_error("UPF memif epoll_wait() failed: %s", strerror(errno));
+            ogs_msleep(1);
+            continue;
+        }
+        epoll_events += count;
+        for (i = 0; i < count; i++) {
+            memif_fd_event_type_t memif_events = 0;
+            int rv;
+
+            if (events[i].data.ptr == &dispatcher_wake_token) {
+                uint64_t value;
+
+                while (read(dispatcher_wake_fd,
+                            &value, sizeof(value)) == sizeof(value))
+                    epoll_wakeups += value;
+                continue;
+            }
+            if (events[i].events & EPOLLIN)
+                memif_events |= MEMIF_FD_EVENT_READ;
+            if (events[i].events & EPOLLOUT)
+                memif_events |= MEMIF_FD_EVENT_WRITE;
+            if (events[i].events & (EPOLLERR | EPOLLHUP))
+                memif_events |= MEMIF_FD_EVENT_ERROR;
+            rv = memif_control_fd_handler(
+                    events[i].data.ptr, memif_events);
+            if (rv != MEMIF_ERR_SUCCESS && rv != MEMIF_ERR_AGAIN) {
+                epoll_errors++;
+                ogs_warn("memif_control_fd_handler() failed: %s",
+                        memif_strerror(rv));
+            }
+        }
+
+        if (!is_stopping()) {
+            int rv;
+
+            /*
+             * One bounded qid quantum per direction. Flip the first direction
+             * after every round so a continuously busy ring cannot starve the
+             * other socket.
+             */
+            if (!upf_self()->dataplane.session_workers)
+                upf_dataplane_read_lock();
+            if (n6_first) {
+                rv = upf_n6_memif_service(
+                        upf_self()->dataplane.io_packet_budget,
+                        upf_self()->dataplane.io_time_budget_us);
+                if (rv == OGS_ERROR)
+                    epoll_errors++;
+                rv = upf_n3_memif_service(
+                        upf_self()->dataplane.io_packet_budget,
+                        upf_self()->dataplane.io_time_budget_us);
+                if (rv == OGS_ERROR)
+                    epoll_errors++;
+            } else {
+                rv = upf_n3_memif_service(
+                        upf_self()->dataplane.io_packet_budget,
+                        upf_self()->dataplane.io_time_budget_us);
+                if (rv == OGS_ERROR)
+                    epoll_errors++;
+                rv = upf_n6_memif_service(
+                        upf_self()->dataplane.io_packet_budget,
+                        upf_self()->dataplane.io_time_budget_us);
+                if (rv == OGS_ERROR)
+                    epoll_errors++;
+            }
+            if (!upf_self()->dataplane.session_workers)
+                upf_dataplane_read_unlock();
+            n6_first = !n6_first;
+        }
+#else
+        ogs_msleep(1000);
+#endif
+
+        if (ogs_get_monotonic_time() - last_stats >=
+                ogs_time_from_sec(upf_self()->dataplane.stats_interval)) {
+            uint8_t i;
+
+#if HAVE_LIBMEMIF
+            ogs_info("UPF memif epoll stats "
+                    "[wait:%llu events:%llu wake:%llu errors:%llu]",
+                    (unsigned long long)epoll_waits,
+                    (unsigned long long)epoll_events,
+                    (unsigned long long)epoll_wakeups,
+                    (unsigned long long)epoll_errors);
+#endif
+            upf_n3_memif_log_stats();
+            upf_n6_memif_log_stats();
+            for (i = 0; i < upf_self()->dataplane.worker_count; i++) {
+                uint64_t read_seq = __atomic_load_n(
+                        &workers[i].read_seq, __ATOMIC_ACQUIRE);
+
+                ogs_info("UPF worker %u stats "
+                        "[packets:%llu drops:%llu queue-depth:%llu "
+                        "queue-high:%llu queue-full:%llu push-fail:%llu]",
+                        i,
+                        (unsigned long long)__atomic_load_n(
+                            &workers[i].packets, __ATOMIC_RELAXED),
+                        (unsigned long long)workers[i].drops,
+                        (unsigned long long)(workers[i].write_seq - read_seq),
+                        (unsigned long long)workers[i].queue_high_water,
+                        (unsigned long long)workers[i].queue_full_batches,
+                        (unsigned long long)workers[i].queue_push_failures);
+            }
+            last_stats = ogs_get_monotonic_time();
+        }
     }
     ogs_info("UPF memif dispatcher stopped");
 }
@@ -302,7 +436,8 @@ static uint8_t owner_from_n6_locked(const void *data, size_t len)
 }
 
 static int submit_batch(upf_work_type_t type,
-        const upf_dataplane_packet_t packets[], uint16_t count)
+        const upf_dataplane_packet_t packets[], uint16_t count,
+        uint16_t *submitted)
 {
     uint16_t indices[UPF_MAX_WORKERS][UPF_DATAPLANE_MAX_BURST];
     uint16_t owner_count[UPF_MAX_WORKERS] = { 0 };
@@ -312,6 +447,8 @@ static int submit_batch(upf_work_type_t type,
     uint8_t owner;
     int result = OGS_OK;
 
+    if (submitted)
+        *submitted = 0;
     if (!packets || !count || count > UPF_DATAPLANE_MAX_BURST)
         return OGS_ERROR;
 
@@ -355,6 +492,7 @@ static int submit_batch(upf_work_type_t type,
             ogs_queue_trypop(
                 worker->free_queue, (void **)&batch) != OGS_OK) {
             worker->drops += owner_count[owner];
+            worker->queue_full_batches++;
             result = OGS_ERROR;
             continue;
         }
@@ -378,14 +516,19 @@ static int submit_batch(upf_work_type_t type,
         batch->start = start;
         batch->count = owner_count[owner];
         worker->write_seq = start + owner_count[owner];
+        if (worker->write_seq - read_seq > worker->queue_high_water)
+            worker->queue_high_water = worker->write_seq - read_seq;
         if (ogs_queue_trypush(worker->queue, batch) != OGS_OK) {
             worker->write_seq = start;
             worker->drops += owner_count[owner];
+            worker->queue_push_failures++;
             ogs_assert(ogs_queue_trypush(
                         worker->free_queue, batch) == OGS_OK);
             result = OGS_ERROR;
             continue;
         }
+        if (submitted)
+            *submitted += owner_count[owner];
     }
 
     return accepted == count ? result : OGS_ERROR;
@@ -401,7 +544,7 @@ int upf_dataplane_submit_n3(
 
     if (from)
         memcpy(&packet.from, from, sizeof(packet.from));
-    return submit_batch(UPF_WORK_N3, &packet, 1);
+    return submit_batch(UPF_WORK_N3, &packet, 1, NULL);
 }
 
 int upf_dataplane_submit_n6(const void *data, size_t len)
@@ -411,19 +554,110 @@ int upf_dataplane_submit_n6(const void *data, size_t len)
         .len = len,
     };
 
-    return submit_batch(UPF_WORK_N6, &packet, 1);
+    return submit_batch(UPF_WORK_N6, &packet, 1, NULL);
 }
 
 int upf_dataplane_submit_n3_batch(
-        const upf_dataplane_packet_t packets[], uint16_t count)
+        const upf_dataplane_packet_t packets[], uint16_t count,
+        uint16_t *submitted)
 {
-    return submit_batch(UPF_WORK_N3, packets, count);
+    return submit_batch(UPF_WORK_N3, packets, count, submitted);
 }
 
 int upf_dataplane_submit_n6_batch(
-        const upf_dataplane_packet_t packets[], uint16_t count)
+        const upf_dataplane_packet_t packets[], uint16_t count,
+        uint16_t *submitted)
 {
-    return submit_batch(UPF_WORK_N6, packets, count);
+    return submit_batch(UPF_WORK_N6, packets, count, submitted);
+}
+
+#if HAVE_LIBMEMIF
+static int ensure_dispatcher_epoll(void)
+{
+    struct epoll_event event;
+
+    if (dispatcher_epoll_fd >= 0)
+        return OGS_OK;
+
+    dispatcher_epoll_fd = epoll_create1(EPOLL_CLOEXEC);
+    if (dispatcher_epoll_fd < 0) {
+        ogs_error("epoll_create1() failed: %s", strerror(errno));
+        return OGS_ERROR;
+    }
+    dispatcher_wake_fd = eventfd(0, EFD_NONBLOCK | EFD_CLOEXEC);
+    if (dispatcher_wake_fd < 0) {
+        ogs_error("eventfd() failed: %s", strerror(errno));
+        close(dispatcher_epoll_fd);
+        dispatcher_epoll_fd = -1;
+        return OGS_ERROR;
+    }
+
+    memset(&event, 0, sizeof(event));
+    event.events = EPOLLIN;
+    event.data.ptr = &dispatcher_wake_token;
+    if (epoll_ctl(dispatcher_epoll_fd, EPOLL_CTL_ADD,
+                dispatcher_wake_fd, &event) < 0) {
+        ogs_error("epoll_ctl(wake-fd) failed: %s", strerror(errno));
+        close(dispatcher_wake_fd);
+        close(dispatcher_epoll_fd);
+        dispatcher_wake_fd = -1;
+        dispatcher_epoll_fd = -1;
+        return OGS_ERROR;
+    }
+    return OGS_OK;
+}
+
+int upf_dataplane_memif_fd_update(
+        memif_fd_event_t fde, void *private_ctx)
+{
+    struct epoll_event event;
+    int operation = EPOLL_CTL_ADD;
+
+    (void)private_ctx;
+    if (ensure_dispatcher_epoll() != OGS_OK)
+        return MEMIF_ERR_CB_FDUPDATE;
+    if (fde.fd < 0)
+        return MEMIF_ERR_BAD_FD;
+
+    if (fde.type & MEMIF_FD_EVENT_DEL) {
+        if (epoll_ctl(dispatcher_epoll_fd,
+                    EPOLL_CTL_DEL, fde.fd, NULL) < 0 && errno != ENOENT) {
+            ogs_error("epoll_ctl(DEL fd:%d) failed: %s",
+                    fde.fd, strerror(errno));
+            return MEMIF_ERR_CB_FDUPDATE;
+        }
+        return MEMIF_ERR_SUCCESS;
+    }
+
+    memset(&event, 0, sizeof(event));
+    if (fde.type & MEMIF_FD_EVENT_READ)
+        event.events |= EPOLLIN;
+    if (fde.type & MEMIF_FD_EVENT_WRITE)
+        event.events |= EPOLLOUT;
+    event.data.ptr = fde.private_ctx;
+    if (fde.type & MEMIF_FD_EVENT_MOD)
+        operation = EPOLL_CTL_MOD;
+    if (epoll_ctl(dispatcher_epoll_fd,
+                operation, fde.fd, &event) < 0) {
+        ogs_error("epoll_ctl(%s fd:%d) failed: %s",
+                operation == EPOLL_CTL_MOD ? "MOD" : "ADD",
+                fde.fd, strerror(errno));
+        return MEMIF_ERR_CB_FDUPDATE;
+    }
+    return MEMIF_ERR_SUCCESS;
+}
+#endif
+
+void upf_dataplane_wake(void)
+{
+#if HAVE_LIBMEMIF
+    uint64_t value = 1;
+
+    if (dispatcher_wake_fd >= 0 &&
+        write(dispatcher_wake_fd, &value, sizeof(value)) < 0 &&
+        errno != EAGAIN)
+        ogs_warn("UPF dispatcher wake failed: %s", strerror(errno));
+#endif
 }
 
 void upf_dataplane_init(void)
@@ -437,6 +671,16 @@ void upf_dataplane_init(void)
 void upf_dataplane_final(void)
 {
     ogs_assert(!dispatcher);
+#if HAVE_LIBMEMIF
+    if (dispatcher_wake_fd >= 0) {
+        close(dispatcher_wake_fd);
+        dispatcher_wake_fd = -1;
+    }
+    if (dispatcher_epoll_fd >= 0) {
+        close(dispatcher_epoll_fd);
+        dispatcher_epoll_fd = -1;
+    }
+#endif
     pthread_mutex_destroy(&report_lock);
     pthread_rwlock_destroy(&rule_lock);
 }
@@ -450,6 +694,14 @@ int upf_dataplane_start(void)
     ogs_assert(!dispatcher);
     __atomic_store_n(&stopping, 0, __ATOMIC_RELEASE);
 
+#if HAVE_LIBMEMIF
+    if (ensure_dispatcher_epoll() != OGS_OK)
+        return OGS_ERROR;
+    epoll_waits = 0;
+    epoll_events = 0;
+    epoll_errors = 0;
+    epoll_wakeups = 0;
+#endif
     if (upf_self()->n6.buffer_size > max_packet_size)
         max_packet_size = upf_self()->n6.buffer_size;
     for (i = 0; i < upf_self()->dataplane.worker_count; i++) {
@@ -472,6 +724,9 @@ int upf_dataplane_start(void)
         __atomic_store_n(&workers[i].read_seq, 0, __ATOMIC_RELEASE);
         workers[i].packets = 0;
         workers[i].drops = 0;
+        workers[i].queue_full_batches = 0;
+        workers[i].queue_push_failures = 0;
+        workers[i].queue_high_water = 0;
         for (j = 0; j < upf_self()->dataplane.worker_queue_size; j++)
             ogs_assert(ogs_queue_trypush(workers[i].free_queue,
                         (upf_work_batch_t *)workers[i].batch_pool + j)
@@ -495,8 +750,7 @@ void upf_dataplane_stop(void)
     uint8_t i;
 
     __atomic_store_n(&stopping, 1, __ATOMIC_RELEASE);
-    upf_n3_memif_cancel_poll();
-    upf_n6_memif_cancel_poll();
+    upf_dataplane_wake();
     if (dispatcher) {
         ogs_thread_destroy(dispatcher);
         dispatcher = NULL;
