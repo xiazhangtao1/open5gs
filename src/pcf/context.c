@@ -32,7 +32,6 @@ static int context_initialized = 0;
 
 static void clear_ipv4addr(pcf_sess_t *sess);
 static void clear_ipv6prefix(pcf_sess_t *sess);
-static void clear_ngap_ids(pcf_sess_t *sess);
 
 void pcf_context_init(void)
 {
@@ -501,25 +500,21 @@ pcf_ue_sm_t *pcf_ue_sm_find_by_amf_ue_ngap_id(uint64_t amf_ue_ngap_id)
 {
     pcf_ue_sm_t *pcf_ue_sm = NULL;
     pcf_ue_sm_t *matched_ue_sm = NULL;
-    pcf_sess_t *sess = NULL;
 
     if (!amf_ue_ngap_id)
         return NULL;
 
     ogs_list_for_each(&self.pcf_ue_sm_list, pcf_ue_sm) {
-        ogs_list_for_each(&pcf_ue_sm->sess_list, sess) {
-            if (sess->amf_ue_ngap_id != amf_ue_ngap_id)
-                continue;
+        if (pcf_ue_sm->amf_ue_ngap_id != amf_ue_ngap_id)
+            continue;
 
-            if (matched_ue_sm && matched_ue_sm != pcf_ue_sm) {
-                ogs_warn("AMF_UE_NGAP_ID[%llu] is ambiguous across UEs",
-                        (unsigned long long)amf_ue_ngap_id);
-                return NULL;
-            }
-
-            matched_ue_sm = pcf_ue_sm;
-            break;
+        if (matched_ue_sm) {
+            ogs_warn("AMF_UE_NGAP_ID[%llu] is ambiguous across UEs",
+                    (unsigned long long)amf_ue_ngap_id);
+            return NULL;
         }
+
+        matched_ue_sm = pcf_ue_sm;
     }
 
     return matched_ue_sm;
@@ -529,28 +524,34 @@ pcf_ue_sm_t *pcf_ue_sm_find_by_ran_ue_ngap_id(uint64_t ran_ue_ngap_id)
 {
     pcf_ue_sm_t *pcf_ue_sm = NULL;
     pcf_ue_sm_t *matched_ue_sm = NULL;
-    pcf_sess_t *sess = NULL;
 
     if (!ran_ue_ngap_id)
         return NULL;
 
     ogs_list_for_each(&self.pcf_ue_sm_list, pcf_ue_sm) {
-        ogs_list_for_each(&pcf_ue_sm->sess_list, sess) {
-            if (sess->ran_ue_ngap_id != ran_ue_ngap_id)
-                continue;
+        if (pcf_ue_sm->ran_ue_ngap_id != ran_ue_ngap_id)
+            continue;
 
-            if (matched_ue_sm && matched_ue_sm != pcf_ue_sm) {
-                ogs_warn("RAN_UE_NGAP_ID[%llu] is ambiguous across UEs",
-                        (unsigned long long)ran_ue_ngap_id);
-                return NULL;
-            }
-
-            matched_ue_sm = pcf_ue_sm;
-            break;
+        if (matched_ue_sm) {
+            ogs_warn("RAN_UE_NGAP_ID[%llu] is ambiguous across UEs",
+                    (unsigned long long)ran_ue_ngap_id);
+            return NULL;
         }
+
+        matched_ue_sm = pcf_ue_sm;
     }
 
     return matched_ue_sm;
+}
+
+void pcf_ue_sm_set_ngap_ids(
+        pcf_ue_sm_t *pcf_ue_sm,
+        uint64_t amf_ue_ngap_id, uint64_t ran_ue_ngap_id)
+{
+    ogs_assert(pcf_ue_sm);
+
+    pcf_ue_sm->amf_ue_ngap_id = amf_ue_ngap_id;
+    pcf_ue_sm->ran_ue_ngap_id = ran_ue_ngap_id;
 }
 
 pcf_sess_t *pcf_sess_add(pcf_ue_sm_t *pcf_ue_sm, uint8_t psi)
@@ -642,7 +643,6 @@ void pcf_sess_remove(pcf_sess_t *sess)
 
     clear_ipv4addr(sess);
     clear_ipv6prefix(sess);
-    clear_ngap_ids(sess);
 
     OpenAPI_clear_and_free_string_list(sess->ipv4_frame_route_list);
     OpenAPI_clear_and_free_string_list(sess->ipv6_frame_route_list);
@@ -684,19 +684,6 @@ static void clear_ipv6prefix(pcf_sess_t *sess)
         ogs_hash_set(self.ipv6prefix_hash,
                 &sess->ipv6prefix, (sess->ipv6prefix.len >> 3) + 1, NULL);
         ogs_free(sess->ipv6prefix_string);
-    }
-}
-
-static void clear_ngap_ids(pcf_sess_t *sess)
-{
-    ogs_assert(sess);
-
-    if (sess->amf_ue_ngap_id) {
-        sess->amf_ue_ngap_id = 0;
-    }
-
-    if (sess->ran_ue_ngap_id) {
-        sess->ran_ue_ngap_id = 0;
     }
 }
 
@@ -755,22 +742,6 @@ bool pcf_sess_set_ipv6prefix(pcf_sess_t *sess, char *ipv6prefix_string)
             &sess->ipv6prefix, (sess->ipv6prefix.len >> 3) + 1, sess);
 
     return true;
-}
-
-void pcf_sess_set_ngap_ids(
-        pcf_sess_t *sess, uint64_t amf_ue_ngap_id, uint64_t ran_ue_ngap_id)
-{
-    ogs_assert(sess);
-
-    clear_ngap_ids(sess);
-
-    if (amf_ue_ngap_id) {
-        sess->amf_ue_ngap_id = amf_ue_ngap_id;
-    }
-
-    if (ran_ue_ngap_id) {
-        sess->ran_ue_ngap_id = ran_ue_ngap_id;
-    }
 }
 
 pcf_sess_t *pcf_sess_find(uint32_t index)

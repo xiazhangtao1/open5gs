@@ -83,6 +83,10 @@ struct pcf_ue_sm_s {
     char *supi;
     char *gpsi;
 
+    /* Current UE-associated logical NG connection, shared by all sessions */
+    uint64_t amf_ue_ngap_id;
+    uint64_t ran_ue_ngap_id;
+
     ogs_list_t sess_list;
 };
 
@@ -161,8 +165,6 @@ struct pcf_sess_s {
     OpenAPI_list_t *ipv6_frame_route_list;
 
     uint32_t ipv4addr;
-    uint64_t amf_ue_ngap_id;
-    uint64_t ran_ue_ngap_id;
     struct {
         uint8_t len;
         uint8_t addr6[OGS_IPV6_LEN];
@@ -220,6 +222,9 @@ pcf_ue_sm_t *pcf_ue_sm_find_by_supi(char *supi);
 pcf_ue_sm_t *pcf_ue_sm_find_by_association_id(char *association_id);
 pcf_ue_sm_t *pcf_ue_sm_find_by_amf_ue_ngap_id(uint64_t amf_ue_ngap_id);
 pcf_ue_sm_t *pcf_ue_sm_find_by_ran_ue_ngap_id(uint64_t ran_ue_ngap_id);
+void pcf_ue_sm_set_ngap_ids(
+        pcf_ue_sm_t *pcf_ue_sm,
+        uint64_t amf_ue_ngap_id, uint64_t ran_ue_ngap_id);
 
 pcf_sess_t *pcf_sess_add(pcf_ue_sm_t *pcf_ue_sm, uint8_t psi);
 void pcf_sess_remove(pcf_sess_t *sess);
@@ -227,8 +232,6 @@ void pcf_sess_remove_all(pcf_ue_sm_t *pcf_ue_sm);
 
 bool pcf_sess_set_ipv4addr(pcf_sess_t *sess, char *ipv4addr);
 bool pcf_sess_set_ipv6prefix(pcf_sess_t *sess, char *ipv6prefix);
-void pcf_sess_set_ngap_ids(
-        pcf_sess_t *sess, uint64_t amf_ue_ngap_id, uint64_t ran_ue_ngap_id);
 
 pcf_sess_t *pcf_sess_find(uint32_t index);
 pcf_sess_t *pcf_sess_find_by_sm_policy_id(char *sm_policy_id);
