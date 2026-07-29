@@ -279,12 +279,12 @@ static char *xcn_supi_from_amf_tmsi(uint64_t tmsi)
     return supi;
 }
 
-static bool xcn_amf_ue_info_match_session(
-        cJSON *ue, const char *supi, uint8_t psi,
+static bool xcn_amf_ue_info_get_ngap_ids(
+        cJSON *ue, const char *supi,
         uint64_t *amf_ue_ngap_id, uint64_t *ran_ue_ngap_id)
 {
     const char *ue_supi = NULL;
-    cJSON *sessions = NULL, *session = NULL, *gnb = NULL;
+    cJSON *gnb = NULL;
 
     ogs_assert(ue);
     ogs_assert(supi);
@@ -295,34 +295,23 @@ static bool xcn_amf_ue_info_match_session(
     if (!ue_supi || strcmp(ue_supi, supi) != 0)
         return false;
 
-    sessions = cJSON_GetObjectItemCaseSensitive(ue, "pdu_sessions");
-    if (!cJSON_IsArray(sessions))
+    gnb = cJSON_GetObjectItemCaseSensitive(ue, "gnb");
+    if (!cJSON_IsObject(gnb))
         return false;
 
-    cJSON_ArrayForEach(session, sessions) {
-        if (xcn_json_int(session, "psi", 0) == psi) {
-            gnb = cJSON_GetObjectItemCaseSensitive(ue, "gnb");
-            if (!cJSON_IsObject(gnb))
-                return false;
-
-            *amf_ue_ngap_id = xcn_json_uint64(gnb, "amf_ue_ngap_id");
-            *ran_ue_ngap_id = xcn_json_uint64(gnb, "ran_ue_ngap_id");
-            return *amf_ue_ngap_id || *ran_ue_ngap_id;
-        }
-    }
-
-    return false;
+    *amf_ue_ngap_id = xcn_json_uint64(gnb, "amf_ue_ngap_id");
+    *ran_ue_ngap_id = xcn_json_uint64(gnb, "ran_ue_ngap_id");
+    return *amf_ue_ngap_id || *ran_ue_ngap_id;
 }
 
-static bool xcn_sess_store_ngap_ids_from_amf_info(
-        pcf_ue_sm_t *pcf_ue_sm, pcf_sess_t *sess, cJSON *amf_info)
+static bool xcn_ue_sm_store_ngap_ids_from_amf_info(
+        pcf_ue_sm_t *pcf_ue_sm, cJSON *amf_info)
 {
     cJSON *items = NULL, *ue = NULL;
     uint64_t amf_ue_ngap_id = 0;
     uint64_t ran_ue_ngap_id = 0;
 
     ogs_assert(pcf_ue_sm);
-    ogs_assert(sess);
     ogs_assert(amf_info);
 
     items = cJSON_GetObjectItemCaseSensitive(amf_info, "items");
@@ -330,9 +319,10 @@ static bool xcn_sess_store_ngap_ids_from_amf_info(
         return false;
 
     cJSON_ArrayForEach(ue, items) {
-        if (xcn_amf_ue_info_match_session(ue, pcf_ue_sm->supi, sess->psi,
+        if (xcn_amf_ue_info_get_ngap_ids(ue, pcf_ue_sm->supi,
                     &amf_ue_ngap_id, &ran_ue_ngap_id)) {
-            pcf_sess_set_ngap_ids(sess, amf_ue_ngap_id, ran_ue_ngap_id);
+            pcf_ue_sm_set_ngap_ids(
+                    pcf_ue_sm, amf_ue_ngap_id, ran_ue_ngap_id);
             return true;
         }
     }
@@ -346,7 +336,6 @@ void pcf_xcn_refresh_ngap_ids_from_amf(void)
     cJSON *amf_info = NULL;
     pcf_context_t *self = pcf_self();
     pcf_ue_sm_t *pcf_ue_sm = NULL;
-    pcf_sess_t *sess = NULL;
 
     content = xcn_http_get(XCN_AMF_UE_INFO_URL);
     if (!content)
@@ -360,9 +349,8 @@ void pcf_xcn_refresh_ngap_ids_from_amf(void)
     }
 
     ogs_list_for_each(&self->pcf_ue_sm_list, pcf_ue_sm) {
-        ogs_list_for_each(&pcf_ue_sm->sess_list, sess)
-            xcn_sess_store_ngap_ids_from_amf_info(
-                    pcf_ue_sm, sess, amf_info);
+        pcf_ue_sm_set_ngap_ids(pcf_ue_sm, 0, 0);
+        xcn_ue_sm_store_ngap_ids_from_amf_info(pcf_ue_sm, amf_info);
     }
 
     cJSON_Delete(amf_info);
@@ -578,11 +566,6 @@ static cJSON *xcn_session_to_json(pcf_sess_t *sess)
         cJSON_AddStringToObject(item, "ipv4", sess->ipv4addr_string);
     if (sess->ipv6prefix_string)
         cJSON_AddStringToObject(item, "ipv6Prefix", sess->ipv6prefix_string);
-    if (sess->amf_ue_ngap_id)
-        cJSON_AddNumberToObject(item, "amfUeNgapId", sess->amf_ue_ngap_id);
-    if (sess->ran_ue_ngap_id)
-        cJSON_AddNumberToObject(item, "ranUeNgapId", sess->ran_ue_ngap_id);
-
     snssai = cJSON_AddObjectToObject(item, "sNssai");
     ogs_assert(snssai);
     cJSON_AddNumberToObject(snssai, "sst", sess->s_nssai.sst);
@@ -633,6 +616,12 @@ static cJSON *xcn_user_to_json(
     xcn_json_add_tmsi(item, amf_info, pcf_ue_sm->supi);
     cJSON_AddBoolToObject(item, "registered",
             pcf_ue_am_find_by_supi(pcf_ue_sm->supi) ? true : false);
+    if (pcf_ue_sm->amf_ue_ngap_id)
+        cJSON_AddNumberToObject(
+                item, "amfUeNgapId", pcf_ue_sm->amf_ue_ngap_id);
+    if (pcf_ue_sm->ran_ue_ngap_id)
+        cJSON_AddNumberToObject(
+                item, "ranUeNgapId", pcf_ue_sm->ran_ue_ngap_id);
 
     sessions = cJSON_AddArrayToObject(item, "sessions");
     ogs_assert(sessions);
@@ -798,6 +787,7 @@ void pcf_xcn_store_ngap_ids_from_sm_policy_content(
         pcf_sess_t *sess, const char *content)
 {
     cJSON *item = NULL;
+    pcf_ue_sm_t *pcf_ue_sm = NULL;
     uint64_t amf_ue_ngap_id = 0;
     uint64_t ran_ue_ngap_id = 0;
 
@@ -812,8 +802,12 @@ void pcf_xcn_store_ngap_ids_from_sm_policy_content(
 
     amf_ue_ngap_id = xcn_json_uint64(item, "xcnAmfUeNgapId");
     ran_ue_ngap_id = xcn_json_uint64(item, "xcnRanUeNgapId");
-    if (amf_ue_ngap_id || ran_ue_ngap_id)
-        pcf_sess_set_ngap_ids(sess, amf_ue_ngap_id, ran_ue_ngap_id);
+    if (amf_ue_ngap_id || ran_ue_ngap_id) {
+        pcf_ue_sm = pcf_ue_sm_find_by_id(sess->pcf_ue_sm_id);
+        ogs_assert(pcf_ue_sm);
+        pcf_ue_sm_set_ngap_ids(
+                pcf_ue_sm, amf_ue_ngap_id, ran_ue_ngap_id);
+    }
 
     cJSON_Delete(item);
 }
@@ -1257,10 +1251,10 @@ bool pcf_npcf_smpolicycontrol_handle_create(pcf_sess_t *sess,
                 sess, SmPolicyContextData->ipv6_address_prefix));
     if (SmPolicyContextData->xcn_amf_ue_ngap_id ||
         SmPolicyContextData->xcn_ran_ue_ngap_id)
-        pcf_sess_set_ngap_ids(sess,
+        pcf_ue_sm_set_ngap_ids(pcf_ue_sm,
                 SmPolicyContextData->xcn_amf_ue_ngap_id,
                 SmPolicyContextData->xcn_ran_ue_ngap_id);
-    if (!sess->amf_ue_ngap_id && !sess->ran_ue_ngap_id)
+    if (!pcf_ue_sm->amf_ue_ngap_id && !pcf_ue_sm->ran_ue_ngap_id)
         pcf_xcn_refresh_ngap_ids_from_amf();
 
     if (SmPolicyContextData->ipv4_frame_route_list) {
@@ -2879,10 +2873,12 @@ bool pcf_xcn_dedicated_bearer_handle_query(
         cJSON_AddStringToObject(root, "ueIp", sess->ipv4addr_string);
     else if (sess->ipv6prefix_string)
         cJSON_AddStringToObject(root, "ueIp", sess->ipv6prefix_string);
-    if (sess->amf_ue_ngap_id)
-        cJSON_AddNumberToObject(root, "amfUeNgapId", sess->amf_ue_ngap_id);
-    if (sess->ran_ue_ngap_id)
-        cJSON_AddNumberToObject(root, "ranUeNgapId", sess->ran_ue_ngap_id);
+    if (pcf_ue_sm->amf_ue_ngap_id)
+        cJSON_AddNumberToObject(
+                root, "amfUeNgapId", pcf_ue_sm->amf_ue_ngap_id);
+    if (pcf_ue_sm->ran_ue_ngap_id)
+        cJSON_AddNumberToObject(
+                root, "ranUeNgapId", pcf_ue_sm->ran_ue_ngap_id);
 
     bearers = cJSON_AddArrayToObject(root, "bearers");
     ogs_assert(bearers);
@@ -3140,19 +3136,16 @@ bool pcf_xcn_query_handle_sessions(
     sess = pcf_sess_find_by_ipv4addr((char *)ue_ip);
     if (!sess)
         sess = pcf_sess_find_by_ipv6prefix((char *)ue_ip);
-    if (sess && !sess->amf_ue_ngap_id && !sess->ran_ue_ngap_id) {
-        pcf_xcn_refresh_ngap_ids_from_amf();
-        sess = pcf_sess_find_by_ipv4addr((char *)ue_ip);
-        if (!sess)
-            sess = pcf_sess_find_by_ipv6prefix((char *)ue_ip);
+    if (sess) {
+        pcf_ue_sm = pcf_ue_sm_find_by_id(sess->pcf_ue_sm_id);
+        ogs_assert(pcf_ue_sm);
+        if (!pcf_ue_sm->amf_ue_ngap_id && !pcf_ue_sm->ran_ue_ngap_id)
+            pcf_xcn_refresh_ngap_ids_from_amf();
     }
 
     if (!sess)
         return xcn_send_error(stream, recvmsg,
                 OGS_SBI_HTTP_STATUS_NOT_FOUND, "No UE IP");
-
-    pcf_ue_sm = pcf_ue_sm_find_by_id(sess->pcf_ue_sm_id);
-    ogs_assert(pcf_ue_sm);
 
     root = cJSON_CreateObject();
     ogs_assert(root);
@@ -3160,6 +3153,12 @@ bool pcf_xcn_query_handle_sessions(
     cJSON_AddStringToObject(root, "supi", pcf_ue_sm->supi);
     cJSON_AddStringToObject(root, "imsi", xcn_supi_to_imsi(pcf_ue_sm->supi));
     xcn_json_add_tmsi(root, amf_info, pcf_ue_sm->supi);
+    if (pcf_ue_sm->amf_ue_ngap_id)
+        cJSON_AddNumberToObject(
+                root, "amfUeNgapId", pcf_ue_sm->amf_ue_ngap_id);
+    if (pcf_ue_sm->ran_ue_ngap_id)
+        cJSON_AddNumberToObject(
+                root, "ranUeNgapId", pcf_ue_sm->ran_ue_ngap_id);
     cJSON_AddItemToObject(root, "session", xcn_session_to_json(sess));
     if (amf_info)
         cJSON_Delete(amf_info);

@@ -481,6 +481,31 @@ curl --http2-prior-knowledge -sS -i \
 The `tmsi` and `amfUeNgapId` query parameters each select one user. If both
 are present, `tmsi` takes precedence.
 
+`amfUeNgapId` and `ranUeNgapId` identify the UE-associated NG connection,
+not an individual PDU session. They are therefore returned on the user
+object, while PDU-session-specific data remains under `sessions`:
+
+```json
+{
+  "supi": "imsi-460110000000001",
+  "imsi": "460110000000001",
+  "registered": true,
+  "amfUeNgapId": 5,
+  "ranUeNgapId": 9,
+  "sessions": [
+    {
+      "pduSessionId": 1,
+      "dnn": "internet",
+      "pduSessionType": 1,
+      "ipv4": "10.45.0.2",
+      "sNssai": {
+        "sst": 1
+      }
+    }
+  ]
+}
+```
+
 These lab APIs are unauthenticated HTTP endpoints. Restrict `NodePort 30777` with firewall rules, security groups, or Kubernetes network policy before using it outside a controlled lab network.
 
 ## Notes
