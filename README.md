@@ -13,6 +13,20 @@ VPP 26.06、N3/N6 memif、1428-byte inner IPv4 UDP、两个真实 PDU/PFCP
 Session，并完整执行 Open5GS 的 PDR/FAR/QER/URR 和 GTP-U 语义；未引入
 UPG-VPP 或绕过 UPF 语义的 fast path。
 
+### UPF部署模式
+
+当前Helm Chart支持两套经过实际运行验证的完整模式：
+
+- 无VF兼容模式：N3使用内核UDP/2152，N6使用`ogstun`，不创建VPP容器、不申请
+  SR-IOV资源，并关闭Session Worker。
+- 高性能模式：N3/N6均使用raw-IP memif，由VPP 26.06 sidecar分别连接两个VF，
+  支持按UPF CPU数量自动配置`1..16`个Session Worker。
+
+两种模式的完整安装、切换、检查命令和地址要求见
+[helm/xcn/README.md](helm/xcn/README.md#upf-dataplane-deployment-modes)。
+当前不支持UDP/TUN与memif混合组合；从一种模式切换到另一种模式后需要让UE
+重新注册并重建PFCP Session。
+
 ### 当前可复现基线（2026-07-27）
 
 当前正式配置为两个 Session Worker、N3/N6专用dispatcher、descriptor lease、
@@ -99,6 +113,7 @@ Open5GS N3/N6 memif 段，不包含未插网线的 fabric VF 后续 ARP/NAT 丢�
 | 2026-07-27 | N3/N6专用dispatcher、descriptor lease、0/20/-1 A/B | 消除了dispatcher payload copy且100M功能零丢包；1.2G下行仍是零丢包边界。持续忙轮询收益不稳定，压力转移到单入口qid的有序completion/refill和输出TX allocation。 |
 | 2026-07-27 | 六Session/六Worker全局最少连接分配 | 六个Session实际均分到六个Worker；下行2G、上行4G零丢包，4G下行约0.247%、6G上行约0.643%。六Worker内部无drop，N3/N6单有效RX qid均触及8192 in-flight上限。 |
 | 2026-07-30 | Helm按UPF CPU自动推导Worker与memif队列 | `worker = UPF逻辑CPU - reservedCpus`，默认保留2核给N3/N6 dispatcher；8核实机自动生成6 Worker和双侧6队列，并正确绑定8个CPUManager独占逻辑核。 |
+| 2026-07-30 | UDP/TUN与双memif模式切换实测 | UDP/TUN模式无VPP/VF，6个PFCP Session重建，3个OAI业务TUN各5次ping零丢包；恢复双memif后N3/N6各6 ring connected，N6注入1750包、Open5GS从N3输出1750包，核心memif段零丢包。fabric物理口未插线，因此后者不代表物理端到端回包。 |
 
 ### 下一步优化优先级
 

@@ -57,6 +57,65 @@ helm install xcn helm/xcn -n xcn --create-namespace \
   --set networking.upf.gtpu.advertiseAddress=192.168.9.60
 ```
 
+## UPF dataplane deployment modes
+
+The chart supports two complete UPF dataplane modes. Mixed combinations are
+deliberately rejected: Session Workers require both N3 and N6 memif, and the
+VPP sidecar requires both memif backends.
+
+| Mode | N3 | N6 | VPP/SR-IOV | Session Workers |
+|---|---|---|---|---|
+| Compatible | kernel UDP/2152 | `ogstun` | not required | disabled |
+| Accelerated | raw-IP memif | raw-IP memif | two VFs | `1..16` |
+
+### Compatible UDP/TUN mode without VFs
+
+Use this mode when the NIC or Kubernetes environment cannot provide SR-IOV
+VFs. With `hostNetwork=true`, replace `10.2.0.119` with the node address
+reachable by the gNB:
+
+```bash
+helm upgrade --install xcn /home/xiazhangtao/code/open5gs/helm/xcn \
+  -n xcn --create-namespace \
+  --set fivegc.hostNetwork.enabled=true \
+  --set networking.amf.ngap.serverAddress=10.2.0.119 \
+  --set networking.upf.gtpu.serverAddress=10.2.0.119 \
+  --set networking.upf.gtpu.advertiseAddress=10.2.0.119 \
+  --set networking.upf.n3.backend=udp \
+  --set networking.upf.n6.backend=tun \
+  --set networking.upf.dataplane.sessionWorkers.enabled=false \
+  --set vpp.enabled=false
+```
+
+This renders no VPP container or SR-IOV resource request. The UPF container
+mounts `/dev/net/tun`; `open5gs-k8s-setup` creates `ogstun`, enables IP
+forwarding, and installs IPv4 MASQUERADE/FORWARD rules. When Pod networking is
+used instead of `hostNetwork`, omit the three explicit AMF/UPF host addresses;
+the UPF GTP-U address defaults to the Pod IP.
+
+Verify the running mode:
+
+```bash
+kubectl -n xcn get deploy xcn-5gc \
+  -o jsonpath='{.spec.template.spec.containers[*].name}{"\n"}'
+kubectl -n xcn exec deploy/xcn-5gc -c upf -- ip -d addr show ogstun
+kubectl -n xcn exec deploy/xcn-5gc -c upf -- ss -lunp
+kubectl -n xcn exec deploy/xcn-5gc -c upf -- \
+  iptables -t nat -S POSTROUTING
+```
+
+Expected results are eight 5GC containers with no `vpp`, an UP `ogstun`
+interface, and `open5gs-upfd` listening on the configured N3 address at
+UDP/2152. Restart or re-register the UE after changing modes because an UPF
+restart cannot recover the old PFCP Session state from the UE's existing TUN.
+
+### Accelerated VPP/memif mode with two VFs
+
+Use the command in the next section. For a `hostNetwork` deployment, the
+Open5GS compatibility GTP socket can use a dedicated loopback address such as
+`127.0.0.8`; `advertiseAddress` and `n3.memif.localAddress` must both be the
+N3 address exposed by VPP.
+
 ## VPP memif N3/N6 with two SR-IOV VFs
 
 The first-stage accelerated topology keeps Open5GS UPF responsible for PFCP,
@@ -76,11 +135,18 @@ helm upgrade --install xcn helm/xcn -n xcn --create-namespace \
   --set images.runtime.tag=memif-dev \
   --set fivegc.hostNetwork.enabled=true \
   --set networking.amf.ngap.serverAddress=10.2.0.119 \
-  --set networking.upf.gtpu.serverAddress=10.2.0.119 \
+  --set networking.upf.gtpu.serverAddress=127.0.0.8 \
   --set networking.upf.gtpu.advertiseAddress=10.2.0.226 \
   --set networking.upf.n3.backend=memif \
   --set networking.upf.n3.memif.localAddress=10.2.0.226 \
   --set networking.upf.n6.backend=memif \
+  --set networking.upf.dataplane.sessionWorkers.enabled=true \
+  --set-string networking.upf.dataplane.sessionWorkers.count=auto \
+  --set networking.upf.dataplane.sessionWorkers.reservedCpus=2 \
+  --set-string networking.upf.n3.memif.queues=auto \
+  --set-string networking.upf.n6.memif.queues=auto \
+  --set resources.fivegc.upf.requests.cpu=8 \
+  --set resources.fivegc.upf.limits.cpu=8 \
   --set vpp.enabled=true \
   --set vpp.sriov.resourceName=intel.com/fabric_network \
   --set vpp.sriov.deviceEnv=PCIDEVICE_INTEL_COM_FABRIC_NETWORK \
@@ -172,7 +238,27 @@ parallelize a single Open5GS UPF instance.
 The current implementation is IPv4-first. IPv6 UE routing/NAT is not enabled
 by this VPP template. Restore the original path with
 `networking.upf.n3.backend=udp`, `networking.upf.n6.backend=tun`, and
-`vpp.enabled=false`.
+`vpp.enabled=false`. Session Workers must also be disabled when restoring the
+UDP/TUN path.
+
+### Runtime validation on 2026-07-30
+
+Both modes were deployed on the same node from this chart:
+
+- UDP/TUN rendered an `8/8 Running` 5GC Pod with no VPP container or VF
+  request. `ogstun` was UP, UDP/2152 and PFCP were listening/associated, six
+  PFCP Sessions were recreated, and the three OAI UE business TUN interfaces
+  tested each completed five bidirectional pings with zero loss.
+- VPP/memif rendered a `9/9 Running` Pod requesting two
+  `intel.com/fabric_network` VFs. N3 and N6 each connected six memif rings, six
+  Session Workers plus two dispatchers were pinned to the eight UPF logical
+  CPUs, and six PFCP Sessions were recreated. A six-Session N6 injection sent
+  1,750 packets through `memif1/0`; Open5GS emitted all 1,750 through
+  `memif2/0`, with zero loss in the Open5GS memif segment.
+
+The fabric physical ports were not cabled during the memif validation, so the
+second result proves the VPP/Open5GS core path but does not claim an external
+physical end-to-end return path.
 
 ## External PCF APIs
 
