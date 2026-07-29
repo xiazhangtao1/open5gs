@@ -60,10 +60,6 @@ void pcf_context_init(void)
     ogs_assert(self.ipv4addr_hash);
     self.ipv6prefix_hash = ogs_hash_make();
     ogs_assert(self.ipv6prefix_hash);
-    self.amf_ue_ngap_id_hash = ogs_hash_make();
-    ogs_assert(self.amf_ue_ngap_id_hash);
-    self.ran_ue_ngap_id_hash = ogs_hash_make();
-    ogs_assert(self.ran_ue_ngap_id_hash);
 
     context_initialized = 1;
 }
@@ -83,10 +79,6 @@ void pcf_context_final(void)
     ogs_hash_destroy(self.ipv4addr_hash);
     ogs_assert(self.ipv6prefix_hash);
     ogs_hash_destroy(self.ipv6prefix_hash);
-    ogs_assert(self.amf_ue_ngap_id_hash);
-    ogs_hash_destroy(self.amf_ue_ngap_id_hash);
-    ogs_assert(self.ran_ue_ngap_id_hash);
-    ogs_hash_destroy(self.ran_ue_ngap_id_hash);
 
     ogs_pool_final(&pcf_app_pool);
     ogs_pool_final(&pcf_sess_pool);
@@ -505,6 +497,62 @@ pcf_ue_sm_t *pcf_ue_sm_find_by_association_id(char *association_id)
     return ogs_pool_find(&pcf_ue_sm_pool, atoll(association_id));
 }
 
+pcf_ue_sm_t *pcf_ue_sm_find_by_amf_ue_ngap_id(uint64_t amf_ue_ngap_id)
+{
+    pcf_ue_sm_t *pcf_ue_sm = NULL;
+    pcf_ue_sm_t *matched_ue_sm = NULL;
+    pcf_sess_t *sess = NULL;
+
+    if (!amf_ue_ngap_id)
+        return NULL;
+
+    ogs_list_for_each(&self.pcf_ue_sm_list, pcf_ue_sm) {
+        ogs_list_for_each(&pcf_ue_sm->sess_list, sess) {
+            if (sess->amf_ue_ngap_id != amf_ue_ngap_id)
+                continue;
+
+            if (matched_ue_sm && matched_ue_sm != pcf_ue_sm) {
+                ogs_warn("AMF_UE_NGAP_ID[%llu] is ambiguous across UEs",
+                        (unsigned long long)amf_ue_ngap_id);
+                return NULL;
+            }
+
+            matched_ue_sm = pcf_ue_sm;
+            break;
+        }
+    }
+
+    return matched_ue_sm;
+}
+
+pcf_ue_sm_t *pcf_ue_sm_find_by_ran_ue_ngap_id(uint64_t ran_ue_ngap_id)
+{
+    pcf_ue_sm_t *pcf_ue_sm = NULL;
+    pcf_ue_sm_t *matched_ue_sm = NULL;
+    pcf_sess_t *sess = NULL;
+
+    if (!ran_ue_ngap_id)
+        return NULL;
+
+    ogs_list_for_each(&self.pcf_ue_sm_list, pcf_ue_sm) {
+        ogs_list_for_each(&pcf_ue_sm->sess_list, sess) {
+            if (sess->ran_ue_ngap_id != ran_ue_ngap_id)
+                continue;
+
+            if (matched_ue_sm && matched_ue_sm != pcf_ue_sm) {
+                ogs_warn("RAN_UE_NGAP_ID[%llu] is ambiguous across UEs",
+                        (unsigned long long)ran_ue_ngap_id);
+                return NULL;
+            }
+
+            matched_ue_sm = pcf_ue_sm;
+            break;
+        }
+    }
+
+    return matched_ue_sm;
+}
+
 pcf_sess_t *pcf_sess_add(pcf_ue_sm_t *pcf_ue_sm, uint8_t psi)
 {
     pcf_event_t e;
@@ -644,14 +692,10 @@ static void clear_ngap_ids(pcf_sess_t *sess)
     ogs_assert(sess);
 
     if (sess->amf_ue_ngap_id) {
-        ogs_hash_set(self.amf_ue_ngap_id_hash,
-                &sess->amf_ue_ngap_id, sizeof(sess->amf_ue_ngap_id), NULL);
         sess->amf_ue_ngap_id = 0;
     }
 
     if (sess->ran_ue_ngap_id) {
-        ogs_hash_set(self.ran_ue_ngap_id_hash,
-                &sess->ran_ue_ngap_id, sizeof(sess->ran_ue_ngap_id), NULL);
         sess->ran_ue_ngap_id = 0;
     }
 }
@@ -722,14 +766,10 @@ void pcf_sess_set_ngap_ids(
 
     if (amf_ue_ngap_id) {
         sess->amf_ue_ngap_id = amf_ue_ngap_id;
-        ogs_hash_set(self.amf_ue_ngap_id_hash,
-                &sess->amf_ue_ngap_id, sizeof(sess->amf_ue_ngap_id), sess);
     }
 
     if (ran_ue_ngap_id) {
         sess->ran_ue_ngap_id = ran_ue_ngap_id;
-        ogs_hash_set(self.ran_ue_ngap_id_hash,
-                &sess->ran_ue_ngap_id, sizeof(sess->ran_ue_ngap_id), sess);
     }
 }
 
@@ -835,24 +875,6 @@ pcf_sess_t *pcf_sess_find_by_ipv6prefix(char *ipv6prefix_string)
 
     return ogs_hash_get(self.ipv6prefix_hash,
             &ipv6prefix, (ipv6prefix.len >> 3) + 1);
-}
-
-pcf_sess_t *pcf_sess_find_by_amf_ue_ngap_id(uint64_t amf_ue_ngap_id)
-{
-    if (!amf_ue_ngap_id)
-        return NULL;
-
-    return ogs_hash_get(self.amf_ue_ngap_id_hash,
-            &amf_ue_ngap_id, sizeof(amf_ue_ngap_id));
-}
-
-pcf_sess_t *pcf_sess_find_by_ran_ue_ngap_id(uint64_t ran_ue_ngap_id)
-{
-    if (!ran_ue_ngap_id)
-        return NULL;
-
-    return ogs_hash_get(self.ran_ue_ngap_id_hash,
-            &ran_ue_ngap_id, sizeof(ran_ue_ngap_id));
 }
 
 pcf_ue_am_t *pcf_ue_am_find_by_id(ogs_pool_id_t id)
