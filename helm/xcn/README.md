@@ -171,7 +171,7 @@ curl --http2-prior-knowledge -sS -i -X POST \
 
 The request is translated inside PCF into the normal policy authorization path and triggers SM policy/session modification when the target UE session exists. Required fields are `supi`, `pduSessionId`, and `flowDescriptions`. `mediaType` is still supported for legacy automatic QoS mapping (`audio` -> 5QI 1, `video` -> 5QI 2, `control` -> 5QI 5). New callers can directly specify `qos.5qi` or `qos.index`, `qos.arp.priorityLevel`, `qos.arp.preemptionCapability`, `qos.arp.preemptionVulnerability`, `qos.maxbrDl`, `qos.maxbrUl`, `qos.gbrDl`, and `qos.gbrUl`. Legacy top-level bandwidth fields `marBwDl`, `marBwUl`, `mirBwDl`, `mirBwUl`, `rrBw`, and `rsBw` are also supported.
 
-The target session can be selected by `ueIp`, `ngapId`, or the legacy `supi` + `pduSessionId` pair. If multiple selectors are present, PCF uses only the highest priority selector: `ueIp` first, then `ngapId`, then `supi` + `pduSessionId`. `ngapId` matches AMF UE NGAP ID first and then RAN UE NGAP ID; callers can also use explicit `amfUeNgapId` or `ranUeNgapId`.
+The target session can be selected by `ueIp`, `ngapId` + `pduSessionId`, or the legacy `supi` + `pduSessionId` pair. If multiple selectors are present, PCF uses only the highest priority selector: `ueIp` first, then NGAP ID + `pduSessionId`, then `supi` + `pduSessionId`. An NGAP ID identifies the UE connection, not a PDU session, so `pduSessionId` is required with `ngapId`, `amfUeNgapId`, or `ranUeNgapId`. `ngapId` matches AMF UE NGAP ID first and then RAN UE NGAP ID.
 
 Query XCN-created dedicated bearer triggers for a target PDU session:
 
@@ -179,7 +179,7 @@ Query XCN-created dedicated bearer triggers for a target PDU session:
 curl --http2-prior-knowledge -sS -i \
   'http://<node-ip>:30777/xcn-dedicated-bearer/v1/bearers?ueIp=10.45.0.2'
 curl --http2-prior-knowledge -sS -i \
-  'http://<node-ip>:30777/xcn-dedicated-bearer/v1/bearers?ngapId=2'
+  'http://<node-ip>:30777/xcn-dedicated-bearer/v1/bearers?ngapId=2&pduSessionId=1'
 curl --http2-prior-knowledge -sS -i \
   'http://<node-ip>:30777/xcn-dedicated-bearer/v1/bearers?supi=imsi-460110000000001&pduSessionId=1'
 ```

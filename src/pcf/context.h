@@ -47,8 +47,6 @@ typedef struct pcf_context_s {
 
     ogs_hash_t      *ipv4addr_hash;
     ogs_hash_t      *ipv6prefix_hash;
-    ogs_hash_t      *amf_ue_ngap_id_hash;
-    ogs_hash_t      *ran_ue_ngap_id_hash;
 } pcf_context_t;
 
 struct pcf_ue_am_s {
@@ -220,6 +218,8 @@ void pcf_ue_sm_remove(pcf_ue_sm_t *pcf_ue_sm);
 void pcf_ue_sm_remove_all(void);
 pcf_ue_sm_t *pcf_ue_sm_find_by_supi(char *supi);
 pcf_ue_sm_t *pcf_ue_sm_find_by_association_id(char *association_id);
+pcf_ue_sm_t *pcf_ue_sm_find_by_amf_ue_ngap_id(uint64_t amf_ue_ngap_id);
+pcf_ue_sm_t *pcf_ue_sm_find_by_ran_ue_ngap_id(uint64_t ran_ue_ngap_id);
 
 pcf_sess_t *pcf_sess_add(pcf_ue_sm_t *pcf_ue_sm, uint8_t psi);
 void pcf_sess_remove(pcf_sess_t *sess);
@@ -237,8 +237,6 @@ pcf_sess_t *pcf_sess_find_by_dnn(pcf_ue_sm_t *pcf_ue_sm, char *dnn);
 pcf_sess_t *pcf_sess_find_by_ipv4addr(char *ipv4addr_string);
 pcf_sess_t *pcf_sess_find_by_ipv6addr(char *ipv6addr_string);
 pcf_sess_t *pcf_sess_find_by_ipv6prefix(char *ipv6prefix_string);
-pcf_sess_t *pcf_sess_find_by_amf_ue_ngap_id(uint64_t amf_ue_ngap_id);
-pcf_sess_t *pcf_sess_find_by_ran_ue_ngap_id(uint64_t ran_ue_ngap_id);
 int pcf_sessions_number_by_snssai_and_dnn(
         pcf_ue_sm_t *pcf_ue_sm, ogs_s_nssai_t *s_nssai, char *dnn);
 
