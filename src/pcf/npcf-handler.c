@@ -2937,6 +2937,7 @@ bool pcf_xcn_query_handle_users(
     pcf_ue_sm_t *pcf_ue_sm = NULL;
     cJSON *amf_info = NULL;
     const char *tmsi_string = NULL;
+    const char *amf_ue_ngap_id_string = NULL;
     char *tmsi_supi = NULL;
     int user_count = 0;
 
@@ -2981,6 +2982,36 @@ bool pcf_xcn_query_handle_users(
             cJSON_AddNumberToObject(root, "m_tmsi", tmsi);
         ogs_free(tmsi_supi);
 
+        if (xcn_send_json_response(
+                    stream, OGS_SBI_HTTP_STATUS_OK, root) == false) {
+            cJSON_Delete(root);
+            return false;
+        }
+
+        cJSON_Delete(root);
+        return true;
+    }
+
+    amf_ue_ngap_id_string = params ?
+        ogs_sbi_header_get(params, "amfUeNgapId") : NULL;
+    if (amf_ue_ngap_id_string) {
+        uint64_t amf_ue_ngap_id =
+            xcn_string_uint64(amf_ue_ngap_id_string);
+
+        if (!amf_ue_ngap_id)
+            return xcn_send_error(stream, recvmsg,
+                    OGS_SBI_HTTP_STATUS_BAD_REQUEST,
+                    "Invalid AMF UE NGAP ID");
+
+        pcf_xcn_refresh_ngap_ids_from_amf();
+        pcf_ue_sm =
+            pcf_ue_sm_find_by_amf_ue_ngap_id(amf_ue_ngap_id);
+        if (!pcf_ue_sm)
+            return xcn_send_error(stream, recvmsg,
+                    OGS_SBI_HTTP_STATUS_NOT_FOUND,
+                    "No AMF UE NGAP ID");
+
+        root = xcn_user_to_json(pcf_ue_sm, NULL);
         if (xcn_send_json_response(
                     stream, OGS_SBI_HTTP_STATUS_OK, root) == false) {
             cJSON_Delete(root);
