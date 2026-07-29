@@ -99,6 +99,48 @@ to `intel.com/external_network` and
 `PCIDEVICE_INTEL_COM_EXTERNAL_NETWORK`. The entrypoint reads the configured
 environment-variable name rather than assuming one device-plugin resource.
 
+### Automatic UPF Session Worker sizing
+
+When Session Workers are enabled, the recommended configuration derives the
+Worker and memif queue counts from the UPF container CPU limit:
+
+```text
+Session Workers = UPF logical CPUs - reservedCpus
+```
+
+The default `reservedCpus: 2` reserves one logical CPU for each of the N3 and
+N6 dispatchers. For example, an 8-CPU UPF creates 6 Session Workers and six
+N3/N6 memif queues on both Open5GS and VPP:
+
+```bash
+helm upgrade --install xcn helm/xcn -n xcn --create-namespace \
+  --set resources.fivegc.upf.requests.cpu=8 \
+  --set resources.fivegc.upf.limits.cpu=8 \
+  --set networking.upf.dataplane.sessionWorkers.enabled=true \
+  --set-string networking.upf.dataplane.sessionWorkers.count=auto \
+  --set networking.upf.dataplane.sessionWorkers.reservedCpus=2 \
+  --set-string networking.upf.n3.memif.queues=auto \
+  --set-string networking.upf.n6.memif.queues=auto
+```
+
+Automatic mode requires equal integer CPU requests and limits and accepts a
+resolved Worker count of `1..16`, so the valid default range is 3 to 18 UPF
+logical CPUs. `reservedCpus` must be at least 2. Set it to 3 to leave an
+additional unpinned logical CPU for PFCP, timers, and the main event thread.
+These CPUs belong only to the UPF container; VPP CPU resources remain
+independent.
+
+An explicit numeric `sessionWorkers.count` keeps manual sizing. A memif queue
+value of `auto` follows either the automatically resolved or explicit Worker
+count. When Session Workers are enabled, Helm rejects explicit N3/N6 queue
+counts that do not match the Worker count.
+
+The calculation deliberately uses the Helm CPU limit rather than the process
+affinity mask. CPUManager can temporarily expose the node cpuset during Pod
+startup; deriving the Worker count from that transient mask would create too
+many threads. After CPUManager assigns the exclusive cpuset, Open5GS pins the
+Workers followed by the N3 and N6 dispatchers to the resolved `N+2` CPUs.
+
 NAT44 is enabled by default so IPv4 UE traffic keeps the former
 TUN/iptables-MASQUERADE behavior. When the upstream router has a route for
 `10.45.0.0/16` via the VPP external address, disable NAT with

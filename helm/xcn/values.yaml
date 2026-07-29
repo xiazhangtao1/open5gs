@@ -174,7 +174,11 @@ networking:
       statsInterval: 10
       sessionWorkers:
         enabled: false
-        count: 1
+        # "auto": limits.cpu - reservedCpus; an explicit 1..16 keeps manual sizing.
+        count: auto
+        # Two logical CPUs are reserved for the N3 and N6 dispatchers.
+        # Set to 3 to leave one additional unpinned CPU for control-plane work.
+        reservedCpus: 2
         queueSize: 8192
         # -1: always busy-poll, 0: block, >0: active polling window (us)
         busyPollUs: 20
@@ -194,7 +198,8 @@ networking:
         burstSize: 256
         ringSize: 8192
         log2RingSize: 13
-        queues: 1
+        # "auto" follows the resolved Session Worker count.
+        queues: auto
         # UDP checksum is optional for IPv4. Keep disabled on the high-speed
         # N3 memif path; enable only when required by a peer/network policy.
         udpChecksum: false
@@ -208,7 +213,8 @@ networking:
         burstSize: 256
         ringSize: 8192
         log2RingSize: 13
-        queues: 1
+        # "auto" follows the resolved Session Worker count.
+        queues: auto
   webui:
     hostname: 0.0.0.0
     port: 9999

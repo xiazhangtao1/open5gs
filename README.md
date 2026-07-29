@@ -98,6 +98,7 @@ Open5GS N3/N6 memif 段，不包含未插网线的 fabric VF 后续 ARP/NAT 丢�
 | 2026-07-26 | SPSC ring、0/20/50us busy-poll A/B（已回退） | 20us 下行/上行仅输出1.185G/1.181G，段丢包1.262%/1.571%，低于原基线；持续流量时20us已近似全忙轮询，说明单纯去锁和无限忙轮询不能解决TX小批次问题。 |
 | 2026-07-27 | N3/N6专用dispatcher、descriptor lease、0/20/-1 A/B | 消除了dispatcher payload copy且100M功能零丢包；1.2G下行仍是零丢包边界。持续忙轮询收益不稳定，压力转移到单入口qid的有序completion/refill和输出TX allocation。 |
 | 2026-07-27 | 六Session/六Worker全局最少连接分配 | 六个Session实际均分到六个Worker；下行2G、上行4G零丢包，4G下行约0.247%、6G上行约0.643%。六Worker内部无drop，N3/N6单有效RX qid均触及8192 in-flight上限。 |
+| 2026-07-30 | Helm按UPF CPU自动推导Worker与memif队列 | `worker = UPF逻辑CPU - reservedCpus`，默认保留2核给N3/N6 dispatcher；8核实机自动生成6 Worker和双侧6队列，并正确绑定8个CPUManager独占逻辑核。 |
 
 ### 下一步优化优先级
 

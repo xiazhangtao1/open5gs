@@ -2,22 +2,40 @@
 
 ## Session 多 Worker
 
-UPF 可在 N3/N6 均为 memif 时按 PFCP Session 分配 `1..16` 个数据 Worker：
+UPF 可在 N3/N6 均为 memif 时按 PFCP Session 分配 `1..16` 个数据 Worker。
+推荐让 Helm 根据 UPF 容器的整数 CPU limit 自动计算：
 
 ```yaml
-upf:
-  dataplane:
-    io_packet_budget: 1024
-    io_time_budget_us: 50
-    stats_interval: 10
-    session_workers:
-      enabled: true
-      count: 4
-      queue_size: 8192
-      busy_poll_us: 20
+resources:
+  fivegc:
+    upf:
+      requests:
+        cpu: 8
+      limits:
+        cpu: 8
+networking:
+  upf:
+    dataplane:
+      sessionWorkers:
+        enabled: true
+        count: auto
+        reservedCpus: 2
+        queueSize: 8192
+        busyPollUs: 20
+    n3:
+      memif:
+        queues: auto
+    n6:
+      memif:
+        queues: auto
 ```
 
-N3/N6 的 `memif.queues` 必须与 `count` 相等。N3 按 TEID、N6 按 UE IP
+自动模式按`worker = UPF逻辑CPU - reservedCpus`计算，因此上例为
+`8 - 2 = 6`个Worker。CPU requests/limits必须相等且为整数；
+`reservedCpus`至少为2，计算结果必须在`1..16`。数值型`count`继续支持手工
+覆盖，`queues: auto`会跟随自动或手工Worker数。
+
+N3/N6 的实际`memif.queues`必须与Worker数相等。N3按TEID、N6按UE IP
 查找固定 Session owner；分发不绕过 PDR/FAR/QER/URR。一个 Session 只使用
 一个 Worker，因此扩展性测试必须建立至少与 Worker 数相同的独立 PFCP Session。
 Worker 使用普通 `SCHED_OTHER`。`busy_poll_us=0` 表示空闲时阻塞，正数表示
