@@ -473,8 +473,13 @@ curl --http2-prior-knowledge -sS -i \
 curl --http2-prior-knowledge -sS -i \
   'http://<node-ip>:30777/xcn-core-query/v1/users?tmsi=3221227435'
 curl --http2-prior-knowledge -sS -i \
+  'http://<node-ip>:30777/xcn-core-query/v1/users?amfUeNgapId=5'
+curl --http2-prior-knowledge -sS -i \
   'http://<node-ip>:30777/xcn-core-query/v1/sessions?ueIp=10.45.0.2'
 ```
+
+The `tmsi` and `amfUeNgapId` query parameters each select one user. If both
+are present, `tmsi` takes precedence.
 
 These lab APIs are unauthenticated HTTP endpoints. Restrict `NodePort 30777` with firewall rules, security groups, or Kubernetes network policy before using it outside a controlled lab network.
 
