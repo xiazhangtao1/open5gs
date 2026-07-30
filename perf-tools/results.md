@@ -1220,3 +1220,78 @@ condition variable：worker验证generation/sequence后以原子store标记lease
 本轮最终状态：运行实例和源代码均恢复`six-worker-balance`基线；没有保留
 任何上述实验数据面改动。下一轮必须先实现不重启Session、不改变owner/qid的
 严格A/B，并针对每TX qid分别记录VPP消费间隔和allocation可用性。
+
+## 同Pod/Session/qid热切换与调度诊断（2026-07-30）
+
+增加N3 TX逐qid诊断计数和`run_dl_qid_diag.sh`。数据面处理、Session owner、
+PDR/FAR/QER/URR、PFCP和GTP-U语义均未改变。TX burst间隔采样默认关闭，仅在
+容器内存在`/tmp/open5gs-n3-tx-timing`时热启用；开关不重启UPF或Session。
+
+固定Pod `xcn-5gc-6b6f8c8f78-nthfw`、6个已建立PFCP Session，只向
+`10.45.0.2`发送。该Session在整个A/B期间始终归属Worker 2/N3 TX qid 2。
+1428-byte inner IPv4 UDP、1.2G、20秒、10微秒节奏的结果：
+
+| 状态 | 轮次 | N6输入 | N3输出 | N3 TX allocation丢包 |
+|---|---:|---:|---:|---:|
+| timing off（前） | 1 | 2,100,840 | 1,989,899 | 110,941 / 5.2808% |
+| timing off（前） | 2 | 2,100,840 | 2,060,931 | 39,909 / 1.8997% |
+| timing off（前） | 3 | 2,100,840 | 1,765,347 | 335,493 / 15.9695% |
+| timing on | 1 | 2,100,840 | 1,740,752 | 360,088 / 17.1402% |
+| timing on | 2 | 2,100,840 | 1,758,293 | 342,547 / 16.3052% |
+| timing on | 3 | 2,100,840 | 1,770,488 | 330,352 / 15.7248% |
+| timing off（后） | 1 | 2,100,840 | 1,746,832 | 354,008 / 16.8517% |
+| timing off（后） | 2 | 2,100,840 | 1,755,124 | 345,716 / 16.4561% |
+| timing off（后） | 3 | 2,100,840 | 1,716,389 | 384,451 / 18.3008% |
+
+切回off后性能没有恢复，因此不能把前期某轮零丢包或本轮变化归因于每burst
+读取时钟。该热开关只用于测量观测开销，不是性能优化。
+
+完整诊断轮输入2,100,840包、N3输出1,706,614包，差394,226包
+（18.7652%），差值全部对应qid 2的`memif_buffer_alloc()`短申请/零申请。
+dispatcher drop、Worker内部drop、RX/refill error均未构成主要差值。N3实际
+发送burst的累计平均大小为1包，最大64包，否定了“大TX burst集中填满ring”
+这一首要假设。
+
+同一诊断窗口的线程`schedstat`增量：
+
+| 线程 | 作用 | CPU运行时间 | runqueue等待 | 非自愿切换 |
+|---|---|---:|---:|---:|
+| Open5GS tid 20 | Session Worker 2 | 13.302s | 68.8ms | 22 |
+| Open5GS tid 25 | N6 dispatcher | 10.676s | 146.8ms | 169 |
+| VPP tid 12 | 消费N3 memif qid 2 | 24.448s | 10.021s | 690 |
+
+Open5GS worker的调度等待不足其运行时间的1%，不支持“Open5GS线程工作中频繁
+被切走导致丢包”。主要调度缺口在VPP qid消费线程。
+
+当前VPP cpuset为`49-52,121-124`，实际对应4个物理核的超线程对：
+`49/121`、`50/122`、`51/123`、`52/124`。VPP启动了1个main和7个持续轮询
+worker，占满全部8个逻辑CPU。`show interface rx-placement`确认N3 memif
+qid 2由`vpp_wk_3`消费，其初始lcore为121，与main的lcore49互为超线程兄弟。
+CPUManager随后又把各VPP线程的Linux affinity扩展到整个cpuset，Linux可在这
+8个逻辑CPU间迁移线程。不同测试时段中main、packet-generator、DPDK polling
+和memif polling获得的执行份额会变化，因此即使Session owner/qid不变，也会
+产生百分点级吞吐波动。
+
+500ms VPP ring采样和UPF约11秒统计快照均只看到qid 2为空，但
+`memif_buffer_alloc()`在测试中大量返回0，说明ring枯竭发生在远短于500ms的
+瞬态窗口；低频ring快照不能作为“从未满过”的证据。代码中的零申请episode
+按相邻失败调用统计，间隔超过1ms即划分新episode，避免把测试结束后的空闲期
+误算为连续失败。
+
+本轮结论：
+
+1. Open5GS不是大burst生产者，且其worker调度延迟很小；首要证据指向VPP
+   memif消费线程的运行份额/轮询间隔波动。
+2. 这不表示libmemif单队列本身只有约1G能力；裸memif线速实验没有同时运行
+   当前main + 7 busy-poll worker、DPDK双VF、PG和完整UPF链路。
+3. 下一轮应先做CPU资源隔离A/B：保持CPUManager机制不变，给VPP更多成对逻辑
+   CPU，但只启用所需数量的VPP worker，为每个busy-poll worker保留不运行
+   另一个VPP busy-poll线程的兄弟逻辑CPU；不得仅把ring继续放大或在Open5GS
+   worker中忙等重试。
+
+最终`qid-diag-v3`运行验证：6个PFCP Session全部重建成功；100M/2秒冒烟
+17,506包输入/输出、核心段零丢包。随后1.2G/20秒发生器实际送出2,076,458包，
+N3输出1,933,495包，N3 TX allocation丢142,963包（6.8849%）。该Session本次
+归属qid 5，共识别19个零申请episode，最大连续失败56,746次、真实最大持续
+180,640微秒；测试结束等待15秒后`zero-current-us`仍为0，确认空闲期不再被
+误计入失败持续时间。

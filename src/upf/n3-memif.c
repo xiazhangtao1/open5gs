@@ -11,6 +11,7 @@
 
 #include <netinet/ip.h>
 #include <netinet/udp.h>
+#include <unistd.h>
 
 #if HAVE_LIBMEMIF
 #include <libmemif.h>
@@ -20,6 +21,9 @@
 #define UPF_GTPU_PORT 2152
 #define UPF_MEMIF_MAX_QUEUES 16
 #define UPF_MEMIF_MAX_RING_SIZE (1U << 14)
+#define UPF_N3_TX_TIMING_CONTROL_FILE "/tmp/open5gs-n3-tx-timing"
+#define UPF_N3_TX_GAP_IDLE_US 1000000
+#define UPF_N3_TX_ZERO_EPISODE_GAP_US 1000
 
 typedef struct {
     uint64_t sequence;
@@ -77,9 +81,27 @@ typedef struct {
     uint64_t tx_drops;
     uint64_t tx_ring_full;
     uint64_t tx_alloc_failures;
+    uint64_t tx_alloc_short_calls;
+    uint64_t tx_alloc_short_min_granted;
+    uint64_t tx_alloc_zero_episodes;
+    uint64_t tx_alloc_zero_streak;
+    uint64_t tx_alloc_zero_streak_max;
+    uint64_t tx_alloc_zero_started;
+    uint64_t tx_alloc_zero_last_us;
+    uint64_t tx_alloc_zero_max_us;
     uint64_t tx_burst_calls;
     uint64_t tx_burst_requested;
     uint64_t tx_burst_sent;
+    uint64_t tx_burst_size_min;
+    uint64_t tx_burst_size_max;
+    uint64_t tx_burst_last_us;
+    uint64_t tx_burst_gap_samples;
+    uint64_t tx_burst_gap_total_us;
+    uint64_t tx_burst_gap_min_us;
+    uint64_t tx_burst_gap_max_us;
+    uint64_t tx_burst_gap_gt_20us;
+    uint64_t tx_burst_gap_gt_50us;
+    uint64_t tx_burst_gap_gt_100us;
     ogs_time_t last_tx_drop_log;
     bool tx_batch;
     bool connected;
@@ -88,6 +110,7 @@ typedef struct {
 static upf_n3_memif_state_t state[16];
 static upf_n3_rx_queue_t rx_queue[UPF_MEMIF_MAX_QUEUES];
 static uint8_t rx_rr_qid;
+static uint8_t tx_timing_enabled;
 #define self state[upf_dataplane_worker_id()]
 
 static void reset_lease_queue(upf_n3_rx_queue_t *queue)
@@ -620,14 +643,64 @@ int upf_n3_memif_service(
 
 void upf_n3_memif_log_stats(void)
 {
+    char details_buf[4096];
+    memif_details_t details = { 0 };
+    bool details_valid = false;
+    bool timing_enabled =
+        access(UPF_N3_TX_TIMING_CONTROL_FILE, F_OK) == 0;
     uint8_t i;
+
+    if (timing_enabled != __atomic_load_n(
+                &tx_timing_enabled, __ATOMIC_RELAXED)) {
+        __atomic_store_n(&tx_timing_enabled,
+                timing_enabled, __ATOMIC_RELAXED);
+        for (i = 0; i < upf_self()->n3.queues; i++)
+            __atomic_store_n(&state[i].tx_burst_last_us,
+                    0, __ATOMIC_RELAXED);
+        ogs_info("N3 memif TX timing diagnostics %s [%s]",
+                timing_enabled ? "enabled" : "disabled",
+                UPF_N3_TX_TIMING_CONTROL_FILE);
+    }
+
+    if (state[0].connection &&
+        memif_get_details(state[0].connection, &details,
+            details_buf, sizeof(details_buf)) == MEMIF_ERR_SUCCESS)
+        details_valid = true;
 
     for (i = 0; i < upf_self()->n3.queues; i++) {
         upf_n3_rx_queue_t *queue = &rx_queue[i];
+        uint64_t short_calls = __atomic_load_n(
+                &state[i].tx_alloc_short_calls, __ATOMIC_RELAXED);
+        uint64_t short_min = short_calls ? __atomic_load_n(
+                &state[i].tx_alloc_short_min_granted,
+                __ATOMIC_RELAXED) : 0;
+        uint64_t zero_streak = __atomic_load_n(
+                &state[i].tx_alloc_zero_streak, __ATOMIC_RELAXED);
+        uint64_t zero_current_us = 0;
+        uint64_t gap_samples = __atomic_load_n(
+                &state[i].tx_burst_gap_samples, __ATOMIC_RELAXED);
+        uint64_t burst_calls = __atomic_load_n(
+                &state[i].tx_burst_calls, __ATOMIC_RELAXED);
+        uint64_t burst_average = burst_calls ? __atomic_load_n(
+                &state[i].tx_burst_requested,
+                __ATOMIC_RELAXED) / burst_calls : 0;
+        uint64_t gap_average = gap_samples ? __atomic_load_n(
+                &state[i].tx_burst_gap_total_us,
+                __ATOMIC_RELAXED) / gap_samples : 0;
         uint64_t average = queue->bursts ?
             queue->packets / queue->bursts : 0;
         ogs_time_t pending_us = queue->pending ?
             ogs_get_monotonic_time() - queue->pending_since : 0;
+
+        if (zero_streak) {
+            uint64_t started = __atomic_load_n(
+                    &state[i].tx_alloc_zero_started, __ATOMIC_RELAXED);
+            uint64_t last = __atomic_load_n(
+                    &state[i].tx_alloc_zero_last_us, __ATOMIC_RELAXED);
+
+            if (last > started)
+                zero_current_us = last - started;
+        }
 
         ogs_info("N3 memif RX qid:%u stats "
                 "[interrupt:%llu burst:%llu packets:%llu "
@@ -679,6 +752,134 @@ void upf_n3_memif_log_stats(void)
                     &state[i].tx_burst_sent, __ATOMIC_RELAXED),
                 (unsigned long long)__atomic_load_n(
                     &state[i].tx_drops, __ATOMIC_RELAXED));
+        ogs_info("N3 memif TX qid:%u pressure "
+                "[short-call:%llu short-min-granted:%llu "
+                "zero-episode:%llu zero-streak:%llu zero-streak-max:%llu "
+                "zero-current-us:%llu zero-max-us:%llu]",
+                i, (unsigned long long)short_calls,
+                (unsigned long long)short_min,
+                (unsigned long long)__atomic_load_n(
+                    &state[i].tx_alloc_zero_episodes, __ATOMIC_RELAXED),
+                (unsigned long long)zero_streak,
+                (unsigned long long)__atomic_load_n(
+                    &state[i].tx_alloc_zero_streak_max, __ATOMIC_RELAXED),
+                (unsigned long long)zero_current_us,
+                (unsigned long long)__atomic_load_n(
+                    &state[i].tx_alloc_zero_max_us, __ATOMIC_RELAXED));
+        ogs_info("N3 memif TX qid:%u pacing "
+                "[timing:%s burst-size(min/avg/max):%llu/%llu/%llu "
+                "gap-us(samples/min/avg/max):%llu/%llu/%llu/%llu "
+                "gap-gt-us(20/50/100):%llu/%llu/%llu]",
+                i, __atomic_load_n(
+                    &tx_timing_enabled, __ATOMIC_RELAXED) ? "on" : "off",
+                (unsigned long long)(burst_calls ? __atomic_load_n(
+                    &state[i].tx_burst_size_min, __ATOMIC_RELAXED) : 0),
+                (unsigned long long)burst_average,
+                (unsigned long long)__atomic_load_n(
+                    &state[i].tx_burst_size_max, __ATOMIC_RELAXED),
+                (unsigned long long)gap_samples,
+                (unsigned long long)(gap_samples ? __atomic_load_n(
+                    &state[i].tx_burst_gap_min_us, __ATOMIC_RELAXED) : 0),
+                (unsigned long long)gap_average,
+                (unsigned long long)__atomic_load_n(
+                    &state[i].tx_burst_gap_max_us, __ATOMIC_RELAXED),
+                (unsigned long long)__atomic_load_n(
+                    &state[i].tx_burst_gap_gt_20us, __ATOMIC_RELAXED),
+                (unsigned long long)__atomic_load_n(
+                    &state[i].tx_burst_gap_gt_50us, __ATOMIC_RELAXED),
+                (unsigned long long)__atomic_load_n(
+                    &state[i].tx_burst_gap_gt_100us, __ATOMIC_RELAXED));
+        if (details_valid && i < details.tx_queues_num) {
+            memif_queue_details_t *tx = &details.tx_queues[i];
+            uint16_t used = tx->head - tx->tail;
+            uint32_t free_slots =
+                used <= tx->ring_size ? tx->ring_size - used : 0;
+
+            ogs_info("N3 memif TX qid:%u ring-snapshot "
+                    "[size:%u head:%u tail:%u used:%u free:%u]",
+                    i, tx->ring_size, tx->head, tx->tail,
+                    used, free_slots);
+        }
+    }
+}
+
+static void update_tx_alloc_pressure(
+        uint16_t requested, uint16_t allocated, int rv)
+{
+    uint64_t started;
+    uint64_t last;
+    uint64_t now;
+    uint64_t streak;
+    uint64_t elapsed;
+
+    if (rv != MEMIF_ERR_SUCCESS &&
+        rv != MEMIF_ERR_NOBUF_RING && rv != MEMIF_ERR_NOBUF)
+        return;
+
+    if (allocated < requested) {
+        uint64_t short_calls = __atomic_add_fetch(
+                &self.tx_alloc_short_calls, 1, __ATOMIC_RELAXED);
+        uint64_t short_min = __atomic_load_n(
+                &self.tx_alloc_short_min_granted, __ATOMIC_RELAXED);
+
+        if (short_calls == 1 || allocated < short_min)
+            __atomic_store_n(&self.tx_alloc_short_min_granted,
+                    allocated, __ATOMIC_RELAXED);
+    }
+
+    streak = __atomic_load_n(
+            &self.tx_alloc_zero_streak, __ATOMIC_RELAXED);
+    if (!allocated) {
+        now = ogs_get_monotonic_time();
+        last = __atomic_load_n(
+                &self.tx_alloc_zero_last_us, __ATOMIC_RELAXED);
+        if (!streak ||
+            (last && now > last &&
+             now - last > UPF_N3_TX_ZERO_EPISODE_GAP_US)) {
+            if (streak) {
+                started = __atomic_load_n(
+                        &self.tx_alloc_zero_started, __ATOMIC_RELAXED);
+                elapsed = last > started ? last - started : 0;
+                if (elapsed > __atomic_load_n(
+                            &self.tx_alloc_zero_max_us,
+                            __ATOMIC_RELAXED))
+                    __atomic_store_n(
+                            &self.tx_alloc_zero_max_us,
+                            elapsed, __ATOMIC_RELAXED);
+            }
+            __atomic_add_fetch(
+                    &self.tx_alloc_zero_episodes, 1, __ATOMIC_RELAXED);
+            __atomic_store_n(&self.tx_alloc_zero_started,
+                    now, __ATOMIC_RELAXED);
+            streak = 0;
+            __atomic_store_n(
+                    &self.tx_alloc_zero_streak, 0, __ATOMIC_RELAXED);
+        }
+        __atomic_store_n(
+                &self.tx_alloc_zero_last_us, now, __ATOMIC_RELAXED);
+        streak = __atomic_add_fetch(
+                &self.tx_alloc_zero_streak, 1, __ATOMIC_RELAXED);
+        if (streak > __atomic_load_n(
+                    &self.tx_alloc_zero_streak_max, __ATOMIC_RELAXED))
+            __atomic_store_n(&self.tx_alloc_zero_streak_max,
+                    streak, __ATOMIC_RELAXED);
+    } else if (streak) {
+        started = __atomic_load_n(
+                &self.tx_alloc_zero_started, __ATOMIC_RELAXED);
+        last = __atomic_load_n(
+                &self.tx_alloc_zero_last_us, __ATOMIC_RELAXED);
+        elapsed = last > started ? last - started : 0;
+
+        if (elapsed > __atomic_load_n(
+                    &self.tx_alloc_zero_max_us, __ATOMIC_RELAXED))
+            __atomic_store_n(&self.tx_alloc_zero_max_us,
+                    elapsed, __ATOMIC_RELAXED);
+        __atomic_store_n(
+                &self.tx_alloc_zero_streak, 0, __ATOMIC_RELAXED);
+        __atomic_store_n(
+                &self.tx_alloc_zero_started, 0, __ATOMIC_RELAXED);
+        __atomic_store_n(
+                &self.tx_alloc_zero_last_us, 0, __ATOMIC_RELAXED);
     }
 }
 
@@ -701,6 +902,7 @@ static bool preallocate_tx_buffers(uint16_t count)
             &allocated, upf_self()->n3.buffer_size);
     __atomic_fetch_add(
             &self.tx_alloc_granted, allocated, __ATOMIC_RELAXED);
+    update_tx_alloc_pressure(count, allocated, rv);
     if (allocated < count)
         __atomic_fetch_add(&self.tx_ring_full,
                 count - allocated, __ATOMIC_RELAXED);
@@ -810,6 +1012,56 @@ void upf_n3_memif_tx_batch_flush(void)
         self.tx_buffers[i].len = total_len;
     }
 
+    if (__atomic_load_n(&tx_timing_enabled, __ATOMIC_RELAXED)) {
+        uint64_t now = ogs_get_monotonic_time();
+        uint64_t last = __atomic_load_n(
+                &self.tx_burst_last_us, __ATOMIC_RELAXED);
+
+        if (last && now > last) {
+            uint64_t gap = now - last;
+
+            if (gap <= UPF_N3_TX_GAP_IDLE_US) {
+                uint64_t samples = __atomic_add_fetch(
+                        &self.tx_burst_gap_samples, 1, __ATOMIC_RELAXED);
+
+                __atomic_fetch_add(
+                        &self.tx_burst_gap_total_us, gap, __ATOMIC_RELAXED);
+                if (samples == 1 || gap < __atomic_load_n(
+                            &self.tx_burst_gap_min_us, __ATOMIC_RELAXED))
+                    __atomic_store_n(
+                            &self.tx_burst_gap_min_us,
+                            gap, __ATOMIC_RELAXED);
+                if (gap > __atomic_load_n(
+                            &self.tx_burst_gap_max_us, __ATOMIC_RELAXED))
+                    __atomic_store_n(
+                            &self.tx_burst_gap_max_us,
+                            gap, __ATOMIC_RELAXED);
+                if (gap > 20)
+                    __atomic_fetch_add(
+                            &self.tx_burst_gap_gt_20us,
+                            1, __ATOMIC_RELAXED);
+                if (gap > 50)
+                    __atomic_fetch_add(
+                            &self.tx_burst_gap_gt_50us,
+                            1, __ATOMIC_RELAXED);
+                if (gap > 100)
+                    __atomic_fetch_add(
+                            &self.tx_burst_gap_gt_100us,
+                            1, __ATOMIC_RELAXED);
+            }
+        }
+        __atomic_store_n(
+                &self.tx_burst_last_us, now, __ATOMIC_RELAXED);
+    }
+    if (!__atomic_load_n(&self.tx_burst_calls, __ATOMIC_RELAXED) ||
+        self.tx_count < __atomic_load_n(
+            &self.tx_burst_size_min, __ATOMIC_RELAXED))
+        __atomic_store_n(
+                &self.tx_burst_size_min, self.tx_count, __ATOMIC_RELAXED);
+    if (self.tx_count > __atomic_load_n(
+                &self.tx_burst_size_max, __ATOMIC_RELAXED))
+        __atomic_store_n(
+                &self.tx_burst_size_max, self.tx_count, __ATOMIC_RELAXED);
     __atomic_fetch_add(&self.tx_burst_calls, 1, __ATOMIC_RELAXED);
     __atomic_fetch_add(
             &self.tx_burst_requested, self.tx_count, __ATOMIC_RELAXED);

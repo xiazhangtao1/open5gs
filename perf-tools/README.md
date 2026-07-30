@@ -70,6 +70,9 @@ dispatch drop、queue high-water 和 memif TX ring-full 外，还包含
   将总速率平均分配到 `1..16` 个 UE IPv4。
 - `scripts/run_pg_ul_multi.sh`: VPP packet-generator 多 Session 上行发生器，
   将总速率平均分配到 `1..16` 个当前 Session GTP-U pcap。
+- `scripts/run_dl_qid_diag.sh`: 固定Pod、Session和qid的下行诊断脚本，同时采集
+  Open5GS/VPP线程`schedstat`、CPU/NUMA/超线程拓扑、VPP memif ring快照、
+  VPP runtime以及Open5GS各N3 TX qid计数。
 
 多 Session 脚本默认按每 10us 计算一次 `maxframe`，设置
 `PACING_10US=0` 可切换为 `maxframe=256` 的原突发方式。例如：
@@ -85,6 +88,31 @@ PACING_10US=0 perf-tools/scripts/run_pg_ul_multi.sh \
 脚本输出的 `expected` 是目标包数，性能结论必须使用 `show interface` 中
 实际送入和输出的 memif 包数；packet-generator 未达到 `expected` 时不能按
 目标速率声明核心网吞吐。
+
+固定同一Pod、Session和qid采集下行诊断：
+
+```bash
+POD=xcn-5gc-xxxxxxxxxx-xxxxx
+VPP_MEMIF_SAMPLE_MS=500 perf-tools/scripts/run_dl_qid_diag.sh \
+  "$POD" 1200 20 10.45.0.2 /tmp/open5gs-dl-qid-diag.log
+```
+
+N3 TX burst间隔采样默认关闭，避免每次发送读取时钟影响性能。可在不重启
+Pod、UPF进程或Session的情况下热切换：
+
+```bash
+# 开启；最多等待一个UPF统计周期（当前约11秒）生效。
+kubectl -n xcn exec "$POD" -c upf -- \
+  touch /tmp/open5gs-n3-tx-timing
+
+# 关闭。
+kubectl -n xcn exec "$POD" -c upf -- \
+  rm -f /tmp/open5gs-n3-tx-timing
+```
+
+日志出现`N3 memif TX timing diagnostics enabled/disabled`后再开始A/B。必须
+保持Pod UID、PFCP Session、UE IP、Session owner、worker和TX qid均不变；
+跨Pod或UE重建的测试只能作为新基线，不能作为代码优化A/B。
 
 ## 编译
 
