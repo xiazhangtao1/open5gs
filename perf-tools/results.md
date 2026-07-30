@@ -1345,3 +1345,33 @@ packet-generator使用VPP Worker 0，N3 memif qid 1由Worker 3消费；不同阶
 N3 TX qid 3的allocation drop，dispatcher、Worker内部处理及RX/refill均为
 零丢包。该单轮高于前述三轮isolated平均值，再次说明不能用一次结果代替多轮
 统计。
+
+### 单Session高负载扫描
+
+保持同一Pod、VPP PID 7、六个已建立PFCP Session和`isolated`绑核，只向
+`10.45.0.2`发送，按10微秒均匀节奏分别运行20秒。以下均为完整单轮，发生器
+实际输入达到目标包数：
+
+| 目标速率 | N6输入 | N3输出 | 丢包 | 丢包率 | 有效吞吐 |
+|---:|---:|---:|---:|---:|---:|
+| 4 Gbps | 7,002,800 | 6,871,383 | 131,417 | 1.8766% | 3.9249 Gbps |
+| 6 Gbps | 10,504,200 | 10,253,853 | 250,347 | 2.3833% | 5.8570 Gbps |
+| 8 Gbps | 14,005,600 | 13,854,196 | 151,404 | 1.0810% | 7.9135 Gbps |
+| 10 Gbps | 17,507,000 | 16,998,483 | 508,517 | 2.9047% | 9.7095 Gbps |
+
+四档合计差1,041,685包，严格等于N3 TX qid 3的allocation drop从6,065增至
+1,047,750的增量。Session Worker drop、queue-full、dispatcher drop以及
+RX/refill error均为0。说明单Session路径可以处理接近10G的有效吞吐，但当前
+无法宣称4/6/8/10G零丢包稳定运行；丢包率不随目标速率单调增长，仍存在明显
+VPP消费/测试发生器相位波动。
+
+随后尝试扩展`dense A1 -> isolated B -> dense A2`时，两个测试编排进程意外
+重叠并同时操作VPP内置packet-generator。一进程发包期间，另一进程执行
+`delete packet-generator interface pg0`，VPP 26.06在
+`ip4_lookup_node_fn_x86_64_v4`触发SIGSEGV，容器exit 250并自动重启。该组
+交错日志无效，未计入性能结果。这是测试控制面并发删除PG接口导致，不是正常
+UPF业务路径在4G压力下崩溃。
+
+为防止再次发生，`run_pg_dl_multi.sh`增加每Pod packet-generator排他锁，
+`run_vpp_affinity_ab.sh`增加覆盖整个A/B生命周期的每Pod排他锁。锁冲突时
+脚本直接失败，不再并发修改PG stream、接口或affinity模式。

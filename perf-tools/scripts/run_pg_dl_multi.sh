@@ -6,6 +6,14 @@ total_mbps=${2:?total Mbps}
 duration=${3:?duration seconds}
 shift 3
 session_ips=("$@")
+lock_name=${pod//[^a-zA-Z0-9_.-]/_}
+lock_file=${VPP_PG_LOCK_FILE:-/tmp/open5gs-vpp-pg-"$lock_name".lock}
+
+exec 9>"$lock_file"
+if ! flock -n 9; then
+    echo "another VPP packet-generator test is active for Pod $pod" >&2
+    exit 1
+fi
 
 if ((${#session_ips[@]} < 1 || ${#session_ips[@]} > 16)); then
     echo "UE_IP count must be between 1 and 16" >&2

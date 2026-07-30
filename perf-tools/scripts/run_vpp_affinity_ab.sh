@@ -8,6 +8,14 @@ ue_ip=${4:?UE IPv4 address}
 output=${5:-/tmp/open5gs-vpp-affinity-ab-$(date +%Y%m%d-%H%M%S).log}
 runs=${RUNS_PER_MODE:-3}
 script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+lock_name=${pod//[^a-zA-Z0-9_.-]/_}
+lock_file=${VPP_AFFINITY_AB_LOCK_FILE:-/tmp/open5gs-vpp-affinity-ab-"$lock_name".lock}
+
+exec 8>"$lock_file"
+if ! flock -n 8; then
+    echo "another VPP affinity A/B is active for Pod $pod" >&2
+    exit 1
+fi
 
 if ((runs < 1)); then
     echo "RUNS_PER_MODE must be at least 1" >&2
