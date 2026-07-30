@@ -1375,3 +1375,39 @@ UPF业务路径在4G压力下崩溃。
 为防止再次发生，`run_pg_dl_multi.sh`增加每Pod packet-generator排他锁，
 `run_vpp_affinity_ab.sh`增加覆盖整个A/B生命周期的每Pod排他锁。锁冲突时
 脚本直接失败，不再并发修改PG stream、接口或affinity模式。
+
+### 六Session/六Worker高负载扫描
+
+保持VPP `isolated + SCHED_OTHER`、六个已建立PFCP Session和六个UPF
+Session Worker，向`10.45.0.2`至`10.45.0.7`同时发送。每档运行20秒，
+1428-byte inner IPv4 UDP、10微秒均匀节奏；总pps按整数尽量平均分配到六个
+Session。例如总计6G时每Session为1G。
+
+| 总目标速率 | 每Session目标 | N6输入 | N3输出 | 丢包 | 丢包率 | 有效吞吐 |
+|---:|---:|---:|---:|---:|---:|---:|
+| 1 Gbps | 0.1667 Gbps | 1,750,700 | 1,750,700 | 0 | 0% | 1.0000 Gbps |
+| 2 Gbps | 0.3333 Gbps | 3,501,400 | 3,501,400 | 0 | 0% | 2.0000 Gbps |
+| 4 Gbps | 0.6667 Gbps | 7,002,800 | 7,002,800 | 0 | 0% | 4.0000 Gbps |
+| 6 Gbps | 1.0000 Gbps | 10,504,200 | 10,504,041 | 159 | 0.001514% | 5.9999 Gbps |
+| 8 Gbps | 1.3333 Gbps | 14,005,600 | 13,990,607 | 14,993 | 0.107050% | 7.9914 Gbps |
+| 10 Gbps | 1.6667 Gbps | 17,507,000 | 17,464,161 | 42,839 | 0.244696% | 9.9755 Gbps |
+
+六档发生器均达到目标输入包数。UPF累计计数确认六个Session分别由Worker
+0至5处理，并分别使用N3 TX qid 0至5；六个Worker内部drop、queue-full和
+push-fail均为0。六档合计57,991包差值均落在各N3 TX qid的
+`memif_buffer_alloc()`短申请/零申请，dispatcher drop和RX/refill error为0。
+
+与同条件单Session结果相比，多Session/多Worker分流收益明显：
+
+| 总目标速率 | 单Session丢包率 | 六Session丢包率 |
+|---:|---:|---:|
+| 4 Gbps | 1.8766% | 0% |
+| 6 Gbps | 2.3833% | 0.001514% |
+| 8 Gbps | 1.0810% | 0.107050% |
+| 10 Gbps | 2.9047% | 0.244696% |
+
+这组单轮结果证明Session归属和六Worker并行实际生效，且在当前内部PG/memif
+验证路径上4G可零丢包、10G有效吞吐达到9.9755G。但8G/10G仍非零丢包，
+并且当前N6入口流量仍全部由memif RX qid 1接收后再按UE IP分发到六个
+Session Worker；因此不能把本结果表述为N6真实多RX qid线速，也不能用单轮
+结果替代长期稳定性测试。
