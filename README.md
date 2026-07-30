@@ -136,6 +136,13 @@ Open5GS N3/N6 memif 段，不包含未插网线的 fabric VF 后续 ARP/NAT 丢�
   `no free tx slots`和单Session owner Worker queue-full。正式VPP内置
   packet-generator争用不是主要原因；外部RSS把同一Session送入多个RX qid后，
   最终仍汇聚到一个Worker，是比单纯N3 TX allocation更完整的真实入口瓶颈。
+- Session worker每64次空轮询读取一次时间可明显降低perf中的时间读取占比，
+  但跨Pod重启后Session owner/TX qid发生变化，1.2G结果无法形成同qid严格A/B，
+  未证明稳定吞吐收益，因此代码未保留。一次锁取出全部已有batch会把TX发送
+  变成更集中的突发，1.2G丢包升至25.824%，已回退。
+- 当前completion不是`ogs_queue + mutex`：worker只原子标记descriptor完成，
+  dispatcher按原RX顺序扫描并批量refill。再增加每worker completion SPSC不能
+  消除现有perf mutex，反而需要跨worker重排，故未实施。
 
 ### 主要测试里程碑
 
@@ -158,21 +165,22 @@ Open5GS N3/N6 memif 段，不包含未插网线的 fabric VF 后续 ARP/NAT 丢�
 | 2026-07-30 | 独立VCL/VF发生器隔离 | 1 Session、1.2G、20秒下，内置PG输出1.1954G/丢0.3816%；独立VCL两次只输出1.0918G/1.0571G，核心段丢4.0611%/6.7967%。排除PG抢占为主因，定位到外部VF rx-miss、N6 input ring、单owner Worker队列及N3 TX四段反压。 |
 | 2026-07-30 | 直接路径、聚合、反压、TX重试A/B | 直接路径证明dispatcher→Worker架构贡献部分回退，但仍非零丢包；64包/8us聚合、未触发的队列重投和3次/10us N3 TX重试均无收益或明显变差，已全部回退。基线恢复后1.2G/20秒输出约1.198～1.200G、丢包0.205%和0.0367%。 |
 | 2026-07-30 | 当前下行perf | Session worker的时间读取约占15%以上、mutex unlock 13.91%、queue pop 6.03%；N6 dispatcher的mutex lock 28.80%。VPP侧主要为正常DPDK/memif节点。下一步优先减少高频计时和completion/dispatcher锁竞争。 |
+| 2026-07-30 | worker计时、queue bulk-pop、completion复核 | 计时降频降低perf时间热点但没有同owner/qid的可重复吞吐收益，未保留；bulk-pop使1.2G丢包达到25.824%，已回退；completion原本已是原子完成标记和顺序批量refill，无completion mutex可优化。恢复基线后100M功能零丢包；1.2G两轮因N3 TX allocation分别丢2.237%和2.279%。 |
 
 ### 下一步优化优先级
 
-1. 优化descriptor completion/refill节奏：减少空epoll/逐槽扫描开销，按完成
-   水位做有界批量回收，并保留generation、断线和停止排空保护。必须监控
-   `in-flight-max`，避免再次占满8192 ring。
-2. 减少Session worker每轮/每包的`clock_gettime`及单任务queue lock操作，
-   优先按既有batch边界更新时钟、批量pop/publish；必须保持低速流有界延迟。
-   已实测N3 TX allocation原地重试会阻塞唯一owner Worker并显著恶化丢包，
-   不再采用该方案。
+1. 先建立不重启Pod/不改变Session owner和TX qid的严格A/B方法，并分别记录
+   每个qid的VPP消费能力。当前跨重启随机映射会产生百分点级差异，不能再用
+   不同qid结果评价微优化。
+2. 针对N3 TX allocation做生产/消费节奏隔离，重点观测每qid的
+   `alloc-short/alloc-fail`、VPP memif input调度间隔和TX burst分布。不要让
+   唯一owner Worker原地重试，也不要把已有RX batch合并成更大的集中突发。
 3. 实现真实入口多 qid：N3 按 TEID、N6 按 UE IP 分流，并使
    `qid -> Session owner -> Worker -> TX qid` 一一对应。优先通过 Open5GS
    和 VPP 现有配置/API 完成，不修改 VPP 源码。
 4. descriptor lease已完成，不再重做payload内存池复制；继续保留控制/异常
-   报文复制回退和完整UPF语义。
+   报文复制回退和完整UPF语义。completion也已是无锁原子完成标记，不再替换
+   为额外SPSC队列。
 
 ### 后续测试记录规范
 

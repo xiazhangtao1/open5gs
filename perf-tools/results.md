@@ -1153,6 +1153,70 @@ VPP worker，三个线程共3,749个cycles样本且无丢失。各线程按自�
 - VPP worker：主要为DPDK input 9.00%、memif input 6.31%以及VLIB节点调度；
   内置PG约2.03%，未出现单一异常热点。
 
-新证据说明下一步应减少数据面高频时间读取、dispatcher/completion锁竞争，并
-在不破坏原有合批的前提下优化队列协议。不能继续在TX ring无空位时让唯一
-Session worker原地微秒级忙等；这种局部重试会降低而不是提高持续吞吐。
+当时证据提示应验证数据面高频时间读取和任务队列锁竞争，并在不破坏原有合批
+的前提下优化队列协议。后续A/B结果见下一节。不能继续在TX ring无空位时让
+唯一Session worker原地微秒级忙等；这种局部重试会降低而不是提高持续吞吐。
+
+## Worker计时、queue bulk-pop与completion复核（2026-07-30）
+
+固定VPP 26.06、6 Worker、6个已建立PFCP Session，只向`10.45.0.2`发送
+1428-byte inner IPv4 UDP；下行目标1.2G、20秒、10微秒节奏。每项单独构建、
+部署和验证；未达到验收标准的代码均已回退，未改变PDR/FAR/QER/URR、PFCP或
+GTP-U语义。
+
+### worker高频计时
+
+临时将20微秒busy-poll期间的截止时间检查从每次空轮询一次改为每64次一次。
+100M/2秒功能冒烟输入/输出均为17,506包。优化实例首次建立Session后的三轮
+1.2G测试均输入/输出2,100,840包、Open5GS段零丢包。该实例perf中，活跃worker
+的未解析时间读取符号降至2.13%；主要样本变为`session_worker_main`49.72%、
+`queue_pop`15.63%、`memif_tx_burst`10.67%，说明计时热点确实下降。
+
+但重启UE后同一IP重新归属Worker 3/TX qid 3，连续三轮结果为：
+
+| 轮次 | 实际输入 | N3输出 | N3 TX allocation丢包 |
+|---|---:|---:|---:|
+| 优化实例1 | 2,100,499 | 2,019,751 | 80,748 / 3.844% |
+| 优化实例2 | 2,074,675 | 2,048,370 | 26,305 / 1.268% |
+| 优化实例3 | 2,047,334 | 2,004,968 | 42,366 / 2.069% |
+
+三轮dispatcher drop、Worker drop、queue-full、push-fail均为0，差值均发生在
+N3 TX buffer allocation。恢复`six-worker-balance`基线并再次重建UE后，
+`10.45.0.2`改归属Worker 0/TX qid 0：
+
+| 轮次 | 实际输入 | N3输出 | N3 TX allocation丢包 |
+|---|---:|---:|---:|
+| 恢复基线1 | 2,067,709 | 2,021,458 | 46,251 / 2.237% |
+| 恢复基线2 | 2,100,840 | 2,052,968 | 47,872 / 2.279% |
+
+恢复基线后的100M/2秒冒烟仍为17,506包输入/输出、零丢包。由于优化和基线落在
+不同owner/TX qid，跨重启数据不能构成严格代码A/B；它同时证明当前环境的qid
+映射和VPP消费节奏会产生百分点级波动。计时修改虽降低CPU热点，却没有证明
+同owner/qid下可重复的稳定吞吐收益，因此按保守验收原则回退。
+
+### 现有队列bulk-pop
+
+临时增加一次加锁取出队列中全部已有batch的接口，dispatcher仍按原RX burst
+立即投递，不跨burst等待。core queue单元测试和100M功能冒烟均通过，但首次
+1.2G测试实际输入1,916,230包、N3输出1,421,383包，丢494,847包
+（25.824%）。dispatcher和Worker内部drop仍为0，损失全部发生在N3 TX
+allocation。
+
+bulk-pop把多个已有RX batch连续交给worker，形成更集中的N3 TX buffer申请，
+加剧生产/消费节奏不匹配。该改动已立即从`dataplane.c`、`ogs-queue.c/.h`和
+queue单元测试中完整撤销。
+
+### completion SPSC可行性复核
+
+当前descriptor lease的completion路径本来不使用`ogs_queue`、mutex或
+condition variable：worker验证generation/sequence后以原子store标记lease
+完成；N3/N6 dispatcher按原RX sequence扫描连续完成项，并按connection/qid
+批量调用`memif_refill_queue()`。
+
+因此新增“每worker独占completion SPSC”不能消除perf中观察到的任务队列mutex，
+还会引入多worker completion的有序合并、断线generation和停止排空复杂度。
+该项没有可量化收益且增加descriptor生命周期风险，故未实施。
+
+本轮最终状态：运行实例和源代码均恢复`six-worker-balance`基线；没有保留
+任何上述实验数据面改动。下一轮必须先实现不重启Session、不改变owner/qid的
+严格A/B，并针对每TX qid分别记录VPP消费间隔和allocation可用性。
