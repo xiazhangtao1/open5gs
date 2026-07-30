@@ -156,14 +156,18 @@ Open5GS N3/N6 memif 段，不包含未插网线的 fabric VF 后续 ARP/NAT 丢�
 | 2026-07-30 | Helm按UPF CPU自动推导Worker与memif队列 | `worker = UPF逻辑CPU - reservedCpus`，默认保留2核给N3/N6 dispatcher；8核实机自动生成6 Worker和双侧6队列，并正确绑定8个CPUManager独占逻辑核。 |
 | 2026-07-30 | UDP/TUN与双memif模式切换实测 | UDP/TUN模式无VPP/VF，6个PFCP Session重建，3个OAI业务TUN各5次ping零丢包；恢复双memif后N3/N6各6 ring connected，N6注入1750包、Open5GS从N3输出1750包，核心memif段零丢包。fabric物理口未插线，因此后者不代表物理端到端回包。 |
 | 2026-07-30 | 独立VCL/VF发生器隔离 | 1 Session、1.2G、20秒下，内置PG输出1.1954G/丢0.3816%；独立VCL两次只输出1.0918G/1.0571G，核心段丢4.0611%/6.7967%。排除PG抢占为主因，定位到外部VF rx-miss、N6 input ring、单owner Worker队列及N3 TX四段反压。 |
+| 2026-07-30 | 直接路径、聚合、反压、TX重试A/B | 直接路径证明dispatcher→Worker架构贡献部分回退，但仍非零丢包；64包/8us聚合、未触发的队列重投和3次/10us N3 TX重试均无收益或明显变差，已全部回退。基线恢复后1.2G/20秒输出约1.198～1.200G、丢包0.205%和0.0367%。 |
+| 2026-07-30 | 当前下行perf | Session worker的时间读取约占15%以上、mutex unlock 13.91%、queue pop 6.03%；N6 dispatcher的mutex lock 28.80%。VPP侧主要为正常DPDK/memif节点。下一步优先减少高频计时和completion/dispatcher锁竞争。 |
 
 ### 下一步优化优先级
 
 1. 优化descriptor completion/refill节奏：减少空epoll/逐槽扫描开销，按完成
    水位做有界批量回收，并保留generation、断线和停止排空保护。必须监控
    `in-flight-max`，避免再次占满8192 ring。
-2. 对短时 `memif_buffer_alloc()` 不足增加微秒级有界重试/延后 flush，不允许
-   无限自旋，也不能让一个方向饿死另一个方向。
+2. 减少Session worker每轮/每包的`clock_gettime`及单任务queue lock操作，
+   优先按既有batch边界更新时钟、批量pop/publish；必须保持低速流有界延迟。
+   已实测N3 TX allocation原地重试会阻塞唯一owner Worker并显著恶化丢包，
+   不再采用该方案。
 3. 实现真实入口多 qid：N3 按 TEID、N6 按 UE IP 分流，并使
    `qid -> Session owner -> Worker -> TX qid` 一一对应。优先通过 Open5GS
    和 VPP 现有配置/API 完成，不修改 VPP 源码。

@@ -1093,3 +1093,66 @@ N6 memif；测试结束后已恢复NAT并删除临时Pod、ConfigMap和所有PG 
 4. 单纯扩大Worker队列可以延迟短测中的queue-full，但本轮Worker实际持续输出
    只有约1.06～1.09G；若平均输入继续大于处理速度，最终仍会填满并增加延迟，
    不能作为持续吞吐优化。
+
+## 直接路径、聚合、反压与N3重试A/B（2026-07-30）
+
+固定VPP 26.06、1428-byte inner IPv4 UDP、1 Session、目标1.2G、20秒，
+逐项验证建议的四种改进。所有临时代码均未改变PDR/FAR/QER/URR、PFCP或
+GTP-U语义；出现回退的实现已从代码和部署中撤销。
+
+### Session Worker直接路径
+
+临时设置`sessionWorkers.enabled=false`，memif自动使用单队列，N6 dispatcher
+直接执行完整UPF处理。内置PG输入2,100,840包，N3输出2,057,259包，核心段
+丢43,581包（2.074%）。独立VCL/VF发生2,082,546包，正式VPP N6输入
+1,904,662包，N3输出1,890,859包；以正式VPP输入计算核心段丢13,803包
+（0.725%）。
+
+与同类独立VCL Session Worker路径4.061%～6.797%的核心段丢包相比，直接路径
+减少约3.3～6.1个百分点，证明dispatcher到Worker的排队、唤醒和反压确实构成
+回退；但直接路径仍未恢复零丢包，不能把全部问题归因于Session Worker架构。
+诊断结束后已恢复6 Worker。
+
+### 自适应聚合和队列反压
+
+曾实现跨RX burst按owner累计64包或8微秒超时投递。1.2G/20秒输入
+2,100,840包、输出1,927,050包，丢173,790包（8.273%）。运行计数中约
+187.7万次为超时flush，达到64包触发的flush仅212次；在10微秒平滑发包下，
+8微秒阈值退化成近乎逐包投递，破坏了原Worker内部合批，因此已回退。
+
+随后单独保留Worker队列满时的有界重投，但该轮`queue-full/retry`均为0，
+损失全部发生在N3 TX allocation。该改动对当前限制没有收益，也已回退。
+
+### N3 TX allocation有界重试
+
+仅在`memif_buffer_alloc()`返回0时，最多重试3次、总等待不超过10微秒。
+1.2G/20秒完整输入2,100,840包，输出1,950,301包，丢150,539包
+（7.165%）。共执行858,895次重试、累计忙等约2.577秒，只挽回25次申请；
+等待期间worker不能继续完成已有任务，反而加剧队列和ring反压。该实现已立即
+回退，部署恢复到`six-worker-balance`基线。
+
+恢复后的两轮基线分别为：
+
+| 轮次 | 实际输入 | N3输出 | 核心段丢包 | 实际输出 |
+|---|---:|---:|---:|---:|
+| 基线1 | 2,058,348（发生器未送满） | 2,054,480 | 3,868 / 0.188% | 约1.174G |
+| 基线2 | 2,100,840 | 2,096,531 | 4,309 / 0.205% | 约1.198G |
+| perf轮 | 2,100,840 | 2,100,070 | 770 / 0.0367% | 约1.200G |
+
+### 当前代码perf
+
+对perf轮同时以99Hz采样N6 dispatcher、实际活跃Session worker和负责该流的
+VPP worker，三个线程共3,749个cycles样本且无丢失。各线程按自身样本归一化：
+
+- Session worker：`session_worker_main`28.20%，未解析的vDSO时间读取20.56%，
+  `pthread_mutex_unlock`13.91%，`__vdso_clock_gettime`7.82%，`queue_pop`
+  6.03%，`ogs_get_monotonic_time`4.69%。
+- N6 dispatcher：`pthread_mutex_lock`28.80%，
+  `drain_queue_completions`3.85%，`do_epoll_wait`2.60%，
+  `memif_refill_queue`1.95%，`memif_rx_burst`1.58%。
+- VPP worker：主要为DPDK input 9.00%、memif input 6.31%以及VLIB节点调度；
+  内置PG约2.03%，未出现单一异常热点。
+
+新证据说明下一步应减少数据面高频时间读取、dispatcher/completion锁竞争，并
+在不破坏原有合批的前提下优化队列协议。不能继续在TX ring无空位时让唯一
+Session worker原地微秒级忙等；这种局部重试会降低而不是提高持续吞吐。
