@@ -1024,3 +1024,72 @@ RX/refill/stale均为0。结果说明：
   head-of-line和ring反压。
 - “配置6个Worker”不等于一个Session会并行使用6个Worker。Session归属保证
   语义一致性，一个Session仍只由一个owner Worker处理。
+
+## 独立VCL/VF发生器隔离（2026-07-30）
+
+为验证正式VPP内置packet-generator是否因占用VPP Worker而降低memif消费速度，
+在不修改Open5GS和VPP源码的前提下创建临时VPP 26.06/VCL Pod。临时Pod申请
+1个`intel.com/fabric_network` VF、2个CPUManager独占逻辑CPU和4GiB大页，
+通过无网线X710 fabric VF内部交换向正式VPP的N6 VF发送流量。正式VPP测试期间
+临时删除`dpdk-n6`的NAT44 outside feature，使目标UE IP的测试包直接路由到
+N6 memif；测试结束后已恢复NAT并删除临时Pod、ConfigMap和所有PG stream。
+
+固定条件：
+
+- 当前6 Worker运行实例，只向Session `10.45.0.8`发流；
+- inner IPv4 UDP 1428 bytes，目标1.2G，持续20秒；
+- 内置PG为单stream、`maxframe=2`；
+- 独立VCL使用`10.2.0.227..230`四个源IP和四个源端口，每流300M；
+- 下行执行完整PDR/FAR/QER/URR和GTP-U封装；
+- N3 fabric物理口未插线，N3 memif后的ARP丢包不计入核心段。
+
+10M/2秒VCL冒烟中，发生器提交1,751包，正式N6 VF、N6 memif和N3 memif均为
+1,751包，证明独立发生器确实经过正式N6 VF、Open5GS语义处理和N3 memif输出。
+
+### 吞吐与丢包
+
+| 发生器 | 发生包/速率 | 正式N6 VF IPv4输入 | Open5GS N6 RX | Worker处理/N3发送请求 | N3 memif输出 | 核心段丢包 |
+|---|---:|---:|---:|---:|---:|---:|
+| 内置PG | 2,100,840 / 1.2000G | 不经过VF | 2,100,840 | 2,100,840 | 2,092,823 / 1.1954G | 8,017 / 0.3816% |
+| VCL/VF第1次 | 2,100,734 / 1.1999G | 1,992,314 / 1.1380G | 1,968,038 / 1.1241G | 1,912,676 | 1,911,405 / 1.0918G | 80,909 / 4.0611% |
+| VCL/VF第2次 | 2,100,580 / 1.1999G | 1,985,694 / 1.1342G | 1,939,958 / 1.1081G | 1,852,538 | 1,850,732 / 1.0571G | 134,962 / 6.7967% |
+
+核心段丢包以正式VPP向N6 memif尝试发送的IPv4包为分母、以N3 memif实际收到
+的包为输出；独立发生器到正式N6 VF之前的`rx-miss`另行统计，不混入该百分比。
+
+### 精确丢包位置
+
+| 测试 | N6 VF `rx-miss` | N6 memif无空位 | dispatcher/Worker queue-full | N3 TX allocation | 合计核心段差值 |
+|---|---:|---:|---:|---:|---:|
+| 内置PG | 不适用 | 0 | 0 | 8,017 | 8,017 |
+| VCL/VF第1次 | 108,420 | 24,276 | 55,362 | 1,271 | 80,909 |
+| VCL/VF第2次 | 114,887 | 45,736 | 87,420 | 1,806 | 134,962 |
+
+内置PG测试中，N6 RX qid 1接收2,100,840包，dispatcher drop和Worker drop均为
+0；N3 TX qid 0的`send-request - tx-sent`恰为8,017，说明该轮差值仍全部发生
+在N3 TX buffer allocation。
+
+独立VCL四条流经N6 VF RSS和正式VPP后实际进入N6 memif qid 0/1/5，但Session
+归属算法将它们全部投递给Worker 0。第2次测试中：
+
+- 正式VPP尝试送入N6 memif 1,985,694包，Open5GS实际RX 1,939,958包，
+  差45,736包，对应VPP `memif1/0-tx no free tx slots`；
+- Worker 0队列高水位达到8192，新增87,420个dispatch drop，处理
+  1,852,538包；
+- N3 TX qid 0收到1,852,538个发送请求，实际发送1,850,732包，allocation
+  丢1,806包；
+- 三段差值`45,736 + 87,420 + 1,806 = 134,962`，与接口计数完全闭合。
+
+结论：
+
+1. 独立VCL/VF没有恢复1.2G零丢包，且两次均明显差于内置PG，因此“内置PG抢占
+   正式VPP Worker”不是当前单Session下行退化的主要原因。
+2. 外部VF路径更接近真实输入，也额外暴露X710 VF `rx-miss`和N6 memif
+   input-ring反压。多RX qid并不等于单Session能使用多个Session Worker；这些
+   qid最终都汇聚到同一个owner Worker。
+3. 内置PG条件下主要看到N3 TX allocation；外部多qid突发条件下，主要损失已
+   前移到N6 input ring和Worker队列。当前瓶颈是单Session owner的持续消费速度
+   及端到端反压，不应只归因于VPP N3 memif消费。
+4. 单纯扩大Worker队列可以延迟短测中的queue-full，但本轮Worker实际持续输出
+   只有约1.06～1.09G；若平均输入继续大于处理速度，最终仍会填满并增加延迟，
+   不能作为持续吞吐优化。

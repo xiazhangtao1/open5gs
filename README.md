@@ -45,6 +45,25 @@ ARP/NAT/物理链路：
 有序refill阻塞。完整逐档包数、重复测试和计数证据见
 [perf-tools/results.md](perf-tools/results.md#6-worker下1-session6-session-ab2026-07-30)。
 
+### 独立VCL/VF发生器隔离（2026-07-30）
+
+为排除正式VPP内置packet-generator与memif input争用Worker，固定6 Worker、
+1 Session、1428-byte inner IPv4和20秒时长，对1.2G下行做了同实例A/B：
+
+| 发生器 | 实际发生 | N6侧实际输入 | N3 memif输出 | 核心段丢包 |
+|---|---:|---:|---:|---:|
+| 正式VPP内置PG | 1.2000G | 1.2000G | 1.1954G | 0.3816% |
+| 独立VCL/VF，第1次 | 1.1999G | 1.1380G | 1.0918G | 4.0611% |
+| 独立VCL/VF，第2次 | 1.1999G | 1.1342G | 1.0571G | 6.7967% |
+
+独立VCL没有恢复1.2G零丢包，因此正式VPP内置PG争用不是主要原因。独立VF两次
+分别先发生108,420/114,887包`rx-miss`；进入正式VPP后，4条流经RSS进入N6
+memif qid 0/1/5，但都归属同一个Session Worker。第二次核心段134,962包差值
+可精确拆为N6 memif无空位45,736包、Worker队列满87,420包、N3 TX申请失败
+1,806包。增加队列只能吸收短突发，不能改变单Session Worker约1.06G的本轮
+持续处理速率。完整计数见
+[perf-tools/results.md](perf-tools/results.md#独立vclvf发生器隔离2026-07-30)。
+
 ### 历史双Session基线（2026-07-27）
 
 该阶段配置为两个 Session Worker、N3/N6专用dispatcher、descriptor lease、
@@ -113,6 +132,10 @@ Open5GS N3/N6 memif 段，不包含未插网线的 fabric VF 后续 ARP/NAT 丢�
 - `busy_poll_us=0/20/-1`实测中，20us比纯阻塞稳定；持续忙轮询虽把一次2G下行
   丢包降到0.278%，但1.2G/4G和重复测试波动，且不能避免ring耗尽。因此默认
   保持20us、`SCHED_OTHER`，不采用无限忙轮询。
+- 独立VCL/VF发生器两次1.2G下行没有恢复零丢包，反而暴露N6 memif
+  `no free tx slots`和单Session owner Worker queue-full。正式VPP内置
+  packet-generator争用不是主要原因；外部RSS把同一Session送入多个RX qid后，
+  最终仍汇聚到一个Worker，是比单纯N3 TX allocation更完整的真实入口瓶颈。
 
 ### 主要测试里程碑
 
@@ -132,6 +155,7 @@ Open5GS N3/N6 memif 段，不包含未插网线的 fabric VF 后续 ARP/NAT 丢�
 | 2026-07-27 | 六Session/六Worker全局最少连接分配 | 六个Session实际均分到六个Worker；下行2G、上行4G零丢包，4G下行约0.247%、6G上行约0.643%。六Worker内部无drop，N3/N6单有效RX qid均触及8192 in-flight上限。 |
 | 2026-07-30 | Helm按UPF CPU自动推导Worker与memif队列 | `worker = UPF逻辑CPU - reservedCpus`，默认保留2核给N3/N6 dispatcher；8核实机自动生成6 Worker和双侧6队列，并正确绑定8个CPUManager独占逻辑核。 |
 | 2026-07-30 | UDP/TUN与双memif模式切换实测 | UDP/TUN模式无VPP/VF，6个PFCP Session重建，3个OAI业务TUN各5次ping零丢包；恢复双memif后N3/N6各6 ring connected，N6注入1750包、Open5GS从N3输出1750包，核心memif段零丢包。fabric物理口未插线，因此后者不代表物理端到端回包。 |
+| 2026-07-30 | 独立VCL/VF发生器隔离 | 1 Session、1.2G、20秒下，内置PG输出1.1954G/丢0.3816%；独立VCL两次只输出1.0918G/1.0571G，核心段丢4.0611%/6.7967%。排除PG抢占为主因，定位到外部VF rx-miss、N6 input ring、单owner Worker队列及N3 TX四段反压。 |
 
 ### 下一步优化优先级
 
