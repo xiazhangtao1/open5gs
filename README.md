@@ -27,9 +27,27 @@ UPG-VPP 或绕过 UPF 语义的 fast path。
 当前不支持UDP/TUN与memif混合组合；从一种模式切换到另一种模式后需要让UE
 重新注册并重建PFCP Session。
 
-### 当前可复现基线（2026-07-27）
+### 最新1/6 Session性能A/B（2026-07-30）
 
-当前正式配置为两个 Session Worker、N3/N6专用dispatcher、descriptor lease、
+固定6 Worker、10us节奏、1428-byte inner IPv4、每档5秒，所有发生器均实际
+送满目标。这里只统计Open5GS N3/N6 memif段，不包含未插线fabric VF之后的
+ARP/NAT/物理链路：
+
+| 实际灌入Session | 方向 | 可重复零丢包边界 | 10G档实际输出 | 10G档段丢包 |
+|---:|---|---:|---:|---:|
+| 1 | 下行 | 本轮仅确认0.5G | 9.4353G | 5.6469% |
+| 1 | 上行 | 10G，连续3次零丢包 | 10.0000G | 0 |
+| 6 | 下行 | 2G | 9.6151G | 3.8487% |
+| 6 | 上行 | 2G；4G约0.24%丢包 | 9.7123G | 2.8765%，重复为5.4174% |
+
+6 Session下行明显受益于多Worker；单Session不会拆给6个Worker。单Session
+上行由于只有一个owner按序完成，反而避免6 Worker共享单RX qid时的跨Worker
+有序refill阻塞。完整逐档包数、重复测试和计数证据见
+[perf-tools/results.md](perf-tools/results.md#6-worker下1-session6-session-ab2026-07-30)。
+
+### 历史双Session基线（2026-07-27）
+
+该阶段配置为两个 Session Worker、N3/N6专用dispatcher、descriptor lease、
 两个 memif qid、8192-entry ring和20us混合轮询。每档
 目标持续 10 秒；“输入”是实际进入 Open5GS 输入 memif 的包，“丢包”只计算
 Open5GS N3/N6 memif 段，不包含未插网线的 fabric VF 后续 ARP/NAT 丢包。
