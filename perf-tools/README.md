@@ -73,6 +73,9 @@ dispatch drop、queue high-water 和 memif TX ring-full 外，还包含
 - `scripts/run_dl_qid_diag.sh`: 固定Pod、Session和qid的下行诊断脚本，同时采集
   Open5GS/VPP线程`schedstat`、CPU/NUMA/超线程拓扑、VPP memif ring快照、
   VPP runtime以及Open5GS各N3 TX qid计数。
+- `scripts/run_vpp_affinity_ab.sh`: 在同一Pod、PFCP Session和VPP进程内按
+  `dense(A1) -> isolated(B) -> dense(A2)`热切换VPP线程绑核，逐阶段采集
+  实际affinity、`SCHED_OTHER`策略、`schedstat`、RX placement和吞吐计数。
 
 多 Session 脚本默认按每 10us 计算一次 `maxframe`，设置
 `PACING_10US=0` 可切换为 `maxframe=256` 的原突发方式。例如：
@@ -96,6 +99,20 @@ POD=xcn-5gc-xxxxxxxxxx-xxxxx
 VPP_MEMIF_SAMPLE_MS=500 perf-tools/scripts/run_dl_qid_diag.sh \
   "$POD" 1200 20 10.45.0.2 /tmp/open5gs-dl-qid-diag.log
 ```
+
+进行VPP超线程共享/物理核隔离的严格A/B：
+
+```bash
+POD=xcn-5gc-xxxxxxxxxx-xxxxx
+RUNS_PER_MODE=3 perf-tools/scripts/run_vpp_affinity_ab.sh \
+  "$POD" 1200 20 10.45.0.2 /tmp/open5gs-vpp-affinity-ab.log
+```
+
+`dense`故意依次使用同一物理核的两个超线程，`isolated`则让VPP main和六个
+Worker各占一个不同物理核的一个逻辑CPU。脚本不重启Pod、VPP或Session，并在
+正常结束、失败和中断时均恢复`isolated`。两种模式都只使用`SCHED_OTHER`。
+使用前应确认`/run/vpp/affinity-plan.json`包含至少7个
+`physical_core_groups`；测试结论仍须以同一Session owner/TX qid为前提。
 
 N3 TX burst间隔采样默认关闭，避免每次发送读取时钟影响性能。可在不重启
 Pod、UPF进程或Session的情况下热切换：

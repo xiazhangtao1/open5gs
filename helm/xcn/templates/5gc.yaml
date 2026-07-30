@@ -386,6 +386,10 @@ spec:
                   containerName: vpp
                   resource: limits.cpu
                   divisor: "1"
+            - name: VPP_CPU_WORKERS
+              value: {{ .Values.vpp.cpu.workers | quote }}
+            - name: VPP_AFFINITY_POLL_MS
+              value: {{ .Values.vpp.cpu.affinityPollMs | quote }}
             - name: VPP_N3_INTERFACE_ADDRESS
               value: {{ .Values.vpp.n3.interfaceAddress | quote }}
             - name: VPP_N3_DEFAULT_GATEWAY

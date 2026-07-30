@@ -1295,3 +1295,53 @@ N3输出1,933,495包，N3 TX allocation丢142,963包（6.8849%）。该Session�
 归属qid 5，共识别19个零申请episode，最大连续失败56,746次、真实最大持续
 180,640微秒；测试结束等待15秒后`zero-current-us`仍为0，确认空闲期不再被
 误计入失败持续时间。
+
+## VPP独立物理核绑核A/B（2026-07-30）
+
+保持CPUManager机制和超线程配置不变，将VPP Guaranteed CPU从8个逻辑CPU
+提高到16个，固定启动6个VPP Worker。运行cpuset为
+`46-53,118-125`，对应8个完整物理核超线程对。入口supervisor在CPUManager
+完成分配后，将VPP main和6个Worker逐线程重新绑定；所有线程保持
+`SCHED_OTHER`。
+
+同一Pod、同一VPP PID、同一组6个PFCP Session，只向`10.45.0.2`发送。
+该Session在整个A/B期间保持N3 TX qid 1。1428-byte inner IPv4 UDP、
+10微秒节奏，每种模式连续3轮：
+
+| 目标 | 阶段 | 布局 | 总输入包 | 总丢包 | 平均丢包率 |
+|---:|---|---|---:|---:|---:|
+| 1.2 Gbps | A1 | dense | 6,302,520 | 4,311 | 0.0684% |
+| 1.2 Gbps | B | isolated | 6,302,520 | 2,850 | 0.0452% |
+| 1.2 Gbps | A2 | dense | 6,302,520 | 6,213 | 0.0986% |
+| 2.0 Gbps | A1 | dense | 10,504,200 | 71,541 | 0.6811% |
+| 2.0 Gbps | B | isolated | 10,504,200 | 105,549 | 1.0049% |
+| 2.0 Gbps | A2 | dense | 10,504,200 | 28,178 | 0.2683% |
+
+1.2G九轮均显著好于此前8逻辑CPU下1.8997%至18.3008%的同类结果，说明
+“增加成对CPU资源、限制VPP busy-poll Worker数、重新逐线程绑核”具有明确
+运行价值。但这组资源变更需要重建Pod，和旧配置之间不是严格的同进程热A/B，
+不能把全部改善只归因于某一个因素。
+
+物理核隔离本身没有呈现单调收益：2G的`dense -> isolated -> dense`丢包率
+没有随模式可逆变化。补充2G单轮`schedstat`测试结果同样波动：
+
+| 阶段 | 布局 | 丢包率 |
+|---|---|---:|
+| A1 | dense | 1.0828% |
+| B | isolated | 0.3155% |
+| A2 | dense | 0.4454% |
+
+因此默认保留`isolated`以避免VPP polling线程确定性地竞争同一物理核，但不把
+它描述为单独的性能保证。packet-generator、DPDK polling、memif polling、
+主机IRQ/内核任务的相位仍会使结果波动。`show interface rx-placement`显示
+packet-generator使用VPP Worker 0，N3 memif qid 1由Worker 3消费；不同阶段
+的runqueue等待没有与丢包率形成稳定单调关系。
+
+最终Helm revision 92实际获得cpuset
+`50-57,122-129`，运行状态为main CPU50、六个Worker CPU51至56，
+全部为单CPU affinity和`SCHED_OTHER`。重建后六个PFCP Session全部建立。
+100M/2秒冒烟输入/输出17,506包。最终isolated单轮1.2G/20秒输入
+2,100,840包、N3输出2,094,775包，丢6,065包（0.2887%）；差值严格对应
+N3 TX qid 3的allocation drop，dispatcher、Worker内部处理及RX/refill均为
+零丢包。该单轮高于前述三轮isolated平均值，再次说明不能用一次结果代替多轮
+统计。

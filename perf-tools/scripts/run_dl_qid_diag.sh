@@ -30,7 +30,11 @@ snapshot_tasks() {
 
     echo "=== $label $container tasks ==="
     kubectl -n xcn exec "$pod" -c "$container" -- sh -c '
-        for d in /proc/1/task/[0-9]*; do
+        process=1
+        if test "$1" = vpp; then
+            process=$(pidof vpp)
+        fi
+        for d in /proc/$process/task/[0-9]*; do
             test -r "$d/schedstat" || continue
             comm=$(cat "$d/comm" 2>/dev/null) || continue
             allowed=$(awk "/^Cpus_allowed_list:/ { print \$2 }" "$d/status")
@@ -41,7 +45,7 @@ snapshot_tasks() {
                 "${d##*/}" "$comm" "$allowed" "$runtime" "$wait" "$slices" \
                 "$voluntary" "$involuntary"
         done
-    '
+    ' sh "$container"
 }
 
 sample_vpp_memif() {

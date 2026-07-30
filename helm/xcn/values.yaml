@@ -239,6 +239,9 @@ vpp:
     numTxDesc: 4096
   memory:
     mainHeapSize: 8G
+  cpu:
+    workers: 6
+    affinityPollMs: 250
   n3:
     interfaceAddress: ""
     defaultGateway: ""
@@ -254,11 +257,11 @@ vpp:
       workers: "2"
   resources:
     requests:
-      cpu: "8"
+      cpu: "16"
       memory: 16Gi
       hugepages-1Gi: 8Gi
     limits:
-      cpu: "8"
+      cpu: "16"
       memory: 16Gi
       hugepages-1Gi: 8Gi
 
