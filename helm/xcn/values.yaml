@@ -182,9 +182,9 @@ networking:
         enabled: false
         # "auto": limits.cpu - reservedCpus; an explicit 1..16 keeps manual sizing.
         count: auto
-        # Two logical CPUs are reserved for the N3 and N6 dispatchers.
-        # Set to 3 to leave one additional unpinned CPU for control-plane work.
-        reservedCpus: 2
+        # Reserve one logical CPU for each N3/N6 dispatcher and one shared
+        # control CPU for the rate sampler and UPF main event thread.
+        reservedCpus: 3
         queueSize: 8192
         # -1: always busy-poll, 0: block, >0: active polling window (us)
         busyPollUs: 20

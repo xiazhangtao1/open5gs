@@ -195,7 +195,7 @@ helm upgrade --install xcn helm/xcn -n xcn --create-namespace \
   --set networking.upf.n6.backend=memif \
   --set networking.upf.dataplane.sessionWorkers.enabled=true \
   --set-string networking.upf.dataplane.sessionWorkers.count=auto \
-  --set networking.upf.dataplane.sessionWorkers.reservedCpus=2 \
+  --set networking.upf.dataplane.sessionWorkers.reservedCpus=3 \
   --set-string networking.upf.n3.memif.queues=auto \
   --set-string networking.upf.n6.memif.queues=auto \
   --set resources.fivegc.upf.requests.cpu=8 \
@@ -227,8 +227,9 @@ Worker and memif queue counts from the UPF container CPU limit:
 Session Workers = UPF logical CPUs - reservedCpus
 ```
 
-The default `reservedCpus: 2` reserves one logical CPU for each of the N3 and
-N6 dispatchers. For example, an 8-CPU UPF creates 6 Session Workers and six
+The default `reservedCpus: 3` reserves one logical CPU for each of the N3 and
+N6 dispatchers and one shared control CPU for the rate sampler and UPF main
+event thread. For example, an 8-CPU UPF creates 5 Session Workers and five
 N3/N6 memif queues on both Open5GS and VPP:
 
 ```bash
@@ -237,17 +238,17 @@ helm upgrade --install xcn helm/xcn -n xcn --create-namespace \
   --set resources.fivegc.upf.limits.cpu=8 \
   --set networking.upf.dataplane.sessionWorkers.enabled=true \
   --set-string networking.upf.dataplane.sessionWorkers.count=auto \
-  --set networking.upf.dataplane.sessionWorkers.reservedCpus=2 \
+  --set networking.upf.dataplane.sessionWorkers.reservedCpus=3 \
   --set-string networking.upf.n3.memif.queues=auto \
   --set-string networking.upf.n6.memif.queues=auto
 ```
 
-Automatic mode requires equal integer CPU requests and limits and accepts a
-resolved Worker count of `1..16`, so the valid default range is 3 to 18 UPF
-logical CPUs. `reservedCpus` must be at least 2. Set it to 3 to leave an
-additional unpinned logical CPU for PFCP, timers, and the main event thread.
-These CPUs belong only to the UPF container; VPP CPU resources remain
-independent.
+Automatic mode requires equal integer CPU requests and limits, at least 4 UPF
+logical CPUs, and a resolved Worker count of `1..16`, so the valid default
+range is 4 to 19 UPF logical CPUs. `reservedCpus` must be at least 3. An
+explicit Worker count must also leave three CPUs for the two dispatchers and
+the shared control CPU. These CPUs belong only to the UPF container; VPP CPU
+resources remain independent.
 
 An explicit numeric `sessionWorkers.count` keeps manual sizing. A memif queue
 value of `auto` follows either the automatically resolved or explicit Worker
@@ -258,7 +259,8 @@ The calculation deliberately uses the Helm CPU limit rather than the process
 affinity mask. CPUManager can temporarily expose the node cpuset during Pod
 startup; deriving the Worker count from that transient mask would create too
 many threads. After CPUManager assigns the exclusive cpuset, Open5GS pins the
-Workers followed by the N3 and N6 dispatchers to the resolved `N+2` CPUs.
+Workers, the N3/N6 dispatchers, and the shared rate/main control threads to the
+resolved `N+3` CPUs.
 
 ### VPP CPU sizing and affinity
 

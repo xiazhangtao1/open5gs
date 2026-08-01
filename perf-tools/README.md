@@ -52,7 +52,7 @@ networking:
       sessionWorkers:
         enabled: true
         count: auto
-        reservedCpus: 2
+        reservedCpus: 3
         queueSize: 8192
         busyPollUs: 20
     n3:
@@ -64,9 +64,11 @@ networking:
 ```
 
 自动模式按`worker = UPF逻辑CPU - reservedCpus`计算，因此上例为
-`8 - 2 = 6`个Worker。CPU requests/limits必须相等且为整数；
-`reservedCpus`至少为2，计算结果必须在`1..16`。数值型`count`继续支持手工
-覆盖，`queues: auto`会跟随自动或手工Worker数。
+`8 - 3 = 5`个Worker。UPF容器至少需要4个逻辑CPU，CPU requests/limits必须
+相等且为整数；`reservedCpus`至少为3，分别为N3/N6 dispatcher以及共享的
+rate/main控制线程保留CPU。计算结果必须在`1..16`。数值型`count`继续支持
+手工覆盖，但也必须满足`count + 3 <= UPF逻辑CPU`；`queues: auto`会跟随自动
+或手工Worker数。
 
 N3/N6 的实际`memif.queues`必须与Worker数相等。N3按TEID、N6按UE IP
 查找固定 Session owner；分发不绕过 PDR/FAR/QER/URR。一个 Session 只使用

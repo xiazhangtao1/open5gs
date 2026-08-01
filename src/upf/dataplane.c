@@ -161,7 +161,7 @@ static void pin_current_thread_when_ready(
 {
     int cpus[CPU_SETSIZE];
     unsigned int required =
-        upf_self()->dataplane.worker_count + 2; /* dispatcher + control */
+        upf_self()->dataplane.worker_count + 3; /* 2 dispatchers + control */
     int retry;
 
     for (retry = 0; retry < 300 && !is_stopping(); retry++) {
@@ -184,6 +184,12 @@ static void pin_current_thread_when_ready(
         ogs_msleep(100);
     }
     ogs_warn("CPUManager cpuset not ready for %s; using pod cpuset", name);
+}
+
+void upf_dataplane_pin_control_thread(const char *name)
+{
+    pin_current_thread_when_ready(
+            upf_self()->dataplane.worker_count + 2, name);
 }
 
 static inline void worker_cpu_relax(void)

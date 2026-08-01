@@ -36,45 +36,47 @@ app.kubernetes.io/managed-by: {{ .Release.Service }}
 
 {{/*
 Return the configured UPF CPU limit as an integer logical-CPU count.
-This helper is used only by automatic Session Worker sizing. CPUManager may
-temporarily expose the node cpuset while a Pod starts, so use the immutable
-Helm resource limit instead of inspecting the runtime affinity mask.
+This also enforces the minimum CPU allocation needed to isolate one Worker,
+two dispatchers, and the shared control CPU. CPUManager may temporarily expose
+the node cpuset while a Pod starts, so use the immutable Helm resource limit
+instead of inspecting the runtime affinity mask.
 */}}
 {{- define "xcn.upfCpuCount" -}}
 {{- $request := toString .Values.resources.fivegc.upf.requests.cpu -}}
 {{- $limit := toString .Values.resources.fivegc.upf.limits.cpu -}}
 {{- if ne $request $limit -}}
-{{- fail (printf "automatic UPF worker sizing requires resources.fivegc.upf.requests.cpu (%s) to equal limits.cpu (%s)" $request $limit) -}}
+{{- fail (printf "UPF CPU isolation requires resources.fivegc.upf.requests.cpu (%s) to equal limits.cpu (%s)" $request $limit) -}}
 {{- end -}}
 {{- if not (regexMatch "^[0-9]+$" $limit) -}}
-{{- fail (printf "automatic UPF worker sizing requires an integer CPU limit, got %q" $limit) -}}
+{{- fail (printf "UPF CPU isolation requires an integer CPU limit, got %q" $limit) -}}
 {{- end -}}
 {{- $cpuCount := int $limit -}}
-{{- if lt $cpuCount 1 -}}
-{{- fail "resources.fivegc.upf.limits.cpu must be at least 1" -}}
+{{- if lt $cpuCount 4 -}}
+{{- fail "resources.fivegc.upf.limits.cpu must be at least 4 (one Session Worker, two dispatchers, and one control CPU)" -}}
 {{- end -}}
 {{- printf "%d" $cpuCount -}}
 {{- end -}}
 
 {{/*
 Resolve networking.upf.dataplane.sessionWorkers.count. A numeric value keeps
-manual sizing. "auto" reserves two logical CPUs for the N3/N6 dispatchers by
-default and assigns the remaining CPUs to Session Workers.
+manual sizing. "auto" reserves three logical CPUs for the N3/N6 dispatchers
+and the shared rate/main control CPU by default, and assigns the remaining
+CPUs to Session Workers.
 */}}
 {{- define "xcn.upfWorkerCount" -}}
 {{- $configured := toString .Values.networking.upf.dataplane.sessionWorkers.count -}}
+{{- $cpuCount := include "xcn.upfCpuCount" . | int -}}
 {{- if eq $configured "auto" -}}
 {{- if not .Values.networking.upf.dataplane.sessionWorkers.enabled -}}
 {{- printf "1" -}}
 {{- else -}}
 {{- $reservedText := toString .Values.networking.upf.dataplane.sessionWorkers.reservedCpus -}}
 {{- if not (regexMatch "^[0-9]+$" $reservedText) -}}
-{{- fail (printf "networking.upf.dataplane.sessionWorkers.reservedCpus must be an integer of at least 2, got %q" $reservedText) -}}
+{{- fail (printf "networking.upf.dataplane.sessionWorkers.reservedCpus must be an integer of at least 3, got %q" $reservedText) -}}
 {{- end -}}
-{{- $cpuCount := include "xcn.upfCpuCount" . | int -}}
 {{- $reserved := int $reservedText -}}
-{{- if lt $reserved 2 -}}
-{{- fail (printf "networking.upf.dataplane.sessionWorkers.reservedCpus must reserve at least 2 CPUs for N3/N6 dispatchers, got %d" $reserved) -}}
+{{- if lt $reserved 3 -}}
+{{- fail (printf "networking.upf.dataplane.sessionWorkers.reservedCpus must reserve at least 3 CPUs for N3/N6 dispatchers and control, got %d" $reserved) -}}
 {{- end -}}
 {{- $workerCount := sub $cpuCount $reserved | int -}}
 {{- if or (lt $workerCount 1) (gt $workerCount 16) -}}
@@ -89,6 +91,9 @@ default and assigns the remaining CPUs to Session Workers.
 {{- $workerCount := int $configured -}}
 {{- if or (lt $workerCount 1) (gt $workerCount 16) -}}
 {{- fail (printf "networking.upf.dataplane.sessionWorkers.count must be between 1 and 16, got %d" $workerCount) -}}
+{{- end -}}
+{{- if gt (add $workerCount 3) $cpuCount -}}
+{{- fail (printf "networking.upf.dataplane.sessionWorkers.count=%d requires at least %d UPF CPUs (workers + two dispatchers + control), got %d" $workerCount (add $workerCount 3) $cpuCount) -}}
 {{- end -}}
 {{- printf "%d" $workerCount -}}
 {{- end -}}

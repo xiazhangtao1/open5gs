@@ -661,6 +661,7 @@ static void rate_main(void *data)
     ogs_time_t next_sample = 0;
 
     (void)data;
+    upf_dataplane_pin_control_thread("rate/control");
     while (!rate_is_stopping()) {
         struct pollfd pfd = { .fd = listen_fd, .events = POLLIN };
         ogs_time_t now = ogs_get_monotonic_time();

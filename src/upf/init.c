@@ -125,6 +125,7 @@ static void upf_main(void *data)
     ogs_fsm_t upf_sm;
     int rv;
 
+    upf_dataplane_pin_control_thread("main/control");
     ogs_fsm_init(&upf_sm, upf_state_initial, upf_state_final, 0);
 
     for ( ;; ) {

@@ -33,6 +33,7 @@ void upf_dataplane_init(void);
 void upf_dataplane_final(void);
 int upf_dataplane_start(void);
 void upf_dataplane_stop(void);
+void upf_dataplane_pin_control_thread(const char *name);
 
 void upf_dataplane_lock(void);
 void upf_dataplane_unlock(void);
