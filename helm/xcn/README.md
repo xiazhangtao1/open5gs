@@ -98,6 +98,9 @@ networking:
 Disabling `rateStats.enabled` removes both the sampler/control thread and all
 data-plane counter updates. Statistics are observational only: PDR/FAR/QER/URR,
 PFCP, packet ordering, Session ownership, and routing behavior are unchanged.
+Text output uses dynamic column widths and numeric right alignment. `--watch`
+refreshes one screen even when `kubectl exec` is used without `-t`; use
+`--json` for scripts and machine parsing.
 
 ## UPF dataplane deployment modes
 

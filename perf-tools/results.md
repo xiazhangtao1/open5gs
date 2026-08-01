@@ -1519,5 +1519,25 @@ owner Worker、QFI和PDR/QER方向。六Session均衡注入1.2Gbps时，用户�
 开启统计的两轮输入累计为27,999,995,520字节，CLI用户级累计值严格相等。
 本轮未观察到统计功能导致的吞吐或丢包回退。该结论覆盖VPP内置PG→N6 memif
 →Open5GS完整UPF语义→N3 memif→VPP；fabric VF未插网线，因此不代表外部VF
-全链路10Gbps已验证。最终镜像部署于Helm revision 102，保持
+全链路10Gbps已验证。该轮镜像部署于Helm revision 102，保持
 `rateStats.enabled=true`。
+
+## UPF速率CLI动态表格排版验证（2026-08-01）
+
+文本输出改为由`open5gs-upfctl`接收完整快照后动态计算列宽。SUPI、UE IP、
+DNN和方向左对齐，SEID、Worker、QFI/PDR/QER、Mbps、pps和累计计数右对齐，
+表头与数据之间增加分隔线。列宽取当前表头和全部数据的最大宽度，因此累计
+数值增长、速率位数变化、IPv6地址或较长标识不会破坏对齐。JSON输出保持不变。
+
+实际Pod对user/session/bearer/rule四级零流量表格均验证通过。六Session均衡
+1.2Gbps下行、1428-byte inner IPv4 UDP、10微秒节奏、10秒测试中，实时用户
+汇总显示约1.199Gbps，每Session约200Mbps；VPP N6 memif输入1,050,420包，
+N3 memif输出1,050,420包，Open5GS段丢包为0。非零Mbps、pps和十位累计字节
+同时出现时各列仍保持对齐。
+
+普通未分配TTY的`kubectl exec ... --watch --interval 0.5`运行3秒，确认每轮均
+输出ANSI光标归位/清屏序列和一张完整表格，真实终端不再逐秒向下堆叠。脚本
+和重定向场景应使用`--json`。
+
+最终镜像`xcn-runtime:rate-stats-table-v2`部署于Helm revision 104；文本
+`--watch`启用单屏刷新，`--watch --json`不输出ANSI控制序列。

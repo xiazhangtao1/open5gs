@@ -16,6 +16,8 @@
 
 #define DEFAULT_SOCKET "/run/open5gs/upf-stats.sock"
 #define REQUEST_SIZE 512
+#define RESPONSE_SIZE (4 * 1024 * 1024)
+#define MAX_COLUMNS 16
 
 static void usage(FILE *stream)
 {
@@ -50,12 +52,119 @@ static int append_option(char *request, size_t size,
     return 0;
 }
 
+static size_t split_columns(char *line, char **columns, size_t capacity)
+{
+    char *save = NULL;
+    char *column;
+    size_t count = 0;
+
+    for (column = strtok_r(line, " \t\r", &save); column;
+            column = strtok_r(NULL, " \t\r", &save)) {
+        if (count == capacity)
+            return capacity + 1;
+        columns[count++] = column;
+    }
+    return count;
+}
+
+static bool is_number(const char *value)
+{
+    char *end = NULL;
+
+    errno = 0;
+    (void)strtod(value, &end);
+    return !errno && end != value && *end == '\0';
+}
+
+static int print_table(char *response)
+{
+    size_t width[MAX_COLUMNS] = { 0 };
+    bool numeric[MAX_COLUMNS];
+    bool has_data[MAX_COLUMNS] = { false };
+    char *copy;
+    char *line;
+    char *save = NULL;
+    size_t max_columns = 0;
+    size_t row = 0;
+    size_t i;
+
+    if (response[0] == '{' || !strncmp(response, "ERROR", 5)) {
+        fputs(response, stdout);
+        return 0;
+    }
+    for (i = 0; i < MAX_COLUMNS; i++)
+        numeric[i] = true;
+    copy = strdup(response);
+    if (!copy) {
+        perror("strdup");
+        return 1;
+    }
+    for (line = strtok_r(copy, "\n", &save); line;
+            line = strtok_r(NULL, "\n", &save)) {
+        char *columns[MAX_COLUMNS];
+        size_t count = split_columns(line, columns, MAX_COLUMNS);
+
+        if (count > MAX_COLUMNS) {
+            free(copy);
+            fputs(response, stdout);
+            return 0;
+        }
+        if (count > max_columns)
+            max_columns = count;
+        for (i = 0; i < count; i++) {
+            size_t length = strlen(columns[i]);
+
+            if (length > width[i])
+                width[i] = length;
+            if (row) {
+                has_data[i] = true;
+                if (!is_number(columns[i]))
+                    numeric[i] = false;
+            }
+        }
+        row++;
+    }
+    free(copy);
+
+    save = NULL;
+    row = 0;
+    for (line = strtok_r(response, "\n", &save); line;
+            line = strtok_r(NULL, "\n", &save)) {
+        char *columns[MAX_COLUMNS];
+        size_t count = split_columns(line, columns, MAX_COLUMNS);
+
+        for (i = 0; i < count; i++) {
+            if (i)
+                fputs(" | ", stdout);
+            if (has_data[i] && numeric[i])
+                fprintf(stdout, "%*s", (int)width[i], columns[i]);
+            else
+                fprintf(stdout, "%-*s", (int)width[i], columns[i]);
+        }
+        fputc('\n', stdout);
+        if (!row) {
+            for (i = 0; i < max_columns; i++) {
+                size_t j;
+
+                if (i)
+                    fputs("-+-", stdout);
+                for (j = 0; j < width[i]; j++)
+                    fputc('-', stdout);
+            }
+            fputc('\n', stdout);
+        }
+        row++;
+    }
+    return 0;
+}
+
 static int query(const char *socket_path, const char *request)
 {
     struct sockaddr_un address;
-    char buffer[8192];
+    char *response;
     int fd;
     ssize_t length;
+    size_t response_len = 0;
     size_t request_len = strlen(request);
 
     if (strlen(socket_path) >= sizeof(address.sun_path)) {
@@ -90,28 +199,37 @@ static int query(const char *socket_path, const char *request)
         }
     }
     shutdown(fd, SHUT_WR);
-    while ((length = read(fd, buffer, sizeof(buffer))) != 0) {
-        size_t offset = 0;
-
+    response = malloc(RESPONSE_SIZE + 1);
+    if (!response) {
+        perror("malloc");
+        close(fd);
+        return 1;
+    }
+    while ((length = read(fd, response + response_len,
+                    RESPONSE_SIZE - response_len)) != 0) {
         if (length < 0) {
             if (errno == EINTR)
                 continue;
             perror("read");
+            free(response);
             close(fd);
             return 1;
         }
-        while (offset < (size_t)length) {
-            size_t written = fwrite(buffer + offset, 1,
-                    (size_t)length - offset, stdout);
-
-            if (!written) {
-                close(fd);
-                return 1;
-            }
-            offset += written;
+        response_len += length;
+        if (response_len == RESPONSE_SIZE) {
+            fprintf(stderr, "response exceeds %u bytes\n", RESPONSE_SIZE);
+            free(response);
+            close(fd);
+            return 1;
         }
     }
     close(fd);
+    response[response_len] = '\0';
+    if (print_table(response)) {
+        free(response);
+        return 1;
+    }
+    free(response);
     fflush(stdout);
     return 0;
 }
@@ -133,6 +251,7 @@ int main(int argc, char *argv[])
     const char *socket_path = DEFAULT_SOCKET;
     char request[REQUEST_SIZE] = "show=rate";
     bool watch = false;
+    bool json_output = false;
     double interval = 1.0;
     int option;
 
@@ -177,6 +296,7 @@ int main(int argc, char *argv[])
         case 'j':
             if (append_option(request, sizeof(request), "json", "1"))
                 return 2;
+            json_output = true;
             break;
         case 'w':
             watch = true;
@@ -211,7 +331,7 @@ int main(int argc, char *argv[])
         struct timespec delay;
         int rv;
 
-        if (watch && isatty(STDOUT_FILENO))
+        if (watch && !json_output)
             fputs("\033[H\033[J", stdout);
         rv = query(socket_path, request);
         if (!watch)

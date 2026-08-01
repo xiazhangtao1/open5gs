@@ -22,6 +22,11 @@ kubectl -n xcn exec deploy/xcn-5gc -c upf -- \
 替代PFCP URR计费，也不修改UPF语义；可通过
 `networking.upf.rateStats.enabled=false`完全关闭。
 
+文本模式会根据当前数据动态计算列宽：标识字段左对齐、速率和计数字段右
+对齐，并用表格分隔线区分表头。`--watch`即使通过未分配TTY的普通
+`kubectl exec`执行，也会原地刷新单张表格；按`Ctrl-C`退出。脚本处理请使用
+`--json`，避免依赖文本表格宽度和ANSI刷新序列。
+
 ## Session 多 Worker
 
 UPF 可在 N3/N6 均为 memif 时按 PFCP Session 分配 `1..16` 个数据 Worker。
