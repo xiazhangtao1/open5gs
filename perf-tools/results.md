@@ -1469,3 +1469,25 @@ Running且0重启。Open5GS保持8逻辑CPU、6个Session Worker和两个dispatc
 六Session均匀下行100Mbps、10微秒节奏、2秒冒烟：VPP PG输入17,506包，N6
 memif发送17,506包，N3 memif接收17,506包，核心路径零丢包。fabric VF未插
 网线导致N3侧ARP未解析，不计为UPF/memif丢包。
+
+### VPP默认两逻辑CPU的单Session下行性能（2026-08-01）
+
+保持Helm revision 98、VPP两逻辑CPU（1 main + 1 Worker）、Open5GS 8逻辑
+CPU（6 Session Worker + N3/N6 dispatcher）和六个已建立PFCP Session不变，
+仅向`10.45.0.2`一个Session发送流量。报文为1428字节IPv4 UDP，10微秒节奏，
+每档20秒：
+
+| 目标速率 | PG/N6输入包 | N3 memif输出包 | 核心路径丢包率 | 有效吞吐 |
+|---:|---:|---:|---:|---:|
+| 1 Gbps | 1,750,700 | 1,750,700 | 0% | 1.000 Gbps |
+| 2 Gbps | 3,501,400 | 3,501,400 | 0% | 2.000 Gbps |
+| 4 Gbps | 7,002,800 | 7,002,800 | 0% | 4.000 Gbps |
+| 6 Gbps | 10,504,200 | 10,504,200 | 0% | 6.000 Gbps |
+| 8 Gbps | 14,005,600 | 14,005,600 | 0% | 8.000 Gbps |
+| 10 Gbps | 17,507,000 | 17,507,000 | 0% | 10.000 Gbps |
+
+测试后该Session所属Worker 5累计`drops=0`、`queue-full=0`、`push-fail=0`，
+N3 TX qid 5累计`alloc-short=0`、`alloc-fail=0`、`drop=0`。Pod保持9/9
+Running、0重启。以上结论止于VPP内置PG→N6 memif→Open5GS完整UPF语义→
+N3 memif→VPP；fabric VF未插网线，N3侧ARP未解析不计为核心路径丢包，也不
+代表真实外部VF收发已经验证到10Gbps。
