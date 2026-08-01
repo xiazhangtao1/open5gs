@@ -47,6 +47,29 @@ extern int __upf_log_domain;
 
 struct upf_route_trie_node;
 
+typedef enum {
+    UPF_RATE_DIR_UL = 0,
+    UPF_RATE_DIR_DL,
+} upf_rate_direction_t;
+
+typedef struct upf_rate_slot_s {
+    bool active;
+    uint16_t pdr_id;
+    uint32_t qer_id;
+    uint8_t qfi;
+    uint8_t direction;
+    uint32_t generation;
+    uint32_t dirty_epoch;
+    uint64_t live_octets;
+    uint64_t live_packets;
+    uint64_t published_octets;
+    uint64_t published_packets;
+    uint64_t sampled_octets;
+    uint64_t sampled_packets;
+    uint64_t rate_bps;
+    uint64_t rate_pps;
+} upf_rate_slot_t;
+
 typedef struct upf_context_s {
     ogs_hash_t *upf_n4_seid_hash;   /* hash table (UPF-N4-SEID) */
     ogs_hash_t *smf_n4_seid_hash;   /* hash table (SMF-N4-SEID) */
@@ -70,6 +93,12 @@ typedef struct upf_context_s {
         uint32_t io_time_budget_us;
         uint32_t stats_interval;
     } dataplane;
+
+    struct {
+        bool enabled;
+        uint32_t interval_ms;
+        const char *socket_path;
+    } rate_stats;
 
     struct {
         bool memif;
@@ -137,6 +166,8 @@ typedef struct upf_sess_s {
 
     ogs_pfcp_sess_t pfcp;
     uint8_t         owner_worker;
+    char            supi[OGS_MAX_IMSI_BCD_LEN + 6];
+    upf_rate_slot_t rate_slot[OGS_MAX_NUM_OF_PDR];
 
     uint64_t        upf_n4_seid;        /* UPF SEID is derived from NODE */
     struct {

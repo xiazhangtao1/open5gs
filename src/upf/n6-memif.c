@@ -9,6 +9,7 @@
 #include "gtp-path.h"
 #include "n3-memif.h"
 #include "n6-memif.h"
+#include "rate-stats.h"
 
 #if HAVE_LIBMEMIF
 #include <libmemif.h>
@@ -16,6 +17,12 @@
 #define UPF_MEMIF_MAX_BURST 256
 #define UPF_MEMIF_MAX_QUEUES 16
 #define UPF_MEMIF_MAX_RING_SIZE (1U << 14)
+
+typedef struct {
+    ogs_pkbuf_t *pkbuf;
+    upf_rate_slot_t *rate_slot;
+    uint32_t rate_octets;
+} upf_n6_tx_packet_t;
 
 typedef struct {
     uint64_t sequence;
@@ -52,7 +59,7 @@ typedef struct {
 typedef struct {
     memif_socket_handle_t socket;
     memif_conn_handle_t connection;
-    ogs_pkbuf_t *tx_packets[UPF_MEMIF_MAX_BURST];
+    upf_n6_tx_packet_t tx_packets[UPF_MEMIF_MAX_BURST];
     uint16_t tx_count;
     uint64_t tx_send_requests;
     uint64_t tx_alloc_calls;
@@ -567,8 +574,8 @@ void upf_n6_memif_tx_batch_flush(void)
     }
 
     for (i = 0; i < self.tx_count; i++) {
-        if (self.tx_packets[i]->len > max_len)
-            max_len = self.tx_packets[i]->len;
+        if (self.tx_packets[i].pkbuf->len > max_len)
+            max_len = self.tx_packets[i].pkbuf->len;
     }
 
     __atomic_fetch_add(&self.tx_alloc_calls, 1, __ATOMIC_RELAXED);
@@ -592,9 +599,9 @@ void upf_n6_memif_tx_batch_flush(void)
     }
 
     for (i = 0; i < allocated; i++) {
-        memcpy(buffers[i].data, self.tx_packets[i]->data,
-                self.tx_packets[i]->len);
-        buffers[i].len = self.tx_packets[i]->len;
+        memcpy(buffers[i].data, self.tx_packets[i].pkbuf->data,
+                self.tx_packets[i].pkbuf->len);
+        buffers[i].len = self.tx_packets[i].pkbuf->len;
     }
 
     __atomic_fetch_add(&self.tx_burst_calls, 1, __ATOMIC_RELAXED);
@@ -603,6 +610,9 @@ void upf_n6_memif_tx_batch_flush(void)
     rv = memif_tx_burst(self.connection, upf_dataplane_worker_id(),
             buffers, allocated, &sent);
     __atomic_fetch_add(&self.tx_burst_sent, sent, __ATOMIC_RELAXED);
+    for (i = 0; i < sent; i++)
+        upf_rate_stats_record(self.tx_packets[i].rate_slot,
+                self.tx_packets[i].rate_octets);
     if (sent != allocated) {
         if (rv != MEMIF_ERR_NOBUF_RING && rv != MEMIF_ERR_NOBUF)
             ogs_error("memif_tx_burst() failed: %s", memif_strerror(rv));
@@ -615,11 +625,12 @@ void upf_n6_memif_tx_batch_flush(void)
 
 cleanup:
     for (i = 0; i < self.tx_count; i++)
-        ogs_pkbuf_free(self.tx_packets[i]);
+        ogs_pkbuf_free(self.tx_packets[i].pkbuf);
     self.tx_count = 0;
 }
 
-int upf_n6_memif_send(const ogs_pkbuf_t *pkbuf)
+int upf_n6_memif_send(const ogs_pkbuf_t *pkbuf,
+        upf_rate_slot_t *rate_slot, uint32_t rate_octets)
 {
     bool standalone = !self.tx_batch;
 
@@ -637,7 +648,10 @@ int upf_n6_memif_send(const ogs_pkbuf_t *pkbuf)
     }
 
     ogs_pkbuf_ref((ogs_pkbuf_t *)pkbuf);
-    self.tx_packets[self.tx_count++] = (ogs_pkbuf_t *)pkbuf;
+    self.tx_packets[self.tx_count].pkbuf = (ogs_pkbuf_t *)pkbuf;
+    self.tx_packets[self.tx_count].rate_slot = rate_slot;
+    self.tx_packets[self.tx_count].rate_octets = rate_octets;
+    self.tx_count++;
 
     if (standalone)
         upf_n6_memif_tx_batch_flush();
@@ -681,8 +695,12 @@ void upf_n6_memif_tx_batch_flush(void)
 {
 }
 
-int upf_n6_memif_send(const ogs_pkbuf_t *pkbuf)
+int upf_n6_memif_send(const ogs_pkbuf_t *pkbuf,
+        upf_rate_slot_t *rate_slot, uint32_t rate_octets)
 {
+    (void)pkbuf;
+    (void)rate_slot;
+    (void)rate_octets;
     return OGS_ERROR;
 }
 

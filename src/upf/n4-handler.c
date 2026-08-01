@@ -21,6 +21,7 @@
 #include "pfcp-path.h"
 #include "gtp-path.h"
 #include "n4-handler.h"
+#include "rate-stats.h"
 
 static void upf_n4_handle_create_urr(upf_sess_t *sess, ogs_pfcp_tlv_create_urr_t *create_urr_arr,
                               uint8_t *cause_value, uint8_t *offending_ie_value)
@@ -76,6 +77,8 @@ void upf_n4_handle_session_establishment_request(
                 UPF_METR_CTR_SM_N4SESSIONESTABFAIL, 1);
         return;
     }
+
+    upf_rate_stats_set_user(sess, &req->user_id);
 
     memset(&sereq_flags, 0, sizeof(sereq_flags));
     if (req->pfcpsereq_flags.presence == 1)
@@ -210,6 +213,8 @@ void upf_n4_handle_session_establishment_request(
                 goto cleanup;
         }
     }
+
+    upf_rate_stats_sync_rules(sess);
 
     /* Send Buffered Packet to gNB/SGW */
     ogs_list_for_each(&sess->pfcp.pdr_list, pdr) {
@@ -417,6 +422,8 @@ void upf_n4_handle_session_modification_request(
                 goto cleanup;
         }
     }
+
+    upf_rate_stats_sync_rules(sess);
 
     /* Send Buffered Packet to gNB/SGW */
     ogs_list_for_each(&sess->pfcp.pdr_list, pdr) {

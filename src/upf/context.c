@@ -118,6 +118,10 @@ static int upf_context_prepare(void)
     upf_self()->dataplane.io_time_budget_us = 50;
     upf_self()->dataplane.stats_interval = 10;
 
+    upf_self()->rate_stats.enabled = true;
+    upf_self()->rate_stats.interval_ms = 1000;
+    upf_self()->rate_stats.socket_path = "/run/open5gs/upf-stats.sock";
+
     upf_self()->n3.socket_path = "/run/vpp/memif-n3.sock";
     upf_self()->n3.interface_id = 0;
     upf_self()->n3.buffer_size = 2048;
@@ -167,6 +171,16 @@ static int upf_context_validation(void)
     if (upf_self()->dataplane.stats_interval < 1 ||
         upf_self()->dataplane.stats_interval > 3600) {
         ogs_error("upf.dataplane.stats_interval must be between 1 and 3600");
+        return OGS_ERROR;
+    }
+    if (upf_self()->rate_stats.interval_ms < 100 ||
+        upf_self()->rate_stats.interval_ms > 60000) {
+        ogs_error("upf.rate_stats.interval_ms must be between 100 and 60000");
+        return OGS_ERROR;
+    }
+    if (!upf_self()->rate_stats.socket_path ||
+        upf_self()->rate_stats.socket_path[0] != '/') {
+        ogs_error("upf.rate_stats.socket must be an absolute path");
         return OGS_ERROR;
     }
     if (ogs_list_first(&ogs_gtp_self()->gtpu_list) == NULL) {
@@ -284,6 +298,22 @@ int upf_context_parse_config(void)
                     /* handle config in pfcp library */
                 } else if (!strcmp(upf_key, "metrics")) {
                     /* handle config in metrics library */
+                } else if (!strcmp(upf_key, "rate_stats")) {
+                    ogs_yaml_iter_t rate_iter;
+                    ogs_yaml_iter_recurse(&upf_iter, &rate_iter);
+                    while (ogs_yaml_iter_next(&rate_iter)) {
+                        const char *key = ogs_yaml_iter_key(&rate_iter);
+                        const char *v = ogs_yaml_iter_value(&rate_iter);
+                        if (!strcmp(key, "enabled"))
+                            upf_self()->rate_stats.enabled =
+                                ogs_yaml_iter_bool(&rate_iter);
+                        else if (!strcmp(key, "interval_ms"))
+                            upf_self()->rate_stats.interval_ms = atoi(v);
+                        else if (!strcmp(key, "socket"))
+                            upf_self()->rate_stats.socket_path = v;
+                        else
+                            ogs_warn("unknown key `%s`", key);
+                    }
                 } else if (!strcmp(upf_key, "dataplane")) {
                     ogs_yaml_iter_t dp_iter;
                     ogs_yaml_iter_recurse(&upf_iter, &dp_iter);

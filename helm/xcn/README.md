@@ -57,6 +57,48 @@ helm install xcn helm/xcn -n xcn --create-namespace \
   --set networking.upf.gtpu.advertiseAddress=192.168.9.60
 ```
 
+## UPF real-time rate CLI
+
+Rate statistics are enabled by default and sampled once per second. The data
+plane only increments worker-local counters for packets successfully sent on
+N3 or N6, then publishes the touched counters once per TX batch. It does not
+perform per-packet time reads, allocation, logging, hash lookup, mutex locking,
+or cross-core atomic increments.
+
+Run the CLI in the UPF container:
+
+```bash
+kubectl -n xcn exec deploy/xcn-5gc -c upf -- \
+  open5gs-upfctl show rate --level user
+kubectl -n xcn exec deploy/xcn-5gc -c upf -- \
+  open5gs-upfctl show rate --level session --ue-ip 10.45.0.2
+kubectl -n xcn exec deploy/xcn-5gc -c upf -- \
+  open5gs-upfctl show rate --level bearer --supi imsi-001010000000001
+kubectl -n xcn exec deploy/xcn-5gc -c upf -- \
+  open5gs-upfctl show rate --level rule --json
+```
+
+`user` aggregates all PFCP Sessions of one SUPI; `session` identifies each
+Session by UPF N4 SEID and UE IP; `bearer` aggregates UL/DL PDRs by QFI inside
+one Session; `rule` shows direction, PDR ID and QER ID. `--watch` continuously
+refreshes the display, while `--seid`, `--ue-ip`, and `--supi` filter results.
+The socket is local to the UPF container and has mode `0600`.
+
+Configure or disable it through Helm:
+
+```yaml
+networking:
+  upf:
+    rateStats:
+      enabled: true
+      intervalMs: 1000
+      socket: /run/open5gs/upf-stats.sock
+```
+
+Disabling `rateStats.enabled` removes both the sampler/control thread and all
+data-plane counter updates. Statistics are observational only: PDR/FAR/QER/URR,
+PFCP, packet ordering, Session ownership, and routing behavior are unchanged.
+
 ## UPF dataplane deployment modes
 
 The chart supports two complete UPF dataplane modes. Mixed combinations are

@@ -51,6 +51,7 @@
 #include "arp-nd.h"
 #include "event.h"
 #include "gtp-path.h"
+#include "rate-stats.h"
 #include "n3-memif.h"
 #include "n6-memif.h"
 #include "pfcp-path.h"
@@ -171,6 +172,7 @@ static void upf_gtp_handle_n6_packet(
     ogs_pfcp_far_t *far = NULL;
     ogs_pfcp_user_plane_report_t report;
     int i;
+    uint32_t rate_octets;
 
     if (has_eth) {
         ogs_pkbuf_t *replybuf = NULL;
@@ -270,6 +272,8 @@ static void upf_gtp_handle_n6_packet(
         goto cleanup;
     }
 
+    rate_octets = recvbuf->len;
+
     /* Increment total & dl octets + pkts */
     for (i = 0; i < pdr->num_of_urr; i++)
         upf_sess_urr_acc_add(sess, pdr->urr[i], recvbuf->len, false);
@@ -293,6 +297,9 @@ static void upf_gtp_handle_n6_packet(
         recvbuf = sendbuf;
         external = false;
     }
+
+    upf_rate_stats_tag(
+            recvbuf, upf_rate_stats_slot(sess, pdr), rate_octets);
 
     ogs_assert(true == ogs_pfcp_up_handle_pdr(
                 pdr, OGS_GTPU_MSGTYPE_GPDU, 0, NULL, recvbuf, &report));
@@ -355,6 +362,12 @@ int upf_gtp_handle_n6_data(const void *data, size_t len)
 static void _gtpv1_tun_recv_cb(short when, ogs_socket_t fd, void *data)
 {
     _gtpv1_tun_recv_common_cb(when, fd, false, data);
+}
+
+static void upf_gtp_rate_sent_cb(const ogs_pkbuf_t *pkbuf)
+{
+    upf_rate_stats_record(upf_rate_stats_tag_slot(pkbuf),
+            upf_rate_stats_tag_octets(pkbuf));
 }
 
 static void _gtpv1_tun_recv_eth_cb(short when, ogs_socket_t fd, void *data)
@@ -792,6 +805,8 @@ static void upf_gtp_handle_n3_packet(
             ogs_pfcp_pdr_t *dl_fallback_pdr = NULL;
             ogs_pfcp_far_t *dl_far = NULL;
             ogs_pfcp_user_plane_report_t dl_report;
+            uint32_t rate_octets = pkbuf->len;
+            upf_rate_slot_t *rate_slot = upf_rate_stats_slot(sess, pdr);
 
             if (!subnet) {
 #if 0 /* It's redundant log message */
@@ -877,6 +892,9 @@ static void upf_gtp_handle_n3_packet(
                             dst_sess, dl_pdr->urr[i],
                             pkbuf->len, false);
 
+                    upf_rate_stats_tag(pkbuf,
+                            upf_rate_stats_slot(dst_sess, dl_pdr),
+                            pkbuf->len);
                     ogs_assert(true == ogs_pfcp_up_handle_pdr(
                         dl_pdr, OGS_GTPU_MSGTYPE_GPDU,
                         0, NULL, pkbuf, &dl_report));
@@ -918,10 +936,12 @@ static void upf_gtp_handle_n3_packet(
             }
 
             if (upf_self()->n6.memif) {
-                upf_n6_memif_send(pkbuf);
+                upf_n6_memif_send(pkbuf, rate_slot, rate_octets);
             } else {
                 if (ogs_tun_write(dev->fd, pkbuf) != OGS_OK)
                     ogs_warn("ogs_tun_write() failed");
+                else
+                    upf_rate_stats_record(rate_slot, rate_octets);
             }
 
         } else {
@@ -1105,6 +1125,9 @@ int upf_gtp_open(void)
 
     OGS_SETUP_GTPU_SERVER;
 
+    if (!upf_self()->n3.memif)
+        ogs_gtp_set_user_plane_sent_cb(upf_gtp_rate_sent_cb);
+
     /* NOTE : tun device can be created via following command.
      *
      * $ sudo ip tuntap add name ogstun mode tun
@@ -1193,6 +1216,7 @@ void upf_gtp_close(void)
     ogs_pfcp_dev_t *dev = NULL;
 
     upf_dataplane_stop();
+    ogs_gtp_set_user_plane_sent_cb(NULL);
     ogs_socknode_remove_all(&ogs_gtp_self()->gtpu_list);
 
     if (upf_self()->n6.memif)

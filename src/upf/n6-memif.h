@@ -9,6 +9,8 @@
 
 #include "ogs-core.h"
 
+typedef struct upf_rate_slot_s upf_rate_slot_t;
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -23,7 +25,8 @@ void upf_n6_memif_complete(
 void upf_n6_memif_drain_completions(void);
 void upf_n6_memif_tx_batch_begin(void);
 void upf_n6_memif_tx_batch_flush(void);
-int upf_n6_memif_send(const ogs_pkbuf_t *pkbuf);
+int upf_n6_memif_send(const ogs_pkbuf_t *pkbuf,
+        upf_rate_slot_t *rate_slot, uint32_t rate_octets);
 
 #ifdef __cplusplus
 }

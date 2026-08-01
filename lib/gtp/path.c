@@ -148,8 +148,13 @@ int ogs_gtp_send_with_teid(
 
     ogs_trace("SEND GTP-U to Peer[%s] : TEID[0x%x]", OGS_ADDR(to, buf), teid);
 
-    if (ogs_gtp_self()->gtpu_send_cb)
-        return ogs_gtp_self()->gtpu_send_cb(pkbuf, to);
+    if (ogs_gtp_self()->gtpu_send_cb) {
+        int rv = ogs_gtp_self()->gtpu_send_cb(pkbuf, to);
+
+        if (rv == OGS_OK && ogs_gtp_self()->gtpu_sent_cb)
+            ogs_gtp_self()->gtpu_sent_cb(pkbuf);
+        return rv;
+    }
 
     sent = ogs_sendto(sock->fd, pkbuf->data, pkbuf->len, 0, to);
     if (sent < 0 || sent != pkbuf->len) {
@@ -158,6 +163,9 @@ int ogs_gtp_send_with_teid(
         return OGS_ERROR;
     }
 
+    if (ogs_gtp_self()->gtpu_sent_cb)
+        ogs_gtp_self()->gtpu_sent_cb(pkbuf);
+
     return OGS_OK;
 }
 
@@ -165,6 +173,12 @@ void ogs_gtp_set_user_plane_send_cb(
         int (*cb)(ogs_pkbuf_t *pkbuf, const ogs_sockaddr_t *to))
 {
     ogs_gtp_self()->gtpu_send_cb = cb;
+}
+
+void ogs_gtp_set_user_plane_sent_cb(
+        void (*cb)(const ogs_pkbuf_t *pkbuf))
+{
+    ogs_gtp_self()->gtpu_sent_cb = cb;
 }
 
 void ogs_gtp_send_error_message(

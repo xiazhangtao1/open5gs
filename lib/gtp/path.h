@@ -75,6 +75,8 @@ int ogs_gtp_send_with_teid(
         ogs_sockaddr_t *to);
 void ogs_gtp_set_user_plane_send_cb(
         int (*cb)(ogs_pkbuf_t *pkbuf, const ogs_sockaddr_t *to));
+void ogs_gtp_set_user_plane_sent_cb(
+        void (*cb)(const ogs_pkbuf_t *pkbuf));
 
 void ogs_gtp_send_error_message(
         ogs_gtp_xact_t *xact, uint32_t teid, uint8_t type, uint8_t cause_value);

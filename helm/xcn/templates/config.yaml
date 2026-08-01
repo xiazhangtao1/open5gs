@@ -1,4 +1,5 @@
 {{- $n3FibTable := default 10 .Values.vpp.n3.fibTable }}
+{{- $upfRateStats := default (dict) .Values.networking.upf.rateStats }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -150,6 +151,10 @@ data:
       max:
         ue: 1024
     upf:
+      rate_stats:
+        enabled: {{ if hasKey $upfRateStats "enabled" }}{{ get $upfRateStats "enabled" }}{{ else }}true{{ end }}
+        interval_ms: {{ default 1000 (get $upfRateStats "intervalMs") }}
+        socket: {{ default "/run/open5gs/upf-stats.sock" (get $upfRateStats "socket") | quote }}
       dataplane:
         io_packet_budget: {{ default 1024 .Values.networking.upf.dataplane.ioPacketBudget }}
         io_time_budget_us: {{ default 50 .Values.networking.upf.dataplane.ioTimeBudgetUs }}

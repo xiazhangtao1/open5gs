@@ -168,6 +168,12 @@ networking:
     ngap:
       serverAddress: 0.0.0.0
   upf:
+    rateStats:
+      # Low-overhead per-user/session/QFI/PDR rate snapshots. Data-plane
+      # counters are published once per TX batch, not atomically per packet.
+      enabled: true
+      intervalMs: 1000
+      socket: /run/open5gs/upf-stats.sock
     dataplane:
       ioPacketBudget: 1024
       ioTimeBudgetUs: 50

@@ -12,6 +12,7 @@
 #include "gtp-path.h"
 #include "n3-memif.h"
 #include "n6-memif.h"
+#include "rate-stats.h"
 
 #include <netinet/ip.h>
 #include <netinet/ip6.h>
@@ -289,6 +290,7 @@ static void session_worker_main(void *data)
         }
 
         upf_dataplane_read_lock();
+        upf_rate_stats_batch_begin();
         upf_n6_memif_tx_batch_begin();
         upf_n3_memif_tx_batch_begin(n6_count);
         for (i = 0; i < batch_count; i++) {
@@ -316,6 +318,7 @@ static void session_worker_main(void *data)
         }
         upf_n6_memif_tx_batch_flush();
         upf_n3_memif_tx_batch_flush();
+        upf_rate_stats_batch_end();
         upf_dataplane_read_unlock();
         __atomic_fetch_add(&worker->packets,
                 packet_count, __ATOMIC_RELAXED);

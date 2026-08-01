@@ -1,5 +1,27 @@
 # Open5GS UPF performance tools
 
+## 实时用户/Session/承载速率
+
+UPF默认每秒生成一次低开销速率快照。只统计N3/N6实际发送成功的报文；数据面
+使用每Worker独占计数，并在TX batch结束时发布，不执行逐包时钟读取、malloc、
+日志、哈希查询、mutex或跨核原子累加。示例：
+
+```bash
+kubectl -n xcn exec deploy/xcn-5gc -c upf -- \
+  open5gs-upfctl show rate --level user
+kubectl -n xcn exec deploy/xcn-5gc -c upf -- \
+  open5gs-upfctl show rate --level session --ue-ip 10.45.0.2 --watch
+kubectl -n xcn exec deploy/xcn-5gc -c upf -- \
+  open5gs-upfctl show rate --level bearer --json
+kubectl -n xcn exec deploy/xcn-5gc -c upf -- \
+  open5gs-upfctl show rate --level rule --seid 0x1234
+```
+
+`user`按SUPI汇总多个Session；`session`以UPF N4 SEID和UE IP区分；`bearer`
+在一个Session内按QFI汇总上下行；`rule`进一步展示PDR/QER和方向。统计功能不
+替代PFCP URR计费，也不修改UPF语义；可通过
+`networking.upf.rateStats.enabled=false`完全关闭。
+
 ## Session 多 Worker
 
 UPF 可在 N3/N6 均为 memif 时按 PFCP Session 分配 `1..16` 个数据 Worker。

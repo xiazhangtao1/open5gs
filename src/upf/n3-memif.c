@@ -8,6 +8,7 @@
 #include "gtp-path.h"
 #include "n3-memif.h"
 #include "n6-memif.h"
+#include "rate-stats.h"
 
 #include <netinet/ip.h>
 #include <netinet/udp.h>
@@ -61,6 +62,8 @@ typedef struct upf_n3_tx_packet_s {
     ogs_pkbuf_t *pkbuf;
     ogs_sockaddr_t to;
     ogs_pkbuf_t direct_pkbuf;
+    upf_rate_slot_t *rate_slot;
+    uint32_t rate_octets;
     bool ready;
 } upf_n3_tx_packet_t;
 
@@ -1068,6 +1071,9 @@ void upf_n3_memif_tx_batch_flush(void)
     rv = memif_tx_burst(self.connection, upf_dataplane_worker_id(),
             self.tx_buffers, self.tx_count, &sent);
     __atomic_fetch_add(&self.tx_burst_sent, sent, __ATOMIC_RELAXED);
+    for (i = 0; i < sent; i++)
+        upf_rate_stats_record(self.tx_packets[i].rate_slot,
+                self.tx_packets[i].rate_octets);
     if (sent != self.tx_count)
         log_tx_drop(memif_strerror(rv), self.tx_count - sent);
     else if (rv != MEMIF_ERR_SUCCESS)
@@ -1170,6 +1176,8 @@ int upf_n3_memif_send_gtpu(
         ogs_assert(!packet->ready);
         ogs_pkbuf_ref(gtpu);
         memcpy(&packet->to, to, sizeof(*to));
+        packet->rate_slot = upf_rate_stats_tag_slot(gtpu);
+        packet->rate_octets = upf_rate_stats_tag_octets(gtpu);
         packet->ready = true;
         return OGS_OK;
     }
@@ -1193,6 +1201,8 @@ int upf_n3_memif_send_gtpu(
         ogs_pkbuf_put_data(&packet->direct_pkbuf, gtpu->data, gtpu->len);
         packet->pkbuf = &packet->direct_pkbuf;
         memcpy(&packet->to, to, sizeof(*to));
+        packet->rate_slot = upf_rate_stats_tag_slot(gtpu);
+        packet->rate_octets = upf_rate_stats_tag_octets(gtpu);
         packet->ready = true;
         self.tx_count++;
         if (self.tx_batch_remaining)

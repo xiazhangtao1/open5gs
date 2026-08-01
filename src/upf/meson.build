@@ -68,6 +68,7 @@ libupf_sources = files('''
     n3-memif.h
     n6-memif.h
     dataplane.h
+    rate-stats.h
 
     rule-match.c
     init.c
@@ -84,6 +85,7 @@ libupf_sources = files('''
     n3-memif.c
     n6-memif.c
     dataplane.c
+    rate-stats.c
 '''.split())
 
 libtins_dep = dependency('libtins',
@@ -133,4 +135,8 @@ executable('open5gs-upfd',
     include_directories : srcinc,
     dependencies : libupf_dep,
     install_rpath : libdir,
+    install : true)
+
+executable('open5gs-upfctl',
+    sources : files('upfctl.c'),
     install : true)

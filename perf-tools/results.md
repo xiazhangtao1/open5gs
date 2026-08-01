@@ -1491,3 +1491,33 @@ N3 TX qid 5累计`alloc-short=0`、`alloc-fail=0`、`drop=0`。Pod保持9/9
 Running、0重启。以上结论止于VPP内置PG→N6 memif→Open5GS完整UPF语义→
 N3 memif→VPP；fabric VF未插网线，N3侧ARP未解析不计为核心路径丢包，也不
 代表真实外部VF收发已经验证到10Gbps。
+
+## UPF实时速率统计功能与性能A/B（2026-08-01）
+
+新增本地Unix socket CLI，按SUPI、PFCP Session、QFI承载和PDR/QER规则展示
+上下行实时速率、pps及累计包/字节。统计只在N3/N6实际发送成功后记账；数据
+线程只更新Worker本地计数，并在现有TX batch结束时发布，不在逐包路径读取
+时钟、分配内存、打印日志、获取mutex或执行跨核原子累加。采样和CLI格式化由
+独立低频线程完成，默认采样周期1秒。
+
+实际部署使用VPP 26.06、VPP 2逻辑CPU（1 main + 1 Worker）、UPF 8逻辑CPU
+（6 Session Worker + N3/N6 dispatcher）、6个PFCP Session。CLI正确识别同一
+`imsi-460110000000100`下`10.45.0.2..7`六个Session，并显示各自UPF N4 SEID、
+owner Worker、QFI和PDR/QER方向。六Session均衡注入1.2Gbps时，用户汇总实时
+值为1.199991Gbps，每Session约200Mbps；对应累计字节和发生器实际包数一致。
+`--supi`、`--ue-ip`、`--seid`过滤、JSON输出以及user/session/bearer/rule四级
+输出均通过运行验证。配置为disabled时不创建socket，数据面计数路径完全跳过。
+
+性能A/B使用1428-byte inner IPv4 UDP、10微秒节奏、六Session均衡流量、每轮
+20秒，计数口径为VPP N6 memif实际输入到N3 memif实际输出：
+
+| 统计模式 | 目标/实际输入 | 输入包 | 实际输出 | 输出包 | Open5GS段丢包率 |
+|---|---:|---:|---:|---:|---:|
+| enabled | 10.0000Gbps | 17,507,000 | 10.0000Gbps | 17,507,000 | 0% |
+| disabled | 10.0000Gbps | 17,507,000 | 10.0000Gbps | 17,507,000 | 0% |
+
+开启统计的两轮输入累计为27,999,995,520字节，CLI用户级累计值严格相等。
+本轮未观察到统计功能导致的吞吐或丢包回退。该结论覆盖VPP内置PG→N6 memif
+→Open5GS完整UPF语义→N3 memif→VPP；fabric VF未插网线，因此不代表外部VF
+全链路10Gbps已验证。最终镜像部署于Helm revision 102，保持
+`rateStats.enabled=true`。
