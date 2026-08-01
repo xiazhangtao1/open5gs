@@ -259,7 +259,9 @@ data:
     set interface ip address dpdk-n6 {{ "{{N6_INTERFACE_ADDRESS}}" }}
     ip route add 0.0.0.0/0 via {{ "{{N6_DEFAULT_GATEWAY}}" }} dpdk-n6
 {{- if .Values.vpp.n6.nat44.enabled }}
-    set nat workers {{ default "2" .Values.vpp.n6.nat44.workers }}
+{{- if ne (toString .Values.vpp.n6.nat44.workers) "" }}
+    set nat workers {{ .Values.vpp.n6.nat44.workers }}
+{{- end }}
     set nat frame-queue-nelts {{ default 8192 .Values.vpp.n6.nat44.frameQueueNelts }}
     nat44 plugin enable sessions {{ .Values.vpp.n6.nat44.maxSessions }}
     set interface nat44 in memif{{ .Values.networking.upf.n6.memif.socketId }}/{{ .Values.networking.upf.n6.memif.id }} out dpdk-n6

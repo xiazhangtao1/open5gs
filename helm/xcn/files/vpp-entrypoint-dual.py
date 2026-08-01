@@ -107,6 +107,15 @@ def positive_integer(name, minimum=1):
     return int(value)
 
 
+def worker_count_from_environment(cpu_limit):
+    value = required("VPP_CPU_WORKERS")
+    if value == "auto":
+        return cpu_limit - 1
+    if not value.isdigit():
+        raise ConfigError("VPP_CPU_WORKERS must be 'auto' or a non-negative integer")
+    return int(value)
+
+
 def cpu_core_groups(cpus, topology_root=TOPOLOGY_ROOT):
     groups = {}
     for cpu in cpus:
@@ -262,7 +271,7 @@ def supervise_vpp(command, layouts, worker_count, mode_path, status_path,
 def main():
     try:
         cpu_limit = positive_integer("VPP_CPU_LIMIT", 2)
-        worker_count = positive_integer("VPP_CPU_WORKERS", 0)
+        worker_count = worker_count_from_environment(cpu_limit)
         if worker_count >= cpu_limit:
             raise ConfigError(
                 f"VPP_CPU_WORKERS {worker_count} must be less than "

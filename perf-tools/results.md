@@ -1449,6 +1449,23 @@ IPv4 UDP、10微秒节奏、每档20秒。仅改变VPP CPU和Worker布局：
 本轮说明的是：此前六VPP Worker配置出现的N3 TX allocation波动并非完整UPF
 语义处理能力不足；在内部PG测试路径中，一个VPP main或一个VPP Worker就能
 及时消费六个N3 TX ring。多VPP Worker的队列分配、轮询相位及PG竞争反而会
-影响该合成测试结果。生产配置仍恢复为16逻辑CPU、6 VPP Worker、isolated，
-Helm revision 96已确认main和六个Worker分别绑定七个独立物理核；六Session
-重建和100M/2秒17,506包零丢包冒烟均通过。
+影响该合成测试结果。基于该结果，VPP默认值调整为2逻辑CPU、1 VPP Worker、
+dense，同一物理核的两个超线程分别运行main和Worker；真实外部VF全链路容量
+仍需在有线环境继续验证。
+
+### VPP默认两逻辑CPU运行验证（2026-08-01）
+
+Helm revision 98实际部署默认策略：`vpp.resources.cpu=2`、
+`vpp.cpu.workers=auto`、`initialMode=dense`。CPUManager分配`45,117`，入口脚本
+识别为同一Socket、同一物理Core 9的两个超线程；`vpp_main`绑定CPU45，唯一
+`vpp_wk_0`绑定CPU117，调度策略均为`SCHED_OTHER`。
+
+VPP 26.06只有一个Worker时拒绝`set nat workers`命令，因此单Worker默认不再
+生成该命令，交由NAT44使用唯一Worker。实际检查NAT44已正确配置
+`memif1/0 in`和`dpdk-n6 out`，N3/N6 memif与两个DPDK VF均为up，Pod 9/9
+Running且0重启。Open5GS保持8逻辑CPU、6个Session Worker和两个dispatcher，
+六个PFCP Session（10.45.0.2至10.45.0.7）全部重建成功。
+
+六Session均匀下行100Mbps、10微秒节奏、2秒冒烟：VPP PG输入17,506包，N6
+memif发送17,506包，N3 memif接收17,506包，核心路径零丢包。fabric VF未插
+网线导致N3侧ARP未解析，不计为UPF/memif丢包。

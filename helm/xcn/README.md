@@ -156,7 +156,7 @@ helm upgrade --install xcn helm/xcn -n xcn --create-namespace \
   --set vpp.n6.defaultGateway=10.2.7.254
 ```
 
-The chart requests two VFs, 16 exclusive logical CPUs for VPP, 8 CPUs for UPF, 8 GiB
+The chart requests two VFs, 2 exclusive logical CPUs for VPP, 8 CPUs for UPF, 8 GiB
 of hugepages and 16 GiB of regular memory for VPP. The VPP main heap is 8 GiB.
 Adjust these values to the NIC NUMA layout rather than reducing them for a
 performance run. Both VFs must be link-up and use different PCI functions.
@@ -207,30 +207,30 @@ startup; deriving the Worker count from that transient mask would create too
 many threads. After CPUManager assigns the exclusive cpuset, Open5GS pins the
 Workers followed by the N3 and N6 dispatchers to the resolved `N+2` CPUs.
 
-### VPP physical-core isolation
+### VPP CPU sizing and affinity
 
-The VPP sidecar starts a fixed six polling Workers by default. Its 16-CPU
-Guaranteed allocation is expected to contain eight physical cores with both
-hyperthreads. The entrypoint waits for the CPUManager cpuset, reads the Linux
-CPU topology, and continuously pins VPP main plus six Workers to seven
-different physical cores. All threads remain `SCHED_OTHER`; do not use
-`SCHED_FIFO`.
+By default the VPP sidecar reserves one logical CPU for `vpp_main` and creates
+one Worker for every remaining logical CPU. Its default two-CPU Guaranteed
+allocation is one physical core with both hyperthreads: one for main and one
+for the Worker. The entrypoint waits for the CPUManager cpuset, reads the Linux
+CPU topology, and continuously reapplies the selected affinity. All threads
+remain `SCHED_OTHER`; do not use `SCHED_FIFO`.
 
 ```yaml
 vpp:
   cpu:
-    workers: 6
-    initialMode: isolated
+    workers: auto
+    initialMode: dense
     affinityPollMs: 250
   resources:
     requests:
-      cpu: "16"
+      cpu: "2"
     limits:
-      cpu: "16"
+      cpu: "2"
 ```
 
-`workers + 1` distinct physical cores are required. The Pod fails fast if the
-assigned cpuset cannot provide them. Inspect the resolved plan and the actual
+In `dense` mode the topology-aware layout fills both hyperthreads of a physical
+core before using another core. Inspect the resolved plan and the actual
 per-thread assignments with:
 
 ```bash
@@ -240,15 +240,16 @@ kubectl -n xcn exec deploy/xcn-5gc -c vpp -- \
   cat /run/vpp/affinity-status
 ```
 
-The normal mode is `isolated`. The performance A/B tool may hot-switch to
-`dense`, which deliberately places threads on hyperthread siblings, without
-restarting VPP or PFCP Sessions. It always restores `isolated` on exit.
+The normal mode is `dense`. An explicit numeric `workers` value remains
+available for diagnostic A/B tests. `isolated` may be selected when the CPU
+allocation provides `workers + 1` distinct physical cores.
 
-`workers: 0` and `initialMode: dense` are supported for controlled CPU-scaling
-diagnostics. They are not recommended production defaults. `dense` is required
-when main and a Worker deliberately share one physical core; `isolated`
-continues to fail fast unless every VPP busy thread has a distinct physical
-core.
+With one Worker, `vpp.n6.nat44.workers` stays empty because VPP rejects the
+`set nat workers` command unless at least two Workers exist. When allocating
+more VPP Workers, set it explicitly if NAT should use a selected worker set.
+
+`workers: 0` is supported only for controlled CPU-scaling diagnostics and is
+not a production default.
 
 NAT44 is enabled by default so IPv4 UE traffic keeps the former
 TUN/iptables-MASQUERADE behavior. When the upstream router has a route for

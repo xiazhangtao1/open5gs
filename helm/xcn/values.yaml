@@ -240,8 +240,10 @@ vpp:
   memory:
     mainHeapSize: 8G
   cpu:
-    workers: 6
-    initialMode: isolated
+    # "auto" uses every CPU except one reserved for vpp_main.
+    workers: auto
+    # The two-CPU default places main and Worker on sibling hyperthreads.
+    initialMode: dense
     affinityPollMs: 250
   n3:
     interfaceAddress: ""
@@ -255,14 +257,16 @@ vpp:
       enabled: true
       maxSessions: "1048576"
       frameQueueNelts: 8192
-      workers: "2"
+      # Empty uses VPP's only Worker. Set an explicit bitmap/list only when
+      # two or more VPP Workers are configured.
+      workers: ""
   resources:
     requests:
-      cpu: "16"
+      cpu: "2"
       memory: 16Gi
       hugepages-1Gi: 8Gi
     limits:
-      cpu: "16"
+      cpu: "2"
       memory: 16Gi
       hugepages-1Gi: 8Gi
 
