@@ -48,7 +48,7 @@ static size_t split_columns(char *line, char **columns, size_t capacity);
 static void usage(FILE *stream)
 {
     fprintf(stream,
-        "Usage: open5gs-upfctl show rate [options]\n"
+        "Usage: xcnctl show rate [options]\n"
         "  --level user|session|bearer|rule\n"
         "  --supi SUPI       Filter by SUPI (for example imsi-001010000000001)\n"
         "  --ue-ip ADDRESS   Filter by UE IP address\n"

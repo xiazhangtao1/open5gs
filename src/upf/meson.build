@@ -137,7 +137,7 @@ executable('open5gs-upfd',
     install_rpath : libdir,
     install : true)
 
-executable('open5gs-upfctl',
+executable('xcnctl',
     sources : files('upfctl.c'),
     dependencies : [libsbi_openapi_dep, libcurl_dep],
     install : true)

@@ -69,13 +69,13 @@ Run the CLI in the UPF container:
 
 ```bash
 kubectl -n xcn exec deploy/xcn-5gc -c upf -- \
-  open5gs-upfctl show rate --level user
+  xcnctl show rate --level user
 kubectl -n xcn exec deploy/xcn-5gc -c upf -- \
-  open5gs-upfctl show rate --level session --ue-ip 10.45.0.2
+  xcnctl show rate --level session --ue-ip 10.45.0.2
 kubectl -n xcn exec deploy/xcn-5gc -c upf -- \
-  open5gs-upfctl show rate --level bearer --supi imsi-001010000000001
+  xcnctl show rate --level bearer --supi imsi-001010000000001
 kubectl -n xcn exec deploy/xcn-5gc -c upf -- \
-  open5gs-upfctl show rate --level rule --json
+  xcnctl show rate --level rule --json
 ```
 
 `user` aggregates all PFCP Sessions of one SUPI. `session`, `bearer`, and

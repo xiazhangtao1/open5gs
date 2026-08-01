@@ -1524,7 +1524,7 @@ owner Worker、QFI和PDR/QER方向。六Session均衡注入1.2Gbps时，用户�
 
 ## UPF速率CLI动态表格排版验证（2026-08-01）
 
-文本输出改为由`open5gs-upfctl`接收完整快照后动态计算列宽。SUPI、UE IP、
+文本输出改为由`xcnctl`接收完整快照后动态计算列宽。SUPI、UE IP、
 DNN和方向左对齐，SEID、Worker、QFI/PDR/QER、Mbps、pps和累计计数右对齐，
 表头与数据之间增加分隔线。列宽取当前表头和全部数据的最大宽度，因此累计
 数值增长、速率位数变化、IPv6地址或较长标识不会破坏对齐。JSON输出保持不变。

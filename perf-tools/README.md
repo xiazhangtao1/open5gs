@@ -8,13 +8,13 @@ UPF默认每秒生成一次低开销速率快照。只统计N3/N6实际发送成
 
 ```bash
 kubectl -n xcn exec deploy/xcn-5gc -c upf -- \
-  open5gs-upfctl show rate --level user
+  xcnctl show rate --level user
 kubectl -n xcn exec deploy/xcn-5gc -c upf -- \
-  open5gs-upfctl show rate --level session --ue-ip 10.45.0.2 --watch
+  xcnctl show rate --level session --ue-ip 10.45.0.2 --watch
 kubectl -n xcn exec deploy/xcn-5gc -c upf -- \
-  open5gs-upfctl show rate --level bearer --json
+  xcnctl show rate --level bearer --json
 kubectl -n xcn exec deploy/xcn-5gc -c upf -- \
-  open5gs-upfctl show rate --level rule --seid 0x1234
+  xcnctl show rate --level rule --seid 0x1234
 ```
 
 `user`按SUPI汇总多个Session；`session`、`bearer`和`rule`同时显示NAS PDU
