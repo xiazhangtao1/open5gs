@@ -241,6 +241,7 @@ vpp:
     mainHeapSize: 8G
   cpu:
     workers: 6
+    initialMode: isolated
     affinityPollMs: 250
   n3:
     interfaceAddress: ""

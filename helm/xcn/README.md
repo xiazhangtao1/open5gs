@@ -220,6 +220,7 @@ different physical cores. All threads remain `SCHED_OTHER`; do not use
 vpp:
   cpu:
     workers: 6
+    initialMode: isolated
     affinityPollMs: 250
   resources:
     requests:
@@ -242,6 +243,12 @@ kubectl -n xcn exec deploy/xcn-5gc -c vpp -- \
 The normal mode is `isolated`. The performance A/B tool may hot-switch to
 `dense`, which deliberately places threads on hyperthread siblings, without
 restarting VPP or PFCP Sessions. It always restores `isolated` on exit.
+
+`workers: 0` and `initialMode: dense` are supported for controlled CPU-scaling
+diagnostics. They are not recommended production defaults. `dense` is required
+when main and a Worker deliberately share one physical core; `isolated`
+continues to fail fast unless every VPP busy thread has a distinct physical
+core.
 
 NAT44 is enabled by default so IPv4 UE traffic keeps the former
 TUN/iptables-MASQUERADE behavior. When the upstream router has a route for

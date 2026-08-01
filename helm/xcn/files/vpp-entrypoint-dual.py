@@ -128,17 +128,16 @@ def cpu_core_groups(cpus, topology_root=TOPOLOGY_ROOT):
 def affinity_layouts(cpus, worker_count):
     thread_count = worker_count + 1
     groups = cpu_core_groups(cpus)
-    if len(groups) < thread_count:
-        raise ConfigError(
-            f"{thread_count} VPP busy threads require distinct physical cores, "
-            f"but CPU allocation {cpus} contains only {len(groups)} cores")
-
-    isolated = [group[0] for group in groups[:thread_count]]
     dense = [cpu for group in groups for cpu in group][:thread_count]
     if len(dense) != thread_count:
         raise ConfigError(
             f"CPU allocation {cpus} cannot place {thread_count} VPP busy threads")
-    return groups, isolated, dense
+
+    layouts = {"dense": dense}
+    if len(groups) >= thread_count:
+        layouts["isolated"] = [
+            group[0] for group in groups[:thread_count]]
+    return groups, layouts
 
 
 def atomic_write(path, value):
@@ -228,7 +227,7 @@ def apply_affinity(pid, mode, layouts, worker_count, status_path):
 
 
 def supervise_vpp(command, layouts, worker_count, mode_path, status_path,
-                  poll_interval):
+                  poll_interval, default_mode):
     process = subprocess.Popen(command)
 
     def forward_signal(signum, _frame):
@@ -242,13 +241,13 @@ def supervise_vpp(command, layouts, worker_count, mode_path, status_path,
         try:
             mode = mode_path.read_text(encoding="ascii").strip()
         except OSError:
-            mode = "isolated"
+            mode = default_mode
         if mode not in layouts:
             print(
                 f"ignoring invalid VPP affinity mode {mode!r}; "
-                "expected dense or isolated",
+                f"expected one of {sorted(layouts)}",
                 file=sys.stderr, flush=True)
-            mode = "isolated"
+            mode = default_mode
             atomic_write(mode_path, mode + "\n")
         try:
             apply_affinity(
@@ -263,19 +262,28 @@ def supervise_vpp(command, layouts, worker_count, mode_path, status_path,
 def main():
     try:
         cpu_limit = positive_integer("VPP_CPU_LIMIT", 2)
-        worker_count = positive_integer("VPP_CPU_WORKERS")
+        worker_count = positive_integer("VPP_CPU_WORKERS", 0)
         if worker_count >= cpu_limit:
             raise ConfigError(
                 f"VPP_CPU_WORKERS {worker_count} must be less than "
                 f"VPP_CPU_LIMIT {cpu_limit}")
         cpus = allocated_cpus(cpu_limit)
-        groups, isolated, dense = affinity_layouts(cpus, worker_count)
+        groups, layouts = affinity_layouts(cpus, worker_count)
+        initial_mode = os.environ.get(
+            "VPP_AFFINITY_INITIAL_MODE", "isolated").strip()
+        if initial_mode not in layouts:
+            raise ConfigError(
+                f"VPP_AFFINITY_INITIAL_MODE {initial_mode!r} is unavailable; "
+                f"CPU allocation provides layouts {sorted(layouts)}")
+        initial_layout = layouts[initial_mode]
         pci_device_env = os.environ.get(
             "VPP_PCI_DEVICE_ENV", "PCIDEVICE_INTEL_COM_EXTERNAL_NETWORK")
         pci_n3, pci_n6 = parse_pcis(required(pci_device_env))
-        cpu_config = (
-            f"    main-core {isolated[0]}\n"
-            f"    corelist-workers {','.join(map(str, isolated[1:]))}")
+        cpu_config = f"    main-core {initial_layout[0]}"
+        if worker_count:
+            cpu_config += (
+                "\n    corelist-workers "
+                f"{','.join(map(str, initial_layout[1:]))}")
 
         replacements = {
             "CPU_CONFIG": cpu_config,
@@ -302,22 +310,23 @@ def main():
         plan_path = Path(os.environ.get(
             "VPP_AFFINITY_PLAN_FILE", "/run/vpp/affinity-plan.json"))
         poll_ms = positive_integer("VPP_AFFINITY_POLL_MS", 50)
-        layouts = {"isolated": isolated, "dense": dense}
-        atomic_write(mode_path, "isolated\n")
+        atomic_write(mode_path, initial_mode + "\n")
         atomic_write(plan_path, json.dumps({
             "cpuset": cpus,
             "physical_core_groups": groups,
             "worker_count": worker_count,
+            "initial_mode": initial_mode,
             "layouts": layouts,
         }, sort_keys=True) + "\n")
 
         print(
             f"starting VPP with N3 {pci_n3}, N6 {pci_n6}, cpuset {cpus}, "
-            f"workers {worker_count}, isolated CPUs {isolated}",
+            f"workers {worker_count}, {initial_mode} CPUs {initial_layout}",
             flush=True)
         return supervise_vpp(
             ("vpp", "-c", str(output_dir / "startup.conf")),
-            layouts, worker_count, mode_path, status_path, poll_ms / 1000)
+            layouts, worker_count, mode_path, status_path, poll_ms / 1000,
+            initial_mode)
     except (ConfigError, OSError, ValueError) as exc:
         print(f"vpp-entrypoint-dual: {exc}", file=sys.stderr, flush=True)
         return 1

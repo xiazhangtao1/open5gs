@@ -1411,3 +1411,44 @@ push-fail均为0。六档合计57,991包差值均落在各N3 TX qid的
 并且当前N6入口流量仍全部由memif RX qid 1接收后再按UE IP分发到六个
 Session Worker；因此不能把本结果表述为N6真实多RX qid线速，也不能用单轮
 结果替代长期稳定性测试。
+
+### VPP 0/1 Worker CPU布局对比（2026-08-01）
+
+UPF固定8个逻辑CPU、六个Session Worker、六个PFCP Session和六组N3/N6
+memif ring。流量均匀分配到`10.45.0.2`至`10.45.0.7`，1428-byte inner
+IPv4 UDP、10微秒节奏、每档20秒。仅改变VPP CPU和Worker布局：
+
+| 场景 | VPP cpuset示例 | VPP运行线程 | 绑核方式 |
+|---|---|---|---|
+| 1 | `50,122` | main CPU50，0 Worker | 分配一个物理核的两个超线程，仅使用一个逻辑CPU |
+| 2 | `49,121` | main CPU49、Worker CPU121 | main/Worker共享同一物理核的两个超线程 |
+| 3 | `45,46,117,118` | main CPU45、Worker CPU46 | main/Worker分别使用两个物理核 |
+
+三种场景的完整单轮结果相同：
+
+| 总目标速率 | 每Session目标 | N6输入 | N3输出 | 丢包 | 丢包率 | 有效吞吐 |
+|---:|---:|---:|---:|---:|---:|---:|
+| 1 Gbps | 0.1667 Gbps | 1,750,700 | 1,750,700 | 0 | 0% | 1.0000 Gbps |
+| 2 Gbps | 0.3333 Gbps | 3,501,400 | 3,501,400 | 0 | 0% | 2.0000 Gbps |
+| 4 Gbps | 0.6667 Gbps | 7,002,800 | 7,002,800 | 0 | 0% | 4.0000 Gbps |
+| 6 Gbps | 1.0000 Gbps | 10,504,200 | 10,504,200 | 0 | 0% | 6.0000 Gbps |
+| 8 Gbps | 1.3333 Gbps | 14,005,600 | 14,005,600 | 0 | 0% | 8.0000 Gbps |
+| 10 Gbps | 1.6667 Gbps | 17,507,000 | 17,507,000 | 0 | 0% | 10.0000 Gbps |
+
+场景3累计计数确认六个UPF Worker各处理约9,045,000包，N3 TX qid 0至5的
+`alloc-short`、`alloc-fail`和`drop`全部为0。N6入口仍全部来自qid 1，随后
+按UE IP分发到六个Session Worker。唯一VPP Worker轮询N3/N6全部12个memif
+队列以及两块VF的8个DPDK RX队列。
+
+该结果不能据此认定生产环境只需要0或1个VPP Worker，原因是测试流量由VPP
+内置packet-generator产生，核心计数口径止于回到VPP的N3 memif；fabric VF
+未接网线，真实N3/N6 DPDK收发、外部IRQ/RX burst、NAT44和网卡线速均未进入
+被测路径。0/1 Worker下`set nat workers 2`不满足VPP要求，NAT44插件未启用，
+因此这两种配置不具备当前推荐配置的完整N6功能。
+
+本轮说明的是：此前六VPP Worker配置出现的N3 TX allocation波动并非完整UPF
+语义处理能力不足；在内部PG测试路径中，一个VPP main或一个VPP Worker就能
+及时消费六个N3 TX ring。多VPP Worker的队列分配、轮询相位及PG竞争反而会
+影响该合成测试结果。生产配置仍恢复为16逻辑CPU、6 VPP Worker、isolated，
+Helm revision 96已确认main和六个Worker分别绑定七个独立物理核；六Session
+重建和100M/2秒17,506包零丢包冒烟均通过。
