@@ -3,9 +3,12 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
+#include <arpa/inet.h>
 #include <errno.h>
+#include <curl/curl.h>
 #include <getopt.h>
 #include <stdbool.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -14,10 +17,33 @@
 #include <time.h>
 #include <unistd.h>
 
+#include "sbi/openapi/external/cJSON.h"
+
 #define DEFAULT_SOCKET "/run/open5gs/upf-stats.sock"
 #define REQUEST_SIZE 512
 #define RESPONSE_SIZE (4 * 1024 * 1024)
 #define MAX_COLUMNS 16
+#define DEFAULT_SMF_PDU_INFO_URL "http://127.0.0.1:9092/pdu-info"
+#define PSI_MAP_MAX 4096
+#define ENRICHED_RESPONSE_SIZE (RESPONSE_SIZE + PSI_MAP_MAX * 8)
+
+typedef struct {
+    char supi[64];
+    char ue_ip[INET6_ADDRSTRLEN];
+    unsigned int psi;
+} psi_map_entry_t;
+
+typedef struct {
+    psi_map_entry_t entries[PSI_MAP_MAX];
+    size_t count;
+} psi_map_t;
+
+typedef struct {
+    char *data;
+    size_t length;
+} http_response_t;
+
+static size_t split_columns(char *line, char **columns, size_t capacity);
 
 static void usage(FILE *stream)
 {
@@ -27,10 +53,265 @@ static void usage(FILE *stream)
         "  --supi SUPI       Filter by SUPI (for example imsi-001010000000001)\n"
         "  --ue-ip ADDRESS   Filter by UE IP address\n"
         "  --seid SEID       Filter by UPF N4 SEID\n"
+        "  --smf-pdu-info URL  SMF /pdu-info URL used to resolve PSI\n"
         "  --json            Emit JSON\n"
         "  --watch           Refresh continuously\n"
         "  --interval SEC    Watch interval (default 1)\n"
         "  --socket PATH     Control socket path\n");
+}
+
+static size_t http_write(void *data, size_t size, size_t count, void *opaque)
+{
+    http_response_t *response = opaque;
+    size_t bytes = size * count;
+    char *expanded;
+
+    if (bytes > RESPONSE_SIZE - response->length)
+        return 0;
+    expanded = realloc(response->data, response->length + bytes + 1);
+    if (!expanded)
+        return 0;
+    response->data = expanded;
+    memcpy(response->data + response->length, data, bytes);
+    response->length += bytes;
+    response->data[response->length] = '\0';
+    return bytes;
+}
+
+static int psi_map_add(psi_map_t *map, const char *supi,
+        const char *ue_ip, unsigned int psi)
+{
+    psi_map_entry_t *entry;
+
+    if (!supi || !*supi || !ue_ip || !*ue_ip || !psi ||
+        map->count == PSI_MAP_MAX)
+        return -1;
+    entry = &map->entries[map->count++];
+    snprintf(entry->supi, sizeof(entry->supi), "%s", supi);
+    snprintf(entry->ue_ip, sizeof(entry->ue_ip), "%s", ue_ip);
+    entry->psi = psi;
+    return 0;
+}
+
+static void psi_map_parse_page(psi_map_t *map, const char *json,
+        bool *has_next)
+{
+    cJSON *root = cJSON_Parse(json);
+    cJSON *items;
+    cJSON *ue;
+    cJSON *pager;
+
+    *has_next = false;
+    if (!root)
+        return;
+    items = cJSON_GetObjectItemCaseSensitive(root, "items");
+    cJSON_ArrayForEach(ue, items) {
+        cJSON *supi = cJSON_GetObjectItemCaseSensitive(ue, "supi");
+        cJSON *pdus = cJSON_GetObjectItemCaseSensitive(ue, "pdu");
+        cJSON *pdu;
+
+        if (!cJSON_IsString(supi) || !cJSON_IsArray(pdus))
+            continue;
+        cJSON_ArrayForEach(pdu, pdus) {
+            cJSON *psi = cJSON_GetObjectItemCaseSensitive(pdu, "psi");
+            cJSON *ipv4 = cJSON_GetObjectItemCaseSensitive(pdu, "ipv4");
+            cJSON *ipv6 = cJSON_GetObjectItemCaseSensitive(pdu, "ipv6");
+
+            if (!cJSON_IsNumber(psi) || psi->valuedouble < 1 ||
+                psi->valuedouble > 255)
+                continue;
+            if (cJSON_IsString(ipv4))
+                (void)psi_map_add(map, supi->valuestring,
+                        ipv4->valuestring, (unsigned int)psi->valuedouble);
+            if (cJSON_IsString(ipv6))
+                (void)psi_map_add(map, supi->valuestring,
+                        ipv6->valuestring, (unsigned int)psi->valuedouble);
+        }
+    }
+    pager = cJSON_GetObjectItemCaseSensitive(root, "pager");
+    if (cJSON_IsObject(pager))
+        *has_next = cJSON_IsString(
+                cJSON_GetObjectItemCaseSensitive(pager, "next"));
+    cJSON_Delete(root);
+}
+
+static void load_psi_map(const char *base_url, psi_map_t *map)
+{
+    unsigned int page;
+
+    memset(map, 0, sizeof(*map));
+    for (page = 0; page < 1024 && map->count < PSI_MAP_MAX; page++) {
+        CURL *curl = curl_easy_init();
+        http_response_t response = { 0 };
+        char url[1024];
+        bool has_next = false;
+        CURLcode result;
+        long status = 0;
+
+        if (!curl)
+            break;
+        snprintf(url, sizeof(url), "%s%cpage=%u&page_size=100", base_url,
+                strchr(base_url, '?') ? '&' : '?', page);
+        curl_easy_setopt(curl, CURLOPT_URL, url);
+        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, http_write);
+        curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
+        curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT_MS, 200L);
+        curl_easy_setopt(curl, CURLOPT_TIMEOUT_MS, 500L);
+        curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1L);
+        result = curl_easy_perform(curl);
+        if (result == CURLE_OK)
+            curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &status);
+        curl_easy_cleanup(curl);
+        if (result != CURLE_OK || status != 200 || !response.data) {
+            free(response.data);
+            break;
+        }
+        psi_map_parse_page(map, response.data, &has_next);
+        free(response.data);
+        if (!has_next)
+            break;
+    }
+}
+
+static const char *psi_map_find(
+        const psi_map_t *map, const char *supi, const char *ue_ip,
+        char *value, size_t value_size)
+{
+    size_t i;
+
+    for (i = 0; i < map->count; i++) {
+        if (!strcmp(map->entries[i].supi, supi) &&
+            !strcmp(map->entries[i].ue_ip, ue_ip)) {
+            snprintf(value, value_size, "%u", map->entries[i].psi);
+            return value;
+        }
+    }
+    return "-";
+}
+
+static bool append_output(char *output, size_t capacity, size_t *used,
+        const char *format, ...)
+{
+    va_list ap;
+    int written;
+
+    if (*used >= capacity)
+        return false;
+    va_start(ap, format);
+    written = vsnprintf(output + *used, capacity - *used, format, ap);
+    va_end(ap);
+    if (written < 0 || (size_t)written >= capacity - *used)
+        return false;
+    *used += (size_t)written;
+    return true;
+}
+
+static char *add_psi_column(const char *response, const psi_map_t *map)
+{
+    char *copy = strdup(response);
+    char *output = malloc(ENRICHED_RESPONSE_SIZE + 1);
+    char *line;
+    char *save = NULL;
+    size_t used = 0;
+    bool header = true;
+    bool session_table = false;
+
+    if (!copy || !output) {
+        free(copy);
+        free(output);
+        return NULL;
+    }
+    output[0] = '\0';
+    for (line = strtok_r(copy, "\n", &save); line;
+            line = strtok_r(NULL, "\n", &save)) {
+        char *columns[MAX_COLUMNS];
+        size_t count = split_columns(line, columns, MAX_COLUMNS);
+        size_t i;
+
+        if (header)
+            session_table = count >= 3 && count <= MAX_COLUMNS &&
+                !strcmp(columns[1], "UE-IP") &&
+                !strcmp(columns[2], "SEID");
+        if (!session_table || count < 3 || count > MAX_COLUMNS) {
+            if (!append_output(output, ENRICHED_RESPONSE_SIZE + 1,
+                        &used, "%s\n", line))
+                goto fail;
+        } else if (header) {
+            if (!append_output(output, ENRICHED_RESPONSE_SIZE + 1, &used,
+                        "%s %s PSI UPF-SEID", columns[0], columns[1]))
+                goto fail;
+            for (i = 3; i < count; i++) {
+                if (!append_output(output, ENRICHED_RESPONSE_SIZE + 1,
+                            &used, " %s", columns[i]))
+                    goto fail;
+            }
+            if (!append_output(output, ENRICHED_RESPONSE_SIZE + 1,
+                        &used, "\n"))
+                goto fail;
+        } else {
+            char psi[4];
+
+            if (!append_output(output, ENRICHED_RESPONSE_SIZE + 1, &used,
+                        "%s %s %s %s", columns[0], columns[1],
+                        psi_map_find(map, columns[0], columns[1],
+                            psi, sizeof(psi)), columns[2]))
+                goto fail;
+            for (i = 3; i < count; i++) {
+                if (!append_output(output, ENRICHED_RESPONSE_SIZE + 1,
+                            &used, " %s", columns[i]))
+                    goto fail;
+            }
+            if (!append_output(output, ENRICHED_RESPONSE_SIZE + 1,
+                        &used, "\n"))
+                goto fail;
+        }
+        header = false;
+    }
+    free(copy);
+    return output;
+
+fail:
+    free(copy);
+    free(output);
+    return NULL;
+}
+
+static char *add_psi_json(const char *response, const psi_map_t *map)
+{
+    cJSON *root = cJSON_Parse(response);
+    cJSON *rows;
+    cJSON *row;
+    char *json;
+    char *output = NULL;
+
+    if (!root)
+        return NULL;
+    rows = cJSON_GetObjectItemCaseSensitive(root, "rows");
+    cJSON_ArrayForEach(row, rows) {
+        cJSON *supi = cJSON_GetObjectItemCaseSensitive(row, "supi");
+        cJSON *ue_ip = cJSON_GetObjectItemCaseSensitive(row, "ue_ip");
+        cJSON *seid = cJSON_GetObjectItemCaseSensitive(row, "seid");
+        char value[4];
+        const char *psi;
+
+        if (!cJSON_IsString(supi) || !cJSON_IsString(ue_ip) ||
+            !cJSON_IsNumber(seid))
+            continue;
+        psi = psi_map_find(map, supi->valuestring, ue_ip->valuestring,
+                value, sizeof(value));
+        if (strcmp(psi, "-"))
+            cJSON_AddNumberToObject(row, "psi", strtoul(psi, NULL, 10));
+        else
+            cJSON_AddNullToObject(row, "psi");
+        cJSON_AddNumberToObject(row, "upf_seid", seid->valuedouble);
+    }
+    json = cJSON_PrintUnformatted(root);
+    if (json) {
+        output = strdup(json);
+        cJSON_free(json);
+    }
+    cJSON_Delete(root);
+    return output;
 }
 
 static bool safe_value(const char *value)
@@ -158,7 +439,8 @@ static int print_table(char *response)
     return 0;
 }
 
-static int query(const char *socket_path, const char *request)
+static int query(const char *socket_path, const char *request,
+        const char *smf_pdu_info_url, bool include_psi, bool json_output)
 {
     struct sockaddr_un address;
     char *response;
@@ -225,6 +507,26 @@ static int query(const char *socket_path, const char *request)
     }
     close(fd);
     response[response_len] = '\0';
+    if (include_psi) {
+        psi_map_t *map = malloc(sizeof(*map));
+        char *enriched = NULL;
+
+        if (!map) {
+            perror("malloc");
+            free(response);
+            return 1;
+        }
+        load_psi_map(smf_pdu_info_url, map);
+        if (json_output)
+            enriched = add_psi_json(response, map);
+        else
+            enriched = add_psi_column(response, map);
+        free(map);
+        if (enriched) {
+            free(response);
+            response = enriched;
+        }
+    }
     if (print_table(response)) {
         free(response);
         return 1;
@@ -241,6 +543,7 @@ int main(int argc, char *argv[])
         { "supi", required_argument, NULL, 'u' },
         { "ue-ip", required_argument, NULL, 'i' },
         { "seid", required_argument, NULL, 's' },
+        { "smf-pdu-info", required_argument, NULL, 'p' },
         { "json", no_argument, NULL, 'j' },
         { "watch", no_argument, NULL, 'w' },
         { "interval", required_argument, NULL, 'n' },
@@ -249,11 +552,16 @@ int main(int argc, char *argv[])
         { NULL, 0, NULL, 0 }
     };
     const char *socket_path = DEFAULT_SOCKET;
+    const char *smf_pdu_info_url = getenv("OPEN5GS_SMF_PDU_INFO_URL");
     char request[REQUEST_SIZE] = "show=rate";
     bool watch = false;
     bool json_output = false;
+    bool include_psi = true;
     double interval = 1.0;
     int option;
+
+    if (!smf_pdu_info_url || !*smf_pdu_info_url)
+        smf_pdu_info_url = DEFAULT_SMF_PDU_INFO_URL;
 
     if (argc < 3 || strcmp(argv[1], "show") || strcmp(argv[2], "rate")) {
         usage(stderr);
@@ -270,6 +578,7 @@ int main(int argc, char *argv[])
             }
             if (append_option(request, sizeof(request), "level", optarg))
                 return 2;
+            include_psi = strcmp(optarg, "user") != 0;
             break;
         case 'u':
             if (append_option(request, sizeof(request), "supi", optarg))
@@ -293,6 +602,15 @@ int main(int argc, char *argv[])
                 return 2;
             break;
         }
+        case 'p':
+            if (!strncmp(optarg, "http://", 7) ||
+                !strncmp(optarg, "https://", 8))
+                smf_pdu_info_url = optarg;
+            else {
+                fprintf(stderr, "invalid SMF PDU info URL: %s\n", optarg);
+                return 2;
+            }
+            break;
         case 'j':
             if (append_option(request, sizeof(request), "json", "1"))
                 return 2;
@@ -333,7 +651,8 @@ int main(int argc, char *argv[])
 
         if (watch && !json_output)
             fputs("\033[H\033[J", stdout);
-        rv = query(socket_path, request);
+        rv = query(socket_path, request, smf_pdu_info_url,
+                include_psi, json_output);
         if (!watch)
             return rv;
         delay.tv_sec = (time_t)interval;

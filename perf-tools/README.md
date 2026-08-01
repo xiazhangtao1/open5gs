@@ -17,10 +17,16 @@ kubectl -n xcn exec deploy/xcn-5gc -c upf -- \
   open5gs-upfctl show rate --level rule --seid 0x1234
 ```
 
-`user`按SUPI汇总多个Session；`session`以UPF N4 SEID和UE IP区分；`bearer`
-在一个Session内按QFI汇总上下行；`rule`进一步展示PDR/QER和方向。统计功能不
+`user`按SUPI汇总多个Session；`session`、`bearer`和`rule`同时显示NAS PDU
+Session ID（`PSI`）与PFCP本地标识（`UPF-SEID`）。PSI由CLI只在查询时读取
+SMF `/pdu-info`，按SUPI和UE IP关联；无法可靠关联时显示`-`，不会根据SEID
+猜测。`bearer`在一个Session内按QFI汇总上下行；`rule`进一步展示PDR/QER和方向。统计功能不
 替代PFCP URR计费，也不修改UPF语义；可通过
 `networking.upf.rateStats.enabled=false`完全关闭。
+
+Helm部署默认使用`http://127.0.0.1:9092/pdu-info`。独立部署可通过
+`--smf-pdu-info URL`或`OPEN5GS_SMF_PDU_INFO_URL`指定SMF地址。JSON模式新增
+`psi`和`upf_seid`，并保留原`seid`字段兼容已有脚本。
 
 文本模式会根据当前数据动态计算列宽：标识字段左对齐、速率和计数字段右
 对齐，并用表格分隔线区分表头。`--watch`即使通过未分配TTY的普通

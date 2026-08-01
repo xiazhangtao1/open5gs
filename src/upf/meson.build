@@ -139,4 +139,5 @@ executable('open5gs-upfd',
 
 executable('open5gs-upfctl',
     sources : files('upfctl.c'),
+    dependencies : [libsbi_openapi_dep, libcurl_dep],
     install : true)
