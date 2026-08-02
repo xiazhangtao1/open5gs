@@ -238,7 +238,7 @@ static char *add_psi_column(const char *response, const psi_map_t *map)
                 goto fail;
         } else if (header) {
             if (!append_output(output, ENRICHED_RESPONSE_SIZE + 1, &used,
-                        "%s %s PSI UPF-SEID", columns[0], columns[1]))
+                        "%s %s PSI", columns[0], columns[1]))
                 goto fail;
             for (i = 3; i < count; i++) {
                 if (!append_output(output, ENRICHED_RESPONSE_SIZE + 1,
@@ -252,9 +252,9 @@ static char *add_psi_column(const char *response, const psi_map_t *map)
             char psi[4];
 
             if (!append_output(output, ENRICHED_RESPONSE_SIZE + 1, &used,
-                        "%s %s %s %s", columns[0], columns[1],
+                        "%s %s %s", columns[0], columns[1],
                         psi_map_find(map, columns[0], columns[1],
-                            psi, sizeof(psi)), columns[2]))
+                            psi, sizeof(psi))))
                 goto fail;
             for (i = 3; i < count; i++) {
                 if (!append_output(output, ENRICHED_RESPONSE_SIZE + 1,
@@ -290,12 +290,10 @@ static char *add_psi_json(const char *response, const psi_map_t *map)
     cJSON_ArrayForEach(row, rows) {
         cJSON *supi = cJSON_GetObjectItemCaseSensitive(row, "supi");
         cJSON *ue_ip = cJSON_GetObjectItemCaseSensitive(row, "ue_ip");
-        cJSON *seid = cJSON_GetObjectItemCaseSensitive(row, "seid");
         char value[4];
         const char *psi;
 
-        if (!cJSON_IsString(supi) || !cJSON_IsString(ue_ip) ||
-            !cJSON_IsNumber(seid))
+        if (!cJSON_IsString(supi) || !cJSON_IsString(ue_ip))
             continue;
         psi = psi_map_find(map, supi->valuestring, ue_ip->valuestring,
                 value, sizeof(value));
@@ -303,7 +301,6 @@ static char *add_psi_json(const char *response, const psi_map_t *map)
             cJSON_AddNumberToObject(row, "psi", strtoul(psi, NULL, 10));
         else
             cJSON_AddNullToObject(row, "psi");
-        cJSON_AddNumberToObject(row, "upf_seid", seid->valuedouble);
     }
     json = cJSON_PrintUnformatted(root);
     if (json) {

@@ -79,10 +79,10 @@ kubectl -n xcn exec deploy/xcn-5gc -c upf -- \
 ```
 
 `user` aggregates all PFCP Sessions of one SUPI. `session`, `bearer`, and
-`rule` display both the NAS PDU Session ID (`PSI`) and the local PFCP identifier
-(`UPF-SEID`). The CLI resolves PSI from the SMF `/pdu-info` endpoint only when
-the command runs, matching SUPI and UE IP; it prints `-` instead of guessing
-when no reliable match exists. `bearer` aggregates UL/DL PDRs by QFI inside
+`rule` display the NAS PDU Session ID (`PSI`) and temporarily omit the local
+PFCP identifier (`UPF-SEID`). The CLI resolves PSI from the SMF `/pdu-info`
+endpoint only when the command runs, matching SUPI and UE IP; it prints `-`
+instead of guessing when no reliable match exists. `bearer` aggregates UL/DL PDRs by QFI inside
 one Session; `rule` shows direction, PDR ID and QER ID. `--watch` continuously
 refreshes the display, while `--seid`, `--ue-ip`, and `--supi` filter results.
 The socket is local to the UPF container and has mode `0600`.
@@ -90,7 +90,7 @@ The socket is local to the UPF container and has mode `0600`.
 The Helm deployment uses `http://127.0.0.1:9092/pdu-info` by default. For a
 standalone deployment, override it with `--smf-pdu-info URL` or the
 `OPEN5GS_SMF_PDU_INFO_URL` environment variable. JSON output adds `psi` and
-`upf_seid`, while retaining `seid` for compatibility.
+retains `seid` for compatibility, but no longer adds `upf_seid`.
 
 Configure or disable it through Helm:
 
