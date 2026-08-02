@@ -121,6 +121,56 @@ VPP sidecar requires both memif backends.
 | Compatible | kernel UDP/2152 | `ogstun` | not required | disabled |
 | Accelerated | raw-IP memif | raw-IP memif | two VFs | `1..16` |
 
+### Current defaults and required configuration
+
+A plain `helm install xcn helm/xcn` selects the compatible UDP/TUN mode. The
+important defaults are:
+
+| Value | Default | Meaning |
+|---|---|---|
+| `fivegc.hostNetwork.enabled` | `false` | Use the Pod network; empty AMF/N3 addresses resolve to the Pod IP at startup |
+| `networking.upf.n3.backend` | `udp` | Kernel UDP/2152 N3 |
+| `networking.upf.n6.backend` | `tun` | Kernel `ogstun` N6 |
+| `networking.upf.dataplane.sessionWorkers.enabled` | `false` | Do not create Session Workers or memif dispatchers |
+| `vpp.enabled` | `false` | Do not create the VPP sidecar or request VFs/hugepages |
+| `resources.fivegc.upf.requests/limits.cpu` | `8` / `8` | Eight logical CPUs for the UPF container |
+| `networking.upf.rateStats.enabled` | `true` | Create the rate/control thread; it shares the UPF control CPU |
+
+The chart applies the following requirements:
+
+| Scope | Required configuration or node prerequisite |
+|---|---|
+| Both modes | UPF CPU request and limit must be the same integer and at least `4`. The default is `8`. N3 must use a dedicated non-wildcard bind address because SMF and UPF share the Pod network namespace and both use UDP/2152. |
+| Pod-network UDP/TUN | No mode override is required. Empty AMF/UPF addresses resolve to the Pod IP. The gNB still needs a reachable NGAP and GTP-U path through the configured host ports/services. The node must provide `/dev/net/tun`. |
+| `hostNetwork=true` | `networking.amf.ngap.serverAddress`, `networking.upf.gtpu.serverAddress`, and `networking.upf.gtpu.advertiseAddress` are mandatory explicit addresses. For UDP/TUN, the two UPF addresses normally use the same node N3 address. |
+| VPP/memif mode | Set both backends to `memif`, enable Session Workers and VPP, and set `n3.memif.localAddress`, `vpp.n3.interfaceAddress`, `vpp.n3.defaultGateway`, `vpp.n6.externalAddress`, and `vpp.n6.defaultGateway`. `n3.memif.localAddress` must equal `gtpu.advertiseAddress`. |
+| VPP/memif node | The SR-IOV device plugin must expose at least two allocatable VFs under `vpp.sriov.resourceName`; `vpp.sriov.deviceEnv` must be the matching device environment variable. With defaults, the node also needs two VPP CPUs and 8 GiB of 1-GiB hugepages available. Both VFs must be link-up. |
+
+UDP/memif or memif/TUN mixed combinations are invalid and fail Helm rendering.
+The memif mode is currently IPv4-first; the chart does not configure IPv6 N6
+routing or NAT.
+
+### CPU layout by mode
+
+The CPU values below are logical CPUs assigned to the individual container,
+not whole-node CPU numbers. If the UPF cpuset sorted by logical CPU ID is
+`C0..C7`, the default layouts are:
+
+| Mode | UPF CPU layout | VPP CPU layout |
+|---|---|---|
+| UDP/TUN, default 8 UPF CPUs | No Session Workers, memif dispatchers, or isolated data cores. `main/control` and the enabled `rate/control` thread are both pinned to `C3`; UDP/TUN uses the legacy UPF event path. Other auxiliary work remains under the normal scheduler inside the UPF cpuset. | No VPP container. |
+| VPP/memif, default 8 UPF CPUs | Five Session Workers on `C0..C4`, N3 dispatcher on `C5`, N6 dispatcher on `C6`, and `main/control` plus `rate/control` on `C7`. | Separate two-CPU container: one `vpp_main` CPU and one VPP Worker CPU by default. |
+| VPP/memif, minimum 4 UPF CPUs | One Session Worker, two dedicated dispatchers, and one shared control CPU. | Still requires the separate VPP allocation; default is two CPUs. |
+
+For VPP/memif automatic sizing,
+`Session Workers = UPF CPUs - reservedCpus`; `reservedCpus` defaults to `3` and
+must remain at least `3`. Thus the current 8-CPU default resolves to **5**
+Session Workers and five queues on each memif side. A manual Worker count must
+satisfy `count + 3 <= UPF CPUs`; both memif queue counts must equal the resolved
+Worker count. The UPF and VPP CPU allocations are independent, so the default
+accelerated Pod requests 8 logical CPUs for UPF plus 2 logical CPUs for VPP,
+in addition to the other 5GC containers.
+
 ### Compatible UDP/TUN mode without VFs
 
 Use this mode when the NIC or Kubernetes environment cannot provide SR-IOV
@@ -340,7 +390,7 @@ by this VPP template. Restore the original path with
 `vpp.enabled=false`. Session Workers must also be disabled when restoring the
 UDP/TUN path.
 
-### Runtime validation on 2026-07-30
+### Historical runtime validation on 2026-07-30
 
 Both modes were deployed on the same node from this chart:
 
@@ -351,9 +401,12 @@ Both modes were deployed on the same node from this chart:
 - VPP/memif rendered a `9/9 Running` Pod requesting two
   `intel.com/fabric_network` VFs. N3 and N6 each connected six memif rings, six
   Session Workers plus two dispatchers were pinned to the eight UPF logical
-  CPUs, and six PFCP Sessions were recreated. A six-Session N6 injection sent
-  1,750 packets through `memif1/0`; Open5GS emitted all 1,750 through
-  `memif2/0`, with zero loss in the Open5GS memif segment.
+  CPUs under the then-current two-reserved-CPU layout. The current layout
+  reserves a third control CPU and therefore creates five Workers with the
+  same eight-UPF-CPU allocation. Six PFCP Sessions were recreated. A
+  six-Session N6 injection sent 1,750 packets through `memif1/0`; Open5GS
+  emitted all 1,750 through `memif2/0`, with zero loss in the Open5GS memif
+  segment.
 
 The fabric physical ports were not cabled during the memif validation, so the
 second result proves the VPP/Open5GS core path but does not claim an external
