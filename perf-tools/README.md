@@ -191,28 +191,102 @@ kubectl -n xcn exec "$POD" -c upf -- ip route get "$GNB_IP"
 
 `ip route get` 输出里的 `dev <iface>` 就是 `VETH`。
 
-上行 TEID 需要从真实 UE 上行包里取。UDP N3 可直接在 UPF 抓包：
+## 抓包命令
+
+先设置当前环境变量：
+
+```bash
+POD=<xcn-5gc-pod>
+UE_POD=<oai-nr-ue-pod>
+UE_IP=10.45.0.2
+GNB_IP=<gNB-N3-IP>
+UPF_N3_IP=<UPF-N3-advertise-address>
+```
+
+### UDP/TUN模式：Linux tcpdump
+
+UDP/TUN仍经过Linux内核，可直接在UPF容器抓N3 GTP-U：
 
 ```bash
 kubectl -n xcn exec "$POD" -c upf -- \
-  tcpdump -i any -nn -vv -xx -c 2 "udp port 2152 and host $GNB_IP"
+  tcpdump -i any -nn -vv -XX \
+  "udp port 2152 and host $GNB_IP"
+```
 
-kubectl exec <nrue-pod> -- ping -c 2 -W 1 10.45.0.1
+抓N6的`ogstun`内层流量：
+
+```bash
+kubectl -n xcn exec "$POD" -c upf -- \
+  tcpdump -i ogstun -nn -vv -XX "host $UE_IP"
+```
+
+需要提取当前上行TEID时，先开启N3抓包，再从UE产生少量上行流量：
+
+```bash
+kubectl -n xcn exec "$POD" -c upf -- \
+  tcpdump -i any -nn -vv -xx -c 2 \
+  "udp port 2152 and host $GNB_IP"
+
+kubectl exec "$UE_POD" -- ping -c 2 -W 1 10.45.0.1
 ```
 
 抓包里 gNB 到 UPF 的 GTP-U 头部 `TEID` 即 `UL_TEID`。
 
-N3 memif 模式下 VF 由 DPDK 接管，应使用 VPP pcap trace：
+### VPP/memif模式：VPP pcap trace
+
+VF由DPDK接管，Linux `tcpdump -i any`看不到N3/N6 VF或共享内存memif流量。
+当前接口及方向如下：
+
+| 接口 | 抓包点 | 下行方向 |
+|---|---|---|
+| `dpdk-n6` | 物理N6 VF，NAT前后取决于方向 | RX |
+| `memif1/0` | VPP与Open5GS N6之间 | VPP TX到Open5GS |
+| `memif2/0` | VPP与Open5GS N3之间 | Open5GS到VPP RX |
+| `dpdk-n3` | 物理N3 VF | TX到gNB |
+
+选择一个接口开始抓收发包；同一VPP实例一次只运行一个pcap trace：
 
 ```bash
+IFACE=dpdk-n3
+PCAP=n3-vf.pcap
+
 kubectl -n xcn exec "$POD" -c vpp -- \
-  vppctl -s /run/vpp/cli.sock pcap trace rx max 2000 intfc dpdk-n3 file gtpu.pcap
-kubectl exec <nrue-pod> -- ping -I oaitun_ue1 -c 3 -W 1 10.2.0.119
+  vppctl -s /run/vpp/cli.sock \
+  pcap trace rx tx max 2000 max-bytes-per-pkt 2048 \
+  intfc "$IFACE" file "$PCAP"
+
+# 在另一个终端产生少量业务流量，然后停止抓包。
 kubectl -n xcn exec "$POD" -c vpp -- \
   vppctl -s /run/vpp/cli.sock pcap trace off
-kubectl -n xcn cp "$POD":/tmp/gtpu.pcap /tmp/gtpu.pcap -c vpp
-tcpdump -nn -r /tmp/gtpu.pcap \
-  'udp dst port 2152 and dst host <N3-advertise-address>' -XX
+
+kubectl -n xcn cp \
+  "${POD}:/tmp/${PCAP}" "/tmp/${PCAP}" -c vpp
+
+tcpdump -nn -vv -XX -r /tmp/"$PCAP"
+```
+
+抓N3 GTP-U时使用：
+
+```bash
+IFACE=dpdk-n3
+PCAP=n3-vf.pcap
+
+tcpdump -nn -vv -XX -r /tmp/"$PCAP" \
+  "udp port 2152 and host $UPF_N3_IP"
+```
+
+排障时可将`IFACE`依次改为`memif2/0`、`memif1/0`和`dpdk-n6`，对比同一批
+报文经过四段的情况。也可以短时间使用`intfc any`，但同一个包会在多个接口
+重复出现。`pcap trace`开销较大，只适合小包数短时诊断，不应在正式吞吐测试
+期间长时间开启。
+
+### UE侧抓包
+
+无论哪种核心网模式，都可以在UE业务TUN确认最终收包：
+
+```bash
+kubectl exec "$UE_POD" -- \
+  tcpdump -ni oaitun_ue1 -nn -vv -XX "host $UE_IP"
 ```
 
 ## 部署工具
@@ -228,11 +302,38 @@ kubectl -n xcn exec "$POD" -c upf -- chmod +x /tmp/udp_gen /tmp/dl_diag.sh /tmp/
 kubectl exec "$GNB_POD" -- chmod +x /tmp/gtpu_gen
 ```
 
-## 下行测试
+## 下行灌包方式
+
+开始前必须确认目标UE已建立真实PDU/PFCP Session：
+
+```bash
+kubectl -n xcn exec "$POD" -c upf -- \
+  xcnctl show rate --level session
+```
+
+测试时可在另一终端观察速率：
+
+```bash
+kubectl -n xcn exec "$POD" -c upf -- \
+  xcnctl show rate --level session --ue-ip "$UE_IP" --watch
+```
+
+### 方式一：UDP/TUN模式使用udp_gen
+
+该方式在UPF容器内从`ogstun`网关向UE发UDP，适合压测传统TUN核心路径，
+不经过外部物理N6网卡：
+
+```bash
+kubectl -n xcn exec "$POD" -c upf -- \
+  /tmp/udp_gen 10.45.0.1 "$UE_IP" 9999 10 100 1400
+```
+
+参数依次为源IP、目的IP、目的端口、秒数、Mbps和UDP payload字节数。也可以
+使用带计数采集的现有脚本：
 
 ```bash
 kubectl -n xcn exec "$POD" -c upf -- env \
-  GNB_IP="$GNB_IP" VETH="$VETH" UE_IP=10.45.0.2 UPF_TUN_IP=10.45.0.1 \
+  GNB_IP="$GNB_IP" VETH="$VETH" UE_IP="$UE_IP" UPF_TUN_IP=10.45.0.1 \
   /tmp/dl_diag.sh 1000 10
 ```
 
@@ -242,6 +343,155 @@ kubectl -n xcn exec "$POD" -c upf -- env \
 - `ogstun tx_packets`: UPF 从 TUN 下行读出并向 N3 发出的包数。
 - `ogstun tx_dropped`: TUN 下行方向丢包。
 - `iptables OUTPUT gtpu-dl-test`: GTP-U 下行输出包数。
+
+### 方式二：VPP packet-generator注入逻辑N6
+
+该方式从VPP `ip4-input`合成UE内层IPv4包，经`memif1/0 -> Open5GS ->
+memif2/0 -> dpdk-n3 -> gNB -> UE`。它完整执行Open5GS用户面语义，但绕过
+物理`dpdk-n6`，适合核心段吞吐和多Session测试：
+
+```bash
+cd /home/xiazhangtao/code/open5gs
+
+PACING_10US=1 perf-tools/scripts/run_pg_dl_multi.sh \
+  "$POD" 100 10 "$UE_IP"
+```
+
+参数依次为Pod、所有Session合计Mbps、秒数和`1..16`个UE IP。没有脚本时，
+100Mbps、10秒、1428字节IPv4包的等价VPP命令如下；第一次执行时删除不存在
+的对象可能报错，可忽略：
+
+```bash
+kubectl -n xcn exec "$POD" -c vpp -- \
+  vppctl -s /run/vpp/cli.sock packet-generator disable
+kubectl -n xcn exec "$POD" -c vpp -- \
+  vppctl -s /run/vpp/cli.sock packet-generator delete dl-s1
+kubectl -n xcn exec "$POD" -c vpp -- \
+  vppctl -s /run/vpp/cli.sock delete packet-generator interface pg0
+
+kubectl -n xcn exec "$POD" -c vpp -- \
+  vppctl -s /run/vpp/cli.sock create packet-generator interface pg0
+kubectl -n xcn exec "$POD" -c vpp -- \
+  vppctl -s /run/vpp/cli.sock set interface state pg0 up
+kubectl -n xcn exec "$POD" -c vpp -- \
+  vppctl -s /run/vpp/cli.sock \
+  set interface ip address pg0 198.18.0.254/24
+
+kubectl -n xcn exec "$POD" -c vpp -- \
+  vppctl -s /run/vpp/cli.sock packet-generator new \
+  "{ name dl-s1 limit 87530 rate 8753 maxframe 1 size 1428-1428 interface pg0 node ip4-input data { UDP: 198.18.0.1 -> $UE_IP UDP: 10001 -> 9001 length 1408 checksum 0 incrementing 1400 } }"
+
+kubectl -n xcn exec "$POD" -c vpp -- \
+  vppctl -s /run/vpp/cli.sock clear interfaces
+kubectl -n xcn exec "$POD" -c vpp -- \
+  vppctl -s /run/vpp/cli.sock clear errors
+kubectl -n xcn exec "$POD" -c vpp -- \
+  vppctl -s /run/vpp/cli.sock packet-generator enable
+
+sleep 12
+
+kubectl -n xcn exec "$POD" -c vpp -- \
+  vppctl -s /run/vpp/cli.sock packet-generator disable
+kubectl -n xcn exec "$POD" -c vpp -- \
+  vppctl -s /run/vpp/cli.sock show packet-generator
+kubectl -n xcn exec "$POD" -c vpp -- \
+  vppctl -s /run/vpp/cli.sock show interface
+kubectl -n xcn exec "$POD" -c vpp -- \
+  vppctl -s /run/vpp/cli.sock show errors
+```
+
+其中`rate=8753pps`、`limit=87530`约等于100Mbps持续10秒。第一条流的UDP
+目的端口为`9001`，可在UE执行：
+
+```bash
+kubectl exec "$UE_POD" -- \
+  tcpdump -ni oaitun_ue1 -nn "udp and dst host $UE_IP and dst port 9001"
+```
+
+### 方式三：NAT44开启时从真实DN用iperf3 reverse下行
+
+这是经过真实`dpdk-n6`的完整链路。默认NAT44不允许DN无状态地直接访问UE
+私网地址，因此由UE上的iperf3 client建立控制和测试会话，并使用`-R`让DN
+server发送大流量。少量控制流量为上行，UDP测试流量为下行。
+
+DN服务器执行：
+
+```bash
+iperf3 -s -p 5201
+```
+
+UE执行，`DN_IP`必须是UE经N6能够访问的DN服务器地址：
+
+```bash
+DN_IP=<DN-server-IP>
+
+kubectl exec "$UE_POD" -- \
+  iperf3 -c "$DN_IP" -p 5201 \
+  -u -R -b 100M -t 10 -l 1400
+```
+
+`-R`表示server向client发送，所以测试数据路径是`DN -> N6 -> UPF -> N3 ->
+gNB -> UE`；去掉`-R`才是上行。测试期间检查NAT和接口计数：
+
+```bash
+kubectl -n xcn exec "$POD" -c vpp -- \
+  vppctl -s /run/vpp/cli.sock show nat44 sessions
+kubectl -n xcn exec "$POD" -c vpp -- \
+  vppctl -s /run/vpp/cli.sock show interface
+```
+
+### 方式四：关闭NAT后从真实DN直接向UE灌包
+
+这种方式由DN主动向UE私网地址发起，必须关闭NAT，并在DN或上游路由器添加
+UE网段路由。修改模式会重启UPF/VPP，测试前需让UE重新注册：
+
+```bash
+helm upgrade xcn /home/xiazhangtao/code/open5gs/helm/xcn \
+  -n xcn --reuse-values \
+  --set networking.upf.mode=memif \
+  --set vpp.n6.nat44.enabled=false
+```
+
+如果DN服务器与VPP N6 VF在同一网段，DN服务器配置：
+
+```bash
+VPP_N6_IP=<vpp-n6-vf-ip>
+sudo ip route replace 10.45.0.0/16 via "$VPP_N6_IP"
+```
+
+`VPP_N6_IP`填写Helm的`vpp.n6.externalAddress`去掉掩码后的地址；例如配置为
+`10.2.0.224/20`时填写`10.2.0.224`。
+
+UE作为接收端：
+
+```bash
+kubectl exec -it "$UE_POD" -- iperf3 -s -p 5201
+```
+
+DN服务器作为发送端：
+
+```bash
+iperf3 -c "$UE_IP" -p 5201 \
+  -u -b 100M -t 10 -l 1400
+```
+
+测试结束后如需恢复默认NAT：
+
+```bash
+helm upgrade xcn /home/xiazhangtao/code/open5gs/helm/xcn \
+  -n xcn --reuse-values \
+  --set networking.upf.mode=memif \
+  --set vpp.n6.nat44.enabled=true
+```
+
+四种方式的口径：
+
+| 方式 | 经过物理N6 VF | 经过完整Open5GS语义 | 到达gNB/UE |
+|---|---|---|---|
+| TUN `udp_gen` | 否 | 是 | 是，N3/空口正常时 |
+| VPP packet-generator | 否 | 是 | 是，N3/空口正常时 |
+| NAT44 iperf3 `-R` | 是 | 是 | 是，NAT会话成功时 |
+| 无NAT+UE网段路由 | 是 | 是 | 是 |
 
 ## 上行测试
 

@@ -41,6 +41,8 @@ queue、VPP开关和默认CPU不再需要逐项`--set`。
 
 两种模式的完整安装、切换、检查命令和地址要求见
 [helm/xcn/README.md](helm/xcn/README.md#upf-dataplane-deployment-modes)。
+Linux/VPP抓包以及TUN、VPP packet-generator、真实DN下行灌包命令见
+[perf-tools/README.md](perf-tools/README.md#抓包命令)。
 当前不支持UDP/TUN与memif混合组合；从一种模式切换到另一种模式后需要让UE
 重新注册并重建PFCP Session。
 
