@@ -1,5 +1,9 @@
 {{- $n3FibTable := default 10 .Values.vpp.n3.fibTable }}
 {{- $upfRateStats := default (dict) .Values.networking.upf.rateStats }}
+{{- $upfN3Backend := include "xcn.upfN3Backend" . }}
+{{- $upfN6Backend := include "xcn.upfN6Backend" . }}
+{{- $upfN3MemifLocalAddress := include "xcn.upfN3MemifLocalAddress" . }}
+{{- $upfSessionWorkersEnabled := eq (include "xcn.upfSessionWorkersEnabled" .) "true" }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -160,7 +164,7 @@ data:
         io_time_budget_us: {{ default 50 .Values.networking.upf.dataplane.ioTimeBudgetUs }}
         stats_interval: {{ default 10 .Values.networking.upf.dataplane.statsInterval }}
         session_workers:
-          enabled: {{ .Values.networking.upf.dataplane.sessionWorkers.enabled }}
+          enabled: {{ $upfSessionWorkersEnabled }}
           count: {{ include "xcn.upfWorkerCount" . }}
           queue_size: {{ .Values.networking.upf.dataplane.sessionWorkers.queueSize }}
           busy_poll_us: {{ .Values.networking.upf.dataplane.sessionWorkers.busyPollUs }}
@@ -174,10 +178,10 @@ data:
           - address: __UPF_GTPU_SERVER_ADDRESS__
             advertise: __UPF_GTPU_ADVERTISE_ADDRESS__
       n3:
-        backend: {{ .Values.networking.upf.n3.backend | quote }}
+        backend: {{ $upfN3Backend | quote }}
         memif:
           socket: {{ .Values.networking.upf.n3.memif.socket | quote }}
-          local_address: {{ .Values.networking.upf.n3.memif.localAddress | quote }}
+          local_address: {{ $upfN3MemifLocalAddress | quote }}
           id: {{ .Values.networking.upf.n3.memif.id }}
           buffer_size: {{ .Values.networking.upf.n3.memif.bufferSize }}
           burst_size: {{ .Values.networking.upf.n3.memif.burstSize }}
@@ -185,7 +189,7 @@ data:
           queues: {{ include "xcn.upfMemifQueueCount" (dict "root" . "value" .Values.networking.upf.n3.memif.queues "path" "networking.upf.n3.memif.queues") }}
           udp_checksum: {{ .Values.networking.upf.n3.memif.udpChecksum }}
       n6:
-        backend: {{ .Values.networking.upf.n6.backend | quote }}
+        backend: {{ $upfN6Backend | quote }}
         memif:
           socket: {{ .Values.networking.upf.n6.memif.socket | quote }}
           id: {{ .Values.networking.upf.n6.memif.id }}

@@ -1,38 +1,42 @@
 {{- $amfNgapAddress := toString .Values.networking.amf.ngap.serverAddress }}
-{{- $upfGtpuAddress := toString .Values.networking.upf.gtpu.serverAddress }}
-{{- $upfGtpuAdvertiseAddress := toString .Values.networking.upf.gtpu.advertiseAddress }}
+{{- $upfN3Backend := include "xcn.upfN3Backend" . }}
+{{- $upfN6Backend := include "xcn.upfN6Backend" . }}
+{{- $vppEnabled := eq (include "xcn.vppEnabled" .) "true" }}
+{{- $upfGtpuAddress := include "xcn.upfGtpuServerAddress" . }}
+{{- $upfGtpuAdvertiseAddress := include "xcn.upfGtpuAdvertiseAddress" . }}
+{{- $upfN3MemifLocalAddress := include "xcn.upfN3MemifLocalAddress" . }}
 {{- if .Values.fivegc.hostNetwork.enabled }}
 {{- if or (eq $amfNgapAddress "") (eq $amfNgapAddress "0.0.0.0") (eq $amfNgapAddress "::") }}
 {{- fail "networking.amf.ngap.serverAddress must be an explicit node interface address when fivegc.hostNetwork.enabled=true" }}
 {{- end }}
 {{- if or (eq $upfGtpuAddress "") (eq $upfGtpuAddress "0.0.0.0") (eq $upfGtpuAddress "::") (eq $upfGtpuAddress "127.0.0.4") }}
-{{- fail "networking.upf.gtpu.serverAddress must be an explicit node interface address when fivegc.hostNetwork.enabled=true" }}
+{{- fail "networking.upf.n3.address (or legacy gtpu.serverAddress) must resolve to an explicit address when fivegc.hostNetwork.enabled=true" }}
 {{- end }}
 {{- if or (eq $upfGtpuAdvertiseAddress "") (eq $upfGtpuAdvertiseAddress "0.0.0.0") (eq $upfGtpuAdvertiseAddress "::") (eq $upfGtpuAdvertiseAddress "127.0.0.4") }}
-{{- fail "networking.upf.gtpu.advertiseAddress must be an explicit UE-reachable address when fivegc.hostNetwork.enabled=true" }}
+{{- fail "networking.upf.n3.address (or legacy gtpu.advertiseAddress) must be an explicit UE-reachable address when fivegc.hostNetwork.enabled=true" }}
 {{- end }}
 {{- end }}
 {{- if or (eq $upfGtpuAddress "0.0.0.0") (eq $upfGtpuAddress "::") (eq $upfGtpuAddress "127.0.0.4") }}
 {{- fail "networking.upf.gtpu.serverAddress must be a dedicated non-wildcard address: the UPF and SMF share one pod network namespace and both use UDP/2152" }}
 {{- end }}
-{{- if and .Values.vpp.enabled (ne .Values.networking.upf.n6.backend "memif") }}
+{{- if and $vppEnabled (ne $upfN6Backend "memif") }}
 {{- fail "networking.upf.n6.backend must be memif when vpp.enabled=true" }}
 {{- end }}
-{{- if and (eq .Values.networking.upf.n6.backend "memif") (not .Values.vpp.enabled) }}
+{{- if and (eq $upfN6Backend "memif") (not $vppEnabled) }}
 {{- fail "vpp.enabled must be true when networking.upf.n6.backend=memif" }}
 {{- end }}
-{{- if and .Values.vpp.enabled (ne .Values.networking.upf.n3.backend "memif") }}
+{{- if and $vppEnabled (ne $upfN3Backend "memif") }}
 {{- fail "networking.upf.n3.backend must be memif when vpp.enabled=true" }}
 {{- end }}
-{{- if and (eq .Values.networking.upf.n3.backend "memif") (not .Values.vpp.enabled) }}
+{{- if and (eq $upfN3Backend "memif") (not $vppEnabled) }}
 {{- fail "vpp.enabled must be true when networking.upf.n3.backend=memif" }}
 {{- end }}
-{{- if .Values.vpp.enabled }}
-{{- if eq (toString .Values.networking.upf.n3.memif.localAddress) "" }}
-{{- fail "networking.upf.n3.memif.localAddress is required when vpp.enabled=true" }}
+{{- if $vppEnabled }}
+{{- if eq $upfN3MemifLocalAddress "" }}
+{{- fail "networking.upf.n3.address (or legacy n3.memif.localAddress) is required in memif mode" }}
 {{- end }}
-{{- if ne (toString .Values.networking.upf.n3.memif.localAddress) $upfGtpuAdvertiseAddress }}
-{{- fail "networking.upf.n3.memif.localAddress must equal networking.upf.gtpu.advertiseAddress" }}
+{{- if ne $upfN3MemifLocalAddress $upfGtpuAdvertiseAddress }}
+{{- fail "the resolved N3 memif local address must equal the GTP-U advertise address" }}
 {{- end }}
 {{- if eq (toString .Values.vpp.n3.interfaceAddress) "" }}
 {{- fail "vpp.n3.interfaceAddress is required when vpp.enabled=true" }}
@@ -274,13 +278,13 @@ spec:
                 fieldRef:
                   fieldPath: status.podIP
             - name: UPF_GTPU_SERVER_ADDRESS
-              value: {{ .Values.networking.upf.gtpu.serverAddress | quote }}
+              value: {{ $upfGtpuAddress | quote }}
             - name: UPF_GTPU_ADVERTISE_ADDRESS
-              value: {{ .Values.networking.upf.gtpu.advertiseAddress | quote }}
+              value: {{ $upfGtpuAdvertiseAddress | quote }}
             - name: UPF_N6_BACKEND
-              value: {{ .Values.networking.upf.n6.backend | quote }}
+              value: {{ $upfN6Backend | quote }}
             - name: UPF_N3_BACKEND
-              value: {{ .Values.networking.upf.n3.backend | quote }}
+              value: {{ $upfN3Backend | quote }}
           command:
             - /bin/sh
             - -ec
@@ -327,7 +331,7 @@ spec:
             privileged: true
             capabilities:
               add: ["NET_ADMIN"]
-{{- if and (not .Values.fivegc.hostNetwork.enabled) (eq .Values.networking.upf.n3.backend "udp") }}
+{{- if and (not .Values.fivegc.hostNetwork.enabled) (eq $upfN3Backend "udp") }}
           ports:
             - name: upf-gtpu
               containerPort: 2152
@@ -362,7 +366,7 @@ spec:
               mountPath: /etc/open5gs
             - name: logs
               mountPath: /var/log/open5gs
-{{- if eq .Values.networking.upf.n6.backend "tun" }}
+{{- if eq $upfN6Backend "tun" }}
             - name: dev-net-tun
               mountPath: /dev/net/tun
 {{- else }}
@@ -370,7 +374,7 @@ spec:
               mountPath: /run/vpp
 {{- end }}
 {{- include "xcn.localtimeVolumeMount" . | nindent 12 }}
-{{- if .Values.vpp.enabled }}
+{{- if $vppEnabled }}
         - name: vpp
           image: {{ printf "%s:%s" .Values.vpp.image.repository .Values.vpp.image.tag }}
           imagePullPolicy: {{ .Values.vpp.image.pullPolicy }}
@@ -397,7 +401,7 @@ spec:
             - name: VPP_N3_DEFAULT_GATEWAY
               value: {{ .Values.vpp.n3.defaultGateway | quote }}
             - name: VPP_N3_UPF_ADDRESS
-              value: {{ .Values.networking.upf.n3.memif.localAddress | quote }}
+              value: {{ $upfN3MemifLocalAddress | quote }}
             - name: VPP_N6_INTERFACE_ADDRESS
               value: {{ .Values.vpp.n6.externalAddress | quote }}
             - name: VPP_N6_DEFAULT_GATEWAY
@@ -770,7 +774,7 @@ spec:
         - name: hnet
           secret:
             secretName: {{ include "xcn.componentName" (dict "root" . "component" "udm-hnet") }}
-{{- if eq .Values.networking.upf.n6.backend "tun" }}
+{{- if eq $upfN6Backend "tun" }}
         - name: dev-net-tun
           hostPath:
             path: /dev/net/tun

@@ -168,6 +168,10 @@ networking:
     ngap:
       serverAddress: 0.0.0.0
   upf:
+    # Recommended deployment selector: "tun" or "memif". Empty retains
+    # legacy backend/vpp/sessionWorkers overrides; their defaults resolve to
+    # the same UDP/TUN mode.
+    mode: ""
     rateStats:
       # Low-overhead per-user/session/QFI/PDR rate snapshots. Data-plane
       # counters are published once per TX batch, not atomically per packet.
@@ -194,6 +198,11 @@ networking:
       serverAddress: ""
       advertiseAddress: ""
     n3:
+      # Environment-specific UPF N3 address. In tun mode this becomes the
+      # GTP-U bind/advertise address; in memif mode it becomes the raw-IP
+      # memif local/advertise address.
+      address: ""
+      # Legacy advanced override, used only when networking.upf.mode is empty.
       backend: udp
       memif:
         socket: /run/vpp/memif-n3.sock
@@ -210,6 +219,7 @@ networking:
         # N3 memif path; enable only when required by a peer/network policy.
         udpChecksum: false
     n6:
+      # Legacy advanced override, used only when networking.upf.mode is empty.
       backend: tun
       memif:
         socket: /run/vpp/memif.sock
@@ -230,6 +240,7 @@ webui:
   jwtSecretKey: change-this-open5gs-webui-jwt-secret
 
 vpp:
+  # Legacy advanced override, used only when networking.upf.mode is empty.
   enabled: false
   image:
     repository: vpp

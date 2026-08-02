@@ -35,6 +35,71 @@ app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{- end -}}
 
 {{/*
+Resolve the recommended high-level UPF mode. An empty value preserves legacy
+backend/vpp/sessionWorkers overrides; the values.yaml legacy defaults still
+produce UDP/TUN in that case.
+*/}}
+{{- define "xcn.upfMode" -}}
+{{- $mode := toString (default "" .Values.networking.upf.mode) -}}
+{{- if not (has $mode (list "" "tun" "memif")) -}}
+{{- fail (printf "networking.upf.mode must be empty, tun, or memif, got %q" $mode) -}}
+{{- end -}}
+{{- if eq $mode "" -}}legacy{{- else -}}{{- $mode -}}{{- end -}}
+{{- end -}}
+
+{{- define "xcn.upfN3Backend" -}}
+{{- $mode := include "xcn.upfMode" . -}}
+{{- if eq $mode "memif" -}}memif
+{{- else if eq $mode "tun" -}}udp
+{{- else -}}{{- .Values.networking.upf.n3.backend -}}{{- end -}}
+{{- end -}}
+
+{{- define "xcn.upfN6Backend" -}}
+{{- $mode := include "xcn.upfMode" . -}}
+{{- if eq $mode "memif" -}}memif
+{{- else if eq $mode "tun" -}}tun
+{{- else -}}{{- .Values.networking.upf.n6.backend -}}{{- end -}}
+{{- end -}}
+
+{{- define "xcn.upfSessionWorkersEnabled" -}}
+{{- $mode := include "xcn.upfMode" . -}}
+{{- if eq $mode "memif" -}}true
+{{- else if eq $mode "tun" -}}false
+{{- else -}}{{- .Values.networking.upf.dataplane.sessionWorkers.enabled -}}{{- end -}}
+{{- end -}}
+
+{{- define "xcn.vppEnabled" -}}
+{{- $mode := include "xcn.upfMode" . -}}
+{{- if eq $mode "memif" -}}true
+{{- else if eq $mode "tun" -}}false
+{{- else -}}{{- .Values.vpp.enabled -}}{{- end -}}
+{{- end -}}
+
+{{- define "xcn.upfGtpuServerAddress" -}}
+{{- $n3Address := toString (default "" .Values.networking.upf.n3.address) -}}
+{{- $legacy := toString .Values.networking.upf.gtpu.serverAddress -}}
+{{- if and (ne $n3Address "") (eq (include "xcn.upfN3Backend" .) "udp") -}}
+{{- $n3Address -}}
+{{- else if and (eq $legacy "") (eq (include "xcn.upfN3Backend" .) "memif") -}}
+127.0.0.8
+{{- else -}}
+{{- $legacy -}}
+{{- end -}}
+{{- end -}}
+
+{{- define "xcn.upfGtpuAdvertiseAddress" -}}
+{{- $n3Address := toString (default "" .Values.networking.upf.n3.address) -}}
+{{- if ne $n3Address "" -}}{{- $n3Address -}}
+{{- else -}}{{- .Values.networking.upf.gtpu.advertiseAddress -}}{{- end -}}
+{{- end -}}
+
+{{- define "xcn.upfN3MemifLocalAddress" -}}
+{{- $n3Address := toString (default "" .Values.networking.upf.n3.address) -}}
+{{- if ne $n3Address "" -}}{{- $n3Address -}}
+{{- else -}}{{- .Values.networking.upf.n3.memif.localAddress -}}{{- end -}}
+{{- end -}}
+
+{{/*
 Return the configured UPF CPU limit as an integer logical-CPU count.
 This also enforces the minimum CPU allocation needed to isolate one Worker,
 two dispatchers, and the shared control CPU. CPUManager may temporarily expose
@@ -67,7 +132,7 @@ CPUs to Session Workers.
 {{- $configured := toString .Values.networking.upf.dataplane.sessionWorkers.count -}}
 {{- $cpuCount := include "xcn.upfCpuCount" . | int -}}
 {{- if eq $configured "auto" -}}
-{{- if not .Values.networking.upf.dataplane.sessionWorkers.enabled -}}
+{{- if ne (include "xcn.upfSessionWorkersEnabled" .) "true" -}}
 {{- printf "1" -}}
 {{- else -}}
 {{- $reservedText := toString .Values.networking.upf.dataplane.sessionWorkers.reservedCpus -}}
@@ -118,7 +183,7 @@ violate Open5GS' worker-to-TX-qid ownership requirement.
 {{- if or (lt $queueCount 1) (gt $queueCount 16) -}}
 {{- fail (printf "%s must be between 1 and 16, got %d" .path $queueCount) -}}
 {{- end -}}
-{{- if and $root.Values.networking.upf.dataplane.sessionWorkers.enabled (ne $queueCount $workerCount) -}}
+{{- if and (eq (include "xcn.upfSessionWorkersEnabled" $root) "true") (ne $queueCount $workerCount) -}}
 {{- fail (printf "%s (%d) must equal the resolved Session Worker count (%d)" .path $queueCount $workerCount) -}}
 {{- end -}}
 {{- printf "%d" $queueCount -}}

@@ -22,8 +22,9 @@ UPG-VPP 或绕过 UPF 语义的 fast path。
 - 高性能模式：N3/N6均使用raw-IP memif，由VPP 26.06 sidecar分别连接两个VF，
   支持按UPF CPU数量自动配置`1..16`个Session Worker。
 
-Chart默认使用兼容模式：`hostNetwork=false`、N3=`udp`、N6=`tun`、
-`sessionWorkers.enabled=false`、`vpp.enabled=false`。UPF CPU request/limit默认
+Chart有效默认是`networking.upf.mode=tun`兼容模式：`hostNetwork=false`，并
+选择N3=`udp`、N6=`tun`、关闭Session Worker和VPP。为兼容已有release，
+values中的`mode`默认留空并按旧字段解析，结果仍为TUN。UPF CPU request/limit默认
 均为8个逻辑CPU；当前模板要求两者为相同整数且至少为4。兼容模式不创建
 Session Worker或memif dispatcher，UPF主控制线程与默认启用的速率线程固定到
 同一个控制核；UDP/TUN继续走传统UPF事件路径，没有单独的数据处理核。
@@ -33,6 +34,10 @@ N6 dispatcher + 1个共享控制核`分配；VPP sidecar另行申请2个逻辑CP
 为`1个vpp_main + 1个VPP Worker`。该模式还必须提供2个SR-IOV VF和默认8GiB
 的1GiB hugepage，并显式配置N3/N6 VF地址、网关和N3 memif地址。两种模式的
 默认值、必填项、hostNetwork地址要求、完整安装和检查命令见下方链接。
+
+部署时推荐只通过`networking.upf.mode=tun|memif`选择模式，并通过统一的
+`networking.upf.n3.address`设置随环境变化的UPF N3地址；backend、Worker、
+queue、VPP开关和默认CPU不再需要逐项`--set`。
 
 两种模式的完整安装、切换、检查命令和地址要求见
 [helm/xcn/README.md](helm/xcn/README.md#upf-dataplane-deployment-modes)。

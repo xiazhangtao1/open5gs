@@ -53,8 +53,8 @@ path, so a wildcard UPF listener would receive the SMF-bound packets itself.
 helm install xcn helm/xcn -n xcn --create-namespace \
   --set fivegc.hostNetwork.enabled=true \
   --set networking.amf.ngap.serverAddress=192.168.9.60 \
-  --set networking.upf.gtpu.serverAddress=192.168.9.60 \
-  --set networking.upf.gtpu.advertiseAddress=192.168.9.60
+  --set networking.upf.mode=tun \
+  --set networking.upf.n3.address=192.168.9.60
 ```
 
 ## UPF real-time rate CLI
@@ -129,10 +129,8 @@ important defaults are:
 | Value | Default | Meaning |
 |---|---|---|
 | `fivegc.hostNetwork.enabled` | `false` | Use the Pod network; empty AMF/N3 addresses resolve to the Pod IP at startup |
-| `networking.upf.n3.backend` | `udp` | Kernel UDP/2152 N3 |
-| `networking.upf.n6.backend` | `tun` | Kernel `ogstun` N6 |
-| `networking.upf.dataplane.sessionWorkers.enabled` | `false` | Do not create Session Workers or memif dispatchers |
-| `vpp.enabled` | `false` | Do not create the VPP sidecar or request VFs/hugepages |
+| `networking.upf.mode` | empty (effective `tun`) | Preserve old values compatibility; explicitly set `tun` or `memif` in new deployment commands |
+| `networking.upf.n3.address` | empty | Use the Pod IP in default Pod-network TUN mode; set the environment's N3 address for hostNetwork or memif |
 | `resources.fivegc.upf.requests/limits.cpu` | `8` / `8` | Eight logical CPUs for the UPF container |
 | `networking.upf.rateStats.enabled` | `true` | Create the rate/control thread; it shares the UPF control CPU |
 
@@ -142,13 +140,18 @@ The chart applies the following requirements:
 |---|---|
 | Both modes | UPF CPU request and limit must be the same integer and at least `4`. The default is `8`. N3 must use a dedicated non-wildcard bind address because SMF and UPF share the Pod network namespace and both use UDP/2152. |
 | Pod-network UDP/TUN | No mode override is required. Empty AMF/UPF addresses resolve to the Pod IP. The gNB still needs a reachable NGAP and GTP-U path through the configured host ports/services. The node must provide `/dev/net/tun`. |
-| `hostNetwork=true` | `networking.amf.ngap.serverAddress`, `networking.upf.gtpu.serverAddress`, and `networking.upf.gtpu.advertiseAddress` are mandatory explicit addresses. For UDP/TUN, the two UPF addresses normally use the same node N3 address. |
-| VPP/memif mode | Set both backends to `memif`, enable Session Workers and VPP, and set `n3.memif.localAddress`, `vpp.n3.interfaceAddress`, `vpp.n3.defaultGateway`, `vpp.n6.externalAddress`, and `vpp.n6.defaultGateway`. `n3.memif.localAddress` must equal `gtpu.advertiseAddress`. |
+| `hostNetwork=true` | `networking.amf.ngap.serverAddress` and `networking.upf.n3.address` are mandatory explicit addresses. In TUN mode, the N3 address is used for both GTP-U bind and advertise. |
+| VPP/memif mode | Set `mode=memif`, `n3.address`, `vpp.n3.interfaceAddress`, `vpp.n3.defaultGateway`, `vpp.n6.externalAddress`, and `vpp.n6.defaultGateway`. The chart derives both memif backends, Session Workers, VPP, queue counts, the UPF memif/advertise address, and the local compatibility socket `127.0.0.8`. |
 | VPP/memif node | The SR-IOV device plugin must expose at least two allocatable VFs under `vpp.sriov.resourceName`; `vpp.sriov.deviceEnv` must be the matching device environment variable. With defaults, the node also needs two VPP CPUs and 8 GiB of 1-GiB hugepages available. Both VFs must be link-up. |
 
 UDP/memif or memif/TUN mixed combinations are invalid and fail Helm rendering.
 The memif mode is currently IPv4-first; the chart does not configure IPv6 N6
 routing or NAT.
+
+The old `n3.backend`, `n6.backend`, `dataplane.sessionWorkers.enabled`,
+`vpp.enabled`, `gtpu.*Address`, and `n3.memif.localAddress` values remain as
+advanced compatibility overrides only when `networking.upf.mode` is explicitly
+left empty. New deployments should use `mode` and `n3.address`.
 
 ### CPU layout by mode
 
@@ -182,18 +185,14 @@ helm upgrade --install xcn /home/xiazhangtao/code/open5gs/helm/xcn \
   -n xcn --create-namespace \
   --set fivegc.hostNetwork.enabled=true \
   --set networking.amf.ngap.serverAddress=10.2.0.119 \
-  --set networking.upf.gtpu.serverAddress=10.2.0.119 \
-  --set networking.upf.gtpu.advertiseAddress=10.2.0.119 \
-  --set networking.upf.n3.backend=udp \
-  --set networking.upf.n6.backend=tun \
-  --set networking.upf.dataplane.sessionWorkers.enabled=false \
-  --set vpp.enabled=false
+  --set networking.upf.mode=tun \
+  --set networking.upf.n3.address=10.2.0.119
 ```
 
 This renders no VPP container or SR-IOV resource request. The UPF container
 mounts `/dev/net/tun`; `open5gs-k8s-setup` creates `ogstun`, enables IP
 forwarding, and installs IPv4 MASQUERADE/FORWARD rules. When Pod networking is
-used instead of `hostNetwork`, omit the three explicit AMF/UPF host addresses;
+used instead of `hostNetwork`, omit the two explicit AMF and UPF N3 addresses;
 the UPF GTP-U address defaults to the Pod IP.
 
 Verify the running mode:
@@ -215,9 +214,9 @@ restart cannot recover the old PFCP Session state from the UE's existing TUN.
 ### Accelerated VPP/memif mode with two VFs
 
 Use the command in the next section. For a `hostNetwork` deployment, the
-Open5GS compatibility GTP socket can use a dedicated loopback address such as
-`127.0.0.8`; `advertiseAddress` and `n3.memif.localAddress` must both be the
-N3 address exposed by VPP.
+chart automatically binds the Open5GS compatibility GTP socket to `127.0.0.8`.
+`networking.upf.n3.address` is both the advertised N3 address and the Open5GS
+raw-IP memif local address exposed through VPP.
 
 ## VPP memif N3/N6 with two SR-IOV VFs
 
@@ -228,31 +227,20 @@ VF and FIB table for N3, and one VF for N6/NAT44. The resource is configurable;
 the chart currently defaults to `intel.com/fabric_network`. The original UDP
 N3 and TUN N6 backends remain available for fallback.
 
-Build the memif-enabled runtime image and install with free N3/N6 addresses:
+Build the runtime image and install with free N3/N6 addresses. All omitted
+Worker, queue, CPU, VPP resource, VF resource-name, and hugepage values use the
+defaults from `values.yaml`:
 
 ```bash
 docker build --network host -f docker/runtime/Dockerfile \
-  -t xcn-runtime:memif-dev .
+  -t xcn-runtime:latest .
 
-helm upgrade --install xcn helm/xcn -n xcn --create-namespace \
-  --set images.runtime.tag=memif-dev \
+helm upgrade --install xcn /home/xiazhangtao/code/open5gs/helm/xcn \
+  -n xcn --create-namespace \
   --set fivegc.hostNetwork.enabled=true \
   --set networking.amf.ngap.serverAddress=10.2.0.119 \
-  --set networking.upf.gtpu.serverAddress=127.0.0.8 \
-  --set networking.upf.gtpu.advertiseAddress=10.2.0.226 \
-  --set networking.upf.n3.backend=memif \
-  --set networking.upf.n3.memif.localAddress=10.2.0.226 \
-  --set networking.upf.n6.backend=memif \
-  --set networking.upf.dataplane.sessionWorkers.enabled=true \
-  --set-string networking.upf.dataplane.sessionWorkers.count=auto \
-  --set networking.upf.dataplane.sessionWorkers.reservedCpus=3 \
-  --set-string networking.upf.n3.memif.queues=auto \
-  --set-string networking.upf.n6.memif.queues=auto \
-  --set resources.fivegc.upf.requests.cpu=8 \
-  --set resources.fivegc.upf.limits.cpu=8 \
-  --set vpp.enabled=true \
-  --set vpp.sriov.resourceName=intel.com/fabric_network \
-  --set vpp.sriov.deviceEnv=PCIDEVICE_INTEL_COM_FABRIC_NETWORK \
+  --set networking.upf.mode=memif \
+  --set networking.upf.n3.address=10.2.0.226 \
   --set vpp.n3.interfaceAddress=10.2.0.225/20 \
   --set vpp.n3.defaultGateway=10.2.7.254 \
   --set vpp.n6.externalAddress=10.2.0.224/20 \
@@ -282,15 +270,17 @@ N6 dispatchers and one shared control CPU for the rate sampler and UPF main
 event thread. For example, an 8-CPU UPF creates 5 Session Workers and five
 N3/N6 memif queues on both Open5GS and VPP:
 
-```bash
-helm upgrade --install xcn helm/xcn -n xcn --create-namespace \
-  --set resources.fivegc.upf.requests.cpu=8 \
-  --set resources.fivegc.upf.limits.cpu=8 \
-  --set networking.upf.dataplane.sessionWorkers.enabled=true \
-  --set-string networking.upf.dataplane.sessionWorkers.count=auto \
-  --set networking.upf.dataplane.sessionWorkers.reservedCpus=3 \
-  --set-string networking.upf.n3.memif.queues=auto \
-  --set-string networking.upf.n6.memif.queues=auto
+```yaml
+networking:
+  upf:
+    mode: memif
+resources:
+  fivegc:
+    upf:
+      requests:
+        cpu: 8
+      limits:
+        cpu: 8
 ```
 
 Automatic mode requires equal integer CPU requests and limits, at least 4 UPF
@@ -386,9 +376,8 @@ parallelize a single Open5GS UPF instance.
 
 The current implementation is IPv4-first. IPv6 UE routing/NAT is not enabled
 by this VPP template. Restore the original path with
-`networking.upf.n3.backend=udp`, `networking.upf.n6.backend=tun`, and
-`vpp.enabled=false`. Session Workers must also be disabled when restoring the
-UDP/TUN path.
+`networking.upf.mode=tun`; the chart automatically disables Session Workers
+and VPP and restores the UDP/TUN backends.
 
 ### Historical runtime validation on 2026-07-30
 

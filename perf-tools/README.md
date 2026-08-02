@@ -48,6 +48,7 @@ resources:
         cpu: 8
 networking:
   upf:
+    mode: memif
     dataplane:
       sessionWorkers:
         enabled: true
