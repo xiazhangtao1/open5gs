@@ -36,6 +36,7 @@ void upf_gtp_close(void);
 int upf_gtp_handle_n6_data(const void *data, size_t len);
 int upf_gtp_handle_n3_data(
         const void *data, size_t len, const ogs_sockaddr_t *from);
+void upf_gtp_log_n3_pool_stats(void);
 
 #ifdef __cplusplus
 }

@@ -442,6 +442,8 @@ static void dispatcher_main(void *data)
 #endif
             if (dispatcher->type == UPF_DISPATCH_N3)
                 upf_n3_memif_log_stats();
+            if (dispatcher->type == UPF_DISPATCH_N3)
+                upf_gtp_log_n3_pool_stats();
             else
                 upf_n6_memif_log_stats();
             if (dispatcher->type != UPF_DISPATCH_N3) {

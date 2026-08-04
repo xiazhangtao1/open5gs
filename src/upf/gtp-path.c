@@ -59,9 +59,219 @@
 
 #define UPF_GTP_HANDLED     1
 
+#ifndef UPF_N3_PKBUF_POOL_MAX_SLOTS
+#define UPF_N3_PKBUF_POOL_MAX_SLOTS 8192
+#endif
+#define UPF_N3_PKBUF_POOL_MAX_WORKERS 16
+
 const uint8_t proxy_mac_addr[] = { 0x0e, 0x00, 0x00, 0x00, 0x00, 0x01 };
 
 static ogs_pkbuf_pool_t *packet_pool = NULL;
+
+typedef struct upf_n3_pkbuf_pool_s upf_n3_pkbuf_pool_t;
+
+typedef struct upf_n3_pkbuf_slot_s {
+    ogs_pkbuf_t pkbuf;
+    upf_n3_pkbuf_pool_t *pool;
+    struct upf_n3_pkbuf_slot_s *next;
+    unsigned char *storage;
+    uint8_t in_use;
+} upf_n3_pkbuf_slot_t;
+
+struct upf_n3_pkbuf_pool_s {
+    ogs_thread_mutex_t mutex;
+    upf_n3_pkbuf_slot_t *slots;
+    unsigned char *storage;
+    upf_n3_pkbuf_slot_t *free_list;
+    uint32_t capacity;
+    uint32_t storage_size;
+    uint32_t in_use;
+    uint32_t high_water;
+    uint64_t allocations;
+    uint64_t releases;
+    uint64_t fallbacks;
+    bool initialized;
+    bool accepting;
+};
+
+static upf_n3_pkbuf_pool_t n3_pkbuf_pools[UPF_N3_PKBUF_POOL_MAX_WORKERS];
+static uint8_t n3_pkbuf_pool_count;
+
+static void upf_n3_pkbuf_pool_final(void);
+
+static void upf_n3_pkbuf_pool_release(ogs_pkbuf_t *pkbuf)
+{
+    upf_n3_pkbuf_slot_t *slot = (upf_n3_pkbuf_slot_t *)pkbuf;
+    upf_n3_pkbuf_pool_t *pool;
+    uint8_t expected = 1;
+
+    ogs_assert(slot);
+    pool = slot->pool;
+    ogs_assert(pool);
+
+    if (!__atomic_compare_exchange_n(&slot->in_use, &expected, 0, false,
+                __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE)) {
+        ogs_error("N3 pkbuf pool duplicate release");
+        return;
+    }
+
+    ogs_thread_mutex_lock(&pool->mutex);
+    ogs_assert(pool->in_use);
+    pool->in_use--;
+    pool->releases++;
+    if (pool->accepting) {
+        slot->next = pool->free_list;
+        pool->free_list = slot;
+    }
+    ogs_thread_mutex_unlock(&pool->mutex);
+}
+
+static ogs_pkbuf_t *upf_n3_pkbuf_pool_alloc(size_t len)
+{
+    uint8_t worker_id = upf_dataplane_worker_id();
+    upf_n3_pkbuf_pool_t *pool;
+    upf_n3_pkbuf_slot_t *slot;
+
+    if (worker_id >= n3_pkbuf_pool_count)
+        return NULL;
+    pool = &n3_pkbuf_pools[worker_id];
+    if (!pool->initialized ||
+        len > pool->storage_size - OGS_TUN_MAX_HEADROOM)
+        return NULL;
+
+    ogs_thread_mutex_lock(&pool->mutex);
+    slot = pool->free_list;
+    if (slot) {
+        pool->free_list = slot->next;
+        slot->next = NULL;
+        pool->in_use++;
+        if (pool->in_use > pool->high_water)
+            pool->high_water = pool->in_use;
+        pool->allocations++;
+        ogs_assert(__atomic_exchange_n(
+                    &slot->in_use, 1, __ATOMIC_ACQ_REL) == 0);
+    } else {
+        pool->fallbacks++;
+    }
+    ogs_thread_mutex_unlock(&pool->mutex);
+    if (!slot)
+        return NULL;
+
+    ogs_pkbuf_init_external(&slot->pkbuf, slot->storage,
+            pool->storage_size, upf_n3_pkbuf_pool_release);
+    ogs_pkbuf_reserve(&slot->pkbuf, OGS_TUN_MAX_HEADROOM);
+    ogs_pkbuf_put(&slot->pkbuf, len);
+    return &slot->pkbuf;
+}
+
+static int upf_n3_pkbuf_pool_init(void)
+{
+    uint32_t capacity = upf_self()->dataplane.worker_queue_size;
+    uint32_t storage_size = OGS_MAX_PKT_LEN;
+    uint8_t count = upf_self()->dataplane.worker_count;
+    uint8_t i;
+
+    if (!upf_self()->n3.memif)
+        return OGS_OK;
+    if (n3_pkbuf_pool_count)
+        return OGS_OK;
+    if (!count)
+        count = 1;
+    if (count > OGS_ARRAY_SIZE(n3_pkbuf_pools)) {
+        ogs_error("N3 pkbuf pool worker count %u exceeds maximum %zu",
+                count, OGS_ARRAY_SIZE(n3_pkbuf_pools));
+        return OGS_ERROR;
+    }
+    if (!capacity || capacity > UPF_N3_PKBUF_POOL_MAX_SLOTS)
+        capacity = UPF_N3_PKBUF_POOL_MAX_SLOTS;
+    if (storage_size <= OGS_TUN_MAX_HEADROOM) {
+        ogs_error("Invalid N3 pkbuf pool storage size %u", storage_size);
+        return OGS_ERROR;
+    }
+
+    n3_pkbuf_pool_count = count;
+    for (i = 0; i < count; i++) {
+        upf_n3_pkbuf_pool_t *pool = &n3_pkbuf_pools[i];
+        uint32_t j;
+
+        memset(pool, 0, sizeof(*pool));
+        ogs_thread_mutex_init(&pool->mutex);
+        pool->capacity = capacity;
+        pool->storage_size = storage_size;
+        pool->slots = calloc(capacity, sizeof(*pool->slots));
+        pool->storage = calloc(capacity, storage_size);
+        if (!pool->slots || !pool->storage) {
+            ogs_error("Failed to allocate N3 pkbuf pool %u [slots:%u size:%u]",
+                    i, capacity, storage_size);
+            pool->initialized = true;
+            n3_pkbuf_pool_count = i + 1;
+            upf_n3_pkbuf_pool_final();
+            return OGS_ERROR;
+        }
+        for (j = 0; j < capacity; j++) {
+            upf_n3_pkbuf_slot_t *slot = &pool->slots[j];
+
+            slot->pool = pool;
+            slot->storage = pool->storage + (size_t)j * storage_size;
+            slot->next = pool->free_list;
+            pool->free_list = slot;
+        }
+        pool->accepting = true;
+        pool->initialized = true;
+    }
+
+    ogs_info("N3 worker-local pkbuf pools initialized "
+            "[workers:%u slots:%u storage:%u]",
+            count, capacity, storage_size);
+    return OGS_OK;
+}
+
+static void upf_n3_pkbuf_pool_final(void)
+{
+    uint8_t i;
+
+    for (i = 0; i < n3_pkbuf_pool_count; i++) {
+        upf_n3_pkbuf_pool_t *pool = &n3_pkbuf_pools[i];
+
+        if (!pool->initialized)
+            continue;
+        ogs_thread_mutex_lock(&pool->mutex);
+        pool->accepting = false;
+        if (pool->in_use) {
+            ogs_error("N3 pkbuf pool %u finalized with %u outstanding slots; "
+                    "retaining storage for safe late release", i, pool->in_use);
+            ogs_thread_mutex_unlock(&pool->mutex);
+            continue;
+        }
+        ogs_thread_mutex_unlock(&pool->mutex);
+        ogs_thread_mutex_destroy(&pool->mutex);
+        free(pool->storage);
+        free(pool->slots);
+        memset(pool, 0, sizeof(*pool));
+    }
+    n3_pkbuf_pool_count = 0;
+}
+
+void upf_gtp_log_n3_pool_stats(void)
+{
+    uint8_t i;
+
+    for (i = 0; i < n3_pkbuf_pool_count; i++) {
+        upf_n3_pkbuf_pool_t *pool = &n3_pkbuf_pools[i];
+
+        if (!pool->initialized)
+            continue;
+        ogs_thread_mutex_lock(&pool->mutex);
+        ogs_info("N3 pkbuf pool worker:%u "
+                "[capacity:%u in-use:%u high:%u alloc:%llu "
+                "release:%llu fallback:%llu]",
+                i, pool->capacity, pool->in_use, pool->high_water,
+                (unsigned long long)pool->allocations,
+                (unsigned long long)pool->releases,
+                (unsigned long long)pool->fallbacks);
+        ogs_thread_mutex_unlock(&pool->mutex);
+    }
+}
 
 static void upf_gtp_handle_multicast(ogs_pkbuf_t *recvbuf);
 static void upf_gtp_handle_n6_packet(
@@ -1032,17 +1242,24 @@ int upf_gtp_handle_n3_data(
         const void *data, size_t len, const ogs_sockaddr_t *from)
 {
     ogs_pkbuf_t *pkbuf = NULL;
+    bool pooled = false;
     ogs_sock_t *sock = ogs_gtp_self()->gtpu_sock;
 
     if (!data || !from || !sock || len == 0 ||
         len > OGS_MAX_PKT_LEN-OGS_TUN_MAX_HEADROOM)
         return OGS_ERROR;
 
-    pkbuf = ogs_pkbuf_alloc(packet_pool, OGS_MAX_PKT_LEN);
+    pkbuf = upf_n3_pkbuf_pool_alloc(len);
+    if (pkbuf)
+        pooled = true;
+    if (!pkbuf)
+        pkbuf = ogs_pkbuf_alloc(packet_pool, OGS_MAX_PKT_LEN);
     if (!pkbuf)
         return OGS_ERROR;
-    ogs_pkbuf_reserve(pkbuf, OGS_TUN_MAX_HEADROOM);
-    ogs_pkbuf_put(pkbuf, len);
+    if (!pooled) {
+        ogs_pkbuf_reserve(pkbuf, OGS_TUN_MAX_HEADROOM);
+        ogs_pkbuf_put(pkbuf, len);
+    }
     memcpy(pkbuf->data, data, len);
 
     upf_gtp_handle_n3_packet(pkbuf, sock, (ogs_sockaddr_t *)from);
@@ -1070,6 +1287,7 @@ int upf_gtp_init(void)
 
 void upf_gtp_final(void)
 {
+    upf_n3_pkbuf_pool_final();
     ogs_pkbuf_pool_destroy(packet_pool);
 }
 
@@ -1152,8 +1370,16 @@ int upf_gtp_open(void)
                 upf_n3_memif_close();
             return rc;
         }
+        rc = upf_n3_pkbuf_pool_init();
+        if (rc != OGS_OK) {
+            upf_n6_memif_close();
+            if (upf_self()->n3.memif)
+                upf_n3_memif_close();
+            return rc;
+        }
         rc = upf_dataplane_start();
         if (rc != OGS_OK) {
+            upf_n3_pkbuf_pool_final();
             upf_n6_memif_close();
             if (upf_self()->n3.memif)
                 upf_n3_memif_close();
@@ -1205,8 +1431,15 @@ int upf_gtp_open(void)
         }
     }
 
-    if (upf_self()->n3.memif)
-        return upf_dataplane_start();
+    if (upf_self()->n3.memif) {
+        rc = upf_n3_pkbuf_pool_init();
+        if (rc != OGS_OK)
+            return rc;
+        rc = upf_dataplane_start();
+        if (rc != OGS_OK)
+            upf_n3_pkbuf_pool_final();
+        return rc;
+    }
 
     return OGS_OK;
 }
@@ -1216,6 +1449,7 @@ void upf_gtp_close(void)
     ogs_pfcp_dev_t *dev = NULL;
 
     upf_dataplane_stop();
+    upf_n3_pkbuf_pool_final();
     ogs_gtp_set_user_plane_sent_cb(NULL);
     ogs_socknode_remove_all(&ogs_gtp_self()->gtpu_list);
 
