@@ -1588,3 +1588,62 @@ PG→memif→Open5GS完整UPF语义→memif→VPP的同机路径中，1个VPP Wo
 5个UPF Worker对单Session及五Session均可达到10Gbps零丢包。fabric VF未插
 网线，测试未覆盖真实外部N3/N6 VF、网线、对端设备及线速收发，因此该结论
 不能外推为跨服务器或外部VF全链路10Gbps。
+
+### 高于10Gbps的内部路径上限探测（2026-08-09）
+
+保持同一Pod、VPP/UPF进程、Session、1428-byte报文、10微秒节奏和20秒时长
+不变，继续将目标速率提高到12/15/20/25/30/40Gbps。高于发生器能力后，以
+VPP PG实际生成并送入memif的包数换算实际输入吞吐，不再用配置目标值计算
+UPF丢包率。
+
+单Session结果：
+
+| 方向 | 目标速率 | 实际输入 | 实际输出 | UPF路径丢包率 | 说明 |
+|---|---:|---:|---:|---:|---|
+| DL | 12 Gbps | 12.0000 Gbps | 12.0000 Gbps | 0% | 达到目标 |
+| DL | 15 Gbps | 15.0000 Gbps | 15.0000 Gbps | 0% | 达到目标 |
+| DL | 20 Gbps | 20.0000 Gbps | 20.0000 Gbps | 0% | 达到目标 |
+| DL | 21 Gbps | 21.0000 Gbps | 21.0000 Gbps | 0% | 达到目标 |
+| DL | 22 Gbps | 22.0000 Gbps | 22.0000 Gbps | 0% | 连续三轮均零丢包 |
+| DL | 23 Gbps | 23.0000 Gbps | 22.9535 Gbps | 0.20235% | 开始出现持续丢包 |
+| DL | 24 Gbps | 24.0000 Gbps | 23.6831 Gbps | 1.32031% | Worker入口队列满 |
+| DL | 25 Gbps | 25.0000 Gbps | 24.2824 Gbps | 2.87052% | 本轮最高有效输出 |
+| DL | 30 Gbps | 29.0563 Gbps | 23.0471 Gbps | 20.68141% | PG也未达到目标 |
+| DL | 40 Gbps | 35.8554 Gbps | 22.8048 Gbps | 36.39792% | 已明显过载 |
+| UL | 12 Gbps | 12.0000 Gbps | 12.0000 Gbps | 0% | 达到目标 |
+| UL | 15 Gbps | 15.0000 Gbps | 15.0000 Gbps | 0% | 达到目标 |
+| UL | 20 Gbps | 20.0000 Gbps | 20.0000 Gbps | 0% | 达到目标 |
+| UL | 25 Gbps | 24.1424 Gbps | 24.1424 Gbps | 0% | PG先到达瓶颈 |
+| UL | 30 Gbps | 26.4440 Gbps | 26.4440 Gbps | 0% | PG先到达瓶颈 |
+| UL | 40 Gbps | 27.9739 Gbps | 27.9739 Gbps | 0% | PG平台值，UPF上限未触及 |
+
+单Session下行可重复零丢包能力为22Gbps，带2.87052%丢包时峰值有效输出为
+24.2824Gbps。23Gbps以上的损失对应owner Worker的`queue-high=8192`和
+`queue-full`增长；N3 TX qid的`alloc-short`、`alloc-fail`和`drop`仍为0，
+因此本轮拐点在dispatcher到单Session owner Worker的入口处理能力，不在N3
+memif TX buffer申请。单Session上行在实际27.9739Gbps仍零丢包，但此时单个
+VPP PG Worker已不能继续提高输入，故不能把27.9739Gbps当作UPF上行上限。
+
+五Session等分流量结果：
+
+| 方向 | 目标速率 | 实际输入 | 实际输出 | UPF路径丢包率 | 说明 |
+|---|---:|---:|---:|---:|---|
+| DL | 12 Gbps | 12.0000 Gbps | 12.0000 Gbps | 0% | 达到目标 |
+| DL | 15 Gbps | 15.0000 Gbps | 15.0000 Gbps | 0% | 达到目标 |
+| DL | 20 Gbps | 19.4702 Gbps | 19.4702 Gbps | 0% | 多流PG先到瓶颈 |
+| DL | 25 Gbps | 21.3797 Gbps | 21.3797 Gbps | 0% | 多流PG先到瓶颈 |
+| DL | 30 Gbps | 22.4686 Gbps | 22.4685 Gbps | 约0% | 30个在途包跨计数边界 |
+| DL | 40 Gbps | 24.3899 Gbps | 24.3900 Gbps | 约0% | 上一档30个在途包补计入 |
+| UL | 12 Gbps | 12.0000 Gbps | 12.0000 Gbps | 0% | 达到目标 |
+| UL | 15 Gbps | 15.0000 Gbps | 15.0000 Gbps | 0% | 达到目标 |
+| UL | 20 Gbps | 18.0305 Gbps | 18.0305 Gbps | 0% | 五路PCAP回放先到瓶颈 |
+| UL | 25 Gbps | 19.2720 Gbps | 19.2720 Gbps | 0% | 五路PCAP回放先到瓶颈 |
+| UL | 30 Gbps | 20.7177 Gbps | 20.7177 Gbps | 0% | 五路PCAP回放先到瓶颈 |
+| UL | 40 Gbps | 21.2617 Gbps | 21.2617 Gbps | 0% | PG平台值，UPF上限未触及 |
+
+五Session在本轮发生器能够提供的最高实际输入下，下行24.3899Gbps、上行
+21.2617Gbps均未观察到持续UPF丢包；五个Worker除单Session过载所归属的
+Worker 0外，其余Worker的`drops`和`queue-full`为0。由于VPP只有一个Worker，
+并同时承担内置PG、多条流生成及memif收发，本轮五Session上限首先受测试源
+限制。要继续确认五Worker的真正聚合上限，需要独立的多核VCL/VF发生器，或
+将发生器与被测VPP实例分离，不能继续通过提高同一个PG的配置目标得出结论。
