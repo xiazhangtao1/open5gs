@@ -1680,3 +1680,45 @@ X710外部单口吞吐仍受10Gbps物理线速限制。
 
 测试后已删除临时memif接口、socket和drop路由。原N3/N6 memif保持connected，
 VPP仍为1个Worker，5GC Pod保持9/9 Running且0重启。
+
+### 内置PG与独立memif发生器的方法边界（2026-08-10）
+
+为继续测试`1 VPP Worker + 5 UPF Worker`，创建临时独立VPP发生器Pod，使用
+5个独占worker，并通过额外IP模式memif接入正式VPP。正式VPP仍为1 main +
+1 Worker，UPF保持5个Session Worker。发生器按Session分别放到worker 0至4，
+UPF成功输出使用`xcnctl`的Session级`ul_bytes/dl_bytes`前后差分统计，避免VPP
+多worker统计段延迟合并造成接口计数跨轮污染。
+
+该实验确认三种测试路径不能混为同一性能结论：
+
+1. 正式VPP内置PG不增加入口hop，但PG与memif/DPDK graph共享被测VPP Worker；
+   超过约20Gbps后PG实际输入先饱和，只能给出UPF能力下界。
+2. 裸libmemif→VPP RX/IPv4 lookup/drop不经过Open5GS。当前单VPP Worker三轮
+   平均96.028Gbps；历史2个VPP Worker/2 qid曾达到201.195Gbps。这类结果只
+   证明共享内存和VPP memif能力，不代表完整核心网吞吐。
+3. 独立memif发生器不占正式VPP/UPF CPU，但在正式路径前额外增加一次
+   `memif RX → 正式VPP → N3/N6 memif TX`。上行可用于确认UPF成功处理能力；
+   下行中正式单Worker连续处理额外入口memif和N6 memif，先形成新的测试路径
+   瓶颈，因此不能把该结果当作真实VF入口的UPF上限。
+
+独立发生器上行、1428-byte inner packet、20秒的精确结果：
+
+| 场景 | 发生器目标 | 实际输入 | UPF成功输出 | 端到端丢包率 |
+|---|---:|---:|---:|---:|
+| 单Session | 28 Gbps | 24.754535 Gbps | 24.754535 Gbps | 0% |
+| 单Session | 30 Gbps | 24.814560 Gbps | 24.813689 Gbps | 0.003510% |
+| 五Session | 19 Gbps | 18.999997 Gbps | 18.999997 Gbps | 0% |
+| 五Session | 19.5 Gbps | 19.499991 Gbps | 19.478198 Gbps | 0.111759% |
+| 五Session | 20 Gbps | 19.999997 Gbps | 18.397590 Gbps | 8.012035% |
+
+单Session上行可重复零丢包下界提高到24.754535Gbps；30Gbps目标时独立单流
+发生器自身已平台在约24.81Gbps。五Session端到端零丢包边界为19Gbps，19.5G
+开始出现小幅入口/处理差值。下行独立发生器20Gbps目标时，额外入口hop使正式
+单VPP Worker先饱和：单Session仅约7.14Gbps、五Session约11.16Gbps成功进入
+并通过UPF；该数值低于不增加入口hop的内置PG结果，明确属于测试架构引入的
+瓶颈，不用于覆盖此前内置PG的下行结论。
+
+要获得生产路径的最终上限，应使用独立VCL/硬件发生器从真实N3/N6 VF进入，
+同时让正式VPP只执行生产graph。当前fabric VF未插网线，无法完成该验证；
+X710实际外部单口仍受10Gbps物理线速限制。实验后已删除临时Pod、额外memif、
+socket和路由，正式N3/N6保持connected，部署恢复为单VPP Worker。
