@@ -1701,6 +1701,81 @@ UPF成功输出使用`xcnctl`的Session级`ul_bytes/dl_bytes`前后差分统计�
    下行中正式单Worker连续处理额外入口memif和N6 memif，先形成新的测试路径
    瓶颈，因此不能把该结果当作真实VF入口的UPF上限。
 
+### 临时回退N3 Worker本地pkbuf池A/B（2026-08-10）
+
+临时反向应用提交`9d8f25b08`，仅移除N3 memif接收路径的Worker本地
+`ogs_pkbuf`对象池，重新构建并部署`xcn-runtime:n3-pool-revert-ab`。其他条件
+保持不变：VPP 2个逻辑CPU（1 main + 1 Worker）、UPF 8个逻辑CPU和5个
+Session Worker、N3/N6各5组8192-entry memif ring、1428-byte inner IPv4
+UDP、10微秒节奏、每档20秒。测试结束后已恢复正式镜像
+`xcn-runtime:n3-worker-pool-phase1`，并撤销工作区临时回退。
+
+UE重建后建立六个PFCP Session。五Session测试选取其中owner分别为
+`2/0/3/1/4`的五个Session，确保流量实际覆盖全部五个Worker。上行PCAP依据
+本次PFCP响应重新生成，同时更新Access侧TEID、内层UE IP和IPv4 header
+checksum；6Mbps冒烟1050包全部通过，排除了旧TEID或旧UE IP造成的伪丢包。
+
+#### 单Session结果
+
+| 方向 | 目标速率 | 实际输入 | 实际输出 | UPF路径丢包率 |
+|---|---:|---:|---:|---:|
+| DL | 10 Gbps | 10.0000 Gbps | 10.0000 Gbps | 0% |
+| DL | 15 Gbps | 15.0000 Gbps | 15.0000 Gbps | 0% |
+| DL | 20 Gbps | 20.0000 Gbps | 20.0000 Gbps | 0% |
+| DL | 21 Gbps | 21.0000 Gbps | 19.8460 Gbps | 5.495222% |
+| DL | 22 Gbps | 22.0000 Gbps | 15.8563 Gbps | 27.925921% |
+| DL | 25 Gbps | 25.0000 Gbps | 20.1089 Gbps | 19.564437% |
+| DL | 30 Gbps | 29.5429 Gbps | 20.1992 Gbps | 31.627659% |
+| DL | 40 Gbps | 37.4263 Gbps | 20.1357 Gbps | 46.198979% |
+| UL | 20 Gbps | 20.0000 Gbps | 20.0000 Gbps | 0% |
+| UL | 25 Gbps | 24.2609 Gbps | 24.2609 Gbps | 0% |
+| UL | 30 Gbps | 25.7317 Gbps | 25.7317 Gbps | 0% |
+| UL | 40 Gbps | 27.1945 Gbps | 27.1945 Gbps | 0% |
+
+回退后的单Session下行可重复零丢包最高档为20Gbps，21Gbps已出现5.50%丢包；
+高压下有效输出约停留在20.1Gbps。对象池版本此前22Gbps连续三轮零丢包，
+25Gbps时仍输出24.2824Gbps。但对象池分配函数不在下行N6入口热路径，且两组
+测试之间重建了Pod、CPU绑定和memif连接，因此下行差异只能记录为相关现象，
+不能直接归因于对象池；严格归因仍需同Pod热切换或多轮交叉A/B。单Session
+上行由单流PG先达到27.1945Gbps平台，所有实际输入均被UPF输出，未触及UPF
+上行上限。
+
+#### 五Session、五Worker结果
+
+| 方向 | 目标速率 | 实际输入 | 实际输出 | UPF路径丢包率 |
+|---|---:|---:|---:|---:|
+| DL | 10 Gbps | 10.0000 Gbps | 10.0000 Gbps | 0% |
+| DL | 15 Gbps | 15.0000 Gbps | 15.0000 Gbps | 0% |
+| DL | 20 Gbps | 19.2192 Gbps | 19.2192 Gbps | 0% |
+| DL | 25 Gbps | 20.8083 Gbps | 20.8083 Gbps | 0% |
+| DL | 30 Gbps | 22.2131 Gbps | 22.2131 Gbps | 0% |
+| DL | 40 Gbps | 23.3788 Gbps | 23.3788 Gbps | 0% |
+| UL | 10 Gbps | 10.0000 Gbps | 10.0000 Gbps | 0% |
+| UL | 11 Gbps | 11.0000 Gbps | 11.0000 Gbps | 0% |
+| UL | 12 Gbps | 11.7514 Gbps | 11.7514 Gbps | 0% |
+| UL | 13 Gbps | 12.4101 Gbps | 12.4011 Gbps | 0.072768% |
+| UL | 14 Gbps | 13.0528 Gbps | 12.7034 Gbps | 2.677036% |
+| UL | 15 Gbps | 13.8315 Gbps | 12.8072 Gbps | 7.405345% |
+| UL | 20 Gbps | 17.3455 Gbps | 13.3063 Gbps | 23.287103% |
+| UL | 30 Gbps | 23.6402 Gbps | 13.7042 Gbps | 42.030095% |
+| UL | 40 Gbps | 28.8633 Gbps | 13.4961 Gbps | 53.241321% |
+
+五Session下行在发生器能够提供的最高23.3788Gbps实际输入下仍零丢包，未触及
+UPF下行上限。五Session上行零丢包最高实际输入为11.7514Gbps；12.4101Gbps
+开始丢0.072768%，过载后的有效输出平台约13.3至13.7Gbps。对象池版本此前
+五Session上行在内置PG能够提供的21.2617Gbps实际输入下仍零丢包，说明本提交
+不是无效的预分配：结果强烈支持它缓解了N3 memif接收后逐包
+`ogs_pkbuf_alloc/free`造成的高并发分配压力，对多Session上行提升尤其明显。
+由于临时回退需要重建Pod，这仍是部署级A/B，而不是同进程热切换的唯一变量
+实验；后续如需精确量化对象池净收益，应固定CPU/qid后做多轮交叉复测。
+
+以上均为同实例VPP内置PG→memif→Open5GS完整UPF语义→memif→VPP的内存路径；
+fabric VF未插网线，不代表外部X710线速测试。22Gbps单Session下行回退轮次的
+丢包高于相邻档位，反映过载后的调度/队列波动；零丢包边界以20/21Gbps相邻
+档位为准，不用单个22Gbps异常值推导线性性能。
+
+### 独立memif发生器结果（2026-08-10）
+
 独立发生器上行、1428-byte inner packet、20秒的精确结果：
 
 | 场景 | 发生器目标 | 实际输入 | UPF成功输出 | 端到端丢包率 |
