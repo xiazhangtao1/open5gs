@@ -1647,3 +1647,36 @@ Worker 0外，其余Worker的`drops`和`queue-full`为0。由于VPP只有一个W
 并同时承担内置PG、多条流生成及memif收发，本轮五Session上限首先受测试源
 限制。要继续确认五Worker的真正聚合上限，需要独立的多核VCL/VF发生器，或
 将发生器与被测VPP实例分离，不能继续通过提高同一个PG的配置目标得出结论。
+
+### 当前VPP单Worker裸memif性能（2026-08-10）
+
+为排除Open5GS UPF处理开销，在当前VPP 2逻辑CPU（1 main + 1 Worker）实例
+内临时创建独立IP模式master memif。UPF容器内的临时libmemif slave客户端
+使用两个独立CPU和两个TX qid，持续执行
+`memif_buffer_alloc(256) → 1428-byte payload copy → memif_tx_burst()`；唯一
+VPP Worker接收两个qid，执行IPv4 input/lookup后命中临时drop路由。该路径不
+进入Open5GS，不执行PFCP/PDR/FAR/QER/URR或GTP-U封装/解封装。
+
+2秒冒烟达到客户端提交97.661Gbps。随后三轮10秒结果如下，吞吐均按1428字节
+payload和VPP接口实际RX包数计算：
+
+| 轮次 | 客户端提交包 | VPP实际RX包 | VPP实际吞吐 | VPP实际包率 | 客户端TX short |
+|---:|---:|---:|---:|---:|---:|
+| 1 | 84,050,176 | 84,035,584 | 96.002251 Gbps | 8.404 Mpps | 0 |
+| 2 | 84,153,344 | 84,138,752 | 96.120110 Gbps | 8.414 Mpps | 0 |
+| 3 | 84,014,848 | 84,000,256 | 95.961892 Gbps | 8.400 Mpps | 0 |
+
+三轮VPP实际接收平均96.028085Gbps，范围95.961892～96.120110Gbps。每轮
+客户端提交与VPP RX固定相差14,592包，对应客户端结束并断开时尚未被VPP读取
+的双ring在途描述符；该差值不计入VPP实际吞吐。测试中allocation频繁短申请
+或返回0，表示生产者已经追上ring消费速度，但所有成功申请的buffer均满足
+`tx-request == tx-sent`，`tx-short=0`。
+
+这说明当前单VPP Worker的IP模式memif RX + IPv4 lookup/drop能力约为96Gbps，
+远高于完整UPF单Session下行22Gbps零丢包能力。两者差值来自Open5GS完整UPF
+语义、dispatcher到Session owner Worker队列以及反向memif发送，不是memif
+本身只能处理20～28Gbps。该裸测试是内存数据面能力，不经过VF和物理网线；
+X710外部单口吞吐仍受10Gbps物理线速限制。
+
+测试后已删除临时memif接口、socket和drop路由。原N3/N6 memif保持connected，
+VPP仍为1个Worker，5GC Pod保持9/9 Running且0重启。
