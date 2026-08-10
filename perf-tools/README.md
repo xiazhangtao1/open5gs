@@ -43,9 +43,9 @@ resources:
   fivegc:
     upf:
       requests:
-        cpu: 8
+        cpu: 4
       limits:
-        cpu: 8
+        cpu: 4
 networking:
   upf:
     mode: memif
@@ -64,8 +64,9 @@ networking:
         queues: auto
 ```
 
-自动模式按`worker = UPF逻辑CPU - reservedCpus`计算，因此上例为
-`8 - 3 = 5`个Worker。UPF容器至少需要4个逻辑CPU，CPU requests/limits必须
+默认按`worker = UPF逻辑CPU - reservedCpus`计算，4核配置得到`4 - 3 = 1`个
+Worker和一组N3/N6 memif队列；提高到8核会自动得到5个Worker。UPF容器至少
+需要4个逻辑CPU，CPU requests/limits必须
 相等且为整数；`reservedCpus`至少为3，分别为N3/N6 dispatcher以及共享的
 rate/main控制线程保留CPU。计算结果必须在`1..16`。数值型`count`继续支持
 手工覆盖，但也必须满足`count + 3 <= UPF逻辑CPU`；`queues: auto`会跟随自动

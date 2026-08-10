@@ -20,17 +20,18 @@ UPG-VPP 或绕过 UPF 语义的 fast path。
 - 无VF兼容模式：N3使用内核UDP/2152，N6使用`ogstun`，不创建VPP容器、不申请
   SR-IOV资源，并关闭Session Worker。
 - 高性能模式：N3/N6均使用raw-IP memif，由VPP 26.06 sidecar分别连接两个VF，
-  支持按UPF CPU数量自动配置`1..16`个Session Worker。
+  默认1个Session Worker，也支持显式配置或按UPF CPU自动推导`1..16`个Worker。
 
 Chart有效默认是`networking.upf.mode=tun`兼容模式：`hostNetwork=false`，并
 选择N3=`udp`、N6=`tun`、关闭Session Worker和VPP。为兼容已有release，
 values中的`mode`默认留空并按旧字段解析，结果仍为TUN。UPF CPU request/limit默认
-均为8个逻辑CPU；当前模板要求两者为相同整数且至少为4。兼容模式不创建
+均为4个逻辑CPU；当前模板要求两者为相同整数且至少为4。兼容模式不创建
 Session Worker或memif dispatcher，UPF主控制线程与默认启用的速率线程固定到
 同一个控制核；UDP/TUN继续走传统UPF事件路径，没有单独的数据处理核。
 
-高性能模式下，默认8个UPF逻辑CPU按`5个Session Worker + N3 dispatcher +
-N6 dispatcher + 1个共享控制核`分配；VPP sidecar另行申请2个逻辑CPU，默认
+高性能模式下，默认4个UPF逻辑CPU自动解析为`1个Session Worker + N3 dispatcher +
+N6 dispatcher + 1个共享控制核`。增加UPF CPU时会继续自动增加Worker数量。
+VPP sidecar另行申请2个逻辑CPU，默认
 为`1个vpp_main + 1个VPP Worker`。该模式还必须提供2个SR-IOV VF和默认8GiB
 的1GiB hugepage，并显式配置N3/N6 VF地址、网关和N3 memif地址。两种模式的
 默认值、必填项、hostNetwork地址要求、完整安装和检查命令见下方链接。

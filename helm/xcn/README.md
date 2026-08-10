@@ -138,7 +138,7 @@ The chart applies the following requirements:
 
 | Scope | Required configuration or node prerequisite |
 |---|---|
-| Both modes | UPF CPU request and limit must be the same integer and at least `4`. The default is `8`. N3 must use a dedicated non-wildcard bind address because SMF and UPF share the Pod network namespace and both use UDP/2152. |
+| Both modes | UPF CPU request and limit must be the same integer and at least `4`. The default is `4`. N3 must use a dedicated non-wildcard bind address because SMF and UPF share the Pod network namespace and both use UDP/2152. |
 | Pod-network UDP/TUN | No mode override is required. Empty AMF/UPF addresses resolve to the Pod IP. The gNB still needs a reachable NGAP and GTP-U path through the configured host ports/services. The node must provide `/dev/net/tun`. |
 | `hostNetwork=true` | `networking.amf.ngap.serverAddress` and `networking.upf.n3.address` are mandatory explicit addresses. In TUN mode, the N3 address is used for both GTP-U bind and advertise. |
 | VPP/memif mode | Set `mode=memif`, `n3.address`, `vpp.n3.interfaceAddress`, `vpp.n3.defaultGateway`, `vpp.n6.externalAddress`, and `vpp.n6.defaultGateway`. The chart derives both memif backends, Session Workers, VPP, queue counts, the UPF memif/advertise address, and the local compatibility socket `127.0.0.8`. |
@@ -157,22 +157,22 @@ left empty. New deployments should use `mode` and `n3.address`.
 
 The CPU values below are logical CPUs assigned to the individual container,
 not whole-node CPU numbers. If the UPF cpuset sorted by logical CPU ID is
-`C0..C7`, the default layouts are:
+`C0..C3`, the default layouts are:
 
 | Mode | UPF CPU layout | VPP CPU layout |
 |---|---|---|
-| UDP/TUN, default 8 UPF CPUs | No Session Workers, memif dispatchers, or isolated data cores. `main/control` and the enabled `rate/control` thread are both pinned to `C3`; UDP/TUN uses the legacy UPF event path. Other auxiliary work remains under the normal scheduler inside the UPF cpuset. | No VPP container. |
-| VPP/memif, default 8 UPF CPUs | Five Session Workers on `C0..C4`, N3 dispatcher on `C5`, N6 dispatcher on `C6`, and `main/control` plus `rate/control` on `C7`. | Separate two-CPU container: one `vpp_main` CPU and one VPP Worker CPU by default. |
-| VPP/memif, minimum 4 UPF CPUs | One Session Worker, two dedicated dispatchers, and one shared control CPU. | Still requires the separate VPP allocation; default is two CPUs. |
+| UDP/TUN, default 4 UPF CPUs | No Session Workers, memif dispatchers, or isolated data cores. `main/control` and the enabled `rate/control` thread are both pinned to `C3`; UDP/TUN uses the legacy UPF event path. Other auxiliary work remains under the normal scheduler inside the UPF cpuset. | No VPP container. |
+| VPP/memif, default 4 UPF CPUs | One Session Worker on `C0`, N3 dispatcher on `C1`, N6 dispatcher on `C2`, and `main/control` plus `rate/control` on `C3`. | Separate two-CPU container: one `vpp_main` CPU and one VPP Worker CPU by default. |
 
-For VPP/memif automatic sizing,
+VPP/memif uses automatic sizing by default:
 `Session Workers = UPF CPUs - reservedCpus`; `reservedCpus` defaults to `3` and
-must remain at least `3`. Thus the current 8-CPU default resolves to **5**
-Session Workers and five queues on each memif side. A manual Worker count must
-satisfy `count + 3 <= UPF CPUs`; both memif queue counts must equal the resolved
-Worker count. The UPF and VPP CPU allocations are independent, so the default
-accelerated Pod requests 8 logical CPUs for UPF plus 2 logical CPUs for VPP,
-in addition to the other 5GC containers.
+must remain at least `3`. The default 4 UPF CPUs therefore resolve to one Worker
+and one queue per memif side; increasing UPF to 8 CPUs automatically resolves to
+five Workers and five queues. A manual Worker count
+must satisfy `count + 3 <= UPF CPUs`; both memif queue counts must equal the
+resolved Worker count. The UPF and VPP CPU allocations are independent, so the
+default accelerated Pod requests 4 logical CPUs for UPF plus 2 logical CPUs for
+VPP, in addition to the other 5GC containers.
 
 ### Compatible UDP/TUN mode without VFs
 
@@ -247,7 +247,7 @@ helm upgrade --install xcn /home/xiazhangtao/code/open5gs/helm/xcn \
   --set vpp.n6.defaultGateway=10.2.7.254
 ```
 
-The chart requests two VFs, 2 exclusive logical CPUs for VPP, 8 CPUs for UPF, 8 GiB
+The chart requests two VFs, 2 exclusive logical CPUs for VPP, 4 CPUs for UPF, 8 GiB
 of hugepages and 16 GiB of regular memory for VPP. The VPP main heap is 8 GiB.
 Adjust these values to the NIC NUMA layout rather than reducing them for a
 performance run. Both VFs must be link-up and use different PCI functions.
@@ -256,10 +256,10 @@ to `intel.com/external_network` and
 `PCIDEVICE_INTEL_COM_EXTERNAL_NETWORK`. The entrypoint reads the configured
 environment-variable name rather than assuming one device-plugin resource.
 
-### Automatic UPF Session Worker sizing
+### UPF Session Worker sizing
 
-When Session Workers are enabled, the recommended configuration derives the
-Worker and memif queue counts from the UPF container CPU limit:
+The chart derives the Worker and memif queue counts from the UPF container CPU
+limit by default:
 
 ```text
 Session Workers = UPF logical CPUs - reservedCpus
@@ -274,6 +274,9 @@ N3/N6 memif queues on both Open5GS and VPP:
 networking:
   upf:
     mode: memif
+    dataplane:
+      sessionWorkers:
+        count: auto
 resources:
   fivegc:
     upf:
@@ -284,15 +287,15 @@ resources:
 ```
 
 Automatic mode requires equal integer CPU requests and limits, at least 4 UPF
-logical CPUs, and a resolved Worker count of `1..16`, so the valid default
-range is 4 to 19 UPF logical CPUs. `reservedCpus` must be at least 3. An
+logical CPUs, and a resolved Worker count of `1..16`, so its valid CPU range is
+4 to 19 UPF logical CPUs. `reservedCpus` must be at least 3. An
 explicit Worker count must also leave three CPUs for the two dispatchers and
 the shared control CPU. These CPUs belong only to the UPF container; VPP CPU
 resources remain independent.
 
 An explicit numeric `sessionWorkers.count` keeps manual sizing. A memif queue
-value of `auto` follows either the automatically resolved or explicit Worker
-count. When Session Workers are enabled, Helm rejects explicit N3/N6 queue
+value of `auto` follows either the automatically resolved or
+explicit Worker count. When Session Workers are enabled, Helm rejects explicit N3/N6 queue
 counts that do not match the Worker count.
 
 The calculation deliberately uses the Helm CPU limit rather than the process
