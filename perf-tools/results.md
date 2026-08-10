@@ -1868,3 +1868,51 @@ PG实际输入节奏和过载波动影响，不能解释为一个Worker因Sessio
 测试结束后Helm revision 121已恢复`sessionWorkers.count=5`，正式镜像和
 VPP单Worker配置未改变，UE重新建立六个PFCP Session。以上仍是同机内置PG和
 memif内存路径，未覆盖未插线fabric VF及X710外部10Gbps物理链路。
+
+## 单UPF Worker上行发生器burst调优（2026-08-10）
+
+为区分上一轮单Session实际27.7843Gbps、五Session实际24.5310Gbps的平台究竟
+来自UPF还是内置PG，给`run_pg_ul_multi.sh`增加可选`PG_MAXFRAME=1..256`。
+未设置时保持原有10微秒节奏/`burst256`逻辑不变。测试仍使用1个VPP Worker、
+1个UPF Session Worker、1428-byte inner IPv4 UDP和20秒时长。
+
+单Session场景创建5条完全相同的PG stream，使用同一TEID和UE IP，所有流量仍
+进入同一个Session和唯一UPF Worker；五Session场景使用5条不同TEID的stream，
+也全部归属唯一UPF Worker。这样可以减少单条PG stream的生成瓶颈，但不会增加
+VPP或UPF数据面Worker数量。
+
+| 场景 | maxframe | 目标 | 实际输入 | 实际输出 | UPF路径丢包率 |
+|---|---:|---:|---:|---:|---:|
+| 单Session | 32 | 25 Gbps | 25.0000 Gbps | 25.0000 Gbps | 0% |
+| 单Session | 32 | 30 Gbps | 25.8912 Gbps | 25.8912 Gbps | 0% |
+| 单Session | 32 | 35 Gbps | 26.0863 Gbps | 26.0863 Gbps | 0% |
+| 单Session | 40 | 30 Gbps | 25.9110 Gbps | 25.9110 Gbps | 0% |
+| 单Session | 40 | 35 Gbps | 25.5158 Gbps | 25.5158 Gbps | 0% |
+| 单Session | 64 | 25 Gbps | 25.0000 Gbps | 24.8125 Gbps | 0.750004% |
+| 单Session | 64 | 30 Gbps | 27.4403 Gbps | 23.8715 Gbps | 13.005828% |
+| 单Session | 256 | 30 Gbps | 30.0000 Gbps | 12.9728 Gbps | 56.757480% |
+| 五Session | 32 | 25 Gbps | 25.0000 Gbps | 25.0000 Gbps | 0% |
+| 五Session | 32 | 30 Gbps | 26.0304 Gbps | 26.0304 Gbps | 0% |
+| 五Session | 32 | 35 Gbps | 25.8763 Gbps | 25.8763 Gbps | 0% |
+| 五Session | 40 | 30 Gbps | 25.6872 Gbps | 25.6872 Gbps | 0% |
+| 五Session | 40 | 35 Gbps | 25.6081 Gbps | 25.6081 Gbps | 0% |
+| 五Session | 64 | 25 Gbps | 25.0000 Gbps | 24.7151 Gbps | 1.139498% |
+| 五Session | 64 | 30 Gbps | 27.4100 Gbps | 23.8518 Gbps | 12.981226% |
+| 五Session | 256 | 30 Gbps | 30.0000 Gbps | 13.9123 Gbps | 53.625630% |
+
+`maxframe=32`是本轮最佳平衡：单Session最高实际26.0863Gbps、五Session最高
+实际26.0304Gbps，Open5GS段均零丢包。`maxframe=40`未继续提高发生器平台；
+`maxframe=64`虽然可把实际输入提高到约27.4Gbps，但25Gbps时已经出现
+0.75%至1.14%丢包；`maxframe=256`可完整送满30Gbps，却因强突发立即打满
+dispatcher→唯一Worker队列，丢包超过53%，不代表稳定业务吞吐。
+
+因此调整同实例PG后，五Session零丢包下界由24.5310Gbps提高到26.0304Gbps。
+单Session上一轮单流10微秒测试的27.7843Gbps零丢包仍是最高实测；改成5条
+同Session流后，PG平台约26Gbps，未进一步提高。当前不能据此给出单UPF Worker
+的绝对上行上限：小burst下PG先到平台，大burst下入口瞬时反压先发生。若要
+继续提高并严格测到UPF极限，需要将发生器移出被测单VPP Worker，使用独立
+多核VCL/VF发生器从生产入口送入；仅继续调整同一VPP Worker的内置PG会混入
+发生器调度和人为burst瓶颈。
+
+测试结束后Helm revision 123已恢复5个UPF Session Worker，VPP仍为1 Worker，
+等待gNB恢复N2后重启UE并重新建立六个PFCP Session。

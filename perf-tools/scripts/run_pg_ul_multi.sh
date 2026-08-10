@@ -11,6 +11,12 @@ if ((${#pcaps[@]} < 1 || ${#pcaps[@]} > 16)); then
     echo "PCAP count must be between 1 and 16" >&2
     exit 1
 fi
+if [[ -n ${PG_MAXFRAME:-} ]] &&
+   (! [[ $PG_MAXFRAME =~ ^[0-9]+$ ]] ||
+    ((PG_MAXFRAME < 1 || PG_MAXFRAME > 256))); then
+    echo "PG_MAXFRAME must be between 1 and 256" >&2
+    exit 1
+fi
 
 packet_size=1428
 wire_size=1472
@@ -41,7 +47,9 @@ for index in "${!pcaps[@]}"; do
     fi
     limit=$((rate * duration))
     expected=$((expected + limit))
-    if [[ ${PACING_10US:-1} == 1 ]]; then
+    if [[ -n ${PG_MAXFRAME:-} ]]; then
+        maxframe=$PG_MAXFRAME
+    elif [[ ${PACING_10US:-1} == 1 ]]; then
         maxframe=$(((rate + 99999) / 100000))
     else
         maxframe=256
@@ -58,7 +66,7 @@ vppctl packet-generator enable >/dev/null
 sleep $((duration + 2))
 vppctl packet-generator disable >/dev/null
 
-echo "RESULT direction=UL sessions=$session_count target=${total_mbps}Mbps duration=${duration}s pps=$total_pps expected=$expected pacing_10us=${PACING_10US:-1}"
+echo "RESULT direction=UL sessions=$session_count target=${total_mbps}Mbps duration=${duration}s pps=$total_pps expected=$expected pacing_10us=${PACING_10US:-1} maxframe=${PG_MAXFRAME:-auto}"
 vppctl show packet-generator
 vppctl show interface
 echo "ERRORS"
