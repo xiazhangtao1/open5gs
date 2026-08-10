@@ -1797,3 +1797,74 @@ fabric VF未插网线，不代表外部X710线速测试。22Gbps单Session下行
 同时让正式VPP只执行生产graph。当前fabric VF未插网线，无法完成该验证；
 X710实际外部单口仍受10Gbps物理线速限制。实验后已删除临时Pod、额外memif、
 socket和路由，正式N3/N6保持connected，部署恢复为单VPP Worker。
+
+## 单VPP Worker、单UPF Worker的单/五Session性能（2026-08-10）
+
+临时将`networking.upf.dataplane.sessionWorkers.count`从5改为1，UPF CPU资源仍
+保持8个逻辑CPU，避免CPU资源数量变化干扰对比。VPP保持2个逻辑CPU、1 main
++ 1 Worker；N3/N6各建立1组有效Session Worker队列，五个测试Session全部
+归属Worker 0。报文为1428-byte inner IPv4 UDP、10微秒节奏，每档20秒。
+
+UE重建后重新抓取PFCP Session Establishment，并按当前Access侧TEID、UE IP
+和IPv4 header checksum生成五份上行PCAP。五Session 5Mbps冒烟发送874包，
+N6输出874包，确认全部TEID/PDR有效。计数口径仍为VPP送入memif的实际包数与
+Open5GS返回VPP的实际包数，不按未达到的PG目标速率计算丢包。
+
+### 单Session
+
+| 方向 | 目标速率 | 实际输入 | 实际输出 | UPF路径丢包率 |
+|---|---:|---:|---:|---:|
+| DL | 20 Gbps | 20.0000 Gbps | 20.0000 Gbps | 0% |
+| DL | 22 Gbps | 22.0000 Gbps | 22.0000 Gbps | 0% |
+| DL | 23 Gbps | 23.0000 Gbps | 23.0000 Gbps | 0% |
+| DL | 24 Gbps | 24.0000 Gbps | 23.9912 Gbps | 0.036516% |
+| DL | 25 Gbps | 24.7544 Gbps | 24.7541 Gbps | 0.001027% |
+| DL | 30 Gbps | 28.5929 Gbps | 23.3649 Gbps | 18.284227% |
+| DL | 40 Gbps | 35.0012 Gbps | 23.1123 Gbps | 33.967052% |
+| UL | 20 Gbps | 20.0000 Gbps | 20.0000 Gbps | 0% |
+| UL | 22 Gbps | 21.9518 Gbps | 21.9518 Gbps | 0% |
+| UL | 25 Gbps | 23.9471 Gbps | 23.9471 Gbps | 0% |
+| UL | 30 Gbps | 26.1042 Gbps | 26.1042 Gbps | 0% |
+| UL | 40 Gbps | 27.7843 Gbps | 27.7843 Gbps | 0% |
+
+单Session下行完整零丢包最高目标档为23Gbps；24Gbps开始出现0.036516%丢包，
+高压时有效输出约23.1至23.4Gbps。25Gbps轮次发生器只实际提供24.7544Gbps，
+且该轮丢包低于24Gbps，属于过载边缘的调度/队列波动，不能据此把稳定边界
+提高到25Gbps。单Session上行在单流PG最高实际27.7843Gbps时仍零丢包，UPF
+上行上限未触及。
+
+### 五Session、全部归属同一UPF Worker
+
+| 方向 | 目标速率 | 实际输入 | 实际输出 | UPF路径丢包率 |
+|---|---:|---:|---:|---:|
+| DL | 15 Gbps | 15.0000 Gbps | 15.0000 Gbps | 0% |
+| DL | 20 Gbps | 19.7652 Gbps | 19.7652 Gbps | 0% |
+| DL | 22 Gbps | 20.8534 Gbps | 20.8534 Gbps | 0% |
+| DL | 25 Gbps | 23.0526 Gbps | 23.0526 Gbps | 0% |
+| DL | 26 Gbps | 23.4580 Gbps | 23.4580 Gbps | 0% |
+| DL | 27 Gbps | 23.6962 Gbps | 23.6962 Gbps | 0% |
+| DL | 28 Gbps | 23.5262 Gbps | 23.5262 Gbps | 0% |
+| DL | 29 Gbps | 24.9141 Gbps | 24.3604 Gbps | 2.222753% |
+| DL | 30 Gbps | 25.0109 Gbps | 24.3436 Gbps | 2.667669% |
+| DL | 40 Gbps | 27.1037 Gbps | 23.0752 Gbps | 14.863521% |
+| UL | 15 Gbps | 14.9663 Gbps | 14.9663 Gbps | 0% |
+| UL | 20 Gbps | 19.2294 Gbps | 19.2294 Gbps | 0% |
+| UL | 22 Gbps | 20.6570 Gbps | 20.6570 Gbps | 0% |
+| UL | 25 Gbps | 22.1428 Gbps | 22.1428 Gbps | 0% |
+| UL | 30 Gbps | 22.8544 Gbps | 22.8544 Gbps | 0% |
+| UL | 40 Gbps | 24.5310 Gbps | 24.5310 Gbps | 0% |
+
+五Session下行最高实测零丢包输入为23.6962Gbps；实际24.9141Gbps时开始丢
+2.222753%，过载后的输出约23.1至24.4Gbps。五Session上行受单VPP Worker的
+多流PG先限制，最高只实际提供24.5310Gbps，Open5GS仍零丢包，因此只能声明
+UPF上行零丢包能力至少24.5310Gbps，不能把它当作单UPF Worker的真实上限。
+
+高压测试后Worker 0累计`queue-high=8192`且`queue-full`增长，对应下行过载档
+的dispatcher→唯一Session Worker入口队列饱和；不是多个UPF Worker之间的
+归属或负载不均。单Session和五Session的下行零丢包能力接近，说明所有Session
+都归属同一Worker时，多建Session不会获得并行收益；五Session结果略高主要受
+PG实际输入节奏和过载波动影响，不能解释为一个Worker因Session更多而变快。
+
+测试结束后Helm revision 121已恢复`sessionWorkers.count=5`，正式镜像和
+VPP单Worker配置未改变，UE重新建立六个PFCP Session。以上仍是同机内置PG和
+memif内存路径，未覆盖未插线fabric VF及X710外部10Gbps物理链路。
