@@ -1949,3 +1949,33 @@ RX 与 TX 两次处理量之和，不应当作单向有效吞吐。
 99.507Gbps、34.857Mpps；TX+RX 每方向 89.457Gbps、25.532Mpps，RX+TX 合计
 178.915Gbps、51.065Mpps。测试后已删除临时 PG、路由、memif 接口和 socket；
 正式 N3/N6 memif 保持 connected，5GC Pod 9/9 Running、0 重启。
+
+### 两个独立 memif 的单收单发（2026-08-11）
+
+在相同 VPP 进程、CPU 绑定、2 queue 和 8192-entry ring 条件下，将前述同接口
+返回改为两个独立接口：libmemif 发生端从 `memif9/0` 进入 VPP，VPP 执行
+IPv4 input/lookup 后从 `memif10/0` 发给另一个 libmemif 接收端。路径为：
+
+`slave TX → memif9/0 RX → IPv4 lookup → memif10/0 TX → slave RX`
+
+该路径仍不经过 Open5GS UPF。1428-byte 测试每轮 10 秒，64-byte 测试每轮
+5 秒，各执行三轮；结果以两个 VPP 接口的实际计数换算：
+
+| 包长 | 轮次 | `memif9/0` RX | `memif10/0` TX | 有效性能 |
+|---:|---:|---:|---:|---:|
+| 1428B | 1 | 40,316,416 | 40,316,416 | 46.057474 Gbps / 4.032 Mpps |
+| 1428B | 2 | 40,282,624 | 40,282,624 | 46.018870 Gbps / 4.028 Mpps |
+| 1428B | 3 | 40,239,616 | 40,239,616 | 45.969737 Gbps / 4.024 Mpps |
+| 64B | 1 | 92,904,960 | 92,904,960 | 18.581 Mpps |
+| 64B | 2 | 93,444,608 | 93,444,608 | 18.689 Mpps |
+| 64B | 3 | 93,096,192 | 93,096,192 | 18.619 Mpps |
+
+三轮平均为 46.015360Gbps / 4.028Mpps（1428B）和18.630Mpps（64B）；最大
+实测为46.057474Gbps和18.689Mpps。每轮VPP入口RX与出口TX完全一致，VPP段
+未观察到丢包。与同一接口收发的平均88.334Gbps、25.480Mpps相比，两个独立
+memif 的平均吞吐下降47.9%，小包PPS下降26.9%。当前只有一个VPP Worker，
+需要同时轮询两个独立memif并执行收发graph；该结果是当前`1 main + 1 worker`
+配置下双接口转发能力，不代表增加VPP Worker后的扩展上限。
+
+测试后已删除`memif9/0`、`memif10/0`、两个临时socket和测试路由。正式N3/N6
+memif保持connected，5GC Pod 9/9 Running、0重启。
