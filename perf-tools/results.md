@@ -1916,3 +1916,36 @@ dispatcher→唯一Worker队列，丢包超过53%，不代表稳定业务吞吐�
 
 测试结束后Helm revision 123已恢复5个UPF Session Worker，VPP仍为1 Worker，
 等待gNB恢复N2后重启UE并重新建立六个PFCP Session。
+
+## VPP 1 main + 1 Worker 裸 memif 单向/双向性能（2026-08-11）
+
+本轮只测 VPP 26.06 的 IP 模式 memif，不经过 Open5GS UPF，不执行
+PFCP/PDR/FAR/QER/URR 或 GTP-U。VPP 固定 2 个逻辑 CPU：`vpp_main` 位于 CPU
+47，唯一 `vpp_wk_0` 位于 CPU 119；两者是同一物理核的两个超线程。临时
+master `memif9/0` 使用 2 个 RX/TX queue、8192-entry ring；slave 流量端点使用
+UPF 容器 CPU 45/46，仅借用共享 socket，不调用 UPF 数据面。正式
+`memif1/0`、`memif2/0` 未参与测试。
+
+吞吐测试使用 1428-byte IP 包，每种模式 3 轮、每轮有效窗口 10 秒；PPS 测试
+使用 64-byte IP 包，单 RX 每轮 10 秒，单 TX 和 TX+RX 每轮 5 秒。结果均以
+VPP `show interface memif9/0` 的实际包/字节计数换算，不使用发生器目标值。
+
+| 模式 | 1428B 平均 | 1428B 三轮范围 | 64B 平均 | 64B 三轮范围 |
+|---|---:|---:|---:|---:|
+| 单 TX | 74.444 Gbps / 6.516 Mpps | 74.356～74.516 Gbps | 20.906 Mpps | 20.781～20.994 Mpps |
+| 单 RX | 99.074 Gbps / 8.672 Mpps | 98.724～99.507 Gbps | 34.621 Mpps | 34.404～34.857 Mpps |
+| TX+RX（每方向） | 88.334 Gbps / 7.732 Mpps | 87.582～89.457 Gbps | 25.480 Mpps | 25.440～25.532 Mpps |
+| TX+RX（RX+TX 合计） | 176.668 Gbps / 15.464 Mpps | 175.163～178.915 Gbps | 50.959 Mpps | 50.880～51.065 Mpps |
+
+单 RX 由两个 slave TX 线程持续提交报文，VPP 完成 memif RX、IPv4
+input/lookup 后命中 drop 路由。单 TX 由 VPP 内置 packet-generator 从 `pg0`
+注入、经 IPv4 lookup 后从 memif 发给 slave，因此 74.444Gbps/20.906Mpps
+包含同一个 VPP Worker 上的 PG 生成开销，是当前实例可复现的 TX 平台值，不能
+解释为纯 `memif-output` 节点上限。TX+RX 由 slave 发包，VPP 从同一 memif
+接收并路由回同一 memif；“每方向”表示完整往返包率，“合计”表示 VPP 接口
+RX 与 TX 两次处理量之和，不应当作单向有效吞吐。
+
+各模式最大实测值分别为：单 TX 74.516Gbps、20.994Mpps；单 RX
+99.507Gbps、34.857Mpps；TX+RX 每方向 89.457Gbps、25.532Mpps，RX+TX 合计
+178.915Gbps、51.065Mpps。测试后已删除临时 PG、路由、memif 接口和 socket；
+正式 N3/N6 memif 保持 connected，5GC Pod 9/9 Running、0 重启。
