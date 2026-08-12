@@ -141,7 +141,7 @@ The chart applies the following requirements:
 | Both modes | UPF CPU request and limit must be the same integer and at least `4`. The default is `4`. N3 must use a dedicated non-wildcard bind address because SMF and UPF share the Pod network namespace and both use UDP/2152. |
 | Pod-network UDP/TUN | No mode override is required. Empty AMF/UPF addresses resolve to the Pod IP. The gNB still needs a reachable NGAP and GTP-U path through the configured host ports/services. The node must provide `/dev/net/tun`. |
 | `hostNetwork=true` | `networking.amf.ngap.serverAddress` and `networking.upf.n3.address` are mandatory explicit addresses. In TUN mode, the N3 address is used for both GTP-U bind and advertise. |
-| VPP/memif mode | Set `mode=memif`, `n3.address`, `vpp.n3.interfaceAddress`, `vpp.n3.defaultGateway`, `vpp.n6.externalAddress`, and `vpp.n6.defaultGateway`. The chart derives both memif backends, Session Workers, VPP, queue counts, the UPF memif/advertise address, and the local compatibility socket `127.0.0.8`. |
+| VPP/memif mode | Set `mode=memif`, `n3.address`, `vpp.n3.interfaceAddress`, and `vpp.n6.externalAddress`. Set each interface's `defaultGateway` only when it needs to reach a non-directly-connected network. The chart derives both memif backends, Session Workers, VPP, queue counts, the UPF memif/advertise address, and the local compatibility socket `127.0.0.8`. |
 | VPP/memif node | The SR-IOV device plugin must expose at least two allocatable VFs under `vpp.sriov.resourceName`; `vpp.sriov.deviceEnv` must be the matching device environment variable. With defaults, the node also needs two VPP CPUs and 8 GiB of 1-GiB hugepages available. Both VFs must be link-up. |
 
 UDP/memif or memif/TUN mixed combinations are invalid and fail Helm rendering.
@@ -242,10 +242,14 @@ helm upgrade --install xcn /home/xiazhangtao/code/open5gs/helm/xcn \
   --set networking.upf.mode=memif \
   --set networking.upf.n3.address=10.2.0.226 \
   --set vpp.n3.interfaceAddress=10.2.0.225/20 \
-  --set vpp.n3.defaultGateway=10.2.7.254 \
-  --set vpp.n6.externalAddress=10.2.0.224/20 \
-  --set vpp.n6.defaultGateway=10.2.7.254
+  --set vpp.n6.externalAddress=10.2.0.224/20
 ```
+
+This example uses directly connected N3 and N6 networks, so VPP installs only
+the connected routes derived from the interface prefixes. If either interface
+must reach other networks, add `--set vpp.n3.defaultGateway=<gateway>` and/or
+`--set vpp.n6.defaultGateway=<gateway>` as appropriate. The chart emits a
+default route only for a non-empty gateway value.
 
 The chart requests two VFs, 2 exclusive logical CPUs for VPP, 4 CPUs for UPF, 8 GiB
 of hugepages and 16 GiB of regular memory for VPP. The VPP main heap is 8 GiB.

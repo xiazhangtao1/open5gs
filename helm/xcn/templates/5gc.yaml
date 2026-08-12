@@ -41,14 +41,8 @@
 {{- if eq (toString .Values.vpp.n3.interfaceAddress) "" }}
 {{- fail "vpp.n3.interfaceAddress is required when vpp.enabled=true" }}
 {{- end }}
-{{- if eq (toString .Values.vpp.n3.defaultGateway) "" }}
-{{- fail "vpp.n3.defaultGateway is required when vpp.enabled=true" }}
-{{- end }}
 {{- if eq (toString .Values.vpp.n6.externalAddress) "" }}
 {{- fail "vpp.n6.externalAddress is required when vpp.enabled=true" }}
-{{- end }}
-{{- if eq (toString .Values.vpp.n6.defaultGateway) "" }}
-{{- fail "vpp.n6.defaultGateway is required when vpp.enabled=true" }}
 {{- end }}
 {{- end }}
 apiVersion: v1
@@ -398,14 +392,18 @@ spec:
               value: {{ .Values.vpp.cpu.affinityPollMs | quote }}
             - name: VPP_N3_INTERFACE_ADDRESS
               value: {{ .Values.vpp.n3.interfaceAddress | quote }}
+{{- if ne (toString .Values.vpp.n3.defaultGateway) "" }}
             - name: VPP_N3_DEFAULT_GATEWAY
               value: {{ .Values.vpp.n3.defaultGateway | quote }}
+{{- end }}
             - name: VPP_N3_UPF_ADDRESS
               value: {{ $upfN3MemifLocalAddress | quote }}
             - name: VPP_N6_INTERFACE_ADDRESS
               value: {{ .Values.vpp.n6.externalAddress | quote }}
+{{- if ne (toString .Values.vpp.n6.defaultGateway) "" }}
             - name: VPP_N6_DEFAULT_GATEWAY
               value: {{ .Values.vpp.n6.defaultGateway | quote }}
+{{- end }}
             - name: VPP_TEMPLATE_DIR
               value: /etc/vpp/templates
             - name: VPP_CONFIG_DIR

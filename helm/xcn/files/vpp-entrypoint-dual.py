@@ -299,11 +299,15 @@ def main():
             "PCI_N3": pci_n3,
             "PCI_N6": pci_n6,
             "N3_INTERFACE_ADDRESS": required("VPP_N3_INTERFACE_ADDRESS"),
-            "N3_DEFAULT_GATEWAY": required("VPP_N3_DEFAULT_GATEWAY"),
             "N3_UPF_ADDRESS": required("VPP_N3_UPF_ADDRESS"),
             "N6_INTERFACE_ADDRESS": required("VPP_N6_INTERFACE_ADDRESS"),
-            "N6_DEFAULT_GATEWAY": required("VPP_N6_DEFAULT_GATEWAY"),
         }
+        for token, env_name in (
+                ("N3_DEFAULT_GATEWAY", "VPP_N3_DEFAULT_GATEWAY"),
+                ("N6_DEFAULT_GATEWAY", "VPP_N6_DEFAULT_GATEWAY")):
+            value = os.environ.get(env_name, "").strip()
+            if value:
+                replacements[token] = value
         template_dir = Path(os.environ.get("VPP_TEMPLATE_DIR", "/etc/vpp/templates"))
         output_dir = Path(os.environ.get("VPP_CONFIG_DIR", "/run/vpp/config"))
         render(template_dir / "startup.conf.template", output_dir / "startup.conf",

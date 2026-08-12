@@ -262,11 +262,15 @@ data:
     set interface ip address dpdk-n3 {{ "{{N3_INTERFACE_ADDRESS}}" }}
     set interface unnumbered memif{{ .Values.networking.upf.n3.memif.socketId }}/{{ .Values.networking.upf.n3.memif.id }} use dpdk-n3
     ip route add table {{ $n3FibTable }} {{ "{{N3_UPF_ADDRESS}}" }}/32 via memif{{ .Values.networking.upf.n3.memif.socketId }}/{{ .Values.networking.upf.n3.memif.id }}
+{{- if ne (toString .Values.vpp.n3.defaultGateway) "" }}
     ip route add table {{ $n3FibTable }} 0.0.0.0/0 via {{ "{{N3_DEFAULT_GATEWAY}}" }} dpdk-n3
+{{- end }}
     set arp proxy table-id {{ $n3FibTable }} start {{ "{{N3_UPF_ADDRESS}}" }} end {{ "{{N3_UPF_ADDRESS}}" }}
     set interface proxy-arp dpdk-n3 enable
     set interface ip address dpdk-n6 {{ "{{N6_INTERFACE_ADDRESS}}" }}
+{{- if ne (toString .Values.vpp.n6.defaultGateway) "" }}
     ip route add 0.0.0.0/0 via {{ "{{N6_DEFAULT_GATEWAY}}" }} dpdk-n6
+{{- end }}
 {{- if .Values.vpp.n6.nat44.enabled }}
 {{- if ne (toString .Values.vpp.n6.nat44.workers) "" }}
     set nat workers {{ .Values.vpp.n6.nat44.workers }}
