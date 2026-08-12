@@ -381,6 +381,78 @@ to that worker in this 8-worker layout. If interface placement changes, update
 libmemif backend uses one ring, so extra VPP CPUs do not by themselves
 parallelize a single Open5GS UPF instance.
 
+### Capture VPP/DPDK and memif traffic
+
+Linux `tcpdump -i any` cannot see the DPDK-owned VFs or shared-memory memif
+traffic. Use VPP `pcap trace` instead. The capture points are:
+
+| Interface | Capture point | Uplink direction | Downlink direction |
+|---|---|---|---|
+| `dpdk-n3` | Physical N3 VF | RX from gNB | TX to gNB |
+| `memif2/0` | VPP/Open5GS N3 | TX to Open5GS | RX from Open5GS |
+| `memif1/0` | VPP/Open5GS N6 | RX from Open5GS | TX to Open5GS |
+| `dpdk-n6` | Physical N6 VF | TX to data network | RX from data network |
+
+Select one interface, start a bounded capture, generate a small amount of UE
+traffic in another terminal, then stop and copy the file:
+
+```bash
+POD=$(kubectl -n xcn get pod -l app=xcn-5gc \
+  -o jsonpath='{.items[0].metadata.name}')
+IFACE=dpdk-n3
+PCAP=n3-vf.pcap
+
+# Confirm that no other capture is active. One VPP instance supports only one
+# pcap trace at a time.
+kubectl -n xcn exec "$POD" -c vpp -- \
+  vppctl -s /run/vpp/cli.sock pcap trace status
+
+kubectl -n xcn exec "$POD" -c vpp -- \
+  vppctl -s /run/vpp/cli.sock \
+  pcap trace rx tx max 2000 max-bytes-per-pkt 2048 \
+  intfc "$IFACE" file "$PCAP"
+
+# Generate a small amount of UE traffic in another terminal, then stop.
+kubectl -n xcn exec "$POD" -c vpp -- \
+  vppctl -s /run/vpp/cli.sock pcap trace off
+
+kubectl -n xcn cp \
+  "${POD}:/tmp/${PCAP}" "/tmp/${PCAP}" -c vpp
+```
+
+`dpdk-*` interfaces carry Ethernet frames, so their files can be read
+directly:
+
+```bash
+tcpdump -nn -vv -XX -r "/tmp/$PCAP"
+
+# N3 GTP-U example:
+tcpdump -nn -vv -XX -r "/tmp/$PCAP" 'udp port 2152'
+```
+
+The current `memif1/0` and `memif2/0` interfaces use IP mode, so each captured
+packet starts with an IPv4 or IPv6 header. VPP nevertheless records Ethernet
+as the pcap link type. For a capture of one memif interface, preserve the
+original file and change the copy to `DLT_RAW` (101) before using tcpdump or
+Wireshark:
+
+```bash
+RAW_PCAP="/tmp/${PCAP%.pcap}-raw.pcap"
+cp "/tmp/$PCAP" "$RAW_PCAP"
+printf '\145\000\000\000' | \
+  dd of="$RAW_PCAP" bs=1 seek=20 conv=notrunc status=none
+
+tcpdump -nn -vv -XX -r "$RAW_PCAP"
+```
+
+The header update above is for the current Ubuntu/x86 little-endian
+environment. Do not apply it to an `intfc any` capture because that file can
+contain both Ethernet and raw-IP packets. `intfc any` also records the same
+packet at multiple points. Keep captures short and bounded; `pcap trace` adds
+significant overhead and should not run during throughput measurements. More
+capture and traffic-generation examples are available in
+[`perf-tools/README.md`](../../perf-tools/README.md#抓包命令).
+
 The current implementation is IPv4-first. IPv6 UE routing/NAT is not enabled
 by this VPP template. Restore the original path with
 `networking.upf.mode=tun`; the chart automatically disables Session Workers
