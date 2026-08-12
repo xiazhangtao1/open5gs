@@ -263,8 +263,26 @@ kubectl -n xcn exec "$POD" -c vpp -- \
 kubectl -n xcn cp \
   "${POD}:/tmp/${PCAP}" "/tmp/${PCAP}" -c vpp
 
+# `dpdk-*`是Ethernet接口，复制后可直接解析。
 tcpdump -nn -vv -XX -r /tmp/"$PCAP"
 ```
+
+当前`memif1/0`和`memif2/0`使用IP mode，报文从IPv4/IPv6头开始；但VPP
+`pcap trace`仍把文件链路类型写为Ethernet。直接用`tcpdump -r`或Wireshark打开
+会把IP头误识别为MAC头。抓单个memif接口时，先复制一份文件并将pcap全局头的
+链路类型改为`DLT_RAW`（101），再解析；不要对`intfc any`的混合接口抓包这样做：
+
+```bash
+RAW_PCAP="/tmp/${PCAP%.pcap}-raw.pcap"
+cp "/tmp/$PCAP" "$RAW_PCAP"
+printf '\145\000\000\000' | \
+  dd of="$RAW_PCAP" bs=1 seek=20 conv=notrunc status=none
+
+tcpdump -nn -vv -XX -r "$RAW_PCAP"
+```
+
+以上命令适用于当前Ubuntu/x86小端环境。原始文件保持不变，转换后的
+`*-raw.pcap`也可直接用Wireshark打开。
 
 抓N3 GTP-U时使用：
 
