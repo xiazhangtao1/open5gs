@@ -18,9 +18,12 @@
  */
 
 #include "namf-oam.h"
+#include "namf-handler.h"
 #include "sbi-path.h"
 #include "ngap-path.h"
 #include "nsmf-handler.h"
+
+#include <ctype.h>
 
 /*
  * Returns true if duplicate found, false otherwise
@@ -215,7 +218,8 @@ bool amf_namf_oam_handler(
      * Route based on resource path:
      * - /namf-oam/v1/plmns (GET, POST)
      * - /namf-oam/v1/plmns/{plmn_id} (GET, DELETE)
-     * - /namf-oam/v1/status
+     * - /namf-oam/v1/ues (DELETE all UEs)
+     * - /namf-oam/v1/ues/{supi} (DELETE one UE)
      */
     if (!strcmp(resource, "plmns")) {
         const char *plmn_id_param = message->h.resource.component[1];
@@ -255,6 +259,18 @@ bool amf_namf_oam_handler(
         }
     }
 
+    if (!strcmp(resource, "ues")) {
+        if (!strcmp(message->h.method, OGS_SBI_HTTP_METHOD_DELETE))
+            return namf_oam_handle_ues_delete(stream, message);
+
+        ogs_error("Invalid HTTP method [%s] for /ues",
+                message->h.method);
+        ogs_assert(true == ogs_sbi_server_send_error(
+            stream, OGS_SBI_HTTP_STATUS_METHOD_NOT_ALLOWED,
+            message, "Method not allowed", message->h.method, NULL));
+        return false;
+    }
+
     /* Resource not found */
     ogs_error("Invalid OAM resource [%s]", resource);
     ogs_assert(true == ogs_sbi_server_send_error(
@@ -262,6 +278,126 @@ bool amf_namf_oam_handler(
         message, "Resource not found", resource, NULL));
 
     return false;
+}
+
+static int initiate_ue_release(amf_ue_t *amf_ue)
+{
+    ogs_assert(amf_ue);
+
+    return amf_namf_initiate_network_deregistration(
+            amf_ue, OpenAPI_deregistration_reason_REREGISTRATION_REQUIRED, 0);
+}
+
+/*
+ * DELETE /namf-oam/v1/ues/{supi}
+ * DELETE /namf-oam/v1/ues
+ *
+ * The operation is asynchronous. A successful response means that AMF
+ * accepted the network-initiated deregistration procedure.
+ */
+bool namf_oam_handle_ues_delete(
+        ogs_sbi_stream_t *stream, ogs_sbi_message_t *message)
+{
+    const char *ue_id = message->h.resource.component[1];
+    const char *supi = ue_id;
+    char supi_buf[OGS_MAX_IMSI_BCD_LEN + 6];
+    amf_ue_t *amf_ue = NULL, *next_ue = NULL;
+    cJSON *root = NULL;
+    char *response_body = NULL;
+    ogs_sbi_message_t sendmsg;
+    ogs_sbi_response_t *response = NULL;
+    int matched = 0, accepted = 0, skipped = 0;
+
+    ogs_assert(stream);
+    ogs_assert(message);
+
+    if (ue_id && !strchr(ue_id, '-')) {
+        size_t i, len = strlen(ue_id);
+
+        if (!len || len > OGS_MAX_IMSI_BCD_LEN) {
+            ogs_assert(true == ogs_sbi_server_send_error(
+                stream, OGS_SBI_HTTP_STATUS_BAD_REQUEST,
+                message, "Invalid IMSI", ue_id, NULL));
+            return false;
+        }
+
+        for (i = 0; i < len; i++) {
+            if (!isdigit((unsigned char)ue_id[i])) {
+                ogs_assert(true == ogs_sbi_server_send_error(
+                    stream, OGS_SBI_HTTP_STATUS_BAD_REQUEST,
+                    message, "Invalid IMSI", ue_id, NULL));
+                return false;
+            }
+        }
+
+        ogs_snprintf(supi_buf, sizeof(supi_buf), "imsi-%s", ue_id);
+        supi = supi_buf;
+    }
+
+    if (supi) {
+        int rv;
+
+        amf_ue = amf_ue_find_by_supi((char *)supi);
+        if (!amf_ue) {
+            ogs_assert(true == ogs_sbi_server_send_error(
+                stream, OGS_SBI_HTTP_STATUS_NOT_FOUND,
+                message, "UE not found", supi, NULL));
+            return false;
+        }
+
+        matched = 1;
+        rv = initiate_ue_release(amf_ue);
+        if (rv == OGS_OK) {
+            accepted = 1;
+        } else {
+            ogs_assert(true == ogs_sbi_server_send_error(
+                stream, rv == OGS_RETRY ?
+                    OGS_SBI_HTTP_STATUS_CONFLICT :
+                    OGS_SBI_HTTP_STATUS_INTERNAL_SERVER_ERROR,
+                message, "Cannot initiate UE release", supi, NULL));
+            return false;
+        }
+    } else {
+        ogs_list_for_each_safe(
+                &amf_self()->amf_ue_list, next_ue, amf_ue) {
+            if (!AMF_UE_HAVE_SUPI(amf_ue))
+                continue;
+
+            matched++;
+            if (initiate_ue_release(amf_ue) == OGS_OK)
+                accepted++;
+            else
+                skipped++;
+        }
+    }
+
+    root = cJSON_CreateObject();
+    ogs_assert(root);
+    cJSON_AddStringToObject(root, "status", "accepted");
+    cJSON_AddStringToObject(root, "scope", ue_id ? "ue" : "all");
+    if (ue_id)
+        cJSON_AddStringToObject(root, "supi", supi);
+    cJSON_AddNumberToObject(root, "matched", matched);
+    cJSON_AddNumberToObject(root, "accepted", accepted);
+    cJSON_AddNumberToObject(root, "skipped", skipped);
+
+    response_body = cJSON_PrintUnformatted(root);
+    ogs_assert(response_body);
+    cJSON_Delete(root);
+
+    memset(&sendmsg, 0, sizeof(sendmsg));
+    sendmsg.res_status = OGS_SBI_HTTP_STATUS_ACCEPTED;
+    response = ogs_sbi_build_response(
+            &sendmsg, OGS_SBI_HTTP_STATUS_ACCEPTED);
+    ogs_assert(response);
+    response->http.content = response_body;
+    response->http.content_length = strlen(response_body);
+    ogs_assert(true == ogs_sbi_server_send_response(stream, response));
+
+    ogs_info("[OAM] UE release requested [scope:%s matched:%d accepted:%d skipped:%d]",
+            ue_id ? supi : "all", matched, accepted, skipped);
+
+    return true;
 }
 
 /*

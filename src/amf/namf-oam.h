@@ -47,6 +47,9 @@ bool namf_oam_handle_plmns_delete(
 bool namf_oam_handle_plmns_get_by_id(
     ogs_sbi_stream_t *stream,
     ogs_sbi_message_t *message);
+bool namf_oam_handle_ues_delete(
+    ogs_sbi_stream_t *stream,
+    ogs_sbi_message_t *message);
 
 #ifdef __cplusplus
 }

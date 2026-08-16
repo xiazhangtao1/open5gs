@@ -32,6 +32,10 @@ int amf_namf_callback_handle_sm_context_status(
         ogs_sbi_stream_t *stream, ogs_sbi_message_t *recvmsg);
 int amf_namf_callback_handle_dereg_notify(
         ogs_sbi_stream_t *stream, ogs_sbi_message_t *recvmsg);
+int amf_namf_initiate_network_deregistration(
+        amf_ue_t *amf_ue,
+        OpenAPI_deregistration_reason_e dereg_reason,
+        ogs_nas_5gmm_cause_t gmm_cause);
 int amf_namf_callback_handle_sdm_data_change_notify(
         ogs_sbi_stream_t *stream, ogs_sbi_message_t *recvmsg);
 int amf_namf_comm_handle_ue_context_transfer_request(
