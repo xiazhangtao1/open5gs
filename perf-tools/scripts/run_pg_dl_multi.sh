@@ -6,14 +6,6 @@ total_mbps=${2:?total Mbps}
 duration=${3:?duration seconds}
 shift 3
 session_ips=("$@")
-lock_name=${pod//[^a-zA-Z0-9_.-]/_}
-lock_file=${VPP_PG_LOCK_FILE:-/tmp/open5gs-vpp-pg-"$lock_name".lock}
-
-exec 9>"$lock_file"
-if ! flock -n 9; then
-    echo "another VPP packet-generator test is active for Pod $pod" >&2
-    exit 1
-fi
 
 if ((${#session_ips[@]} < 1 || ${#session_ips[@]} > 16)); then
     echo "UE_IP count must be between 1 and 16" >&2
@@ -28,19 +20,64 @@ vppctl() {
     kubectl -n xcn exec "$pod" -c vpp -- vppctl "$@"
 }
 
-vppctl packet-generator disable >/dev/null 2>&1 || true
-for id in $(seq 1 16); do
-    vppctl packet-generator delete "dl-s$id" >/dev/null 2>&1 || true
-    vppctl packet-generator delete "ul-s$id" >/dev/null 2>&1 || true
+pg_name=
+pg_created=0
+stream_names=()
+
+cleanup() {
+    status=$?
+    trap - EXIT INT TERM HUP
+    set +e
+    for stream_name in "${stream_names[@]}"; do
+        vppctl packet-generator disable "$stream_name" >/dev/null 2>&1
+        vppctl packet-generator delete "$stream_name" >/dev/null 2>&1
+    done
+    if ((pg_created)); then
+        vppctl delete packet-generator interface "$pg_name" >/dev/null 2>&1
+    fi
+    if ((status != 0)); then
+        echo "stopped; cleaned packet-generator resources for ${pg_name:-unallocated}" >&2
+    fi
+    exit "$status"
+}
+
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+trap 'exit 129' HUP
+
+for _ in $(seq 1 16); do
+    run_key="${HOSTNAME:-unknown}:$$:$RANDOM:$(date +%s%N)"
+    checksum=$(printf '%s' "$run_key" | cksum)
+    pg_id=$((${checksum%% *} % 2147482647 + 1000))
+    pg_name="pg$pg_id"
+    interface_output=$(vppctl show interface "$pg_name" 2>&1)
+    [[ $interface_output != *"unknown input"* ]] && continue
+    vppctl create packet-generator interface "$pg_name" >/dev/null
+    pg_created=1
+    break
 done
-vppctl delete packet-generator interface pg0 >/dev/null 2>&1 || true
-vppctl create packet-generator interface pg0 >/dev/null
-vppctl set interface state pg0 up >/dev/null
-vppctl set interface ip address pg0 198.18.0.254/24 >/dev/null
+if ((! pg_created)); then
+    echo "failed to allocate an independent packet-generator interface" >&2
+    exit 1
+fi
+
+address_index=$(((pg_id % 4096) * 32))
+address_second=$((18 + address_index / 65536))
+address_remainder=$((address_index % 65536))
+address_third=$((address_remainder / 256))
+address_fourth=$((address_remainder % 256))
+vppctl set interface state "$pg_name" up >/dev/null
+vppctl set interface ip address "$pg_name" \
+    "198.$address_second.$address_third.$((address_fourth + 31))/27" >/dev/null
+printf -v pg_tag '%x' "$pg_id"
 
 expected=0
 for index in "${!session_ips[@]}"; do
     id=$((index + 1))
+    stream_name="d${pg_tag}s$id"
+    stream_names+=("$stream_name")
+    source_ip="198.$address_second.$address_third.$((address_fourth + id))"
     rate=$((total_pps / session_count))
     if ((index < total_pps % session_count)); then
         rate=$((rate + 1))
@@ -54,18 +91,20 @@ for index in "${!session_ips[@]}"; do
     fi
 
     vppctl packet-generator new \
-        "{ name dl-s$id limit $limit rate $rate maxframe $maxframe size $packet_size-$packet_size interface pg0 node ip4-input data { UDP: 198.18.0.$id -> ${session_ips[$index]} UDP: $((10000 + id)) -> $((9000 + id)) length 1408 checksum 0 incrementing 1400 } }" \
+        "{ name $stream_name limit $limit rate $rate maxframe $maxframe size $packet_size-$packet_size interface $pg_name node ip4-input data { UDP: $source_ip -> ${session_ips[$index]} UDP: $((10000 + id)) -> $((9000 + id)) length 1408 checksum 0 incrementing 1400 } }" \
         >/dev/null
 done
 
-vppctl clear interfaces >/dev/null
-vppctl clear errors >/dev/null
-vppctl packet-generator enable >/dev/null
+for stream_name in "${stream_names[@]}"; do
+    vppctl packet-generator enable "$stream_name" >/dev/null
+done
 sleep $((duration + 2))
-vppctl packet-generator disable >/dev/null
+for stream_name in "${stream_names[@]}"; do
+    vppctl packet-generator disable "$stream_name" >/dev/null
+done
 
-echo "RESULT direction=DL sessions=$session_count target=${total_mbps}Mbps duration=${duration}s pps=$total_pps expected=$expected pacing_10us=${PACING_10US:-1}"
+echo "RESULT direction=DL pg=$pg_name streams=${stream_names[*]} sessions=$session_count target=${total_mbps}Mbps duration=${duration}s pps=$total_pps expected=$expected pacing_10us=${PACING_10US:-1}"
 vppctl show packet-generator
 vppctl show interface
-echo "ERRORS"
+echo "ERRORS_CUMULATIVE"
 vppctl show errors | awk '$1 != "0" && $1 != "Count" { print }'
