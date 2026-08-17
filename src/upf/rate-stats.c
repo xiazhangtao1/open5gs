@@ -30,6 +30,7 @@ typedef struct {
 
 typedef struct {
     char supi[OGS_MAX_IMSI_BCD_LEN + 6];
+    ogs_time_t established_at;
     uint64_t ul_bps;
     uint64_t dl_bps;
     uint64_t ul_pps;
@@ -268,6 +269,30 @@ static size_t appendf(char *buf, size_t used, size_t size,
     return used + written;
 }
 
+static uint64_t uptime_seconds(ogs_time_t now, ogs_time_t established_at)
+{
+    if (now <= established_at)
+        return 0;
+    return (uint64_t)ogs_time_sec(now - established_at);
+}
+
+static void format_uptime(char *buf, size_t size, uint64_t seconds)
+{
+    uint64_t days = seconds / (24 * 60 * 60);
+    uint64_t hours = seconds / (60 * 60) % 24;
+    uint64_t minutes = seconds / 60 % 60;
+
+    if (days)
+        ogs_snprintf(buf, size, "%llud%02llu:%02llu:%02llu",
+                (unsigned long long)days, (unsigned long long)hours,
+                (unsigned long long)minutes,
+                (unsigned long long)(seconds % 60));
+    else
+        ogs_snprintf(buf, size, "%02llu:%02llu:%02llu",
+                (unsigned long long)hours, (unsigned long long)minutes,
+                (unsigned long long)(seconds % 60));
+}
+
 static void slot_add(const upf_rate_slot_t *slot,
         uint64_t *ul_bps, uint64_t *dl_bps,
         uint64_t *ul_pps, uint64_t *dl_pps,
@@ -298,13 +323,14 @@ static size_t render_session_rows(
     upf_sess_t *sess;
     size_t used = 0;
     bool first = true;
+    ogs_time_t now = ogs_get_monotonic_time();
 
     if (query->json)
         used = appendf(buf, used, size, "{\"level\":\"%s\",\"rows\":[",
                 query->level);
     else
         used = appendf(buf, used, size,
-                "SUPI UE-IP SEID DNN WORKER UL-Mbps DL-Mbps UL-pps DL-pps UL-bytes DL-bytes\n");
+                "SUPI UE-IP SEID DNN WORKER UPTIME UL-Mbps DL-Mbps UL-pps DL-pps UL-bytes DL-bytes\n");
 
     upf_dataplane_read_lock();
     ogs_list_for_each(&upf_self()->sess_list, sess) {
@@ -312,6 +338,8 @@ static size_t render_session_rows(
         uint64_t ul_bps = 0, dl_bps = 0, ul_pps = 0, dl_pps = 0;
         uint64_t ul_octets = 0, dl_octets = 0;
         uint64_t ul_packets = 0, dl_packets = 0;
+        uint64_t uptime = uptime_seconds(now, sess->established_at);
+        char uptime_buf[32];
         int i;
 
         session_ip(sess, ip, sizeof(ip));
@@ -326,22 +354,26 @@ static size_t render_session_rows(
             used = appendf(buf, used, size,
                     "%s{\"supi\":\"%s\",\"ue_ip\":\"%s\","
                     "\"seid\":%llu,\"dnn\":\"%s\",\"worker\":%u,"
+                    "\"uptime_seconds\":%llu,"
                     "\"ul_bps\":%llu,\"dl_bps\":%llu,"
                     "\"ul_pps\":%llu,\"dl_pps\":%llu,"
                     "\"ul_bytes\":%llu,\"dl_bytes\":%llu}",
                     first ? "" : ",", sess->supi[0] ? sess->supi : "unknown",
                     ip, (unsigned long long)sess->upf_n4_seid,
                     sess->apn_dnn ? sess->apn_dnn : "-", sess->owner_worker,
+                    (unsigned long long)uptime,
                     (unsigned long long)ul_bps, (unsigned long long)dl_bps,
                     (unsigned long long)ul_pps, (unsigned long long)dl_pps,
                     (unsigned long long)ul_octets,
                     (unsigned long long)dl_octets);
         } else {
+            format_uptime(uptime_buf, sizeof(uptime_buf), uptime);
             used = appendf(buf, used, size,
-                    "%s %s %llu %s %u %.3f %.3f %llu %llu %llu %llu\n",
+                    "%s %s %llu %s %u %s %.3f %.3f %llu %llu %llu %llu\n",
                     sess->supi[0] ? sess->supi : "unknown", ip,
                     (unsigned long long)sess->upf_n4_seid,
                     sess->apn_dnn ? sess->apn_dnn : "-", sess->owner_worker,
+                    uptime_buf,
                     (double)ul_bps / 1000000.0,
                     (double)dl_bps / 1000000.0,
                     (unsigned long long)ul_pps,
@@ -363,20 +395,24 @@ static size_t render_rule_rows(
     upf_sess_t *sess;
     size_t used = 0;
     bool first = true;
+    ogs_time_t now = ogs_get_monotonic_time();
 
     if (query->json)
         used = appendf(buf, used, size, "{\"level\":\"rule\",\"rows\":[");
     else
         used = appendf(buf, used, size,
-                "SUPI UE-IP SEID QFI PDR QER DIR Mbps pps bytes packets\n");
+                "SUPI UE-IP SEID QFI PDR QER DIR UPTIME Mbps pps bytes packets\n");
     upf_dataplane_read_lock();
     ogs_list_for_each(&upf_self()->sess_list, sess) {
         char ip[INET6_ADDRSTRLEN];
+        uint64_t uptime = uptime_seconds(now, sess->established_at);
+        char uptime_buf[32];
         int i;
 
         session_ip(sess, ip, sizeof(ip));
         if (!query_matches(query, sess, ip))
             continue;
+        format_uptime(uptime_buf, sizeof(uptime_buf), uptime);
         for (i = 0; i < OGS_MAX_NUM_OF_PDR; i++) {
             upf_rate_slot_t *slot = &sess->rate_slot[i];
             uint64_t octets;
@@ -393,6 +429,7 @@ static size_t render_rule_rows(
                         "%s{\"supi\":\"%s\",\"ue_ip\":\"%s\","
                         "\"seid\":%llu,\"qfi\":%u,\"pdr_id\":%u,"
                         "\"qer_id\":%u,\"direction\":\"%s\","
+                        "\"uptime_seconds\":%llu,"
                         "\"bps\":%llu,\"pps\":%llu,"
                         "\"bytes\":%llu,\"packets\":%llu}",
                         first ? "" : ",",
@@ -400,17 +437,19 @@ static size_t render_rule_rows(
                         (unsigned long long)sess->upf_n4_seid,
                         slot->qfi, slot->pdr_id, slot->qer_id,
                         slot->direction == UPF_RATE_DIR_UL ? "UL" : "DL",
+                        (unsigned long long)uptime,
                         (unsigned long long)slot->rate_bps,
                         (unsigned long long)slot->rate_pps,
                         (unsigned long long)octets,
                         (unsigned long long)packets);
             } else {
                 used = appendf(buf, used, size,
-                        "%s %s %llu %u %u %u %s %.3f %llu %llu %llu\n",
+                        "%s %s %llu %u %u %u %s %s %.3f %llu %llu %llu\n",
                         sess->supi[0] ? sess->supi : "unknown", ip,
                         (unsigned long long)sess->upf_n4_seid, slot->qfi,
                         slot->pdr_id, slot->qer_id,
                         slot->direction == UPF_RATE_DIR_UL ? "UL" : "DL",
+                        uptime_buf,
                         (double)slot->rate_bps / 1000000.0,
                         (unsigned long long)slot->rate_pps,
                         (unsigned long long)octets,
@@ -431,21 +470,25 @@ static size_t render_bearer_rows(
     upf_sess_t *sess;
     size_t used = 0;
     bool first = true;
+    ogs_time_t now = ogs_get_monotonic_time();
 
     if (query->json)
         used = appendf(buf, used, size,
                 "{\"level\":\"bearer\",\"rows\":[");
     else
         used = appendf(buf, used, size,
-                "SUPI UE-IP SEID QFI UL-Mbps DL-Mbps UL-pps DL-pps UL-bytes DL-bytes UL-packets DL-packets\n");
+                "SUPI UE-IP SEID QFI UPTIME UL-Mbps DL-Mbps UL-pps DL-pps UL-bytes DL-bytes UL-packets DL-packets\n");
     upf_dataplane_read_lock();
     ogs_list_for_each(&upf_self()->sess_list, sess) {
         char ip[INET6_ADDRSTRLEN];
+        uint64_t uptime = uptime_seconds(now, sess->established_at);
+        char uptime_buf[32];
         int qfi;
 
         session_ip(sess, ip, sizeof(ip));
         if (!query_matches(query, sess, ip))
             continue;
+        format_uptime(uptime_buf, sizeof(uptime_buf), uptime);
         /* QFI 0 means that no QoS Flow is associated with the PDR. */
         for (qfi = 1; qfi < 64; qfi++) {
             uint64_t ul_bps = 0, dl_bps = 0, ul_pps = 0, dl_pps = 0;
@@ -469,6 +512,7 @@ static size_t render_bearer_rows(
                 used = appendf(buf, used, size,
                         "%s{\"supi\":\"%s\",\"ue_ip\":\"%s\","
                         "\"seid\":%llu,\"qfi\":%d,"
+                        "\"uptime_seconds\":%llu,"
                         "\"ul_bps\":%llu,\"dl_bps\":%llu,"
                         "\"ul_pps\":%llu,\"dl_pps\":%llu,"
                         "\"ul_bytes\":%llu,\"dl_bytes\":%llu,"
@@ -476,6 +520,7 @@ static size_t render_bearer_rows(
                         first ? "" : ",",
                         sess->supi[0] ? sess->supi : "unknown", ip,
                         (unsigned long long)sess->upf_n4_seid, qfi,
+                        (unsigned long long)uptime,
                         (unsigned long long)ul_bps,
                         (unsigned long long)dl_bps,
                         (unsigned long long)ul_pps,
@@ -486,9 +531,10 @@ static size_t render_bearer_rows(
                         (unsigned long long)dl_packets);
             else
                 used = appendf(buf, used, size,
-                        "%s %s %llu %d %.3f %.3f %llu %llu %llu %llu %llu %llu\n",
+                        "%s %s %llu %d %s %.3f %.3f %llu %llu %llu %llu %llu %llu\n",
                         sess->supi[0] ? sess->supi : "unknown", ip,
                         (unsigned long long)sess->upf_n4_seid, qfi,
+                        uptime_buf,
                         (double)ul_bps / 1000000.0,
                         (double)dl_bps / 1000000.0,
                         (unsigned long long)ul_pps,
@@ -514,6 +560,7 @@ static size_t render_user_rows(
     size_t used = 0;
     int count = 0;
     int i;
+    ogs_time_t now = ogs_get_monotonic_time();
 
     users = ogs_calloc(ogs_app()->pool.sess, sizeof(*users));
     if (!users)
@@ -539,6 +586,9 @@ static size_t render_user_rows(
         }
         if (user < 0)
             continue;
+        if (!users[user].established_at ||
+            sess->established_at < users[user].established_at)
+            users[user].established_at = sess->established_at;
         for (j = 0; j < OGS_MAX_NUM_OF_PDR; j++)
             if (sess->rate_slot[j].active)
                 slot_add(&sess->rate_slot[j],
@@ -553,29 +603,37 @@ static size_t render_user_rows(
         used = appendf(buf, used, size, "{\"level\":\"user\",\"rows\":[");
     else
         used = appendf(buf, used, size,
-                "SUPI UL-Mbps DL-Mbps UL-pps DL-pps UL-bytes DL-bytes\n");
+                "SUPI UPTIME UL-Mbps DL-Mbps UL-pps DL-pps UL-bytes DL-bytes\n");
     for (i = 0; i < count; i++) {
+        uint64_t uptime = uptime_seconds(now, users[i].established_at);
+        char uptime_buf[32];
+
         if (query->json)
             used = appendf(buf, used, size,
-                    "%s{\"supi\":\"%s\",\"ul_bps\":%llu,"
+                    "%s{\"supi\":\"%s\",\"uptime_seconds\":%llu,"
+                    "\"ul_bps\":%llu,"
                     "\"dl_bps\":%llu,\"ul_pps\":%llu,"
                     "\"dl_pps\":%llu,\"ul_bytes\":%llu,"
                     "\"dl_bytes\":%llu}", i ? "," : "", users[i].supi,
+                    (unsigned long long)uptime,
                     (unsigned long long)users[i].ul_bps,
                     (unsigned long long)users[i].dl_bps,
                     (unsigned long long)users[i].ul_pps,
                     (unsigned long long)users[i].dl_pps,
                     (unsigned long long)users[i].ul_octets,
                     (unsigned long long)users[i].dl_octets);
-        else
+        else {
+            format_uptime(uptime_buf, sizeof(uptime_buf), uptime);
             used = appendf(buf, used, size,
-                    "%s %.3f %.3f %llu %llu %llu %llu\n", users[i].supi,
+                    "%s %s %.3f %.3f %llu %llu %llu %llu\n", users[i].supi,
+                    uptime_buf,
                     (double)users[i].ul_bps / 1000000.0,
                     (double)users[i].dl_bps / 1000000.0,
                     (unsigned long long)users[i].ul_pps,
                     (unsigned long long)users[i].dl_pps,
                     (unsigned long long)users[i].ul_octets,
                     (unsigned long long)users[i].dl_octets);
+        }
     }
     if (query->json)
         used = appendf(buf, used, size, "]}\n");

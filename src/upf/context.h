@@ -166,6 +166,7 @@ typedef struct upf_sess_s {
 
     ogs_pfcp_sess_t pfcp;
     uint8_t         owner_worker;
+    ogs_time_t      established_at;
     char            supi[OGS_MAX_IMSI_BCD_LEN + 6];
     upf_rate_slot_t rate_slot[OGS_MAX_NUM_OF_PDR];
 

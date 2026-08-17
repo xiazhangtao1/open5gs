@@ -470,6 +470,7 @@ upf_sess_t *upf_sess_add(ogs_pfcp_f_seid_t *cp_f_seid)
     }
 
     ogs_pfcp_pool_init(&sess->pfcp);
+    sess->established_at = ogs_get_monotonic_time();
 
     /* Set UPF-N4-SEID */
     ogs_pool_alloc(&upf_n4_seid_pool, &sess->upf_n4_seid_node);

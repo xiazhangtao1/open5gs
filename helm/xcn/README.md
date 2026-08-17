@@ -87,6 +87,14 @@ one Session; `rule` shows direction, PDR ID and QER ID. `--watch` continuously
 refreshes the display, while `--seid`, `--ue-ip`, and `--supi` filter results.
 The socket is local to the UPF container and has mode `0600`.
 
+`UPTIME` is the lifetime of the current PFCP Session, measured with a monotonic
+clock. At `user` level it starts at the earliest still-active Session for that
+SUPI. JSON output exposes the same value as `uptime_seconds`. The timestamp is
+recorded once when the Session is created and read only by the control-plane
+query, so it adds no work to the per-packet data path. Uptime resets when the
+PFCP Session is recreated, including after an UPF restart; it is not the AMF
+registration lifetime.
+
 The Helm deployment uses `http://127.0.0.1:9092/pdu-info` by default. For a
 standalone deployment, override it with `--smf-pdu-info URL` or the
 `OPEN5GS_SMF_PDU_INFO_URL` environment variable. JSON output adds `psi` and
