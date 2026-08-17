@@ -446,7 +446,8 @@ static size_t render_bearer_rows(
         session_ip(sess, ip, sizeof(ip));
         if (!query_matches(query, sess, ip))
             continue;
-        for (qfi = 0; qfi < 64; qfi++) {
+        /* QFI 0 means that no QoS Flow is associated with the PDR. */
+        for (qfi = 1; qfi < 64; qfi++) {
             uint64_t ul_bps = 0, dl_bps = 0, ul_pps = 0, dl_pps = 0;
             uint64_t ul_octets = 0, dl_octets = 0;
             uint64_t ul_packets = 0, dl_packets = 0;
