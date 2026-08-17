@@ -26,7 +26,8 @@ stream_names=()
 
 cleanup() {
     status=$?
-    trap - EXIT INT TERM HUP
+    trap '' INT TERM HUP
+    trap - EXIT
     set +e
     for stream_name in "${stream_names[@]}"; do
         vppctl packet-generator disable "$stream_name" >/dev/null 2>&1

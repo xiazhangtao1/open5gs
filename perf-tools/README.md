@@ -128,8 +128,10 @@ PACING_10US=0 perf-tools/scripts/run_pg_ul_multi.sh \
 `run_pg_dl_multi.sh`的每个进程会申请独立的packet-generator接口和stream，
 只启停、删除本进程创建的资源。多个用户可同时运行下行脚本；正常结束、异常
 退出或按`Ctrl+C`时都会清理本次资源，不会停止其他用户的stream。并发测试仍
-共享VPP Worker、memif和UPF，接口及error计数也是全局累计值，因此不能用并发
-结果声明某个单独进程的独立吞吐或丢包率。
+共享VPP Worker、memif和UPF。进入清理阶段后会忽略后续`SIGINT`、`SIGTERM`
+和`SIGHUP`，连续按`Ctrl+C`不会中断清理；`SIGKILL`无法捕获，仍不能自动
+清理。接口及error计数也是全局累计值，因此不能用并发结果声明某个单独进程
+的独立吞吐或丢包率。
 
 脚本输出的 `expected` 是目标包数，性能结论必须使用 `show interface` 中
 实际送入和输出的 memif 包数；packet-generator 未达到 `expected` 时不能按
