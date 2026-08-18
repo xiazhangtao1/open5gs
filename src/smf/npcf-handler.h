@@ -33,6 +33,9 @@ bool smf_npcf_smpolicycontrol_handle_update_notify(
 bool smf_npcf_smpolicycontrol_handle_terminate_notify(
         smf_sess_t *sess, ogs_sbi_stream_t *stream, ogs_sbi_message_t *recvmsg);
 
+void smf_npcf_smpolicycontrol_complete_update(smf_sess_t *sess);
+void smf_npcf_smpolicycontrol_clear_update_queue(smf_sess_t *sess);
+
 #ifdef __cplusplus
 }
 #endif

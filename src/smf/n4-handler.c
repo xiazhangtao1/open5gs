@@ -26,6 +26,7 @@
 #include "sbi-path.h"
 #include "ngap-path.h"
 #include "fd-path.h"
+#include "npcf-handler.h"
 
 uint8_t gtp_cause_from_pfcp(uint8_t pfcp_cause, uint8_t gtp_version)
 {
@@ -395,6 +396,8 @@ void smf_5gc_n4_handle_session_modification_response(
                     stream, status, strerror, NULL);
         ogs_error("%s", strerror);
         ogs_free(strerror);
+        if (sess && (flags & OGS_PFCP_MODIFY_SM_POLICY_UPDATE))
+            smf_npcf_smpolicycontrol_complete_update(sess);
         return;
     }
 
@@ -403,7 +406,9 @@ void smf_5gc_n4_handle_session_modification_response(
     if (sess->local_ul_addr == NULL && sess->local_ul_addr6 == NULL) {
         if (stream)
             smf_sbi_send_sm_context_update_error_log(
-                    stream, status, "No UP F_TEID", NULL);
+                stream, status, "No UP F_TEID", NULL);
+        if (flags & OGS_PFCP_MODIFY_SM_POLICY_UPDATE)
+            smf_npcf_smpolicycontrol_complete_update(sess);
         return;
     }
 
@@ -1065,6 +1070,9 @@ void smf_5gc_n4_handle_session_modification_response(
             ogs_assert_if_reached();
         }
     }
+
+    if (flags & OGS_PFCP_MODIFY_SM_POLICY_UPDATE)
+        smf_npcf_smpolicycontrol_complete_update(sess);
 }
 
 int smf_5gc_n4_handle_session_deletion_response(

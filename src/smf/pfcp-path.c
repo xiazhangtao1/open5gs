@@ -19,6 +19,7 @@
 
 #include "sbi-path.h"
 #include "pfcp-path.h"
+#include "npcf-handler.h"
 
 /* Converts PFCP "Usage Report" "Report Trigger" bitmask to Gy "Reporting-Reason" AVP enum value.
  * PFCP: 3GPP TS 29.244 sec 8.2.41
@@ -318,6 +319,8 @@ static void sess_5gc_timeout(ogs_pfcp_xact_t *xact, void *data)
                 stream, OGS_SBI_HTTP_STATUS_GATEWAY_TIMEOUT, strerror, NULL);
         }
         ogs_free(strerror);
+        if (xact->modify_flags & OGS_PFCP_MODIFY_SM_POLICY_UPDATE)
+            smf_npcf_smpolicycontrol_complete_update(sess);
         break;
     case OGS_PFCP_SESSION_DELETION_REQUEST_TYPE:
         trigger = xact->delete_trigger;

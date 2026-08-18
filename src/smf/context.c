@@ -20,6 +20,7 @@
 #include "context.h"
 #include "gtp-path.h"
 #include "pfcp-path.h"
+#include "npcf-handler.h"
 
 static smf_context_t self;
 static ogs_diam_config_t g_diam_conf;
@@ -1267,6 +1268,7 @@ smf_sess_t *smf_sess_add_by_apn(smf_ue_t *smf_ue, char *apn, uint8_t rat_type)
     ogs_pfcp_pool_init(&sess->pfcp);
     smf_qfi_pool_init(sess);
     smf_pf_precedence_pool_init(sess);
+    ogs_list_init(&sess->sm_policy_update_list);
 
     sess->index = ogs_pool_index(&smf_sess_pool, sess);
     ogs_assert(sess->index > 0 && sess->index <= ogs_app()->pool.sess);
@@ -1827,6 +1829,8 @@ void smf_sess_remove(smf_sess_t *sess)
     for (i = 0; i < sess->policy.num_of_pcc_rule; i++)
         OGS_PCC_RULE_FREE(&sess->policy.pcc_rule[i]);
     sess->policy.num_of_pcc_rule = 0;
+
+    smf_npcf_smpolicycontrol_clear_update_queue(sess);
 
     ogs_hash_set(self.smf_n4_seid_hash, &sess->smf_n4_seid,
             sizeof(sess->smf_n4_seid), NULL);

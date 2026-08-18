@@ -25,6 +25,14 @@
 
 #include "npcf-handler.h"
 
+typedef struct smf_sm_policy_update_s {
+    ogs_lnode_t node;
+    OpenAPI_sm_policy_decision_t *decision;
+} smf_sm_policy_update_t;
+
+static void smf_npcf_smpolicycontrol_process_update_queue(
+        smf_sess_t *sess);
+
 static void update_authorized_pcc_rule_and_qos(
         smf_sess_t *sess, OpenAPI_sm_policy_decision_t *SmPolicyDecision)
 {
@@ -730,6 +738,7 @@ bool smf_npcf_smpolicycontrol_handle_update_notify(
 {
     char *strerror = NULL;
     smf_ue_t *smf_ue = NULL;
+    smf_sm_policy_update_t *update = NULL;
 
     OpenAPI_sm_policy_notification_t *SmPolicyNotification = NULL;
     OpenAPI_sm_policy_decision_t *SmPolicyDecision = NULL;
@@ -763,12 +772,17 @@ bool smf_npcf_smpolicycontrol_handle_update_notify(
             SmPolicyDecision->qos_decs ?
                 (int)SmPolicyDecision->qos_decs->count : 0);
 
-    /* Update authorized PCC rule & QoS */
-    update_authorized_pcc_rule_and_qos(sess, SmPolicyDecision);
+    update = ogs_calloc(1, sizeof(*update));
+    ogs_assert(update);
+    update->decision =
+        OpenAPI_sm_policy_decision_copy(NULL, SmPolicyDecision);
+    ogs_assert(update->decision);
+
+    ogs_list_add(&sess->sm_policy_update_list, update);
 
     ogs_assert(true == ogs_sbi_send_http_status_no_content(stream));
 
-    smf_qos_flow_binding(sess);
+    smf_npcf_smpolicycontrol_process_update_queue(sess);
 
     return true;
 
@@ -782,6 +796,59 @@ cleanup:
     ogs_free(strerror);
 
     return false;
+}
+
+static void smf_npcf_smpolicycontrol_process_update_queue(
+        smf_sess_t *sess)
+{
+    smf_sm_policy_update_t *update = NULL;
+
+    ogs_assert(sess);
+
+    while (sess->sm_policy_update_in_progress == false) {
+        update = ogs_list_first(&sess->sm_policy_update_list);
+        if (!update)
+            return;
+
+        ogs_list_remove(&sess->sm_policy_update_list, update);
+        sess->sm_policy_update_in_progress = true;
+
+        update_authorized_pcc_rule_and_qos(sess, update->decision);
+        OpenAPI_sm_policy_decision_free(update->decision);
+        ogs_free(update);
+
+        if (smf_qos_flow_binding(sess) == true)
+            return;
+
+        sess->sm_policy_update_in_progress = false;
+    }
+}
+
+void smf_npcf_smpolicycontrol_complete_update(smf_sess_t *sess)
+{
+    ogs_assert(sess);
+
+    if (sess->sm_policy_update_in_progress == false)
+        return;
+
+    sess->sm_policy_update_in_progress = false;
+    smf_npcf_smpolicycontrol_process_update_queue(sess);
+}
+
+void smf_npcf_smpolicycontrol_clear_update_queue(smf_sess_t *sess)
+{
+    smf_sm_policy_update_t *update = NULL, *next = NULL;
+
+    ogs_assert(sess);
+
+    ogs_list_for_each_safe(
+            &sess->sm_policy_update_list, next, update) {
+        ogs_list_remove(&sess->sm_policy_update_list, update);
+        OpenAPI_sm_policy_decision_free(update->decision);
+        ogs_free(update);
+    }
+
+    sess->sm_policy_update_in_progress = false;
 }
 
 bool smf_npcf_smpolicycontrol_handle_terminate_notify(

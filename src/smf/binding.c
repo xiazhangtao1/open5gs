@@ -503,7 +503,7 @@ int smf_gtp2_send_update_bearer_request(smf_bearer_t *bearer)
     return rv;
 }
 
-void smf_qos_flow_binding(smf_sess_t *sess)
+bool smf_qos_flow_binding(smf_sess_t *sess)
 {
     int rv;
     int i, j;
@@ -622,11 +622,11 @@ void smf_qos_flow_binding(smf_sess_t *sess)
 
                 if (!flow) {
                     ogs_error("No Flow");
-                    return;
+                    return false;
                 }
                 if (!flow->description) {
                     ogs_error("No Flow-Description");
-                    return;
+                    return false;
                 }
 
                 /*
@@ -766,6 +766,9 @@ void smf_qos_flow_binding(smf_sess_t *sess)
     }
 
     if (ogs_list_count(&sess->qos_flow_to_modify_list)) {
+        if (sess->sm_policy_update_in_progress)
+            pfcp_flags |= OGS_PFCP_MODIFY_SM_POLICY_UPDATE;
+
         ogs_info("Send QoS flow modification [count:%d,flags:0x%llx]",
                 ogs_list_count(&sess->qos_flow_to_modify_list),
                 (long long)pfcp_flags);
@@ -775,5 +778,8 @@ void smf_qos_flow_binding(smf_sess_t *sess)
                     HOME_ROUTED_ROAMING_IN_HSMF(sess) ?
                         OGS_PFCP_MODIFY_HOME_ROUTED_ROAMING|pfcp_flags :
                         pfcp_flags, 0));
+        return true;
     }
+
+    return false;
 }
