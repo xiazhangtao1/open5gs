@@ -87,6 +87,11 @@ one Session; `rule` shows direction, PDR ID and QER ID. `--watch` continuously
 refreshes the display, while `--seid`, `--ue-ip`, and `--supi` filter results.
 The socket is local to the UPF container and has mode `0600`.
 
+Every level also displays the AMF `CM-STATE` (`connected` or `idle`), resolved
+by SUPI from `/ue-info` when the command runs. Text output prints `-` and JSON
+prints `null` when the AMF endpoint is unavailable or no reliable match exists;
+the CLI never infers connection state from the traffic rate.
+
 `UPTIME` is the lifetime of the current PFCP Session, measured with a monotonic
 clock. At `user` level it starts at the earliest still-active Session for that
 SUPI. JSON output exposes the same value as `uptime_seconds`. The timestamp is
@@ -95,10 +100,12 @@ query, so it adds no work to the per-packet data path. Uptime resets when the
 PFCP Session is recreated, including after an UPF restart; it is not the AMF
 registration lifetime.
 
-The Helm deployment uses `http://127.0.0.1:9092/pdu-info` by default. For a
-standalone deployment, override it with `--smf-pdu-info URL` or the
-`OPEN5GS_SMF_PDU_INFO_URL` environment variable. JSON output adds `psi` and
-retains `seid` for compatibility, but no longer adds `upf_seid`.
+The Helm deployment uses `http://127.0.0.1:9092/pdu-info` and
+`http://127.0.0.1:9091/ue-info` by default. For a standalone deployment,
+override them with `--smf-pdu-info URL`/`OPEN5GS_SMF_PDU_INFO_URL` and
+`--amf-ue-info URL`/`OPEN5GS_AMF_UE_INFO_URL`. JSON output adds `psi` and
+`cm_state`, and retains `seid` for compatibility, but no longer adds
+`upf_seid`.
 
 Configure or disable it through Helm:
 

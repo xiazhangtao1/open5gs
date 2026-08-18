@@ -345,6 +345,11 @@ kubectl -n xcn exec "$POD" -c upf -- \
   xcnctl show rate --level session --ue-ip "$UE_IP" --watch
 ```
 
+各层级输出中的 `CM-STATE` 来自 AMF `/ue-info`：`connected` 表示 UE
+存在 NGAP/RAN 上下文，`idle` 表示无线连接已释放但核心网上下文仍保留。
+AMF 接口不可用或无法按 SUPI 匹配时文本输出为 `-`，JSON 输出为 `null`；
+该状态不会根据当前流量速率推断。
+
 ### 方式一：UDP/TUN模式使用udp_gen
 
 该方式在UPF容器内从`ogstun`网关向UE发UDP，适合压测传统TUN核心路径，

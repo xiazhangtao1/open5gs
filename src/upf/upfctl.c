@@ -24,8 +24,10 @@
 #define RESPONSE_SIZE (4 * 1024 * 1024)
 #define MAX_COLUMNS 16
 #define DEFAULT_SMF_PDU_INFO_URL "http://127.0.0.1:9092/pdu-info"
+#define DEFAULT_AMF_UE_INFO_URL "http://127.0.0.1:9091/ue-info"
 #define PSI_MAP_MAX 4096
-#define ENRICHED_RESPONSE_SIZE (RESPONSE_SIZE + PSI_MAP_MAX * 8)
+#define CM_STATE_MAP_MAX 4096
+#define ENRICHED_RESPONSE_SIZE (RESPONSE_SIZE * 2)
 
 typedef struct {
     char supi[64];
@@ -37,6 +39,16 @@ typedef struct {
     psi_map_entry_t entries[PSI_MAP_MAX];
     size_t count;
 } psi_map_t;
+
+typedef struct {
+    char supi[64];
+    char state[16];
+} cm_state_map_entry_t;
+
+typedef struct {
+    cm_state_map_entry_t entries[CM_STATE_MAP_MAX];
+    size_t count;
+} cm_state_map_t;
 
 typedef struct {
     char *data;
@@ -54,6 +66,7 @@ static void usage(FILE *stream)
         "  --ue-ip ADDRESS   Filter by UE IP address\n"
         "  --seid SEID       Filter by UPF N4 SEID\n"
         "  --smf-pdu-info URL  SMF /pdu-info URL used to resolve PSI\n"
+        "  --amf-ue-info URL   AMF /ue-info URL used to resolve CM-STATE\n"
         "  --json            Emit JSON\n"
         "  --watch           Refresh continuously\n"
         "  --interval SEC    Watch interval (default 1)\n"
@@ -189,6 +202,107 @@ static const char *psi_map_find(
     return "-";
 }
 
+static int cm_state_map_add(
+        cm_state_map_t *map, const char *supi, const char *state)
+{
+    cm_state_map_entry_t *entry;
+    size_t i;
+
+    if (!supi || !*supi || !state ||
+        (strcmp(state, "connected") && strcmp(state, "idle")))
+        return -1;
+    for (i = 0; i < map->count; i++) {
+        entry = &map->entries[i];
+        if (!strcmp(entry->supi, supi)) {
+            if (!strcmp(state, "connected"))
+                snprintf(entry->state, sizeof(entry->state), "%s", state);
+            return 0;
+        }
+    }
+    if (map->count == CM_STATE_MAP_MAX)
+        return -1;
+    entry = &map->entries[map->count++];
+    snprintf(entry->supi, sizeof(entry->supi), "%s", supi);
+    snprintf(entry->state, sizeof(entry->state), "%s", state);
+    return 0;
+}
+
+static void cm_state_map_parse_page(
+        cm_state_map_t *map, const char *json, bool *has_next)
+{
+    cJSON *root = cJSON_Parse(json);
+    cJSON *items;
+    cJSON *ue;
+    cJSON *pager;
+
+    *has_next = false;
+    if (!root)
+        return;
+    items = cJSON_GetObjectItemCaseSensitive(root, "items");
+    cJSON_ArrayForEach(ue, items) {
+        cJSON *supi = cJSON_GetObjectItemCaseSensitive(ue, "supi");
+        cJSON *state = cJSON_GetObjectItemCaseSensitive(ue, "cm_state");
+
+        if (cJSON_IsString(supi) && cJSON_IsString(state))
+            (void)cm_state_map_add(
+                    map, supi->valuestring, state->valuestring);
+    }
+    pager = cJSON_GetObjectItemCaseSensitive(root, "pager");
+    if (cJSON_IsObject(pager))
+        *has_next = cJSON_IsString(
+                cJSON_GetObjectItemCaseSensitive(pager, "next"));
+    cJSON_Delete(root);
+}
+
+static void load_cm_state_map(const char *base_url, cm_state_map_t *map)
+{
+    unsigned int page;
+
+    memset(map, 0, sizeof(*map));
+    for (page = 0; page < 1024 && map->count < CM_STATE_MAP_MAX; page++) {
+        CURL *curl = curl_easy_init();
+        http_response_t response = { 0 };
+        char url[1024];
+        bool has_next = false;
+        CURLcode result;
+        long status = 0;
+
+        if (!curl)
+            break;
+        snprintf(url, sizeof(url), "%s%cpage=%u&page_size=100", base_url,
+                strchr(base_url, '?') ? '&' : '?', page);
+        curl_easy_setopt(curl, CURLOPT_URL, url);
+        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, http_write);
+        curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
+        curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT_MS, 200L);
+        curl_easy_setopt(curl, CURLOPT_TIMEOUT_MS, 500L);
+        curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1L);
+        result = curl_easy_perform(curl);
+        if (result == CURLE_OK)
+            curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &status);
+        curl_easy_cleanup(curl);
+        if (result != CURLE_OK || status != 200 || !response.data) {
+            free(response.data);
+            break;
+        }
+        cm_state_map_parse_page(map, response.data, &has_next);
+        free(response.data);
+        if (!has_next)
+            break;
+    }
+}
+
+static const char *cm_state_map_find(
+        const cm_state_map_t *map, const char *supi)
+{
+    size_t i;
+
+    for (i = 0; i < map->count; i++)
+        if (!strcmp(map->entries[i].supi, supi))
+            return map->entries[i].state;
+    return "-";
+}
+
 static bool append_output(char *output, size_t capacity, size_t *used,
         const char *format, ...)
 {
@@ -301,6 +415,95 @@ static char *add_psi_json(const char *response, const psi_map_t *map)
             cJSON_AddNumberToObject(row, "psi", strtoul(psi, NULL, 10));
         else
             cJSON_AddNullToObject(row, "psi");
+    }
+    json = cJSON_PrintUnformatted(root);
+    if (json) {
+        output = strdup(json);
+        cJSON_free(json);
+    }
+    cJSON_Delete(root);
+    return output;
+}
+
+static char *add_cm_state_column(
+        const char *response, const cm_state_map_t *map)
+{
+    char *copy = strdup(response);
+    char *output = malloc(ENRICHED_RESPONSE_SIZE + 1);
+    char *line;
+    char *save = NULL;
+    size_t used = 0;
+    bool header = true;
+    bool rate_table = false;
+
+    if (!copy || !output) {
+        free(copy);
+        free(output);
+        return NULL;
+    }
+    output[0] = '\0';
+    for (line = strtok_r(copy, "\n", &save); line;
+            line = strtok_r(NULL, "\n", &save)) {
+        char *columns[MAX_COLUMNS];
+        size_t count = split_columns(line, columns, MAX_COLUMNS);
+        size_t i;
+
+        if (header)
+            rate_table = count && count <= MAX_COLUMNS &&
+                !strcmp(columns[0], "SUPI");
+        if (!rate_table || !count || count > MAX_COLUMNS) {
+            if (!append_output(output, ENRICHED_RESPONSE_SIZE + 1,
+                        &used, "%s\n", line))
+                goto fail;
+        } else {
+            if (!append_output(output, ENRICHED_RESPONSE_SIZE + 1, &used,
+                        "%s %s", columns[0],
+                        header ? "CM-STATE" :
+                        cm_state_map_find(map, columns[0])))
+                goto fail;
+            for (i = 1; i < count; i++) {
+                if (!append_output(output, ENRICHED_RESPONSE_SIZE + 1,
+                            &used, " %s", columns[i]))
+                    goto fail;
+            }
+            if (!append_output(output, ENRICHED_RESPONSE_SIZE + 1,
+                        &used, "\n"))
+                goto fail;
+        }
+        header = false;
+    }
+    free(copy);
+    return output;
+
+fail:
+    free(copy);
+    free(output);
+    return NULL;
+}
+
+static char *add_cm_state_json(
+        const char *response, const cm_state_map_t *map)
+{
+    cJSON *root = cJSON_Parse(response);
+    cJSON *rows;
+    cJSON *row;
+    char *json;
+    char *output = NULL;
+
+    if (!root)
+        return NULL;
+    rows = cJSON_GetObjectItemCaseSensitive(root, "rows");
+    cJSON_ArrayForEach(row, rows) {
+        cJSON *supi = cJSON_GetObjectItemCaseSensitive(row, "supi");
+        const char *state;
+
+        if (!cJSON_IsString(supi))
+            continue;
+        state = cm_state_map_find(map, supi->valuestring);
+        if (strcmp(state, "-"))
+            cJSON_AddStringToObject(row, "cm_state", state);
+        else
+            cJSON_AddNullToObject(row, "cm_state");
     }
     json = cJSON_PrintUnformatted(root);
     if (json) {
@@ -437,7 +640,8 @@ static int print_table(char *response)
 }
 
 static int query(const char *socket_path, const char *request,
-        const char *smf_pdu_info_url, bool include_psi, bool json_output)
+        const char *smf_pdu_info_url, const char *amf_ue_info_url,
+        bool include_psi, bool json_output)
 {
     struct sockaddr_un address;
     char *response;
@@ -524,6 +728,26 @@ static int query(const char *socket_path, const char *request,
             response = enriched;
         }
     }
+    {
+        cm_state_map_t *map = malloc(sizeof(*map));
+        char *enriched = NULL;
+
+        if (!map) {
+            perror("malloc");
+            free(response);
+            return 1;
+        }
+        load_cm_state_map(amf_ue_info_url, map);
+        if (json_output)
+            enriched = add_cm_state_json(response, map);
+        else
+            enriched = add_cm_state_column(response, map);
+        free(map);
+        if (enriched) {
+            free(response);
+            response = enriched;
+        }
+    }
     if (print_table(response)) {
         free(response);
         return 1;
@@ -541,6 +765,7 @@ int main(int argc, char *argv[])
         { "ue-ip", required_argument, NULL, 'i' },
         { "seid", required_argument, NULL, 's' },
         { "smf-pdu-info", required_argument, NULL, 'p' },
+        { "amf-ue-info", required_argument, NULL, 'a' },
         { "json", no_argument, NULL, 'j' },
         { "watch", no_argument, NULL, 'w' },
         { "interval", required_argument, NULL, 'n' },
@@ -550,6 +775,7 @@ int main(int argc, char *argv[])
     };
     const char *socket_path = DEFAULT_SOCKET;
     const char *smf_pdu_info_url = getenv("OPEN5GS_SMF_PDU_INFO_URL");
+    const char *amf_ue_info_url = getenv("OPEN5GS_AMF_UE_INFO_URL");
     char request[REQUEST_SIZE] = "show=rate";
     bool watch = false;
     bool json_output = false;
@@ -559,6 +785,8 @@ int main(int argc, char *argv[])
 
     if (!smf_pdu_info_url || !*smf_pdu_info_url)
         smf_pdu_info_url = DEFAULT_SMF_PDU_INFO_URL;
+    if (!amf_ue_info_url || !*amf_ue_info_url)
+        amf_ue_info_url = DEFAULT_AMF_UE_INFO_URL;
 
     if (argc < 3 || strcmp(argv[1], "show") || strcmp(argv[2], "rate")) {
         usage(stderr);
@@ -608,6 +836,15 @@ int main(int argc, char *argv[])
                 return 2;
             }
             break;
+        case 'a':
+            if (!strncmp(optarg, "http://", 7) ||
+                !strncmp(optarg, "https://", 8))
+                amf_ue_info_url = optarg;
+            else {
+                fprintf(stderr, "invalid AMF UE info URL: %s\n", optarg);
+                return 2;
+            }
+            break;
         case 'j':
             if (append_option(request, sizeof(request), "json", "1"))
                 return 2;
@@ -648,7 +885,7 @@ int main(int argc, char *argv[])
 
         if (watch && !json_output)
             fputs("\033[H\033[J", stdout);
-        rv = query(socket_path, request, smf_pdu_info_url,
+        rv = query(socket_path, request, smf_pdu_info_url, amf_ue_info_url,
                 include_psi, json_output);
         if (!watch)
             return rv;
