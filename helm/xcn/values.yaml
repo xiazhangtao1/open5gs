@@ -262,6 +262,9 @@ vpp:
     # The two-CPU default places main and Worker on sibling hyperthreads.
     initialMode: dense
     affinityPollMs: 250
+    # Keep the container alive while the CPUSet controller converges after a
+    # node restart. A missing or invalid allocation still fails after timeout.
+    cpusetWaitSeconds: 120
   n3:
     interfaceAddress: ""
     defaultGateway: ""

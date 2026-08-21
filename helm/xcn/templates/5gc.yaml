@@ -247,6 +247,7 @@ spec:
     metadata:
       labels:
         app: {{ include "xcn.componentName" (dict "root" . "component" "5gc") }}
+        xnet.com/cpuset-required: "true"
       annotations:
         checksum/config: {{ include (print $.Template.BasePath "/config.yaml") . | sha256sum }}
     spec:
@@ -390,6 +391,8 @@ spec:
               value: {{ .Values.vpp.cpu.initialMode | quote }}
             - name: VPP_AFFINITY_POLL_MS
               value: {{ .Values.vpp.cpu.affinityPollMs | quote }}
+            - name: VPP_CPUSET_WAIT_SECONDS
+              value: {{ dig "cpusetWaitSeconds" 120 .Values.vpp.cpu | quote }}
             - name: VPP_N3_INTERFACE_ADDRESS
               value: {{ .Values.vpp.n3.interfaceAddress | quote }}
 {{- if ne (toString .Values.vpp.n3.defaultGateway) "" }}

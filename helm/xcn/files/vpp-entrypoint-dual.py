@@ -25,6 +25,10 @@ class ConfigError(RuntimeError):
     pass
 
 
+class AllocationPending(ConfigError):
+    pass
+
+
 def parse_cpuset(value):
     cpus = set()
     for item in value.strip().split(","):
@@ -56,7 +60,7 @@ def read_allowed_cpus():
     raise ConfigError("cannot find container cpuset")
 
 
-def allocated_cpus(limit):
+def resolve_allocated_cpus(limit):
     cpus, source = read_allowed_cpus()
     if len(cpus) == limit:
         print(f"CPU allocation ready from {source}: {cpus}", flush=True)
@@ -64,7 +68,7 @@ def allocated_cpus(limit):
 
     isocpu = os.environ.get("ISOCPU", "").strip()
     if not isocpu.startswith("cpu="):
-        raise ConfigError(
+        raise AllocationPending(
             f"expected {limit} CPUs, {source} exposes {len(cpus)} and ISOCPU is missing"
         )
     assigned = parse_cpuset(isocpu.removeprefix("cpu="))
@@ -79,6 +83,24 @@ def allocated_cpus(limit):
         flush=True,
     )
     return assigned
+
+
+def allocated_cpus(limit, wait_seconds, poll_interval):
+    deadline = time.monotonic() + wait_seconds
+    next_log = 0.0
+    while True:
+        try:
+            return resolve_allocated_cpus(limit)
+        except AllocationPending as exc:
+            now = time.monotonic()
+            if now >= deadline:
+                raise ConfigError(
+                    f"CPU allocation did not become ready within {wait_seconds}s: {exc}"
+                ) from exc
+            if now >= next_log:
+                print(f"waiting for CPU allocation: {exc}", flush=True)
+                next_log = now + 5.0
+            time.sleep(min(poll_interval, deadline - now))
 
 
 def parse_pcis(value):
@@ -276,7 +298,10 @@ def main():
             raise ConfigError(
                 f"VPP_CPU_WORKERS {worker_count} must be less than "
                 f"VPP_CPU_LIMIT {cpu_limit}")
-        cpus = allocated_cpus(cpu_limit)
+        poll_ms = positive_integer("VPP_AFFINITY_POLL_MS", 50)
+        cpuset_wait_seconds = positive_integer("VPP_CPUSET_WAIT_SECONDS", 0)
+        cpus = allocated_cpus(
+            cpu_limit, cpuset_wait_seconds, poll_ms / 1000)
         groups, layouts = affinity_layouts(cpus, worker_count)
         initial_mode = os.environ.get(
             "VPP_AFFINITY_INITIAL_MODE", "isolated").strip()
@@ -322,7 +347,6 @@ def main():
             "VPP_AFFINITY_STATUS_FILE", "/run/vpp/affinity-status"))
         plan_path = Path(os.environ.get(
             "VPP_AFFINITY_PLAN_FILE", "/run/vpp/affinity-plan.json"))
-        poll_ms = positive_integer("VPP_AFFINITY_POLL_MS", 50)
         atomic_write(mode_path, initial_mode + "\n")
         atomic_write(plan_path, json.dumps({
             "cpuset": cpus,

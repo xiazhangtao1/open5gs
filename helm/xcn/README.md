@@ -339,6 +339,7 @@ vpp:
     workers: auto
     initialMode: dense
     affinityPollMs: 250
+    cpusetWaitSeconds: 120
   resources:
     requests:
       cpu: "2"
@@ -367,6 +368,14 @@ more VPP Workers, set it explicitly if NAT should use a selected worker set.
 
 `workers: 0` is supported only for controlled CPU-scaling diagnostics and is
 not a production default.
+
+The 5GC Pod is labeled `xnet.com/cpuset-required=true`. The VPP entrypoint
+waits up to `cpusetWaitSeconds` for the container cgroup to converge to the
+requested CPU count. This covers the short controller recovery window after a
+node restart without selecting arbitrary CPUs from the node-wide cpuset. If a
+cluster uses a mutating CPUSet webhook, configure a dedicated webhook rule for
+this label with `failurePolicy: Fail`; keep the general fallback rule
+fail-open and exclude this label so the CPU manager can bootstrap itself.
 
 NAT44 is enabled by default so IPv4 UE traffic keeps the former
 TUN/iptables-MASQUERADE behavior. When the upstream router has a route for
