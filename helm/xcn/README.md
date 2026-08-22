@@ -79,10 +79,12 @@ kubectl -n xcn exec deploy/xcn-5gc -c upf -- \
 ```
 
 `user` aggregates all PFCP Sessions of one SUPI. `session`, `bearer`, and
-`rule` display the NAS PDU Session ID (`PSI`) and temporarily omit the local
-PFCP identifier (`UPF-SEID`). The CLI resolves PSI from the SMF `/pdu-info`
-endpoint only when the command runs, matching SUPI and UE IP; it prints `-`
-instead of guessing when no reliable match exists. `bearer` aggregates UL/DL PDRs by QFI inside
+`rule` display the NAS PDU Session ID (`PSI`) and the local PFCP identifier
+(`UPF-SEID`). The CLI resolves PSI from the SMF `/pdu-info` endpoint only when
+the command runs, matching SUPI and UE IP. If that key maps to multiple PSIs,
+or no match exists, text output prints `-` and JSON prints `null` instead of
+guessing; `UPF-SEID`/`seid` remains available to distinguish the UPF rows.
+`bearer` aggregates UL/DL PDRs by QFI inside
 one Session; `rule` shows direction, PDR ID and QER ID. `--watch` continuously
 refreshes the display, while `--seid`, `--ue-ip`, and `--supi` filter results.
 The socket is local to the UPF container and has mode `0600`.

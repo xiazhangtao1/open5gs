@@ -20,6 +20,48 @@
 #include "nudm-handler.h"
 #include "sbi-path.h"
 
+static void warn_on_subscription_static_ip_conflict(
+        smf_sess_t *sess, smf_ue_t *smf_ue)
+{
+    smf_sess_t *owner = NULL;
+    smf_ue_t *owner_ue = NULL;
+    char buf[OGS_ADDRSTRLEN];
+    uint32_t addr6[OGS_IPV6_LEN / sizeof(uint32_t)];
+    static const uint8_t zero6[OGS_IPV6_LEN] = { 0 };
+
+    ogs_assert(sess);
+    ogs_assert(smf_ue);
+
+    if (sess->session.ue_ip.addr) {
+        owner = smf_sess_find_by_ipv4(sess->session.ue_ip.addr);
+        if (owner && owner != sess) {
+            owner_ue = smf_ue_find_by_id(owner->smf_ue_id);
+            ogs_warn("Subscription static IPv4 address conflict [%s]: "
+                    "requested by [%s:%u], already assigned to [%s:%u]; "
+                    "allocation continues",
+                    OGS_INET_NTOP(&sess->session.ue_ip.addr, buf),
+                    smf_ue->supi, sess->psi,
+                    owner_ue && owner_ue->supi ? owner_ue->supi : "unknown",
+                    owner->psi);
+        }
+    }
+
+    if (memcmp(sess->session.ue_ip.addr6, zero6, sizeof(zero6)) != 0) {
+        memcpy(addr6, sess->session.ue_ip.addr6, sizeof(addr6));
+        owner = smf_sess_find_by_ipv6(addr6);
+        if (owner && owner != sess) {
+            owner_ue = smf_ue_find_by_id(owner->smf_ue_id);
+            ogs_warn("Subscription static IPv6 address conflict [%s]: "
+                    "requested by [%s:%u], already assigned to [%s:%u]; "
+                    "allocation continues",
+                    OGS_INET6_NTOP(sess->session.ue_ip.addr6, buf),
+                    smf_ue->supi, sess->psi,
+                    owner_ue && owner_ue->supi ? owner_ue->supi : "unknown",
+                    owner->psi);
+        }
+    }
+}
+
 bool smf_nudm_sdm_handle_get(smf_sess_t *sess, ogs_sbi_stream_t *stream,
         ogs_sbi_message_t *recvmsg)
 {
@@ -335,6 +377,9 @@ bool smf_nudm_sdm_handle_get(smf_sess_t *sess, ogs_sbi_stream_t *stream,
 
         return false;
     }
+
+    if (staticIpAddress)
+        warn_on_subscription_static_ip_conflict(sess, smf_ue);
 
     /* Set UE IP Address to the Default DL PDR */
     cause_value = smf_sess_set_ue_ip(sess);

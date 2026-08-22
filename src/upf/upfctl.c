@@ -22,7 +22,7 @@
 #define DEFAULT_SOCKET "/run/open5gs/upf-stats.sock"
 #define REQUEST_SIZE 512
 #define RESPONSE_SIZE (4 * 1024 * 1024)
-#define MAX_COLUMNS 16
+#define MAX_COLUMNS 18
 #define DEFAULT_SMF_PDU_INFO_URL "http://127.0.0.1:9092/pdu-info"
 #define DEFAULT_AMF_UE_INFO_URL "http://127.0.0.1:9091/ue-info"
 #define PSI_MAP_MAX 4096
@@ -186,20 +186,23 @@ static void load_psi_map(const char *base_url, psi_map_t *map)
     }
 }
 
-static const char *psi_map_find(
+static bool psi_map_find(
         const psi_map_t *map, const char *supi, const char *ue_ip,
-        char *value, size_t value_size)
+        unsigned int *psi)
 {
     size_t i;
+    bool found = false;
 
     for (i = 0; i < map->count; i++) {
         if (!strcmp(map->entries[i].supi, supi) &&
             !strcmp(map->entries[i].ue_ip, ue_ip)) {
-            snprintf(value, value_size, "%u", map->entries[i].psi);
-            return value;
+            if (found && *psi != map->entries[i].psi)
+                return false;
+            *psi = map->entries[i].psi;
+            found = true;
         }
     }
-    return "-";
+    return found;
 }
 
 static int cm_state_map_add(
@@ -352,7 +355,7 @@ static char *add_psi_column(const char *response, const psi_map_t *map)
                 goto fail;
         } else if (header) {
             if (!append_output(output, ENRICHED_RESPONSE_SIZE + 1, &used,
-                        "%s %s PSI", columns[0], columns[1]))
+                        "%s %s PSI UPF-SEID", columns[0], columns[1]))
                 goto fail;
             for (i = 3; i < count; i++) {
                 if (!append_output(output, ENRICHED_RESPONSE_SIZE + 1,
@@ -363,13 +366,18 @@ static char *add_psi_column(const char *response, const psi_map_t *map)
                         &used, "\n"))
                 goto fail;
         } else {
-            char psi[4];
+            unsigned int psi;
 
-            if (!append_output(output, ENRICHED_RESPONSE_SIZE + 1, &used,
-                        "%s %s %s", columns[0], columns[1],
-                        psi_map_find(map, columns[0], columns[1],
-                            psi, sizeof(psi))))
+            if (psi_map_find(map, columns[0], columns[1], &psi)) {
+                if (!append_output(output, ENRICHED_RESPONSE_SIZE + 1, &used,
+                            "%s %s %u %s", columns[0], columns[1],
+                            psi, columns[2]))
+                    goto fail;
+            } else if (!append_output(output, ENRICHED_RESPONSE_SIZE + 1,
+                        &used, "%s %s - %s", columns[0], columns[1],
+                        columns[2])) {
                 goto fail;
+            }
             for (i = 3; i < count; i++) {
                 if (!append_output(output, ENRICHED_RESPONSE_SIZE + 1,
                             &used, " %s", columns[i]))
@@ -404,15 +412,12 @@ static char *add_psi_json(const char *response, const psi_map_t *map)
     cJSON_ArrayForEach(row, rows) {
         cJSON *supi = cJSON_GetObjectItemCaseSensitive(row, "supi");
         cJSON *ue_ip = cJSON_GetObjectItemCaseSensitive(row, "ue_ip");
-        char value[4];
-        const char *psi;
+        unsigned int psi;
 
         if (!cJSON_IsString(supi) || !cJSON_IsString(ue_ip))
             continue;
-        psi = psi_map_find(map, supi->valuestring, ue_ip->valuestring,
-                value, sizeof(value));
-        if (strcmp(psi, "-"))
-            cJSON_AddNumberToObject(row, "psi", strtoul(psi, NULL, 10));
+        if (psi_map_find(map, supi->valuestring, ue_ip->valuestring, &psi))
+            cJSON_AddNumberToObject(row, "psi", psi);
         else
             cJSON_AddNullToObject(row, "psi");
     }
