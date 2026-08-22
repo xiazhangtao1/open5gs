@@ -12,6 +12,8 @@ kubectl -n xcn exec deploy/xcn-5gc -c upf -- \
 kubectl -n xcn exec deploy/xcn-5gc -c upf -- \
   xcnctl show rate --level session --ue-ip 10.45.0.2 --watch
 kubectl -n xcn exec deploy/xcn-5gc -c upf -- \
+  xcnctl show rate --level session --active-only
+kubectl -n xcn exec deploy/xcn-5gc -c upf -- \
   xcnctl show rate --level bearer --json
 kubectl -n xcn exec deploy/xcn-5gc -c upf -- \
   xcnctl show rate --level rule --seid 0x1234
@@ -19,8 +21,10 @@ kubectl -n xcn exec deploy/xcn-5gc -c upf -- \
 
 `user`按SUPI汇总多个Session；`session`、`bearer`和`rule`显示NAS PDU
 Session ID（`PSI`）和PFCP本地标识（`UPF-SEID`）。PSI由CLI只在查询时读取SMF
-`/pdu-info`，按SUPI和UE IP关联；同一键对应多个PSI或没有匹配时，文本显示`-`、
-JSON显示`null`，不会选择第一个结果猜测，`UPF-SEID`/`seid`仍可用于区分UPF行。
+`/pdu-info`，按SUPI、UE IP和UPF-SEID精确关联；没有精确匹配时，文本显示`-`、
+JSON显示`null`，`UPF-SEID`/`seid`仍可用于区分UPF行。`--active-only`会继续将
+解析出的PSI与AMF当前PDU Session列表比较，只保留当前生效的UPF Session。该参数
+适用于`session`、`bearer`和`rule`级别；AMF或SMF接口不可用时命令会报错，不会猜测。
 `bearer`在一个Session内按QFI汇总上下行；`rule`进一步展示PDR/QER和方向。统计功能不
 替代PFCP URR计费，也不修改UPF语义；可通过
 `networking.upf.rateStats.enabled=false`完全关闭。

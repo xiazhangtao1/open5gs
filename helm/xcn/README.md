@@ -73,6 +73,8 @@ kubectl -n xcn exec deploy/xcn-5gc -c upf -- \
 kubectl -n xcn exec deploy/xcn-5gc -c upf -- \
   xcnctl show rate --level session --ue-ip 10.45.0.2
 kubectl -n xcn exec deploy/xcn-5gc -c upf -- \
+  xcnctl show rate --level session --active-only
+kubectl -n xcn exec deploy/xcn-5gc -c upf -- \
   xcnctl show rate --level bearer --supi imsi-001010000000001
 kubectl -n xcn exec deploy/xcn-5gc -c upf -- \
   xcnctl show rate --level rule --json
@@ -81,9 +83,12 @@ kubectl -n xcn exec deploy/xcn-5gc -c upf -- \
 `user` aggregates all PFCP Sessions of one SUPI. `session`, `bearer`, and
 `rule` display the NAS PDU Session ID (`PSI`) and the local PFCP identifier
 (`UPF-SEID`). The CLI resolves PSI from the SMF `/pdu-info` endpoint only when
-the command runs, matching SUPI and UE IP. If that key maps to multiple PSIs,
-or no match exists, text output prints `-` and JSON prints `null` instead of
-guessing; `UPF-SEID`/`seid` remains available to distinguish the UPF rows.
+the command runs, matching SUPI, UE IP, and UPF-SEID. If no exact match exists,
+text output prints `-` and JSON prints `null`; `UPF-SEID`/`seid` remains
+available to distinguish the UPF rows. `--active-only` additionally compares
+the resolved PSI with the AMF's current PDU Session list and hides stale UPF
+Sessions. It is available at `session`, `bearer`, and `rule` levels and fails
+instead of guessing when the AMF or SMF endpoint is unavailable.
 `bearer` aggregates UL/DL PDRs by QFI inside
 one Session; `rule` shows direction, PDR ID and QER ID. `--watch` continuously
 refreshes the display, while `--seid`, `--ue-ip`, and `--supi` filter results.

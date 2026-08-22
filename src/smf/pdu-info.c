@@ -19,7 +19,7 @@
 
 /*
  * Connected PDUs JSON dumper for the Prometheus HTTP server (/pdu-info).
- * - 5G PDUs:  psi+dnn, snssai, qos_flows [{qfi,5qi}], n3.{gnb,upf}, handover{}, pdu_state
+ * - 5G PDUs:  psi+upf_seid+dnn, snssai, qos_flows [{qfi,5qi}], n3.{gnb,upf}, handover{}, pdu_state
  * - LTE PDUs: ebi(+psi if non-zero)+apn, qos_flows [{ebi,qci}], pdu_state ("unknown" at SMF scope)
  * - UE-level: ue_activity ("active"/"unknown"/"idle")
  * - pager: /pdu-info?page=0&page_size=100 (0-based, page=SIZE_MAX -> no paging)
@@ -34,6 +34,7 @@
  *       "pdu": [
  *         {
  *           "psi": 1,
+ *           "upf_seid": "1234",
  *           "dnn": "internet",
  *           "ipv4": "10.45.0.11",
  *           "snssai": {
@@ -74,6 +75,7 @@
 #include <string.h>
 #include <stdbool.h>
 #include <limits.h>
+#include <inttypes.h>
 
 #include "ogs-core.h"
 #include "context.h"
@@ -521,6 +523,16 @@ static cJSON *build_single_pdu_object(const smf_sess_t *sess, int *any_active, i
         if (!psi) { cJSON_Delete(pdu); return NULL; }
         cJSON_AddItemToObjectCS(pdu, "psi", psi);
 
+        if (sess->upf_n4_seid) {
+            char value[32];
+            cJSON *upf_seid;
+
+            ogs_snprintf(value, sizeof(value), "%" PRIu64, sess->upf_n4_seid);
+            upf_seid = cJSON_CreateString(value);
+            if (!upf_seid) { cJSON_Delete(pdu); return NULL; }
+            cJSON_AddItemToObjectCS(pdu, "upf_seid", upf_seid);
+        }
+
         const char *dnn_c = (sess->session.name ? sess->session.name : "");
         cJSON *dnn = cJSON_CreateString(dnn_c);
         if (!dnn) { cJSON_Delete(pdu); return NULL; }
@@ -702,4 +714,3 @@ size_t smf_dump_pdu_info(char *buf, size_t buflen, size_t page, size_t page_size
 
     return smf_dump_pdu_info_paged(buf, buflen, page, page_size);
 }
-

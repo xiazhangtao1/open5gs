@@ -9,6 +9,7 @@
 #include <getopt.h>
 #include <stdbool.h>
 #include <stdarg.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -27,11 +28,14 @@
 #define DEFAULT_AMF_UE_INFO_URL "http://127.0.0.1:9091/ue-info"
 #define PSI_MAP_MAX 4096
 #define CM_STATE_MAP_MAX 4096
+#define ACTIVE_SESSION_MAP_MAX 4096
 #define ENRICHED_RESPONSE_SIZE (RESPONSE_SIZE * 2)
 
 typedef struct {
     char supi[64];
     char ue_ip[INET6_ADDRSTRLEN];
+    uint64_t upf_seid;
+    bool upf_seid_present;
     unsigned int psi;
 } psi_map_entry_t;
 
@@ -46,8 +50,15 @@ typedef struct {
 } cm_state_map_entry_t;
 
 typedef struct {
+    char supi[64];
+    unsigned int psi;
+} active_session_map_entry_t;
+
+typedef struct {
     cm_state_map_entry_t entries[CM_STATE_MAP_MAX];
     size_t count;
+    active_session_map_entry_t active_sessions[ACTIVE_SESSION_MAP_MAX];
+    size_t active_session_count;
 } cm_state_map_t;
 
 typedef struct {
@@ -67,6 +78,7 @@ static void usage(FILE *stream)
         "  --seid SEID       Filter by UPF N4 SEID\n"
         "  --smf-pdu-info URL  SMF /pdu-info URL used to resolve PSI\n"
         "  --amf-ue-info URL   AMF /ue-info URL used to resolve CM-STATE\n"
+        "  --active-only     Show only Sessions currently held by the AMF\n"
         "  --json            Emit JSON\n"
         "  --watch           Refresh continuously\n"
         "  --interval SEC    Watch interval (default 1)\n"
@@ -91,8 +103,24 @@ static size_t http_write(void *data, size_t size, size_t count, void *opaque)
     return bytes;
 }
 
+static bool parse_u64(const char *value, uint64_t *result)
+{
+    char *end = NULL;
+    unsigned long long parsed;
+
+    if (!value || !*value || !result)
+        return false;
+    errno = 0;
+    parsed = strtoull(value, &end, 10);
+    if (errno || end == value || *end)
+        return false;
+    *result = (uint64_t)parsed;
+    return true;
+}
+
 static int psi_map_add(psi_map_t *map, const char *supi,
-        const char *ue_ip, unsigned int psi)
+        const char *ue_ip, unsigned int psi,
+        bool upf_seid_present, uint64_t upf_seid)
 {
     psi_map_entry_t *entry;
 
@@ -102,6 +130,8 @@ static int psi_map_add(psi_map_t *map, const char *supi,
     entry = &map->entries[map->count++];
     snprintf(entry->supi, sizeof(entry->supi), "%s", supi);
     snprintf(entry->ue_ip, sizeof(entry->ue_ip), "%s", ue_ip);
+    entry->upf_seid = upf_seid;
+    entry->upf_seid_present = upf_seid_present;
     entry->psi = psi;
     return 0;
 }
@@ -129,16 +159,23 @@ static void psi_map_parse_page(psi_map_t *map, const char *json,
             cJSON *psi = cJSON_GetObjectItemCaseSensitive(pdu, "psi");
             cJSON *ipv4 = cJSON_GetObjectItemCaseSensitive(pdu, "ipv4");
             cJSON *ipv6 = cJSON_GetObjectItemCaseSensitive(pdu, "ipv6");
+            cJSON *upf_seid =
+                cJSON_GetObjectItemCaseSensitive(pdu, "upf_seid");
+            uint64_t seid = 0;
+            bool seid_present = cJSON_IsString(upf_seid) &&
+                parse_u64(upf_seid->valuestring, &seid);
 
             if (!cJSON_IsNumber(psi) || psi->valuedouble < 1 ||
                 psi->valuedouble > 255)
                 continue;
             if (cJSON_IsString(ipv4))
                 (void)psi_map_add(map, supi->valuestring,
-                        ipv4->valuestring, (unsigned int)psi->valuedouble);
+                        ipv4->valuestring, (unsigned int)psi->valuedouble,
+                        seid_present, seid);
             if (cJSON_IsString(ipv6))
                 (void)psi_map_add(map, supi->valuestring,
-                        ipv6->valuestring, (unsigned int)psi->valuedouble);
+                        ipv6->valuestring, (unsigned int)psi->valuedouble,
+                        seid_present, seid);
         }
     }
     pager = cJSON_GetObjectItemCaseSensitive(root, "pager");
@@ -148,7 +185,7 @@ static void psi_map_parse_page(psi_map_t *map, const char *json,
     cJSON_Delete(root);
 }
 
-static void load_psi_map(const char *base_url, psi_map_t *map)
+static bool load_psi_map(const char *base_url, psi_map_t *map)
 {
     unsigned int page;
 
@@ -162,7 +199,7 @@ static void load_psi_map(const char *base_url, psi_map_t *map)
         long status = 0;
 
         if (!curl)
-            break;
+            return false;
         snprintf(url, sizeof(url), "%s%cpage=%u&page_size=100", base_url,
                 strchr(base_url, '?') ? '&' : '?', page);
         curl_easy_setopt(curl, CURLOPT_URL, url);
@@ -177,21 +214,39 @@ static void load_psi_map(const char *base_url, psi_map_t *map)
         curl_easy_cleanup(curl);
         if (result != CURLE_OK || status != 200 || !response.data) {
             free(response.data);
-            break;
+            return false;
         }
         psi_map_parse_page(map, response.data, &has_next);
         free(response.data);
         if (!has_next)
-            break;
+            return true;
     }
+    return false;
 }
 
 static bool psi_map_find(
         const psi_map_t *map, const char *supi, const char *ue_ip,
-        unsigned int *psi)
+        uint64_t upf_seid, unsigned int *psi)
 {
     size_t i;
+    bool keyed = false;
     bool found = false;
+
+    for (i = 0; i < map->count; i++) {
+        if (!strcmp(map->entries[i].supi, supi) &&
+            !strcmp(map->entries[i].ue_ip, ue_ip) &&
+            map->entries[i].upf_seid_present) {
+            keyed = true;
+            if (map->entries[i].upf_seid != upf_seid)
+                continue;
+            if (found && *psi != map->entries[i].psi)
+                return false;
+            *psi = map->entries[i].psi;
+            found = true;
+        }
+    }
+    if (keyed)
+        return found;
 
     for (i = 0; i < map->count; i++) {
         if (!strcmp(map->entries[i].supi, supi) &&
@@ -230,6 +285,27 @@ static int cm_state_map_add(
     return 0;
 }
 
+static int active_session_map_add(
+        cm_state_map_t *map, const char *supi, unsigned int psi)
+{
+    active_session_map_entry_t *entry;
+    size_t i;
+
+    if (!supi || !*supi || !psi || psi > 255)
+        return -1;
+    for (i = 0; i < map->active_session_count; i++) {
+        entry = &map->active_sessions[i];
+        if (!strcmp(entry->supi, supi) && entry->psi == psi)
+            return 0;
+    }
+    if (map->active_session_count == ACTIVE_SESSION_MAP_MAX)
+        return -1;
+    entry = &map->active_sessions[map->active_session_count++];
+    snprintf(entry->supi, sizeof(entry->supi), "%s", supi);
+    entry->psi = psi;
+    return 0;
+}
+
 static void cm_state_map_parse_page(
         cm_state_map_t *map, const char *json, bool *has_next)
 {
@@ -245,10 +321,26 @@ static void cm_state_map_parse_page(
     cJSON_ArrayForEach(ue, items) {
         cJSON *supi = cJSON_GetObjectItemCaseSensitive(ue, "supi");
         cJSON *state = cJSON_GetObjectItemCaseSensitive(ue, "cm_state");
+        cJSON *sessions =
+            cJSON_GetObjectItemCaseSensitive(ue, "pdu_sessions");
+        cJSON *session;
 
-        if (cJSON_IsString(supi) && cJSON_IsString(state))
+        if (!cJSON_IsString(supi))
+            continue;
+        if (cJSON_IsString(state))
             (void)cm_state_map_add(
                     map, supi->valuestring, state->valuestring);
+        if (!cJSON_IsArray(sessions))
+            continue;
+        cJSON_ArrayForEach(session, sessions) {
+            cJSON *psi =
+                cJSON_GetObjectItemCaseSensitive(session, "psi");
+
+            if (cJSON_IsNumber(psi) && psi->valuedouble >= 1 &&
+                psi->valuedouble <= 255)
+                (void)active_session_map_add(map, supi->valuestring,
+                        (unsigned int)psi->valuedouble);
+        }
     }
     pager = cJSON_GetObjectItemCaseSensitive(root, "pager");
     if (cJSON_IsObject(pager))
@@ -257,7 +349,7 @@ static void cm_state_map_parse_page(
     cJSON_Delete(root);
 }
 
-static void load_cm_state_map(const char *base_url, cm_state_map_t *map)
+static bool load_cm_state_map(const char *base_url, cm_state_map_t *map)
 {
     unsigned int page;
 
@@ -271,7 +363,7 @@ static void load_cm_state_map(const char *base_url, cm_state_map_t *map)
         long status = 0;
 
         if (!curl)
-            break;
+            return false;
         snprintf(url, sizeof(url), "%s%cpage=%u&page_size=100", base_url,
                 strchr(base_url, '?') ? '&' : '?', page);
         curl_easy_setopt(curl, CURLOPT_URL, url);
@@ -286,13 +378,14 @@ static void load_cm_state_map(const char *base_url, cm_state_map_t *map)
         curl_easy_cleanup(curl);
         if (result != CURLE_OK || status != 200 || !response.data) {
             free(response.data);
-            break;
+            return false;
         }
         cm_state_map_parse_page(map, response.data, &has_next);
         free(response.data);
         if (!has_next)
-            break;
+            return true;
     }
+    return false;
 }
 
 static const char *cm_state_map_find(
@@ -304,6 +397,18 @@ static const char *cm_state_map_find(
         if (!strcmp(map->entries[i].supi, supi))
             return map->entries[i].state;
     return "-";
+}
+
+static bool active_session_map_find(
+        const cm_state_map_t *map, const char *supi, unsigned int psi)
+{
+    size_t i;
+
+    for (i = 0; i < map->active_session_count; i++)
+        if (!strcmp(map->active_sessions[i].supi, supi) &&
+            map->active_sessions[i].psi == psi)
+            return true;
+    return false;
 }
 
 static bool append_output(char *output, size_t capacity, size_t *used,
@@ -323,7 +428,9 @@ static bool append_output(char *output, size_t capacity, size_t *used,
     return true;
 }
 
-static char *add_psi_column(const char *response, const psi_map_t *map)
+static char *add_psi_column(
+        const char *response, const psi_map_t *map,
+        const cm_state_map_t *amf_map, bool active_only)
 {
     char *copy = strdup(response);
     char *output = malloc(ENRICHED_RESPONSE_SIZE + 1);
@@ -366,9 +473,15 @@ static char *add_psi_column(const char *response, const psi_map_t *map)
                         &used, "\n"))
                 goto fail;
         } else {
+            uint64_t upf_seid;
             unsigned int psi;
+            bool psi_found = parse_u64(columns[2], &upf_seid) &&
+                psi_map_find(map, columns[0], columns[1], upf_seid, &psi);
 
-            if (psi_map_find(map, columns[0], columns[1], &psi)) {
+            if (active_only && (!psi_found ||
+                !active_session_map_find(amf_map, columns[0], psi)))
+                continue;
+            if (psi_found) {
                 if (!append_output(output, ENRICHED_RESPONSE_SIZE + 1, &used,
                             "%s %s %u %s", columns[0], columns[1],
                             psi, columns[2]))
@@ -398,7 +511,21 @@ fail:
     return NULL;
 }
 
-static char *add_psi_json(const char *response, const psi_map_t *map)
+static bool json_u64(const cJSON *item, uint64_t *value)
+{
+    if (cJSON_IsString(item))
+        return parse_u64(item->valuestring, value);
+    if (cJSON_IsNumber(item) && item->valuedouble >= 0 &&
+        item->valuedouble <= 9007199254740991.0) {
+        *value = (uint64_t)item->valuedouble;
+        return !(item->valuedouble > (double)*value);
+    }
+    return false;
+}
+
+static char *add_psi_json(
+        const char *response, const psi_map_t *map,
+        const cm_state_map_t *amf_map, bool active_only)
 {
     cJSON *root = cJSON_Parse(response);
     cJSON *rows;
@@ -409,17 +536,39 @@ static char *add_psi_json(const char *response, const psi_map_t *map)
     if (!root)
         return NULL;
     rows = cJSON_GetObjectItemCaseSensitive(root, "rows");
-    cJSON_ArrayForEach(row, rows) {
+    row = cJSON_IsArray(rows) ? rows->child : NULL;
+    while (row) {
+        cJSON *next = row->next;
         cJSON *supi = cJSON_GetObjectItemCaseSensitive(row, "supi");
         cJSON *ue_ip = cJSON_GetObjectItemCaseSensitive(row, "ue_ip");
+        cJSON *seid = cJSON_GetObjectItemCaseSensitive(row, "seid");
+        uint64_t upf_seid;
         unsigned int psi;
+        bool psi_found;
 
-        if (!cJSON_IsString(supi) || !cJSON_IsString(ue_ip))
+        if (!cJSON_IsString(supi) || !cJSON_IsString(ue_ip) ||
+            !json_u64(seid, &upf_seid)) {
+            if (active_only) {
+                cJSON_Delete(cJSON_DetachItemViaPointer(rows, row));
+                row = next;
+                continue;
+            }
+            row = next;
             continue;
-        if (psi_map_find(map, supi->valuestring, ue_ip->valuestring, &psi))
+        }
+        psi_found = psi_map_find(map, supi->valuestring,
+                ue_ip->valuestring, upf_seid, &psi);
+        if (active_only && (!psi_found ||
+            !active_session_map_find(amf_map, supi->valuestring, psi))) {
+            cJSON_Delete(cJSON_DetachItemViaPointer(rows, row));
+            row = next;
+            continue;
+        }
+        if (psi_found)
             cJSON_AddNumberToObject(row, "psi", psi);
         else
             cJSON_AddNullToObject(row, "psi");
+        row = next;
     }
     json = cJSON_PrintUnformatted(root);
     if (json) {
@@ -646,9 +795,10 @@ static int print_table(char *response)
 
 static int query(const char *socket_path, const char *request,
         const char *smf_pdu_info_url, const char *amf_ue_info_url,
-        bool include_psi, bool json_output)
+        bool include_psi, bool active_only, bool json_output)
 {
     struct sockaddr_un address;
+    cm_state_map_t *amf_map;
     char *response;
     int fd;
     ssize_t length;
@@ -713,46 +863,70 @@ static int query(const char *socket_path, const char *request,
     }
     close(fd);
     response[response_len] = '\0';
+    amf_map = malloc(sizeof(*amf_map));
+    if (!amf_map) {
+        perror("malloc");
+        free(response);
+        return 1;
+    }
+    if (!load_cm_state_map(amf_ue_info_url, amf_map) && active_only) {
+        fprintf(stderr,
+                "cannot load AMF UE info required by --active-only\n");
+        free(amf_map);
+        free(response);
+        return 1;
+    }
     if (include_psi) {
         psi_map_t *map = malloc(sizeof(*map));
         char *enriched = NULL;
 
         if (!map) {
             perror("malloc");
+            free(amf_map);
             free(response);
             return 1;
         }
-        load_psi_map(smf_pdu_info_url, map);
-        if (json_output)
-            enriched = add_psi_json(response, map);
-        else
-            enriched = add_psi_column(response, map);
-        free(map);
-        if (enriched) {
+        if (!load_psi_map(smf_pdu_info_url, map) && active_only) {
+            fprintf(stderr,
+                    "cannot load SMF PDU info required by --active-only\n");
+            free(map);
+            free(amf_map);
             free(response);
-            response = enriched;
+            return 1;
         }
+        if (json_output)
+            enriched = add_psi_json(
+                    response, map, amf_map, active_only);
+        else
+            enriched = add_psi_column(
+                    response, map, amf_map, active_only);
+        free(map);
+        if (!enriched) {
+            fprintf(stderr, "cannot enrich UPF response with PSI\n");
+            free(amf_map);
+            free(response);
+            return 1;
+        }
+        free(response);
+        response = enriched;
     }
     {
-        cm_state_map_t *map = malloc(sizeof(*map));
         char *enriched = NULL;
 
-        if (!map) {
-            perror("malloc");
+        if (json_output)
+            enriched = add_cm_state_json(response, amf_map);
+        else
+            enriched = add_cm_state_column(response, amf_map);
+        if (!enriched) {
+            fprintf(stderr, "cannot enrich UPF response with CM state\n");
+            free(amf_map);
             free(response);
             return 1;
         }
-        load_cm_state_map(amf_ue_info_url, map);
-        if (json_output)
-            enriched = add_cm_state_json(response, map);
-        else
-            enriched = add_cm_state_column(response, map);
-        free(map);
-        if (enriched) {
-            free(response);
-            response = enriched;
-        }
+        free(response);
+        response = enriched;
     }
+    free(amf_map);
     if (print_table(response)) {
         free(response);
         return 1;
@@ -771,6 +945,7 @@ int main(int argc, char *argv[])
         { "seid", required_argument, NULL, 's' },
         { "smf-pdu-info", required_argument, NULL, 'p' },
         { "amf-ue-info", required_argument, NULL, 'a' },
+        { "active-only", no_argument, NULL, 'A' },
         { "json", no_argument, NULL, 'j' },
         { "watch", no_argument, NULL, 'w' },
         { "interval", required_argument, NULL, 'n' },
@@ -785,6 +960,8 @@ int main(int argc, char *argv[])
     bool watch = false;
     bool json_output = false;
     bool include_psi = true;
+    bool active_only = false;
+    const char *level = "user";
     double interval = 1.0;
     int option;
 
@@ -808,6 +985,7 @@ int main(int argc, char *argv[])
             }
             if (append_option(request, sizeof(request), "level", optarg))
                 return 2;
+            level = optarg;
             include_psi = strcmp(optarg, "user") != 0;
             break;
         case 'u':
@@ -850,6 +1028,9 @@ int main(int argc, char *argv[])
                 return 2;
             }
             break;
+        case 'A':
+            active_only = true;
+            break;
         case 'j':
             if (append_option(request, sizeof(request), "json", "1"))
                 return 2;
@@ -883,6 +1064,11 @@ int main(int argc, char *argv[])
         usage(stderr);
         return 2;
     }
+    if (active_only && !strcmp(level, "user")) {
+        fprintf(stderr,
+                "--active-only requires --level session, bearer, or rule\n");
+        return 2;
+    }
 
     do {
         struct timespec delay;
@@ -891,7 +1077,7 @@ int main(int argc, char *argv[])
         if (watch && !json_output)
             fputs("\033[H\033[J", stdout);
         rv = query(socket_path, request, smf_pdu_info_url, amf_ue_info_url,
-                include_psi, json_output);
+                include_psi, active_only, json_output);
         if (!watch)
             return rv;
         delay.tv_sec = (time_t)interval;
