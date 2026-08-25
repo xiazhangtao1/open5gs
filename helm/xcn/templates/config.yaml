@@ -4,6 +4,7 @@
 {{- $upfN6Backend := include "xcn.upfN6Backend" . }}
 {{- $upfN3MemifLocalAddress := include "xcn.upfN3MemifLocalAddress" . }}
 {{- $upfSessionWorkersEnabled := eq (include "xcn.upfSessionWorkersEnabled" .) "true" }}
+{{- $ip4NeighborAgeSeconds := int (dig "neighbor" "ip4AgeSeconds" 30 .Values.vpp) }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -247,8 +248,8 @@ data:
       app-socket-api /run/vpp/app_ns_sockets/default
     }
   vpp-cli-commands.conf.template: |
-{{- if gt (int .Values.vpp.neighbor.ip4AgeSeconds) 0 }}
-    set ip neighbor-config ip4 age {{ .Values.vpp.neighbor.ip4AgeSeconds }}
+{{- if gt $ip4NeighborAgeSeconds 0 }}
+    set ip neighbor-config ip4 age {{ $ip4NeighborAgeSeconds }}
 {{- end }}
     create memif socket id {{ .Values.networking.upf.n3.memif.socketId }} filename {{ .Values.networking.upf.n3.memif.socket }}
     create interface memif id {{ .Values.networking.upf.n3.memif.id }} socket-id {{ .Values.networking.upf.n3.memif.socketId }} master mode ip ring-size {{ .Values.networking.upf.n3.memif.ringSize }} buffer-size {{ .Values.networking.upf.n3.memif.bufferSize }} rx-queues {{ include "xcn.upfMemifQueueCount" (dict "root" . "value" .Values.networking.upf.n3.memif.queues "path" "networking.upf.n3.memif.queues") }} tx-queues {{ include "xcn.upfMemifQueueCount" (dict "root" . "value" .Values.networking.upf.n3.memif.queues "path" "networking.upf.n3.memif.queues") }}
