@@ -256,6 +256,8 @@ vpp:
     numTxDesc: 4096
   memory:
     mainHeapSize: 8G
+  neighbor:
+    ip4AgeSeconds: 30
   cpu:
     # "auto" uses every CPU except one reserved for vpp_main.
     workers: auto
