@@ -54,10 +54,10 @@ resources:
     amf:
       requests:
         cpu: 500m
-        memory: 256Mi
+        memory: 1Gi
       limits:
         cpu: 1500m
-        memory: 512Mi
+        memory: 4Gi
     ausf:
       requests:
         cpu: 200m
