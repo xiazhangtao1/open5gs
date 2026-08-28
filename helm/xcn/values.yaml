@@ -140,6 +140,13 @@ fivegc:
   hostNetwork:
     enabled: false
     dnsPolicy: ClusterFirstWithHostNet
+  cpusetGuard:
+    # Recreate a VPP/memif Pod that was admitted before the CPUSet webhook
+    # became ready and therefore lacks its immutable CPU allocation metadata.
+    enabled: true
+    deleteDelaySeconds: 30
+    tokenExpirationSeconds: 600
+    apiTimeoutSeconds: 10
   wait:
     timeout: 600
     interval: 2

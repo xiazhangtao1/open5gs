@@ -2,6 +2,10 @@
 {{- $upfN3Backend := include "xcn.upfN3Backend" . }}
 {{- $upfN6Backend := include "xcn.upfN6Backend" . }}
 {{- $vppEnabled := eq (include "xcn.vppEnabled" .) "true" }}
+{{- $cpusetGuardEnabled := and $vppEnabled (dig "cpusetGuard" "enabled" true .Values.fivegc) }}
+{{- $cpusetGuardDeleteDelay := int (dig "cpusetGuard" "deleteDelaySeconds" 30 .Values.fivegc) }}
+{{- $cpusetGuardTokenExpiration := int (dig "cpusetGuard" "tokenExpirationSeconds" 600 .Values.fivegc) }}
+{{- $cpusetGuardApiTimeout := int (dig "cpusetGuard" "apiTimeoutSeconds" 10 .Values.fivegc) }}
 {{- $upfGtpuAddress := include "xcn.upfGtpuServerAddress" . }}
 {{- $upfGtpuAdvertiseAddress := include "xcn.upfGtpuAdvertiseAddress" . }}
 {{- $upfN3MemifLocalAddress := include "xcn.upfN3MemifLocalAddress" . }}
@@ -44,6 +48,15 @@
 {{- if eq (toString .Values.vpp.n6.externalAddress) "" }}
 {{- fail "vpp.n6.externalAddress is required when vpp.enabled=true" }}
 {{- end }}
+{{- end }}
+{{- if and $cpusetGuardEnabled (lt $cpusetGuardDeleteDelay 0) }}
+{{- fail "fivegc.cpusetGuard.deleteDelaySeconds must be non-negative" }}
+{{- end }}
+{{- if and $cpusetGuardEnabled (lt $cpusetGuardTokenExpiration 600) }}
+{{- fail "fivegc.cpusetGuard.tokenExpirationSeconds must be at least 600" }}
+{{- end }}
+{{- if and $cpusetGuardEnabled (lt $cpusetGuardApiTimeout 1) }}
+{{- fail "fivegc.cpusetGuard.apiTimeoutSeconds must be at least 1" }}
 {{- end }}
 apiVersion: v1
 kind: Service
@@ -230,6 +243,42 @@ spec:
       targetPort: 9094
       protocol: TCP
 ---
+{{- if $cpusetGuardEnabled }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "xcn.componentName" (dict "root" . "component" "5gc-cpuset-guard") }}
+  labels:
+    {{- include "xcn.labels" . | nindent 4 }}
+automountServiceAccountToken: false
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "xcn.componentName" (dict "root" . "component" "5gc-cpuset-guard") }}
+  labels:
+    {{- include "xcn.labels" . | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "xcn.componentName" (dict "root" . "component" "5gc-cpuset-guard") }}
+  labels:
+    {{- include "xcn.labels" . | nindent 4 }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "xcn.componentName" (dict "root" . "component" "5gc-cpuset-guard") }}
+    namespace: {{ .Release.Namespace }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "xcn.componentName" (dict "root" . "component" "5gc-cpuset-guard") }}
+---
+{{- end }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -251,6 +300,56 @@ spec:
       annotations:
         checksum/config: {{ include (print $.Template.BasePath "/config.yaml") . | sha256sum }}
     spec:
+{{- if $cpusetGuardEnabled }}
+      serviceAccountName: {{ include "xcn.componentName" (dict "root" . "component" "5gc-cpuset-guard") }}
+      automountServiceAccountToken: false
+      initContainers:
+        - name: cpuset-admission-guard
+          image: {{ printf "%s:%s" .Values.vpp.image.repository .Values.vpp.image.tag }}
+          imagePullPolicy: {{ .Values.vpp.image.pullPolicy }}
+          command: ["python3", "/usr/local/bin/cpuset-admission-guard.py"]
+          env:
+            - name: PYTHONDONTWRITEBYTECODE
+              value: "1"
+            - name: CPUSET_ALLOCATION
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.annotations['xnet.com/used-core']
+            - name: CPUSET_REQUIRED_CONTAINERS
+              value: "upf,vpp,smf"
+            - name: CPUSET_GUARD_DELETE_DELAY_SECONDS
+              value: {{ $cpusetGuardDeleteDelay | quote }}
+            - name: CPUSET_GUARD_API_TIMEOUT_SECONDS
+              value: {{ $cpusetGuardApiTimeout | quote }}
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              cpu: 100m
+              memory: 64Mi
+          volumeMounts:
+            - name: config
+              mountPath: /usr/local/bin/cpuset-admission-guard.py
+              subPath: cpuset-admission-guard.py
+              readOnly: true
+            - name: cpuset-guard-api
+              mountPath: /var/run/secrets/xcn-guard
+              readOnly: true
+{{- end }}
 {{- if .Values.fivegc.hostNetwork.enabled }}
       hostNetwork: true
       dnsPolicy: {{ .Values.fivegc.hostNetwork.dnsPolicy | quote }}
@@ -775,6 +874,20 @@ spec:
         - name: hnet
           secret:
             secretName: {{ include "xcn.componentName" (dict "root" . "component" "udm-hnet") }}
+{{- if $cpusetGuardEnabled }}
+        - name: cpuset-guard-api
+          projected:
+            defaultMode: 0440
+            sources:
+              - serviceAccountToken:
+                  expirationSeconds: {{ $cpusetGuardTokenExpiration }}
+                  path: token
+              - configMap:
+                  name: kube-root-ca.crt
+                  items:
+                    - key: ca.crt
+                      path: ca.crt
+{{- end }}
 {{- if eq $upfN6Backend "tun" }}
         - name: dev-net-tun
           hostPath:

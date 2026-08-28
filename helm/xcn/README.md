@@ -379,10 +379,21 @@ not a production default.
 The 5GC Pod is labeled `xnet.com/cpuset-required=true`. The VPP entrypoint
 waits up to `cpusetWaitSeconds` for the container cgroup to converge to the
 requested CPU count. This covers the short controller recovery window after a
-node restart without selecting arbitrary CPUs from the node-wide cpuset. If a
-cluster uses a mutating CPUSet webhook, configure a dedicated webhook rule for
-this label with `failurePolicy: Fail`; keep the general fallback rule
-fail-open and exclude this label so the CPU manager can bootstrap itself.
+node restart without selecting arbitrary CPUs from the node-wide cpuset.
+
+In VPP/memif mode, `fivegc.cpusetGuard.enabled` also adds a self-healing init
+container. It exits immediately when the CPUSet webhook supplied valid
+`xnet.com/used-core` allocations for UPF, VPP, and SMF. If admission was
+allowed before the webhook became ready, the immutable allocation is absent;
+the guard waits `deleteDelaySeconds` and deletes its own Pod so the Deployment
+retries admission. It uses a dedicated ServiceAccount and a short-lived
+projected token mounted only into the init container. No Kubernetes API token
+is mounted into the 5GC application containers.
+
+Clusters that permit workload-specific webhook policy should additionally
+configure a dedicated `failurePolicy: Fail` rule for this label while keeping
+the general fallback rule fail-open. The init-container guard remains useful
+for clusters where the shared webhook configuration cannot be changed.
 
 NAT44 is enabled by default so IPv4 UE traffic keeps the former
 TUN/iptables-MASQUERADE behavior. When the upstream router has a route for

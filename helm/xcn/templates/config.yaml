@@ -12,6 +12,8 @@ metadata:
   labels:
     {{- include "xcn.labels" . | nindent 4 }}
 data:
+  cpuset-admission-guard.py: |
+{{ .Files.Get "files/cpuset-admission-guard.py" | indent 4 }}
   vpp-entrypoint-dual.py: |
 {{ .Files.Get "files/vpp-entrypoint-dual.py" | indent 4 }}
   nrf.yaml: |
