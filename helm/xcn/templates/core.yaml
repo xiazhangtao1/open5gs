@@ -44,6 +44,10 @@ spec:
       labels:
         app: {{ include "xcn.componentName" (dict "root" . "component" "core") }}
     spec:
+{{- with .Values.nodeSelector }}
+      nodeSelector:
+{{ toYaml . | indent 8 }}
+{{- end }}
       containers:
         - name: nrf
           image: {{ printf "%s:%s" .Values.images.runtime.repository .Values.images.runtime.tag }}

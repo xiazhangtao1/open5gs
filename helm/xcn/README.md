@@ -32,6 +32,13 @@ helm template xcn helm/xcn
 
 ## Common Overrides
 
+Schedule all xcn workloads on one node by its Kubernetes hostname label:
+
+```bash
+helm install xcn helm/xcn -n xcn --create-namespace \
+  --set 'nodeSelector.kubernetes\.io/hostname=xnet-server1'
+```
+
 ```bash
 helm install xcn helm/xcn \
   --set images.runtime.repository=registry.example.com/xcn-runtime \

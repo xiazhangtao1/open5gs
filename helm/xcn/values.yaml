@@ -1,5 +1,8 @@
 fullnameOverride: xcn
 
+# Apply one node selector to all xcn workloads (core, 5gc, WebUI, and MongoDB).
+nodeSelector: {}
+
 images:
   runtime:
     repository: xcn-runtime

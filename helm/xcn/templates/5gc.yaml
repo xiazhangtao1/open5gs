@@ -300,6 +300,10 @@ spec:
       annotations:
         checksum/config: {{ include (print $.Template.BasePath "/config.yaml") . | sha256sum }}
     spec:
+{{- with .Values.nodeSelector }}
+      nodeSelector:
+{{ toYaml . | indent 8 }}
+{{- end }}
 {{- if $cpusetGuardEnabled }}
       serviceAccountName: {{ include "xcn.componentName" (dict "root" . "component" "5gc-cpuset-guard") }}
       automountServiceAccountToken: false

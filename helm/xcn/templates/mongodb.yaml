@@ -46,6 +46,10 @@ spec:
       labels:
         app: {{ include "xcn.componentName" (dict "root" . "component" "mongodb") }}
     spec:
+{{- with .Values.nodeSelector }}
+      nodeSelector:
+{{ toYaml . | indent 8 }}
+{{- end }}
       containers:
         - name: mongodb
           image: {{ printf "%s:%s" .Values.images.mongodb.repository .Values.images.mongodb.tag }}
