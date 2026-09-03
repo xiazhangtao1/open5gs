@@ -296,7 +296,9 @@ spec:
     metadata:
       labels:
         app: {{ include "xcn.componentName" (dict "root" . "component" "5gc") }}
+{{- if $vppEnabled }}
         xnet.com/cpuset-required: "true"
+{{- end }}
       annotations:
         checksum/config: {{ include (print $.Template.BasePath "/config.yaml") . | sha256sum }}
     spec:
@@ -304,9 +306,9 @@ spec:
       nodeSelector:
 {{ toYaml . | indent 8 }}
 {{- end }}
-{{- if $cpusetGuardEnabled }}
-      serviceAccountName: {{ include "xcn.componentName" (dict "root" . "component" "5gc-cpuset-guard") }}
+      serviceAccountName: {{ ternary (include "xcn.componentName" (dict "root" . "component" "5gc-cpuset-guard")) "default" $cpusetGuardEnabled }}
       automountServiceAccountToken: false
+{{- if $cpusetGuardEnabled }}
       initContainers:
         - name: cpuset-admission-guard
           image: {{ printf "%s:%s" .Values.vpp.image.repository .Values.vpp.image.tag }}
