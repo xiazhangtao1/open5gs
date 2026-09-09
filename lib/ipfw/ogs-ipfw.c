@@ -208,9 +208,8 @@ char *ogs_ipfw_encode_flow_description(ogs_ipfw_rule_t *ipfw_rule)
                     ipfw_rule->ip.src.mask[2],
                     ipfw_rule->ip.src.mask[3]);
             return NULL;
-        } else if (prefixlen == 0) {
-            p = ogs_slprintf(p, last, " any");
-        } else if (prefixlen > 0 && prefixlen < IPV4_BITLEN) {
+        } else if (prefixlen < IPV4_BITLEN) {
+            /* Preserve explicit /0 across flow-description round trips. */
             p = ogs_slprintf(p, last, " %s/%d", buf, prefixlen);
         } else if (prefixlen == IPV4_BITLEN) {
             p = ogs_slprintf(p, last, " %s", buf);
@@ -278,9 +277,8 @@ char *ogs_ipfw_encode_flow_description(ogs_ipfw_rule_t *ipfw_rule)
                     ipfw_rule->ip.dst.mask[2],
                     ipfw_rule->ip.dst.mask[3]);
             return NULL;
-        } else if (prefixlen == 0) {
-            p = ogs_slprintf(p, last, " assigned");
-        } else if (prefixlen > 0 && prefixlen < IPV4_BITLEN) {
+        } else if (prefixlen < IPV4_BITLEN) {
+            /* Preserve explicit /0 across flow-description round trips. */
             p = ogs_slprintf(p, last, " %s/%d", buf, prefixlen);
         } else if (prefixlen == IPV4_BITLEN) {
             p = ogs_slprintf(p, last, " %s", buf);

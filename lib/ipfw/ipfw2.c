@@ -2966,6 +2966,15 @@ fill_ip(ipfw_insn_ip *cmd, char *av, int cblen, struct tidx *tstate)
 
 	/* Check this entry */
 	if (d[1] == 0) { /* "any", specified as x.x.x.x/0 */
+		/* Keep a standalone explicit IPv4 /0 for NAS packet filters.
+		 * Dropping it can leave a filter with no components. Unlike
+		 * the NAS match-all type, an IPv4 address/mask component can
+		 * also be used in a non-default QoS rule.
+		 */
+		if (!(cmd->o.len & F_NOT) && av == NULL && len == 0) {
+			cmd->o.len |= F_INSN_SIZE(ipfw_insn) + 2;
+			return;
+		}
 		/*
 		 * 'any' turns the entire list into a NOP.
 		 * 'not any' never matches, so it is removed from the
@@ -5006,7 +5015,6 @@ ipfw_list_tifaces(void)
 
 	free(olh);
 }
-
 
 
 
