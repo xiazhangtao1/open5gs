@@ -186,7 +186,14 @@ static void update_authorized_pcc_rule_and_qos(
             pcc_rule->type = OGS_PCC_RULE_TYPE_INSTALL;
             pcc_rule->id = ogs_strdup(PccRule->pcc_rule_id);
             ogs_assert(pcc_rule->id);
-            pcc_rule->precedence = PccRule->precedence;
+            if (PccRule->is_precedence) {
+                pcc_rule->precedence = PccRule->precedence;
+            } else {
+                smf_bearer_t *existing =
+                    smf_qos_flow_find_by_pcc_rule_id(sess, PccRuleMap->key);
+                pcc_rule->precedence = existing ?
+                    existing->dl_pdr->precedence : UINT32_MAX;
+            }
 
             if (PccRule->flow_infos) {
                 ogs_assert(pcc_rule->num_of_flow == 0);

@@ -17,6 +17,7 @@
 
 libpcf_sources = files('''
     context.c
+    precedence.c
     metrics.c
     event.c
 

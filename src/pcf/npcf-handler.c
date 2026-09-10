@@ -20,6 +20,7 @@
 #include "sbi-path.h"
 
 #include "npcf-handler.h"
+#include "precedence.h"
 
 #include <errno.h>
 #include <curl/curl.h>
@@ -429,7 +430,7 @@ static bool xcn_parse_qos_override(
         cJSON *item, ogs_pcc_rule_t *pcc_rule, const char **error_detail)
 {
     cJSON *qos = NULL, *arp = NULL;
-    int qos_index = 0, priority_level = 8, precedence = 100;
+    int qos_index = 0, priority_level = 8, precedence = -1;
     const char *value = NULL;
 
     ogs_assert(item);
@@ -465,10 +466,17 @@ static bool xcn_parse_qos_override(
         return false;
     }
 
-    precedence = xcn_json_int(qos, "precedence", precedence);
-    if (precedence < 0) {
-        *error_detail = "qos.precedence must be >= 0";
-        return false;
+    {
+        cJSON *value = cJSON_GetObjectItemCaseSensitive(qos, "precedence");
+        if (value) {
+            if (!cJSON_IsNumber(value) || value->valuedouble < 0 ||
+                value->valuedouble > 254 ||
+                value->valuedouble > value->valueint) {
+                *error_detail = "qos.precedence must be an integer in 0..254 (255 is reserved for the default QoS rule)";
+                return false;
+            }
+            precedence = value->valueint;
+        }
     }
 
     memset(pcc_rule, 0, sizeof(*pcc_rule));
@@ -1864,6 +1872,25 @@ bool pcf_npcf_policyauthorization_handle_create(pcf_sess_t *sess,
         }
 
         if (!pcc_rule) {
+            int precedence = db_pcc_rule->precedence;
+
+            if (AscReqData->af_app_id &&
+                strcmp(AscReqData->af_app_id, XCN_SVC_DEDICATED_BEARER) == 0) {
+                int requested = xcn_qos_override &&
+                    xcn_qos_override->precedence != UINT32_MAX ?
+                    (int)xcn_qos_override->precedence : -1;
+
+                precedence = pcf_select_qos_precedence(
+                        sess, &session_data, requested);
+                if (precedence < 0) {
+                    strerror = ogs_msprintf(
+                            "QoS precedence unavailable in PDU session %u (requested:%d)",
+                            sess->psi, requested);
+                    status = OGS_SBI_HTTP_STATUS_CONFLICT;
+                    goto cleanup;
+                }
+            }
+
             pcc_rule = &app_session->pcc_rule[app_session->num_of_pcc_rule];
             ogs_assert(pcc_rule);
 
@@ -1874,7 +1901,10 @@ bool pcf_npcf_policyauthorization_handle_create(pcf_sess_t *sess,
             memcpy(&pcc_rule->qos, &db_pcc_rule->qos, sizeof(ogs_qos_t));
 
             pcc_rule->flow_status = db_pcc_rule->flow_status;
-            pcc_rule->precedence = db_pcc_rule->precedence;
+            pcc_rule->precedence = precedence;
+
+            /* Include partially built rules in failure cleanup as well. */
+            app_session->num_of_pcc_rule++;
 
             /* Install Flow */
             flow_presence = 1;
@@ -1886,8 +1916,6 @@ bool pcf_npcf_policyauthorization_handle_create(pcf_sess_t *sess,
                 status = OGS_SBI_HTTP_STATUS_FORBIDDEN;
                 goto cleanup;
             }
-
-            app_session->num_of_pcc_rule++;
 
         } else {
             int count = 0;

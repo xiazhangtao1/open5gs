@@ -503,6 +503,54 @@ int smf_gtp2_send_update_bearer_request(smf_bearer_t *bearer)
     return rv;
 }
 
+/* Validate before changing any bearer or sending PFCP/NAS. PCC precedence
+ * is 32 bits; NAS precedence is only 8 bits and 255 belongs to the default.
+ * Updates to an existing rule retain the precedence already installed.
+ */
+static bool qos_precedence_valid(smf_sess_t *sess)
+{
+    smf_bearer_t *bearer;
+    int i, j;
+
+    for (i = 0; i < sess->policy.num_of_pcc_rule; i++) {
+        ogs_pcc_rule_t *rule = &sess->policy.pcc_rule[i];
+
+        if (rule->type != OGS_PCC_RULE_TYPE_INSTALL || !rule->id)
+            continue;
+        if (rule->precedence >= UINT8_MAX) {
+            ogs_error("Invalid NAS QoS precedence [%s:%u]",
+                    rule->id, rule->precedence);
+            return false;
+        }
+        ogs_list_for_each(&sess->bearer_list, bearer) {
+            if (!bearer->pcc_rule.id)
+                continue; /* Default rule is reserved above. */
+            if (!strcmp(bearer->pcc_rule.id, rule->id)) {
+                if (bearer->dl_pdr->precedence != rule->precedence) {
+                    ogs_error("Cannot change installed QoS precedence [%s]",
+                            rule->id);
+                    return false;
+                }
+            } else if (bearer->dl_pdr->precedence == rule->precedence) {
+                ogs_error("Conflicting NAS QoS precedence [%s:%s:%u]",
+                        rule->id, bearer->pcc_rule.id, rule->precedence);
+                return false;
+            }
+        }
+        for (j = 0; j < i; j++) {
+            ogs_pcc_rule_t *other = &sess->policy.pcc_rule[j];
+            if (other->type == OGS_PCC_RULE_TYPE_INSTALL && other->id &&
+                strcmp(other->id, rule->id) &&
+                other->precedence == rule->precedence) {
+                ogs_error("Conflicting NAS QoS precedence [%s:%s:%u]",
+                        rule->id, other->id, rule->precedence);
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
 bool smf_qos_flow_binding(smf_sess_t *sess)
 {
     int rv;
@@ -515,6 +563,9 @@ bool smf_qos_flow_binding(smf_sess_t *sess)
     pfcp_flags = OGS_PFCP_MODIFY_NETWORK_REQUESTED;
 
     ogs_list_init(&sess->qos_flow_to_modify_list);
+
+    if (!qos_precedence_valid(sess))
+        return false;
 
     for (i = 0; i < sess->policy.num_of_pcc_rule; i++) {
         smf_bearer_t *qos_flow = NULL;

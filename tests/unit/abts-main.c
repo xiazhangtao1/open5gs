@@ -38,6 +38,7 @@ abts_suite *test_sbi_message(abts_suite *suite);
 abts_suite *test_security(abts_suite *suite);
 abts_suite *test_crash(abts_suite *suite);
 abts_suite *test_ipfw(abts_suite *suite);
+abts_suite *test_precedence(abts_suite *suite);
 
 const struct testlist {
     abts_suite *(*func)(abts_suite *suite);
@@ -51,6 +52,7 @@ const struct testlist {
     {test_security},
     {test_crash},
     {test_ipfw},
+    {test_precedence},
     {NULL},
 };
 

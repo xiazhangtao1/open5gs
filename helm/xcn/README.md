@@ -570,6 +570,16 @@ The request is translated inside PCF into the normal policy authorization path a
 
 The target session can be selected by `ueIp`, `ngapId` + `pduSessionId`, or the legacy `supi` + `pduSessionId` pair. If multiple selectors are present, PCF uses only the highest priority selector: `ueIp` first, then NGAP ID + `pduSessionId`, then `supi` + `pduSessionId`. An NGAP ID identifies the UE connection, not a PDU session, so `pduSessionId` is required with `ngapId`, `amfUeNgapId`, or `ranUeNgapId`. `ngapId` matches AMF UE NGAP ID first and then RAN UE NGAP ID.
 
+`qos.precedence` is optional and controls packet-filter matching order (lower
+values match first), independently of `qos.arp.priorityLevel`. When omitted,
+PCF selects an unused value in the target PDU session, starting at 100. Explicit
+values must be JSON integers in `0..254`; 255 is reserved for the default NAS
+QoS rule. An occupied value returns HTTP 409 without installing another rule;
+invalid types or values return HTTP 400. Existing application rules retain their
+assigned precedence on updates. Deleting an application or cleaning up a failed
+PCF creation releases its allocation; applications awaiting deletion still reserve
+their values. Each POST creates a new application, not an update of an old one.
+
 Query XCN-created dedicated bearer triggers for a target PDU session:
 
 ```bash
