@@ -96,8 +96,10 @@ available to distinguish the UPF rows. `--active-only` additionally compares
 the resolved PSI with the AMF's current PDU Session list and hides stale UPF
 Sessions. It is available at `session`, `bearer`, and `rule` levels and fails
 instead of guessing when the AMF or SMF endpoint is unavailable.
-`bearer` aggregates UL/DL PDRs by QFI inside
-one Session; `rule` shows direction, PDR ID and QER ID. `--watch` continuously
+`bearer` aggregates UL/DL PDRs by QFI inside one Session; `rule` shows
+direction, PDR ID and QER ID. Both levels resolve `5QI` from SMF `/pdu-info`
+by Session and QFI. If no exact match exists, text prints `-` and JSON uses
+`null`; the CLI does not infer 5QI from QFI. `--watch` continuously
 refreshes the display, while `--seid`, `--ue-ip`, and `--supi` filter results.
 The socket is local to the UPF container and has mode `0600`.
 

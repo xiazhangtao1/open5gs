@@ -25,7 +25,9 @@ Session ID（`PSI`）和PFCP本地标识（`UPF-SEID`）。PSI由CLI只在查询
 JSON显示`null`，`UPF-SEID`/`seid`仍可用于区分UPF行。`--active-only`会继续将
 解析出的PSI与AMF当前PDU Session列表比较，只保留当前生效的UPF Session。该参数
 适用于`session`、`bearer`和`rule`级别；AMF或SMF接口不可用时命令会报错，不会猜测。
-`bearer`在一个Session内按QFI汇总上下行；`rule`进一步展示PDR/QER和方向。统计功能不
+`bearer`在一个Session内按QFI汇总上下行；`rule`进一步展示PDR/QER和方向。
+这两个层级还会从SMF `/pdu-info`按Session和QFI关联显示`5QI`；无法精确关联时
+文本显示`-`、JSON显示`null`，不会根据QFI猜测。统计功能不
 替代PFCP URR计费，也不修改UPF语义；可通过
 `networking.upf.rateStats.enabled=false`完全关闭。
 

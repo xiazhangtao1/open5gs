@@ -27,6 +27,7 @@
 #define DEFAULT_SMF_PDU_INFO_URL "http://127.0.0.1:9092/pdu-info"
 #define DEFAULT_AMF_UE_INFO_URL "http://127.0.0.1:9091/ue-info"
 #define PSI_MAP_MAX 4096
+#define QFI_MAX 63
 #define CM_STATE_MAP_MAX 4096
 #define ACTIVE_SESSION_MAP_MAX 4096
 #define ENRICHED_RESPONSE_SIZE (RESPONSE_SIZE * 2)
@@ -37,6 +38,7 @@ typedef struct {
     uint64_t upf_seid;
     bool upf_seid_present;
     unsigned int psi;
+    uint8_t fiveqi[QFI_MAX + 1];
 } psi_map_entry_t;
 
 typedef struct {
@@ -120,9 +122,10 @@ static bool parse_u64(const char *value, uint64_t *result)
 
 static int psi_map_add(psi_map_t *map, const char *supi,
         const char *ue_ip, unsigned int psi,
-        bool upf_seid_present, uint64_t upf_seid)
+        bool upf_seid_present, uint64_t upf_seid, const cJSON *qos_flows)
 {
     psi_map_entry_t *entry;
+    const cJSON *flow;
 
     if (!supi || !*supi || !ue_ip || !*ue_ip || !psi ||
         map->count == PSI_MAP_MAX)
@@ -133,6 +136,20 @@ static int psi_map_add(psi_map_t *map, const char *supi,
     entry->upf_seid = upf_seid;
     entry->upf_seid_present = upf_seid_present;
     entry->psi = psi;
+    cJSON_ArrayForEach(flow, qos_flows) {
+        const cJSON *qfi = cJSON_GetObjectItemCaseSensitive(flow, "qfi");
+        const cJSON *fiveqi =
+            cJSON_GetObjectItemCaseSensitive(flow, "5qi");
+
+        if (!cJSON_IsNumber(qfi) || qfi->valuedouble < 1 ||
+            qfi->valuedouble > QFI_MAX ||
+            qfi->valuedouble > qfi->valueint ||
+            !cJSON_IsNumber(fiveqi) || fiveqi->valuedouble < 1 ||
+            fiveqi->valuedouble > UINT8_MAX ||
+            fiveqi->valuedouble > fiveqi->valueint)
+            continue;
+        entry->fiveqi[qfi->valueint] = fiveqi->valueint;
+    }
     return 0;
 }
 
@@ -161,6 +178,8 @@ static void psi_map_parse_page(psi_map_t *map, const char *json,
             cJSON *ipv6 = cJSON_GetObjectItemCaseSensitive(pdu, "ipv6");
             cJSON *upf_seid =
                 cJSON_GetObjectItemCaseSensitive(pdu, "upf_seid");
+            cJSON *qos_flows =
+                cJSON_GetObjectItemCaseSensitive(pdu, "qos_flows");
             uint64_t seid = 0;
             bool seid_present = cJSON_IsString(upf_seid) &&
                 parse_u64(upf_seid->valuestring, &seid);
@@ -171,11 +190,11 @@ static void psi_map_parse_page(psi_map_t *map, const char *json,
             if (cJSON_IsString(ipv4))
                 (void)psi_map_add(map, supi->valuestring,
                         ipv4->valuestring, (unsigned int)psi->valuedouble,
-                        seid_present, seid);
+                        seid_present, seid, qos_flows);
             if (cJSON_IsString(ipv6))
                 (void)psi_map_add(map, supi->valuestring,
                         ipv6->valuestring, (unsigned int)psi->valuedouble,
-                        seid_present, seid);
+                        seid_present, seid, qos_flows);
         }
     }
     pager = cJSON_GetObjectItemCaseSensitive(root, "pager");
@@ -254,6 +273,47 @@ static bool psi_map_find(
             if (found && *psi != map->entries[i].psi)
                 return false;
             *psi = map->entries[i].psi;
+            found = true;
+        }
+    }
+    return found;
+}
+
+static bool fiveqi_map_find(
+        const psi_map_t *map, const char *supi, const char *ue_ip,
+        uint64_t upf_seid, unsigned int qfi, unsigned int *fiveqi)
+{
+    size_t i;
+    bool keyed = false;
+    bool found = false;
+
+    if (!qfi || qfi > QFI_MAX)
+        return false;
+    for (i = 0; i < map->count; i++) {
+        const psi_map_entry_t *entry = &map->entries[i];
+
+        if (!strcmp(entry->supi, supi) && !strcmp(entry->ue_ip, ue_ip) &&
+            entry->upf_seid_present) {
+            keyed = true;
+            if (entry->upf_seid != upf_seid || !entry->fiveqi[qfi])
+                continue;
+            if (found && *fiveqi != entry->fiveqi[qfi])
+                return false;
+            *fiveqi = entry->fiveqi[qfi];
+            found = true;
+        }
+    }
+    if (keyed)
+        return found;
+
+    for (i = 0; i < map->count; i++) {
+        const psi_map_entry_t *entry = &map->entries[i];
+
+        if (!strcmp(entry->supi, supi) && !strcmp(entry->ue_ip, ue_ip) &&
+            entry->fiveqi[qfi]) {
+            if (found && *fiveqi != entry->fiveqi[qfi])
+                return false;
+            *fiveqi = entry->fiveqi[qfi];
             found = true;
         }
     }
@@ -439,6 +499,7 @@ static char *add_psi_column(
     size_t used = 0;
     bool header = true;
     bool session_table = false;
+    bool qfi_table = false;
 
     if (!copy || !output) {
         free(copy);
@@ -456,6 +517,8 @@ static char *add_psi_column(
             session_table = count >= 3 && count <= MAX_COLUMNS &&
                 !strcmp(columns[1], "UE-IP") &&
                 !strcmp(columns[2], "SEID");
+        if (header && session_table)
+            qfi_table = count >= 4 && !strcmp(columns[3], "QFI");
         if (!session_table || count < 3 || count > MAX_COLUMNS) {
             if (!append_output(output, ENRICHED_RESPONSE_SIZE + 1,
                         &used, "%s\n", line))
@@ -468,15 +531,26 @@ static char *add_psi_column(
                 if (!append_output(output, ENRICHED_RESPONSE_SIZE + 1,
                             &used, " %s", columns[i]))
                     goto fail;
+                if (qfi_table && i == 3 &&
+                    !append_output(output, ENRICHED_RESPONSE_SIZE + 1,
+                            &used, " 5QI"))
+                    goto fail;
             }
             if (!append_output(output, ENRICHED_RESPONSE_SIZE + 1,
                         &used, "\n"))
                 goto fail;
         } else {
             uint64_t upf_seid;
+            uint64_t qfi_value;
             unsigned int psi;
+            unsigned int fiveqi = 0;
             bool psi_found = parse_u64(columns[2], &upf_seid) &&
                 psi_map_find(map, columns[0], columns[1], upf_seid, &psi);
+            bool fiveqi_found = qfi_table && psi_found &&
+                parse_u64(columns[3], &qfi_value) &&
+                qfi_value <= QFI_MAX && fiveqi_map_find(map,
+                    columns[0], columns[1], upf_seid,
+                    (unsigned int)qfi_value, &fiveqi);
 
             if (active_only && (!psi_found ||
                 !active_session_map_find(amf_map, columns[0], psi)))
@@ -495,6 +569,18 @@ static char *add_psi_column(
                 if (!append_output(output, ENRICHED_RESPONSE_SIZE + 1,
                             &used, " %s", columns[i]))
                     goto fail;
+                if (qfi_table && i == 3) {
+                    if (fiveqi_found) {
+                        if (!append_output(output,
+                                    ENRICHED_RESPONSE_SIZE + 1,
+                                    &used, " %u", fiveqi))
+                            goto fail;
+                    } else if (!append_output(output,
+                                ENRICHED_RESPONSE_SIZE + 1,
+                                &used, " -")) {
+                        goto fail;
+                    }
+                }
             }
             if (!append_output(output, ENRICHED_RESPONSE_SIZE + 1,
                         &used, "\n"))
@@ -543,7 +629,8 @@ static char *add_psi_json(
         cJSON *ue_ip = cJSON_GetObjectItemCaseSensitive(row, "ue_ip");
         cJSON *seid = cJSON_GetObjectItemCaseSensitive(row, "seid");
         uint64_t upf_seid;
-        unsigned int psi;
+        uint64_t qfi_value;
+        unsigned int psi, fiveqi;
         bool psi_found;
 
         if (!cJSON_IsString(supi) || !cJSON_IsString(ue_ip) ||
@@ -568,6 +655,17 @@ static char *add_psi_json(
             cJSON_AddNumberToObject(row, "psi", psi);
         else
             cJSON_AddNullToObject(row, "psi");
+        {
+            cJSON *qfi = cJSON_GetObjectItemCaseSensitive(row, "qfi");
+
+            if (json_u64(qfi, &qfi_value) && qfi_value <= QFI_MAX &&
+                fiveqi_map_find(map, supi->valuestring,
+                    ue_ip->valuestring, upf_seid,
+                    (unsigned int)qfi_value, &fiveqi))
+                cJSON_AddNumberToObject(row, "5qi", fiveqi);
+            else if (qfi)
+                cJSON_AddNullToObject(row, "5qi");
+        }
         row = next;
     }
     json = cJSON_PrintUnformatted(root);
