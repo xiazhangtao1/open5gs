@@ -387,6 +387,10 @@ void pcf_state_operational(ogs_fsm_t *s, pcf_event_t *e)
                 CASE(OGS_SBI_HTTP_METHOD_DELETE)
                     pcf_xcn_dedicated_bearer_handle_delete(stream, &message);
                     break;
+                CASE(OGS_SBI_HTTP_METHOD_PATCH)
+                    pcf_xcn_dedicated_bearer_handle_update(
+                            stream, &message, request->http.content);
+                    break;
                 DEFAULT
                     ogs_assert(true ==
                         ogs_sbi_server_send_error(stream,

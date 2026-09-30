@@ -583,6 +583,10 @@ bool smf_qos_flow_binding(smf_sess_t *sess)
 
             bool qos_flow_created = false;
             bool qos_presence = false;
+            bool replace_filters = false;
+            bool xcn_dedicated = !strncmp(pcc_rule->id,
+                    "xcn-dedicated-bearer-a",
+                    strlen("xcn-dedicated-bearer-a"));
 
             ogs_info("Bind PCC rule [id:%s,precedence:%u,5qi:%u,flows:%d]",
                     pcc_rule->id, pcc_rule->precedence,
@@ -658,6 +662,24 @@ bool smf_qos_flow_binding(smf_sess_t *sess)
 
             } else {
                 ogs_assert(strcmp(qos_flow->pcc_rule.id, pcc_rule->id) == 0);
+
+                /* XCN PATCH replaces the rule's flow set, rather than
+                 * appending filters that no longer belong to the rule. */
+                if (xcn_dedicated) {
+                    if (ogs_list_count(&qos_flow->pf_list) !=
+                            pcc_rule->num_of_flow) {
+                        replace_filters = true;
+                    } else {
+                        for (j = 0; j < pcc_rule->num_of_flow; j++) {
+                            ogs_flow_t *flow = &pcc_rule->flow[j];
+                            if (!smf_pf_find_by_flow(qos_flow,
+                                    flow->direction, flow->description)) {
+                                replace_filters = true;
+                                break;
+                            }
+                        }
+                    }
+                }
             }
 
         /*
@@ -667,6 +689,9 @@ bool smf_qos_flow_binding(smf_sess_t *sess)
          * 5GC: OGS_NAS_QOS_CODE_MODIFY_EXISTING_QOS_RULE_AND_ADD_PACKET_FILTERS
          */
             ogs_list_init(&qos_flow->pf_to_add_list);
+
+            if (replace_filters)
+                smf_pf_remove_all(qos_flow);
 
             for (j = 0; j < pcc_rule->num_of_flow; j++) {
                 ogs_flow_t *flow = &pcc_rule->flow[j];
@@ -743,7 +768,23 @@ bool smf_qos_flow_binding(smf_sess_t *sess)
                 ogs_list_add(&qos_flow->pf_to_add_list, &pf->to_add_node);
             }
 
-            if (qos_flow_created == false &&
+            if (qos_flow_created == false && xcn_dedicated &&
+                (qos_flow->qos.index != pcc_rule->qos.index ||
+                 qos_flow->qos.arp.priority_level !=
+                    pcc_rule->qos.arp.priority_level ||
+                 qos_flow->qos.arp.pre_emption_capability !=
+                    pcc_rule->qos.arp.pre_emption_capability ||
+                 qos_flow->qos.arp.pre_emption_vulnerability !=
+                    pcc_rule->qos.arp.pre_emption_vulnerability ||
+                 qos_flow->qos.mbr.downlink != pcc_rule->qos.mbr.downlink ||
+                 qos_flow->qos.mbr.uplink != pcc_rule->qos.mbr.uplink ||
+                 qos_flow->qos.gbr.downlink != pcc_rule->qos.gbr.downlink ||
+                 qos_flow->qos.gbr.uplink != pcc_rule->qos.gbr.uplink)) {
+                memcpy(&qos_flow->qos, &pcc_rule->qos, sizeof(ogs_qos_t));
+                qos_presence = true;
+            }
+
+            if (qos_flow_created == false && !xcn_dedicated &&
                 (pcc_rule->qos.mbr.downlink || pcc_rule->qos.mbr.uplink ||
                  pcc_rule->qos.gbr.downlink || pcc_rule->qos.gbr.uplink) &&
                 (ogs_list_count(&qos_flow->pf_to_add_list) > 0 ||
@@ -777,7 +818,8 @@ bool smf_qos_flow_binding(smf_sess_t *sess)
                 pfcp_flags |= OGS_PFCP_MODIFY_NETWORK_REQUESTED;
 
                 if (ogs_list_count(&qos_flow->pf_to_add_list) > 0) {
-                    pfcp_flags |= OGS_PFCP_MODIFY_TFT_ADD;
+                    pfcp_flags |= replace_filters ?
+                        OGS_PFCP_MODIFY_TFT_REPLACE : OGS_PFCP_MODIFY_TFT_ADD;
                     smf_bearer_tft_update(qos_flow);
                 }
                 if (qos_presence == true) {

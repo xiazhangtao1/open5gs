@@ -580,7 +580,37 @@ QoS rule. An occupied value returns HTTP 409 without installing another rule;
 invalid types or values return HTTP 400. Existing application rules retain their
 assigned precedence on updates. Deleting an application or cleaning up a failed
 PCF creation releases its allocation; applications awaiting deletion still reserve
-their values. Each POST creates a new application, not an update of an old one.
+their values. Each POST creates a new application.
+
+Replace an existing dedicated bearer rule in place with its `appSessionId`:
+
+```bash
+curl --http2-prior-knowledge -sS -i -X PATCH \
+  http://<node-ip>:30777/xcn-dedicated-bearer/v1/bearers/<appSessionId> \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "flowDescriptions": [
+      "permit out ip from 192.168.1.12/32 to assigned",
+      "permit in ip from assigned to 192.168.1.12/32"
+    ],
+    "qos": {
+      "5qi": 3,
+      "arp": {
+        "priorityLevel": 9,
+        "preemptionCapability": "NOT_PREEMPT",
+        "preemptionVulnerability": "PREEMPTABLE"
+      },
+      "maxbrDl": "12 Mbps", "maxbrUl": "10 Mbps",
+      "gbrDl": "6 Mbps", "gbrUl": "5 Mbps"
+    }
+  }'
+```
+
+PATCH requires the complete new `flowDescriptions` and `qos` rule. It returns
+HTTP 200 with the same `appSessionId`; omitted `qos.precedence` retains the
+existing value. Changing precedence on an installed rule returns HTTP 409;
+SMF does not support modifying it in place. Invalid flow descriptions and
+invalid 5QI/ARP settings return HTTP 400 without replacing the existing rule.
 
 Query XCN-created dedicated bearer triggers for a target PDU session:
 

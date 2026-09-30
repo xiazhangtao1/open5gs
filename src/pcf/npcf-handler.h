@@ -52,6 +52,9 @@ bool pcf_xcn_dedicated_bearer_handle_query(
         ogs_hash_t *params);
 bool pcf_xcn_dedicated_bearer_handle_delete(
         ogs_sbi_stream_t *stream, ogs_sbi_message_t *recvmsg);
+bool pcf_xcn_dedicated_bearer_handle_update(
+        ogs_sbi_stream_t *stream, ogs_sbi_message_t *recvmsg,
+        const char *content);
 void pcf_xcn_store_ngap_ids_from_sm_policy_content(
         pcf_sess_t *sess, const char *content);
 void pcf_xcn_refresh_ngap_ids_from_amf(void);

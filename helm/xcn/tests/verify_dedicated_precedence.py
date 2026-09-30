@@ -43,6 +43,12 @@ def main():
         return {b["appSessionId"]: b["pccRules"][0]["precedence"]
                 for b in body["bearers"]}
 
+    def bearer(app_id):
+        status, data = request("GET", base + "?" + urllib.parse.urlencode(
+            {"supi": args.supi, "pduSessionId": args.psi}))
+        assert status == 200, (status, data)
+        return next(b for b in data["bearers"] if b["appSessionId"] == app_id)
+
     def body(address, precedence=None):
         qos = {"5qi": 3, "arp": {"priorityLevel": 8},
                "maxbrDl": "10 Mbps", "maxbrUl": "10 Mbps",
@@ -68,13 +74,58 @@ def main():
     try:
         create("10.45.0.1")
         first = snapshot()
+        app_id = next(iter(first))
+        qos_only = body("10.45.0.1")
+        qos_only["qos"]["5qi"] = 4
+        status, result = request("PATCH", base + "/" + app_id, qos_only)
+        assert status == 200 and result["pccRules"][0]["qos"]["5qi"] == 4
+        time.sleep(0.1)
+
+        arp_only = body("10.45.0.1")
+        arp_only["qos"]["5qi"] = 4
+        arp_only["qos"]["arp"]["priorityLevel"] = 9
+        status, result = request("PATCH", base + "/" + app_id, arp_only)
+        assert status == 200 and result["pccRules"][0]["qos"]["arp"]["priorityLevel"] == 9
+        time.sleep(0.1)
+
+        updated = body("192.0.2.10")
+        updated["qos"]["5qi"] = 4
+        status, result = request("PATCH", base + "/" + app_id, updated)
+        assert status == 200 and result["appSessionId"] == app_id, (status, result)
+        time.sleep(0.1)
+
+        updated["qos"]["maxbrDl"] = "12 Mbps"
+        status, result = request("PATCH", base + "/" + app_id, updated)
+        assert status == 200 and result["appSessionId"] == app_id, (status, result)
+        time.sleep(0.1)
+
+        rule = bearer(app_id)["pccRules"][0]
+        assert rule["qos"]["5qi"] == 4 and rule["qos"]["mbrDl"] == 12000000, rule
+        assert "192.0.2.10" in rule["flows"][0]["description"], rule
+        assert snapshot() == first, "PATCH changed the application or precedence"
+
+        broken_update = body("192.0.2.11")
+        broken_update["flowDescriptions"] = ["invalid flow"]
+        status, _ = request("PATCH", base + "/" + app_id, broken_update)
+        assert status == 400 and bearer(app_id)["pccRules"][0] == rule, status
+        print("PASS in-place update and failed-update rollback", flush=True)
+
         create("10.2.0.119")
         second = snapshot()
         assert len(second) == 2 and len(set(second.values())) == 2, second
         assert all(second[k] == v for k, v in first.items()), second
         print("PASS sequential create and existing precedence retention", second, flush=True)
 
-        occupied = next(iter(first.values()))
+        other_precedence = next(value for key, value in second.items() if key != app_id)
+        status, _ = request("PATCH", base + "/" + app_id,
+                            body("192.0.2.11", other_precedence))
+        assert status == 409 and snapshot() == second, status
+        status, _ = request("PATCH", base + "/" + app_id,
+                            body("192.0.2.11", 150))
+        assert status == 409 and snapshot() == second, status
+        print("PASS installed precedence is immutable", flush=True)
+
+        occupied = second[app_id]
         status, _ = request("POST", base, body("192.0.2.1", occupied))
         assert status == 409 and snapshot() == second, status
         for invalid in (-1, 255, 256, 100.5, "100", True):

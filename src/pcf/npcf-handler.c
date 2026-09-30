@@ -2865,6 +2865,142 @@ static cJSON *xcn_app_to_json(pcf_app_t *app)
     return item;
 }
 
+bool pcf_xcn_dedicated_bearer_handle_update(
+        ogs_sbi_stream_t *stream, ogs_sbi_message_t *recvmsg,
+        const char *content)
+{
+    pcf_app_t *app = NULL;
+    ogs_pcc_rule_t replacement = {0}, previous;
+    ogs_pcc_rule_t qos_override = {0};
+    ogs_media_component_t *media = NULL;
+    ogs_media_sub_component_t *sub = NULL;
+    OpenAPI_sm_policy_decision_t decision;
+    OpenAPI_list_t *pcc_rules = NULL, *qos_decs = NULL;
+    cJSON *item = NULL, *flows = NULL, *flow = NULL, *response = NULL;
+    const char *error_detail = NULL;
+    int status = OGS_SBI_HTTP_STATUS_BAD_REQUEST;
+    int i = 0;
+    bool sent = false;
+
+    ogs_assert(stream);
+    ogs_assert(recvmsg);
+
+    if (!recvmsg->h.resource.component[1] ||
+        recvmsg->h.resource.component[2])
+        return xcn_send_error(stream, recvmsg, status, "Invalid bearer URI");
+
+    app = pcf_app_find_by_app_session_id(recvmsg->h.resource.component[1]);
+    if (!app || !xcn_app_is_dedicated_bearer(app))
+        return xcn_send_error(stream, recvmsg,
+                OGS_SBI_HTTP_STATUS_NOT_FOUND, "No dedicated bearer");
+    if (app->num_of_pcc_rule != 1)
+        return xcn_send_error(stream, recvmsg,
+                OGS_SBI_HTTP_STATUS_CONFLICT,
+                "Only single-rule dedicated bearers can be updated");
+    if (!content)
+        return xcn_send_error(stream, recvmsg, status, "No request body");
+
+    item = cJSON_Parse(content);
+    if (!cJSON_IsObject(item)) {
+        error_detail = "Invalid JSON object";
+        goto cleanup;
+    }
+
+    /* PATCH replaces the complete rule; missing QoS or flows is ambiguous. */
+    if (!cJSON_IsObject(cJSON_GetObjectItemCaseSensitive(item, "qos"))) {
+        error_detail = "qos must be an object with a 5qi";
+        goto cleanup;
+    }
+    if (!xcn_parse_qos_override(item, &qos_override, &error_detail))
+        goto cleanup;
+    if (qos_override.precedence != UINT32_MAX &&
+        qos_override.precedence != app->pcc_rule[0].precedence) {
+        error_detail = "qos.precedence cannot change during an update";
+        status = OGS_SBI_HTTP_STATUS_CONFLICT;
+        goto cleanup;
+    }
+
+    flows = cJSON_GetObjectItemCaseSensitive(item, "flowDescriptions");
+    if (!cJSON_IsArray(flows) || cJSON_GetArraySize(flows) == 0 ||
+        cJSON_GetArraySize(flows) > OGS_MAX_NUM_OF_FLOW_IN_PCC_RULE) {
+        error_detail = "flowDescriptions must contain 1..15 flows";
+        goto cleanup;
+    }
+
+    media = ogs_calloc(1, sizeof(*media));
+    ogs_assert(media);
+    media->num_of_sub = 1;
+    sub = &media->sub[0];
+    sub->flow_usage = OGS_FLOW_USAGE_NO_INFO;
+    cJSON_ArrayForEach(flow, flows) {
+        const char *description = cJSON_IsString(flow) ?
+            flow->valuestring : NULL;
+        const char *from = NULL, *to = NULL;
+
+        if (!description ||
+            (strncmp(description, "permit out ip from ", 19) &&
+             strncmp(description, "permit in ip from ", 18))) {
+            error_detail = "Invalid flowDescription";
+            goto cleanup;
+        }
+        from = strstr(description, " from ");
+        to = strstr(description, " to ");
+        if (!from || !to || to <= from + 6 || !to[4]) {
+            error_detail = "Invalid flowDescription endpoints";
+            goto cleanup;
+        }
+        sub->flow[i].description = ogs_strdup(description);
+        ogs_assert(sub->flow[i].description);
+        sub->num_of_flow = ++i;
+    }
+
+    replacement.id = ogs_strdup(app->pcc_rule[0].id);
+    ogs_assert(replacement.id);
+    replacement.qos = qos_override.qos;
+    replacement.precedence = app->pcc_rule[0].precedence;
+    replacement.flow_status = OpenAPI_flow_status_ENABLED;
+    if (ogs_pcc_rule_install_flow_from_media(&replacement, media) != OGS_OK) {
+        error_detail = "Invalid flowDescriptions";
+        goto cleanup;
+    }
+
+    /* Preserve the existing rule identity while replacing its contents. */
+    previous = app->pcc_rule[0];
+    app->pcc_rule[0] = replacement;
+    memset(&replacement, 0, sizeof(replacement));
+
+    if (!pcf_build_app_policy_decision(app->sess, &decision,
+                &pcc_rules, &qos_decs) ||
+        !pcf_sbi_send_smpolicycontrol_update_notify(app->sess, &decision)) {
+        OGS_PCC_RULE_FREE(&app->pcc_rule[0]);
+        app->pcc_rule[0] = previous;
+        pcf_free_policy_decision_lists(&pcc_rules, &qos_decs);
+        error_detail = "SM policy update notify failed";
+        status = OGS_SBI_HTTP_STATUS_GATEWAY_TIMEOUT;
+        goto cleanup;
+    }
+    pcf_free_policy_decision_lists(&pcc_rules, &qos_decs);
+    OGS_PCC_RULE_FREE(&previous);
+
+    response = xcn_app_to_json(app);
+    sent = xcn_send_json_response(stream, OGS_SBI_HTTP_STATUS_OK, response);
+
+cleanup:
+    if (response)
+        cJSON_Delete(response);
+    if (media) {
+        for (i = 0; i < media->sub[0].num_of_flow; i++)
+            ogs_free(media->sub[0].flow[i].description);
+        ogs_free(media);
+    }
+    OGS_PCC_RULE_FREE(&replacement);
+    if (item)
+        cJSON_Delete(item);
+    if (error_detail)
+        return xcn_send_error(stream, recvmsg, status, error_detail);
+    return sent;
+}
+
 bool pcf_xcn_dedicated_bearer_handle_query(
         ogs_sbi_stream_t *stream, ogs_sbi_message_t *recvmsg,
         ogs_hash_t *params)
