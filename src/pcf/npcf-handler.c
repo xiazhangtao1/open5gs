@@ -426,6 +426,56 @@ static uint8_t xcn_preemption_vulnerability_from_json(
     return 0;
 }
 
+static bool xcn_parse_qos_bitrate(cJSON *qos, const char *key,
+        const char *alias, uint64_t *bitrate, const char **error_detail)
+{
+    cJSON *item = cJSON_GetObjectItemCaseSensitive(qos, key);
+    const char *value = NULL;
+    char *unit = NULL;
+    double number = 0;
+    uint64_t multiplier = 0;
+
+    if (!item && alias)
+        item = cJSON_GetObjectItemCaseSensitive(qos, alias);
+    if (!item)
+        return true;
+
+    if (!cJSON_IsString(item) || !item->valuestring) {
+        *error_detail = "QoS bitrate must be a string";
+        return false;
+    }
+    value = item->valuestring;
+    if (!(value[0] >= '0' && value[0] <= '9') && value[0] != '.') {
+        *error_detail = "Invalid QoS bitrate";
+        return false;
+    }
+    errno = 0;
+    number = strtod(value, &unit);
+    if (errno == ERANGE || unit == value || *unit != ' ' || !unit[1]) {
+        *error_detail = "Invalid QoS bitrate";
+        return false;
+    }
+    if (!strcmp(unit + 1, "bps"))
+        multiplier = 1;
+    else if (!strcmp(unit + 1, "Kbps"))
+        multiplier = 1000ULL;
+    else if (!strcmp(unit + 1, "Mbps"))
+        multiplier = 1000000ULL;
+    else if (!strcmp(unit + 1, "Gbps"))
+        multiplier = 1000000000ULL;
+    else if (!strcmp(unit + 1, "Tbps"))
+        multiplier = 1000000000000ULL;
+    if (!multiplier || !(number > 0) ||
+        !(number <= (double)INT64_MAX / multiplier) ||
+        number * multiplier < 1) {
+        *error_detail = "Invalid QoS bitrate";
+        return false;
+    }
+
+    *bitrate = (uint64_t)(number * multiplier);
+    return true;
+}
+
 static bool xcn_parse_qos_override(
         cJSON *item, ogs_pcc_rule_t *pcc_rule, const char **error_detail)
 {
@@ -510,18 +560,15 @@ static bool xcn_parse_qos_override(
         pcc_rule->qos.arp.pre_emption_vulnerability =
             OGS_5GC_PRE_EMPTION_ENABLED;
 
-    value = xcn_json_string_from_any(qos, "maxbrDl", "mbrDl");
-    if (value)
-        pcc_rule->qos.mbr.downlink = ogs_sbi_bitrate_from_string((char *)value);
-    value = xcn_json_string_from_any(qos, "maxbrUl", "mbrUl");
-    if (value)
-        pcc_rule->qos.mbr.uplink = ogs_sbi_bitrate_from_string((char *)value);
-    value = xcn_json_string(qos, "gbrDl");
-    if (value)
-        pcc_rule->qos.gbr.downlink = ogs_sbi_bitrate_from_string((char *)value);
-    value = xcn_json_string(qos, "gbrUl");
-    if (value)
-        pcc_rule->qos.gbr.uplink = ogs_sbi_bitrate_from_string((char *)value);
+    if (!xcn_parse_qos_bitrate(qos, "maxbrDl", "mbrDl",
+                &pcc_rule->qos.mbr.downlink, error_detail) ||
+        !xcn_parse_qos_bitrate(qos, "maxbrUl", "mbrUl",
+                &pcc_rule->qos.mbr.uplink, error_detail) ||
+        !xcn_parse_qos_bitrate(qos, "gbrDl", NULL,
+                &pcc_rule->qos.gbr.downlink, error_detail) ||
+        !xcn_parse_qos_bitrate(qos, "gbrUl", NULL,
+                &pcc_rule->qos.gbr.uplink, error_detail))
+        return false;
 
     pcc_rule->flow_status = OpenAPI_flow_status_ENABLED;
     pcc_rule->precedence = (uint32_t)precedence;

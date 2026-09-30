@@ -99,15 +99,60 @@ def main():
         assert status == 200 and result["appSessionId"] == app_id, (status, result)
         time.sleep(0.1)
 
+        updated["qos"]["gbrDl"] = "6 Mbps"
+        status, result = request("PATCH", base + "/" + app_id, updated)
+        assert status == 200 and result["pccRules"][0]["qos"]["gbrDl"] == 6000000, (status, result)
+        time.sleep(0.1)
+
+        updated["qos"]["gbrUl"] = "7 Mbps"
+        status, result = request("PATCH", base + "/" + app_id, updated)
+        assert status == 200 and result["pccRules"][0]["qos"]["gbrUl"] == 7000000, (status, result)
+        time.sleep(0.1)
+
+        updated["qos"]["arp"]["preemptionCapability"] = "PREEMPT"
+        updated["qos"]["arp"]["preemptionVulnerability"] = "NOT_PREEMPTABLE"
+        status, result = request("PATCH", base + "/" + app_id, updated)
+        assert status == 200, (status, result)
+        assert result["pccRules"][0]["qos"]["arp"]["preemptionCapability"] == 2, result
+        assert result["pccRules"][0]["qos"]["arp"]["preemptionVulnerability"] == 1, result
+        print("PASS GBR DL/UL and ARP preemption updates", flush=True)
+
+        for n in range(20):
+            address = "192.0.2.12" if n % 2 else "192.0.2.10"
+            updated["flowDescriptions"] = body(address)["flowDescriptions"]
+            updated["qos"]["gbrDl"] = "6 Mbps" if n % 2 else "5 Mbps"
+            status, result = request("PATCH", base + "/" + app_id, updated)
+            assert status == 200 and result["appSessionId"] == app_id, (n, status, result)
+            rule_now = bearer(app_id)["pccRules"][0]
+            assert rule_now["qos"]["gbrDl"] == (6000000 if n % 2 else 5000000), (n, rule_now)
+            assert address in rule_now["flows"][0]["description"], (n, rule_now)
+            time.sleep(0.1)
+        print("PASS 20 sequential flow and GBR updates", flush=True)
+
         rule = bearer(app_id)["pccRules"][0]
         assert rule["qos"]["5qi"] == 4 and rule["qos"]["mbrDl"] == 12000000, rule
-        assert "192.0.2.10" in rule["flows"][0]["description"], rule
+        assert rule["qos"]["gbrUl"] == 7000000, rule
+        assert "192.0.2.12" in rule["flows"][0]["description"], rule
         assert snapshot() == first, "PATCH changed the application or precedence"
 
         broken_update = body("192.0.2.11")
         broken_update["flowDescriptions"] = ["invalid flow"]
         status, _ = request("PATCH", base + "/" + app_id, broken_update)
         assert status == 400 and bearer(app_id)["pccRules"][0] == rule, status
+        for bad_flows in ([], ["permit out ip from 192.0.2.11/32 to assigned"] * 16):
+            broken_update = body("192.0.2.11")
+            broken_update["flowDescriptions"] = bad_flows
+            status, _ = request("PATCH", base + "/" + app_id, broken_update)
+            assert status == 400 and bearer(app_id)["pccRules"][0] == rule, status
+        broken_update = body("192.0.2.11")
+        del broken_update["flowDescriptions"]
+        status, _ = request("PATCH", base + "/" + app_id, broken_update)
+        assert status == 400 and bearer(app_id)["pccRules"][0] == rule, status
+        for invalid_rate in ("not-a-rate", "-1 Mbps", "0 Mbps", "5 bogus", "5 Mbps extra", 5000000):
+            broken_update = body("192.0.2.11")
+            broken_update["qos"]["gbrDl"] = invalid_rate
+            status, _ = request("PATCH", base + "/" + app_id, broken_update)
+            assert status == 400 and bearer(app_id)["pccRules"][0] == rule, (invalid_rate, status)
         print("PASS in-place update and failed-update rollback", flush=True)
 
         create("10.2.0.119")
@@ -137,6 +182,10 @@ def main():
         broken["flowDescriptions"] = ["invalid flow"]
         status, _ = request("POST", base, broken)
         assert status >= 400 and snapshot() == second, status
+        broken = body("192.0.2.1", 200)
+        broken["qos"]["gbrDl"] = "not-a-rate"
+        status, _ = request("POST", base, broken)
+        assert status == 400 and snapshot() == second, status
         create("192.0.2.1", 200)
         assert 200 in snapshot().values()
         print("PASS failed creation releases precedence", flush=True)
