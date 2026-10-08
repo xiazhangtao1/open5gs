@@ -778,6 +778,28 @@ void testngap_handle_handover_command(
                 }
             }
 
+            memset(sess->handover.drb, 0, sizeof(sess->handover.drb));
+            if (n2sm_message.dataForwardingResponseDRBList) {
+                int k;
+                for (k = 0; k < n2sm_message.dataForwardingResponseDRBList->list.count; k++) {
+                    NGAP_DataForwardingResponseDRBItem_t *item =
+                        n2sm_message.dataForwardingResponseDRBList->list.array[k];
+                    NGAP_UPTransportLayerInformation_t *info[2] = {
+                        item->dLForwardingUP_TNLInformation, item->uLForwardingUP_TNLInformation};
+                    ogs_assert(item->dRB_ID >= 1 && item->dRB_ID <= 32);
+                    int direction;
+                    for (direction = 0; direction < 2; direction++) {
+                        if (info[direction]) {
+                            NGAP_GTPTunnel_t *gtp = info[direction]->choice.gTPTunnel;
+                            ogs_asn_BIT_STRING_to_ip(&gtp->transportLayerAddress,
+                                &sess->handover.drb[item->dRB_ID - 1][direction].ip);
+                            ogs_asn_OCTET_STRING_to_uint32(&gtp->gTP_TEID,
+                                &sess->handover.drb[item->dRB_ID - 1][direction].teid);
+                        }
+                    }
+                }
+            }
+
             ogs_asn_free(
                     &asn_DEF_NGAP_HandoverCommandTransfer,
                     &n2sm_message);

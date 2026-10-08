@@ -237,7 +237,12 @@ bool ogs_pfcp_up_handle_pdr(
 
     memset(report, 0, sizeof(*report));
 
-    if ((pdr->src_if == OGS_PFCP_INTERFACE_CORE &&
+    if ((recvhdr && len >= OGS_GTPV1U_HEADER_LEN &&
+         pdr->src_if == OGS_PFCP_INTERFACE_ACCESS &&
+         far->dst_if == OGS_PFCP_INTERFACE_ACCESS &&
+         !pdr->qfi && !pdr->qer &&
+         (!recvhdr->qos_flow_identifier || recvhdr->pdcp_pdu_presence)) ||
+        (pdr->src_if == OGS_PFCP_INTERFACE_CORE &&
          pdr->src_if_type_presence == true &&
          pdr->src_if_type ==
              OGS_PFCP_3GPP_INTERFACE_TYPE_N9_FOR_ROAMING) ||

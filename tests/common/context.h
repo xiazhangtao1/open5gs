@@ -450,6 +450,12 @@ typedef struct test_sess_s {
 
     struct {
         bool data_forwarding_not_possible;
+        unsigned int drb_count;
+        unsigned int drb_directions;
+        struct {
+            ogs_ip_t ip;
+            uint32_t teid;
+        } drb[32][2];
 
         /* Indirect DL Forwarding */
         uint32_t upf_dl_teid;

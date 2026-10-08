@@ -217,7 +217,7 @@ void sgwc_sxa_handle_session_establishment_response(
         ogs_pfcp_far_t *far = NULL;
 
         ogs_assert(sess);
-        for (i = 0; i < OGS_MAX_NUM_OF_PDR; i++) {
+        for (i = 0; i < OGS_MAX_NUM_OF_PFCP_RULES_PER_MESSAGE; i++) {
             pdr = ogs_pfcp_handle_created_pdr(
                     &sess->pfcp, &pfcp_rsp->created_pdr[i],
                     &pfcp_cause_value, &offending_ie_value);
@@ -573,7 +573,7 @@ void sgwc_sxa_handle_session_modification_response(
 
         ogs_list_copy(&pdr_to_create_list, &pfcp_xact->pdr_to_create_list);
 
-        for (i = 0; i < OGS_MAX_NUM_OF_PDR; i++) {
+        for (i = 0; i < OGS_MAX_NUM_OF_PFCP_RULES_PER_MESSAGE; i++) {
             pdr = ogs_pfcp_handle_created_pdr(
                     &sess->pfcp, &pfcp_rsp->created_pdr[i],
                     &pfcp_cause_value, &offending_ie_value);

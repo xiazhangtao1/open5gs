@@ -120,6 +120,10 @@ typedef struct ogs_pfcp_xact_s {
 #define OGS_PFCP_MODIFY_URR_TIME_THRESH ((uint64_t)1<<34)
 #define OGS_PFCP_MODIFY_SM_POLICY_UPDATE ((uint64_t)1<<35)
     uint64_t        modify_flags;
+    /* CP-local metadata, not carried on the PFCP wire. */
+    uint32_t        handover_generation;
+    unsigned int    handover_next_offset;
+    bool            handover_more;
 
 #define OGS_PFCP_DELETE_TRIGGER_LOCAL_INITIATED 1
 #define OGS_PFCP_DELETE_TRIGGER_UE_REQUESTED 2

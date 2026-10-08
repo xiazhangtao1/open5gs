@@ -9,6 +9,10 @@
 {{- $upfGtpuAddress := include "xcn.upfGtpuServerAddress" . }}
 {{- $upfGtpuAdvertiseAddress := include "xcn.upfGtpuAdvertiseAddress" . }}
 {{- $upfN3MemifLocalAddress := include "xcn.upfN3MemifLocalAddress" . }}
+{{- $upfHostInterface := dig "n3" "hostInterface" "" .Values.networking.upf }}
+{{- if and $upfHostInterface (or (not .Values.fivegc.hostNetwork.enabled) (ne $upfN3Backend "udp")) }}
+{{- fail "networking.upf.n3.hostInterface requires hostNetwork and UDP N3" }}
+{{- end }}
 {{- if .Values.fivegc.hostNetwork.enabled }}
 {{- if or (eq $amfNgapAddress "") (eq $amfNgapAddress "0.0.0.0") (eq $amfNgapAddress "::") }}
 {{- fail "networking.amf.ngap.serverAddress must be an explicit node interface address when fivegc.hostNetwork.enabled=true" }}
@@ -385,6 +389,8 @@ spec:
               value: {{ $upfN6Backend | quote }}
             - name: UPF_N3_BACKEND
               value: {{ $upfN3Backend | quote }}
+            - name: UPF_N3_HOST_INTERFACE
+              value: {{ $upfHostInterface | quote }}
           command:
             - /bin/sh
             - -ec

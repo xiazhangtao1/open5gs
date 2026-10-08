@@ -185,7 +185,7 @@ uint8_t smf_5gc_n4_handle_session_establishment_response(
     if (cause_value != OGS_PFCP_CAUSE_REQUEST_ACCEPTED)
         return cause_value;
 
-    for (i = 0; i < OGS_MAX_NUM_OF_PDR; i++) {
+    for (i = 0; i < OGS_MAX_NUM_OF_PFCP_RULES_PER_MESSAGE; i++) {
         pdr = ogs_pfcp_handle_created_pdr(
                 &sess->pfcp, &rsp->created_pdr[i],
                 &cause_value, &offending_ie_value);
@@ -266,12 +266,24 @@ void smf_5gc_n4_handle_session_modification_response(
 
     OGS_LIST(pdr_to_create_list);
 
+    uint32_t generation;
+    unsigned int next_offset;
+    bool more;
+
     ogs_debug("Session Modification Response [5gc]");
 
     ogs_assert(xact);
     ogs_assert(rsp);
 
+    generation = xact->handover_generation;
+    next_offset = xact->handover_next_offset;
+    more = xact->handover_more;
     flags = xact->modify_flags;
+    if ((flags & OGS_PFCP_MODIFY_INDIRECT) &&
+        (!sess || generation != sess->handover.generation)) {
+        ogs_pfcp_xact_commit(xact);
+        return;
+    }
     ogs_assert(flags);
     trigger = xact->delete_trigger;
 
@@ -319,7 +331,7 @@ void smf_5gc_n4_handle_session_modification_response(
         ogs_pfcp_far_t *far = NULL;
 
         ogs_assert(sess);
-        for (i = 0; i < OGS_MAX_NUM_OF_PDR; i++) {
+        for (i = 0; i < OGS_MAX_NUM_OF_PFCP_RULES_PER_MESSAGE; i++) {
             pdr = ogs_pfcp_handle_created_pdr(
                     &sess->pfcp, &rsp->created_pdr[i],
                     &pfcp_cause_value, &offending_ie_value);
@@ -331,6 +343,15 @@ void smf_5gc_n4_handle_session_modification_response(
         ogs_list_for_each_entry(&pdr_to_create_list, pdr, to_create_node) {
             far = pdr->far;
             ogs_assert(far);
+
+            /* A successful forwarding allocation must resolve every CH F-TEID. */
+            if ((flags & OGS_PFCP_MODIFY_INDIRECT) &&
+                (flags & OGS_PFCP_MODIFY_CREATE) &&
+                (pdr->f_teid.ch || !pdr->f_teid.teid ||
+                 !(pdr->f_teid.ipv4 || pdr->f_teid.ipv6))) {
+                pfcp_cause_value = OGS_PFCP_CAUSE_MANDATORY_IE_INCORRECT;
+                continue;
+            }
 
             if (pdr->src_if == OGS_PFCP_INTERFACE_CORE) {
                 ogs_assert(sess->pfcp_node);
@@ -367,6 +388,24 @@ void smf_5gc_n4_handle_session_modification_response(
                                 &sess->local_ul_addr, &sess->local_ul_addr6));
                         sess->local_ul_teid = pdr->f_teid.teid;
                     } else if (far->dst_if == OGS_PFCP_INTERFACE_ACCESS) {
+                        bool drb_forwarding = false;
+                        for (int drb = 0; drb < SMF_MAX_FORWARDING_DRB; drb++) {
+                            for (int direction = 0; direction < 2; direction++) {
+                                smf_forwarding_tunnel_t *tunnel =
+                                    &sess->handover.drb[drb][direction];
+                                if (tunnel->present && tunnel->pdr_id == pdr->id) {
+                                    if (pdr->f_teid.ch || !pdr->f_teid.teid ||
+                                        ogs_pfcp_f_teid_to_ip(&pdr->f_teid,
+                                            &tunnel->local_ip) != OGS_OK)
+                                        pfcp_cause_value =
+                                            OGS_PFCP_CAUSE_MANDATORY_IE_INCORRECT;
+                                    else
+                                        tunnel->local_teid = pdr->f_teid.teid;
+                                    drb_forwarding = true;
+                                }
+                            }
+                        }
+                        if (drb_forwarding) continue;
                         if (sess->handover.local_dl_addr)
                             ogs_freeaddrinfo(sess->handover.local_dl_addr);
                         if (sess->handover.local_dl_addr6)
@@ -396,12 +435,37 @@ void smf_5gc_n4_handle_session_modification_response(
                     stream, status, strerror, NULL);
         ogs_error("%s", strerror);
         ogs_free(strerror);
+        if (sess && (flags & OGS_PFCP_MODIFY_INDIRECT) &&
+            !(flags & OGS_PFCP_MODIFY_REMOVE)) {
+            sess->handover.prepared = false;
+            sess->handover.batch_offset = 0;
+            ogs_expect(OGS_OK == smf_5gc_pfcp_send_all_pdr_modification_request(
+                sess, NULL, OGS_PFCP_MODIFY_INDIRECT|OGS_PFCP_MODIFY_REMOVE, 0, 0));
+        }
         if (sess && (flags & OGS_PFCP_MODIFY_SM_POLICY_UPDATE))
             smf_npcf_smpolicycontrol_complete_update(sess);
         return;
     }
 
     ogs_assert(sess);
+    if ((flags & OGS_PFCP_MODIFY_INDIRECT) && more) {
+        sess->handover.batch_offset = next_offset;
+        if (OGS_OK != smf_5gc_pfcp_send_all_pdr_modification_request(
+                sess, stream, flags, 0, 0)) {
+            if (stream)
+                smf_sbi_send_sm_context_update_error_log(stream,
+                    OGS_SBI_HTTP_STATUS_SERVICE_UNAVAILABLE,
+                    "Cannot send next forwarding rule batch", NULL);
+            sess->handover.prepared = false;
+            sess->handover.batch_offset = 0;
+            if (!(flags & OGS_PFCP_MODIFY_REMOVE))
+                ogs_expect(OGS_OK == smf_5gc_pfcp_send_all_pdr_modification_request(
+                    sess, NULL, OGS_PFCP_MODIFY_INDIRECT|OGS_PFCP_MODIFY_REMOVE, 0, 0));
+        }
+        return;
+    }
+    if (flags & OGS_PFCP_MODIFY_INDIRECT)
+        sess->handover.batch_offset = 0;
 
     if (sess->local_ul_addr == NULL && sess->local_ul_addr6 == NULL) {
         if (stream)
@@ -866,14 +930,15 @@ void smf_5gc_n4_handle_session_modification_response(
              * So now we do some extra work to create an indirect tunnel.
              */
             if (flags & OGS_PFCP_MODIFY_CREATE) {
-                smf_sess_create_indirect_data_forwarding(sess);
+                ogs_assert(OGS_OK == smf_sess_create_indirect_data_forwarding(sess));
+                sess->handover.indirect_data_forwarding = true;
 
                 ogs_assert(OGS_OK ==
                     smf_5gc_pfcp_send_all_pdr_modification_request(
                         sess, stream,
                         OGS_PFCP_MODIFY_INDIRECT|OGS_PFCP_MODIFY_CREATE,
                         0, 0));
-            } else if (flags & OGS_PFCP_MODIFY_HANDOVER_CANCEL) {
+            } else if ((flags & OGS_PFCP_MODIFY_HANDOVER_CANCEL) && stream) {
                 smf_sbi_send_sm_context_updated_data_ho_state(
                         sess, stream, OpenAPI_ho_state_CANCELLED);
             }
@@ -966,6 +1031,7 @@ void smf_5gc_n4_handle_session_modification_response(
             ogs_pkbuf_t *n2smbuf = ngap_build_handover_command_transfer(sess);
             ogs_assert(n2smbuf);
 
+            if (!stream) return;
             smf_sbi_send_sm_context_updated_data(
                 sess, stream, 0, OpenAPI_ho_state_PREPARED,
                 NULL, OpenAPI_n2_sm_info_type_HANDOVER_CMD, n2smbuf);
@@ -1175,7 +1241,7 @@ uint8_t smf_epc_n4_handle_session_establishment_response(
         ogs_pfcp_pdr_t *pdr = NULL;
         ogs_pfcp_far_t *far = NULL;
 
-        for (i = 0; i < OGS_MAX_NUM_OF_PDR; i++) {
+        for (i = 0; i < OGS_MAX_NUM_OF_PFCP_RULES_PER_MESSAGE; i++) {
             pdr = ogs_pfcp_handle_created_pdr(
                     &sess->pfcp, &rsp->created_pdr[i],
                     &cause_value, &offending_ie_value);
@@ -1303,7 +1369,7 @@ void smf_epc_n4_handle_session_modification_response(
     ogs_assert(sess);
 
     pfcp_cause_value = OGS_PFCP_CAUSE_REQUEST_ACCEPTED;
-    for (i = 0; i < OGS_MAX_NUM_OF_PDR; i++) {
+    for (i = 0; i < OGS_MAX_NUM_OF_PFCP_RULES_PER_MESSAGE; i++) {
         pdr = ogs_pfcp_handle_created_pdr(
                 &sess->pfcp, &rsp->created_pdr[i],
                 &pfcp_cause_value, &offending_ie_value);

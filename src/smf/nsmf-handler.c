@@ -1011,6 +1011,7 @@ bool smf_nsmf_handle_update_sm_context(
                 sess->remote_dl_teid = sess->handover.remote_dl_teid;
             }
             sess->handover.prepared = false;
+            sess->handover.direct_data_forwarding = false;
 
             ogs_list_for_each(&sess->bearer_list, qos_flow) {
                 ogs_pfcp_far_t *dl_far = qos_flow->dl_far;
@@ -1064,6 +1065,10 @@ bool smf_nsmf_handle_update_sm_context(
             smf_bearer_t *qos_flow = NULL;
 
             sess->handover.prepared = false;
+            sess->handover.direct_data_forwarding = false;
+            /* Invalidate an outstanding create response before cancelling. */
+            sess->handover.generation++;
+            sess->handover.batch_offset = 0;
 
             ogs_list_for_each(&sess->bearer_list, qos_flow) {
                 ogs_pfcp_far_t *dl_far = qos_flow->dl_far;

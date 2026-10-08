@@ -313,11 +313,42 @@ static void gtp_message_test1(abts_case *tc, void *data)
     ogs_pkbuf_free(pkbuf);
 }
 
+static void gtpu_forwarding_header_test(abts_case *tc, void *data)
+{
+    /* Long PDCP extension followed by UDP port, then opaque PDCP payload. */
+    uint8_t wire[] = {0x37, 0xff, 0, 20, 0x12, 0x34, 0x56, 0x78,
+        0xab, 0xcd, 7, 0x82, 2, 0, 3, 0xff, 0xff, 0, 0, 0x40,
+        1, 0x08, 0x68, 0, 0xde, 0xad, 0xbe, 0xef};
+    ogs_pkbuf_t *pkbuf = ogs_pkbuf_alloc(NULL, sizeof(wire));
+    ogs_gtp2_header_desc_t header;
+    ogs_pkbuf_put_data(pkbuf, wire, sizeof(wire));
+    ABTS_INT_EQUAL(tc, 24, ogs_gtpu_parse_header(&header, pkbuf));
+    ABTS_INT_EQUAL(tc, 24, ogs_gtpu_parse_header(NULL, pkbuf));
+    ABTS_INT_EQUAL(tc, 0x12345678, header.teid);
+    ABTS_INT_EQUAL(tc, 2152, header.udp.port);
+    int length;
+    for (length = 0; length < (int)sizeof(wire); length++) {
+        pkbuf->len = length;
+        ABTS_INT_EQUAL(tc, -1, ogs_gtpu_parse_header(&header, pkbuf));
+    }
+    pkbuf->len = sizeof(wire);
+    ((uint8_t *)pkbuf->data)[12] = 0;
+    ABTS_INT_EQUAL(tc, -1, ogs_gtpu_parse_header(&header, pkbuf));
+    ((uint8_t *)pkbuf->data)[12] = 255;
+    ABTS_INT_EQUAL(tc, -1, ogs_gtpu_parse_header(&header, pkbuf));
+    ((uint8_t *)pkbuf->data)[12] = 2;
+    ((uint8_t *)pkbuf->data)[19] = 0;
+    ABTS_INT_EQUAL(tc, 20, ogs_gtpu_parse_header(&header, pkbuf));
+    ogs_pkbuf_free(pkbuf);
+}
+
 abts_suite *test_gtp_message(abts_suite *suite)
 {
     suite = ADD_SUITE(suite)
 
-    abts_run_test(suite, gtp_message_test1, NULL);
+    if (!getenv("XCN_FORWARDING_HEADER_ONLY"))
+        abts_run_test(suite, gtp_message_test1, NULL);
+    abts_run_test(suite, gtpu_forwarding_header_test, NULL);
 
     return suite;
 }

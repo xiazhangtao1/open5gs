@@ -26,8 +26,10 @@
 
 #define OGS_PFCP_UDP_PORT               8805
 
-#define OGS_MAX_NUM_OF_PDR              24
-#define OGS_MAX_NUM_OF_FAR              24
+/* Session capacity is independent of the 16 repeated IEs per message. */
+#define OGS_MAX_NUM_OF_PFCP_RULES_PER_MESSAGE 16
+#define OGS_MAX_NUM_OF_PDR              96
+#define OGS_MAX_NUM_OF_FAR              96
 #define OGS_MAX_NUM_OF_URR              8
 #define OGS_MAX_NUM_OF_QER              8
 #define OGS_MAX_NUM_OF_BAR              1

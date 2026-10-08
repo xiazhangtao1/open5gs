@@ -278,6 +278,19 @@ typedef struct smf_bearer_s {
 } smf_bearer_t;
 
 #define SMF_SESS(pfcp_sess) ogs_container_of(pfcp_sess, smf_sess_t, pfcp)
+#define SMF_MAX_FORWARDING_DRB 32
+#define SMF_FORWARDING_DL 0
+#define SMF_FORWARDING_UL 1
+
+typedef struct smf_forwarding_tunnel_s {
+    bool present;
+    ogs_ip_t remote_ip;
+    uint32_t remote_teid;
+    ogs_ip_t local_ip;
+    uint32_t local_teid;
+    uint16_t pdr_id;
+} smf_forwarding_tunnel_t;
+
 typedef struct smf_sess_s {
     ogs_sbi_object_t sbi;
     ogs_pool_id_t id;
@@ -636,15 +649,25 @@ typedef struct smf_sess_s {
         bool prepared;
         bool data_forwarding_not_possible;
         bool indirect_data_forwarding;
+        bool direct_data_forwarding;
+        uint32_t generation;
+        unsigned int batch_offset;
+        uint64_t forwarding_qfi;
+        smf_forwarding_tunnel_t drb[SMF_MAX_FORWARDING_DRB][2];
 
-        /* NG-U UP Transport Information Saved Temporally */
+        /* NG-U UP Transport Information Saved Temporarily */
         uint32_t gnb_n3_teid;
         ogs_ip_t gnb_n3_ip;
+
+        /* Target session-level DL forwarding endpoint. */
+        ogs_ip_t forwarding_dl_ip;
+        uint32_t forwarding_dl_teid;
 
         /* Indirect DL Forwarding */
         uint32_t local_dl_teid;
         ogs_sockaddr_t *local_dl_addr;
         ogs_sockaddr_t *local_dl_addr6;
+        /* Normal target DL endpoint; never overwritten by forwarding. */
         uint32_t remote_dl_teid;
         ogs_ip_t remote_dl_ip;
     } handover;
@@ -766,7 +789,7 @@ smf_sess_t *smf_sess_find_by_ipv6(uint32_t *addr6);
 smf_sess_t *smf_sess_find_by_paging_n1n2message_location(
         char *n1n2message_location);
 
-void smf_sess_create_indirect_data_forwarding(smf_sess_t *sess);
+int smf_sess_create_indirect_data_forwarding(smf_sess_t *sess);
 bool smf_sess_have_indirect_data_forwarding(smf_sess_t *sess);
 void smf_sess_delete_indirect_data_forwarding(smf_sess_t *sess);
 

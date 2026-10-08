@@ -57,7 +57,7 @@ void sgwu_sxa_handle_session_establishment_request(
         sereq_flags.value = req->pfcpsereq_flags.u8;
     }
 
-    for (i = 0; i < OGS_MAX_NUM_OF_PDR; i++) {
+    for (i = 0; i < OGS_MAX_NUM_OF_PFCP_RULES_PER_MESSAGE; i++) {
         created_pdr[i] = ogs_pfcp_handle_create_pdr(&sess->pfcp,
                 &req->create_pdr[i], &sereq_flags,
                 &cause_value, &offending_ie_value);
@@ -68,7 +68,7 @@ void sgwu_sxa_handle_session_establishment_request(
     if (cause_value != OGS_PFCP_CAUSE_REQUEST_ACCEPTED)
         goto cleanup;
 
-    for (i = 0; i < OGS_MAX_NUM_OF_FAR; i++) {
+    for (i = 0; i < OGS_MAX_NUM_OF_PFCP_RULES_PER_MESSAGE; i++) {
         if (ogs_pfcp_handle_create_far(&sess->pfcp, &req->create_far[i],
                     &cause_value, &offending_ie_value) == NULL)
             break;
@@ -191,7 +191,7 @@ void sgwu_sxa_handle_session_modification_request(
         return;
     }
 
-    for (i = 0; i < OGS_MAX_NUM_OF_PDR; i++) {
+    for (i = 0; i < OGS_MAX_NUM_OF_PFCP_RULES_PER_MESSAGE; i++) {
         created_pdr[i] = ogs_pfcp_handle_create_pdr(&sess->pfcp,
                 &req->create_pdr[i], NULL, &cause_value, &offending_ie_value);
         if (created_pdr[i] == NULL)
@@ -201,7 +201,7 @@ void sgwu_sxa_handle_session_modification_request(
     if (cause_value != OGS_PFCP_CAUSE_REQUEST_ACCEPTED)
         goto cleanup;
 
-    for (i = 0; i < OGS_MAX_NUM_OF_PDR; i++) {
+    for (i = 0; i < OGS_MAX_NUM_OF_PFCP_RULES_PER_MESSAGE; i++) {
         if (ogs_pfcp_handle_update_pdr(&sess->pfcp, &req->update_pdr[i],
                     &cause_value, &offending_ie_value) == NULL)
             break;
@@ -209,7 +209,7 @@ void sgwu_sxa_handle_session_modification_request(
     if (cause_value != OGS_PFCP_CAUSE_REQUEST_ACCEPTED)
         goto cleanup;
 
-    for (i = 0; i < OGS_MAX_NUM_OF_PDR; i++) {
+    for (i = 0; i < OGS_MAX_NUM_OF_PFCP_RULES_PER_MESSAGE; i++) {
         if (ogs_pfcp_handle_remove_pdr(&sess->pfcp, &req->remove_pdr[i],
                 &cause_value, &offending_ie_value) == false)
             break;
@@ -217,7 +217,7 @@ void sgwu_sxa_handle_session_modification_request(
     if (cause_value != OGS_PFCP_CAUSE_REQUEST_ACCEPTED)
         goto cleanup;
 
-    for (i = 0; i < OGS_MAX_NUM_OF_FAR; i++) {
+    for (i = 0; i < OGS_MAX_NUM_OF_PFCP_RULES_PER_MESSAGE; i++) {
         if (ogs_pfcp_handle_create_far(&sess->pfcp, &req->create_far[i],
                     &cause_value, &offending_ie_value) == NULL)
             break;
@@ -225,7 +225,7 @@ void sgwu_sxa_handle_session_modification_request(
     if (cause_value != OGS_PFCP_CAUSE_REQUEST_ACCEPTED)
         goto cleanup;
 
-    for (i = 0; i < OGS_MAX_NUM_OF_FAR; i++) {
+    for (i = 0; i < OGS_MAX_NUM_OF_PFCP_RULES_PER_MESSAGE; i++) {
         if (ogs_pfcp_handle_update_far_flags(&sess->pfcp, &req->update_far[i],
                     &cause_value, &offending_ie_value) == NULL)
             break;
@@ -245,7 +245,7 @@ void sgwu_sxa_handle_session_modification_request(
     ogs_list_for_each(&sess->pfcp.far_list, far)
         far->smreq_flags.value = 0;
 
-    for (i = 0; i < OGS_MAX_NUM_OF_FAR; i++) {
+    for (i = 0; i < OGS_MAX_NUM_OF_PFCP_RULES_PER_MESSAGE; i++) {
         if (ogs_pfcp_handle_update_far(&sess->pfcp, &req->update_far[i],
                     &cause_value, &offending_ie_value) == NULL)
             break;
@@ -253,7 +253,7 @@ void sgwu_sxa_handle_session_modification_request(
     if (cause_value != OGS_PFCP_CAUSE_REQUEST_ACCEPTED)
         goto cleanup;
 
-    for (i = 0; i < OGS_MAX_NUM_OF_FAR; i++) {
+    for (i = 0; i < OGS_MAX_NUM_OF_PFCP_RULES_PER_MESSAGE; i++) {
         if (ogs_pfcp_handle_remove_far(&sess->pfcp, &req->remove_far[i],
                 &cause_value, &offending_ie_value) == false)
             break;

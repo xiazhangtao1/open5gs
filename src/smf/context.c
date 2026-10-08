@@ -2314,9 +2314,10 @@ smf_bearer_t *smf_vcn_tunnel_add(smf_sess_t *sess)
     return qos_flow;
 }
 
-void smf_sess_create_indirect_data_forwarding(smf_sess_t *sess)
+int smf_sess_create_indirect_data_forwarding(smf_sess_t *sess)
 {
     smf_bearer_t *qos_flow = NULL;
+    int drb, direction;
 
     ogs_assert(sess);
 
@@ -2325,10 +2326,12 @@ void smf_sess_create_indirect_data_forwarding(smf_sess_t *sess)
         ogs_pfcp_far_t *far = NULL;
         ogs_pfcp_qer_t *qer = NULL;
 
-        ogs_assert(sess);
+        if (!sess->handover.forwarding_dl_teid ||
+            !(sess->handover.forwarding_qfi & (UINT64_C(1) << qos_flow->qfi)))
+            continue;
 
         pdr = ogs_pfcp_pdr_add(&sess->pfcp);
-        ogs_assert(pdr);
+        if (!pdr) goto failure;
 
         ogs_assert(sess->session.name);
         pdr->apn = ogs_strdup(sess->session.name);
@@ -2345,7 +2348,10 @@ void smf_sess_create_indirect_data_forwarding(smf_sess_t *sess)
             OGS_PFCP_OUTER_HEADER_REMOVAL_GTPU_UDP_IP;
 
         far = ogs_pfcp_far_add(&sess->pfcp);
-        ogs_assert(far);
+        if (!far) {
+            ogs_pfcp_pdr_remove(pdr);
+            goto failure;
+        }
 
         ogs_assert(sess->session.name);
         far->apn = ogs_strdup(sess->session.name);
@@ -2399,7 +2405,7 @@ void smf_sess_create_indirect_data_forwarding(smf_sess_t *sess)
              * the first QoS flow, the PDRs of the remaining QoS flows use
              * the same TEID.
              */
-            if (ogs_list_first(&sess->bearer_list) == qos_flow) {
+            if (!sess->handover.local_dl_addr && !sess->handover.local_dl_addr6) {
                 ogs_gtpu_resource_t *resource = NULL;
 
                 if (sess->handover.local_dl_addr)
@@ -2449,15 +2455,90 @@ void smf_sess_create_indirect_data_forwarding(smf_sess_t *sess)
 
         ogs_assert(OGS_OK ==
             ogs_pfcp_ip_to_outer_header_creation(
-                    &sess->handover.remote_dl_ip,
+                    &sess->handover.forwarding_dl_ip,
                     &far->outer_header_creation,
                     &far->outer_header_creation_len));
-        far->outer_header_creation.teid = sess->handover.remote_dl_teid;
+        far->outer_header_creation.teid = sess->handover.forwarding_dl_teid;
 
         /* Indirect Data Forwarding PDRs is set to highest precedence
          * (lowest precedence value) */
         pdr->precedence = OGS_PFCP_INDIRECT_PDR_PRECEDENCE;
     }
+
+    for (drb = 0; drb < SMF_MAX_FORWARDING_DRB; drb++) {
+        for (direction = 0; direction < 2; direction++) {
+            smf_forwarding_tunnel_t *tunnel = &sess->handover.drb[drb][direction];
+            ogs_pfcp_pdr_t *pdr;
+            ogs_pfcp_far_t *far;
+            if (!tunnel->present) continue;
+            pdr = ogs_pfcp_pdr_add(&sess->pfcp);
+            if (!pdr) goto failure;
+            far = ogs_pfcp_far_add(&sess->pfcp);
+            if (!far) {
+                ogs_pfcp_pdr_remove(pdr);
+                goto failure;
+            }
+            ogs_pfcp_pdr_associate_far(pdr, far);
+            pdr->apn = ogs_strdup(sess->session.name);
+            far->apn = ogs_strdup(sess->session.name);
+            ogs_assert(pdr->apn && far->apn);
+            pdr->src_if = far->dst_if = OGS_PFCP_INTERFACE_ACCESS;
+            pdr->src_if_type_presence = far->dst_if_type_presence = true;
+            pdr->src_if_type =
+                OGS_PFCP_3GPP_INTERFACE_TYPE_SGW_UPF_GTP_U_FOR_UL_DATA_FORWARDING;
+            far->dst_if_type =
+                OGS_PFCP_3GPP_INTERFACE_TYPE_SGW_UPF_GTP_U_FOR_DL_DATA_FORWARDING;
+            pdr->outer_header_removal_len = 1;
+            pdr->outer_header_removal.description =
+                OGS_PFCP_OUTER_HEADER_REMOVAL_GTPU_UDP_IP;
+            pdr->precedence = OGS_PFCP_INDIRECT_PDR_PRECEDENCE;
+            far->apply_action = OGS_PFCP_APPLY_ACTION_FORW;
+            ogs_assert(OGS_OK == ogs_pfcp_ip_to_outer_header_creation(
+                &tunnel->remote_ip, &far->outer_header_creation,
+                &far->outer_header_creation_len));
+            far->outer_header_creation.teid = tunnel->remote_teid;
+            tunnel->pdr_id = pdr->id;
+            if (sess->pfcp_node->up_function_features.ftup) {
+                /* No Choose ID: each DRB/direction needs a distinct TEID. */
+                pdr->f_teid.ipv4 = pdr->f_teid.ipv6 = pdr->f_teid.ch = 1;
+                pdr->f_teid_len = 1;
+            } else {
+                ogs_gtpu_resource_t *resource;
+                ogs_sockaddr_t *addr = NULL, *addr6 = NULL;
+                uint32_t local_teid;
+                resource = ogs_pfcp_find_gtpu_resource(
+                    &sess->pfcp_node->gtpu_resource_list, sess->session.name,
+                    pdr->src_if);
+                if (resource) {
+                    ogs_user_plane_ip_resource_info_to_sockaddr(
+                        &resource->info, &addr, &addr6);
+                    local_teid = resource->info.teidri ?
+                        OGS_PFCP_GTPU_INDEX_TO_TEID(pdr->teid,
+                            resource->info.teidri, resource->info.teid_range) :
+                        pdr->teid;
+                } else {
+                    /* Existing ordinary N3 endpoint is authoritative. */
+                    ogs_copyaddrinfo(&addr, sess->local_ul_addr);
+                    ogs_copyaddrinfo(&addr6, sess->local_ul_addr6);
+                    local_teid = pdr->teid;
+                }
+                ogs_assert(OGS_OK == ogs_pfcp_sockaddr_to_f_teid(
+                        addr, addr6, &pdr->f_teid, &pdr->f_teid_len));
+                pdr->f_teid.teid = local_teid;
+                if (addr) ogs_freeaddrinfo(addr);
+                if (addr6) ogs_freeaddrinfo(addr6);
+                ogs_assert(OGS_OK == ogs_pfcp_f_teid_to_ip(
+                        &pdr->f_teid, &tunnel->local_ip));
+                tunnel->local_teid = pdr->f_teid.teid;
+            }
+        }
+    }
+    return OGS_OK;
+
+failure:
+    smf_sess_delete_indirect_data_forwarding(sess);
+    return OGS_ERROR;
+
 }
 
 bool smf_sess_have_indirect_data_forwarding(smf_sess_t *sess)
@@ -2482,11 +2563,11 @@ bool smf_sess_have_indirect_data_forwarding(smf_sess_t *sess)
 
 void smf_sess_delete_indirect_data_forwarding(smf_sess_t *sess)
 {
-    ogs_pfcp_pdr_t *pdr = NULL;
+    ogs_pfcp_pdr_t *pdr = NULL, *next = NULL;
 
     ogs_assert(sess);
 
-    ogs_list_for_each(&sess->pfcp.pdr_list, pdr) {
+    ogs_list_for_each_safe(&sess->pfcp.pdr_list, next, pdr) {
         ogs_pfcp_far_t *far = pdr->far;
 
         ogs_assert(far);
@@ -2497,6 +2578,15 @@ void smf_sess_delete_indirect_data_forwarding(smf_sess_t *sess)
             ogs_pfcp_far_remove(far);
         }
     }
+    sess->handover.indirect_data_forwarding = false;
+    sess->handover.batch_offset = 0;
+    if (sess->handover.local_dl_addr)
+        ogs_freeaddrinfo(sess->handover.local_dl_addr);
+    if (sess->handover.local_dl_addr6)
+        ogs_freeaddrinfo(sess->handover.local_dl_addr6);
+    sess->handover.local_dl_addr = sess->handover.local_dl_addr6 = NULL;
+    sess->handover.local_dl_teid = 0;
+
 }
 
 void smf_sess_create_cp_up_data_forwarding(smf_sess_t *sess)

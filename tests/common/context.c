@@ -31,6 +31,15 @@ static int context_initialized = 0;
 void test_context_init(void)
 {
     int rv;
+    const char *gnb1 = "127.0.0.2", *gnb2 = "127.0.0.3";
+
+    /* External forwarding matrix may need routable, non-loopback endpoints. */
+    if (getenv("XCN_FORWARDING_MATRIX_ONLY")) {
+        if (getenv("XCN_FORWARDING_GNB1_ADDR"))
+            gnb1 = getenv("XCN_FORWARDING_GNB1_ADDR");
+        if (getenv("XCN_FORWARDING_GNB2_ADDR"))
+            gnb2 = getenv("XCN_FORWARDING_GNB2_ADDR");
+    }
 
     ogs_assert(context_initialized == 0);
 
@@ -42,14 +51,14 @@ void test_context_init(void)
     ogs_pool_init(&test_bearer_pool, ogs_app()->pool.bearer);
 
     rv = ogs_getaddrinfo(&test_self()->gnb1_addr, AF_UNSPEC,
-            "127.0.0.2", OGS_GTPV1_U_UDP_PORT, 0);
+            gnb1, OGS_GTPV1_U_UDP_PORT, 0);
     ogs_assert(rv == OGS_OK);
     rv = ogs_getaddrinfo(&test_self()->gnb1_addr6, AF_UNSPEC,
             "fd69:f21d:873c:fa::2", OGS_GTPV1_U_UDP_PORT, 0);
     ogs_assert(rv == OGS_OK);
 
     rv = ogs_getaddrinfo(&test_self()->gnb2_addr, AF_UNSPEC,
-            "127.0.0.3", OGS_GTPV1_U_UDP_PORT, 0);
+            gnb2, OGS_GTPV1_U_UDP_PORT, 0);
     ogs_assert(rv == OGS_OK);
     rv = ogs_getaddrinfo(&test_self()->gnb2_addr6, AF_UNSPEC,
             "fd69:f21d:873c:fa::3", OGS_GTPV1_U_UDP_PORT, 0);

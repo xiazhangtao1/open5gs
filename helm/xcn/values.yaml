@@ -212,6 +212,9 @@ networking:
       # GTP-U bind/advertise address; in memif mode it becomes the raw-IP
       # memif local/advertise address.
       address: ""
+      # Opt-in: provision the dedicated IPv4 N3 address on this host interface.
+      # Requires hostNetwork and the UDP backend; the address remains on restart.
+      hostInterface: ""
       # Legacy advanced override, used only when networking.upf.mode is empty.
       backend: udp
       memif:

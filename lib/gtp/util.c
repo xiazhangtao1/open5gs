@@ -22,135 +22,70 @@
 int ogs_gtpu_parse_header(
         ogs_gtp2_header_desc_t *header_desc, ogs_pkbuf_t *pkbuf)
 {
-    ogs_gtp2_header_t *gtp_h = NULL;
-    ogs_gtp2_extension_header_t ext_hdesc;
-    uint8_t *ext_h = NULL;
-    uint16_t len = 0;
-    int i;
+    const uint8_t *data;
+    size_t len = OGS_GTPV1U_HEADER_LEN, total;
+    uint16_t wire_length;
+    uint32_t teid;
+    uint8_t next;
+    unsigned int count = 0;
 
     ogs_assert(pkbuf);
-    ogs_assert(pkbuf->data);
-
-    gtp_h = (ogs_gtp2_header_t *)pkbuf->data;
-
+    if (header_desc) memset(header_desc, 0, sizeof(*header_desc));
+    if (!pkbuf->data || pkbuf->len < OGS_GTPV1U_HEADER_LEN) return -1;
+    data = pkbuf->data;
+    if ((data[0] & 0xf0) != 0x30) return -1;
+    memcpy(&wire_length, data + 2, sizeof(wire_length));
+    total = OGS_GTPV1U_HEADER_LEN + be16toh(wire_length);
+    if (total != pkbuf->len) return -1;
     if (header_desc) {
-        memset(header_desc, 0, sizeof(*header_desc));
-
-        header_desc->flags = gtp_h->flags;
-        header_desc->type = gtp_h->type;
-        header_desc->teid = be32toh(gtp_h->teid);
+        header_desc->flags = data[0];
+        header_desc->type = data[1];
+        memcpy(&teid, data + 4, sizeof(teid));
+        header_desc->teid = be32toh(teid);
     }
-
-    len = OGS_GTPV1U_HEADER_LEN;
-    if (pkbuf->len < len) {
-        ogs_error("the length of the packet is insufficient[%d:%d]",
-                pkbuf->len, len);
-        return -1;
-    }
-
-    if (gtp_h->flags & OGS_GTPU_FLAGS_E) {
-
-        len += OGS_GTPV1U_EXTENSION_HEADER_LEN;
-        if (pkbuf->len < len) {
-            ogs_error("the length of the packet is insufficient[%d:%d]",
-                    pkbuf->len, len);
+    if (!(data[0] & (OGS_GTPU_FLAGS_E|OGS_GTPU_FLAGS_S|OGS_GTPU_FLAGS_PN)))
+        return len;
+    len += 4;
+    if (total < len) return -1;
+    if (!(data[0] & OGS_GTPU_FLAGS_E)) return len;
+    next = data[len - 1];
+    while (next) {
+        size_t extension_len;
+        uint8_t type = next;
+        if (len >= total || ++count > OGS_GTP2_NUM_OF_EXTENSION_HEADER)
             return -1;
-        }
-
-        /*
-         * TS29.281
-         * 5.2.1 General format of the GTP-U Extension Header
-         *
-         * If no such Header follows,
-         * then the value of the Next Extension Header Type shall be 0. */
-
-        i = 0;
-        while (*(ext_h = (((uint8_t *)gtp_h) + len - 1)) &&
-                i < OGS_GTP2_NUM_OF_EXTENSION_HEADER) {
-        /*
-         * The length of the Extension header shall be defined
-         * in a variable length of 4 octets, i.e. m+1 = n*4 octets,
-         * where n is a positive integer.
-         */
-            len += (*(++ext_h)) * 4;
-            if (*ext_h == 0) {
-                ogs_error("No length in the Extension header");
-                return -1;
-            }
-
-            if (((*ext_h) * 4) > OGS_GTP2_MAX_EXTENSION_HEADER_LEN) {
-                ogs_error("Overflow length : %d", (*ext_h));
-                return -1;
-            }
-
-            if (pkbuf->len < len) {
-                ogs_error("the length of the packet is insufficient[%d:%d]",
-                        pkbuf->len, len);
-                return -1;
-            }
-
-            if (!header_desc) /* Skip to extract header content */
-                continue;
-
-            /* Copy Header Content */
-            memcpy(&ext_hdesc.array[i], ext_h-1, (*ext_h) * 4);
-
-            switch (ext_hdesc.array[i].type) {
+        extension_len = (size_t)data[len] * 4;
+        if (!extension_len || extension_len > total - len) return -1;
+        next = data[len + extension_len - 1];
+        if (header_desc) {
+            uint16_t value;
+            switch (type) {
             case OGS_GTP2_EXTENSION_HEADER_TYPE_PDU_SESSION_CONTAINER:
-                header_desc->pdu_type = ext_hdesc.array[i].pdu_type;
-                if (ext_hdesc.array[i].pdu_type ==
-                    OGS_GTP2_EXTENSION_HEADER_PDU_TYPE_UL_PDU_SESSION_INFORMATION) {
-                        header_desc->qos_flow_identifier =
-                            ext_hdesc.array[i].qos_flow_identifier;
-                        ogs_trace("   QFI [0x%x]",
-                                header_desc->qos_flow_identifier);
-                }
+                header_desc->pdu_type = data[len + 1] >> 4;
+                header_desc->qos_flow_identifier = data[len + 2] & 0x3f;
                 break;
             case OGS_GTP2_EXTENSION_HEADER_TYPE_UDP_PORT:
+                memcpy(&value, data + len + 1, sizeof(value));
                 header_desc->udp.presence = true;
-                header_desc->udp.port = be16toh(ext_hdesc.array[i].udp_port);
-
-                ogs_trace("   UDP Port [%d]", header_desc->udp.port);
+                header_desc->udp.port = be16toh(value);
                 break;
             case OGS_GTP2_EXTENSION_HEADER_TYPE_PDCP_NUMBER:
+                header_desc->pdcp_pdu_presence = true;
+                memcpy(&value, data + len + 1, sizeof(value));
                 header_desc->pdcp_number_presence = true;
-                header_desc->pdcp_number =
-                    be16toh(ext_hdesc.array[i].pdcp_number);
-
-                ogs_trace("   PDCP Number [%d]", header_desc->pdcp_number);
+                header_desc->pdcp_number = be16toh(value);
+                break;
+            case 0x82: /* Long PDCP PDU Number (18-bit sequence number). */
+                if (extension_len != 8) return -1;
+                header_desc->pdcp_pdu_presence = true;
                 break;
             default:
+                /* Long PDCP PDU Number and unknown headers remain opaque. */
                 break;
             }
-
-            i++;
         }
-
-        if (i >= OGS_GTP2_NUM_OF_EXTENSION_HEADER) {
-            ogs_error("The number of extension headers is limited to [%d]", i);
-            return -1;
-        }
-
-    } else if (gtp_h->flags & (OGS_GTPU_FLAGS_S|OGS_GTPU_FLAGS_PN)) {
-        /*
-         * If and only if one or more of these three flags are set,
-         * the fields Sequence Number, N-PDU and Extension Header
-         * shall be present. The sender shall set all the bits of
-         * the unused fields to zero. The receiver shall not evaluate
-         * the unused fields.
-         * For example, if only the E flag is set to 1, then
-         * the N-PDU Number and Sequence Number fields shall also be present,
-         * but will not have meaningful values and shall not be evaluated.
-         */
-        len += 4;
+        len += extension_len;
     }
-
-    if (pkbuf->len < len) {
-        ogs_error("the length of the packet is insufficient[%d:%d]",
-                pkbuf->len, len);
-        return -1;
-    }
-
     return len;
 }
 

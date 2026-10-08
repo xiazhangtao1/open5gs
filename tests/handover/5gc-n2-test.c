@@ -18,6 +18,7 @@
  */
 
 #include "test-common.h"
+#include <poll.h>
 
 static void failure_func(abts_case *tc, void *data)
 {
@@ -1478,8 +1479,142 @@ static void direct_cancel_func(abts_case *tc, void *data)
     test_ue_remove(test_ue);
 }
 
+typedef struct forwarding_case_s {
+    bool direct;
+    unsigned int drbs;
+    unsigned int directions;
+    bool alternate;
+} forwarding_case_t;
+
+static bson_t *forwarding_subscriber(test_ue_t *ue)
+{
+    bson_t *doc = test_db_new_session(ue);
+    bson_t *result;
+    bson_t array_view, slice_view, slice = BSON_INITIALIZER;
+    bson_t array = BSON_INITIALIZER;
+    bson_iter_t iter;
+    const uint8_t *bytes;
+    uint32_t length;
+    char *sd;
+    if (!getenv("XCN_FORWARDING_MATRIX_ONLY")) return doc;
+    sd = ogs_s_nssai_sd_to_string(test_self()->plmn_support[0].s_nssai[0].sd);
+    if (!sd) return doc;
+    ogs_assert(bson_iter_init_find(&iter, doc, "slice"));
+    bson_iter_array(&iter, &length, &bytes);
+    ogs_assert(bson_init_static(&array_view, bytes, length));
+    ogs_assert(bson_iter_init_find(&iter, &array_view, "0"));
+    bson_iter_document(&iter, &length, &bytes);
+    ogs_assert(bson_init_static(&slice_view, bytes, length));
+    bson_copy_to_excluding_noinit(&slice_view, &slice, "sd", NULL);
+    BSON_APPEND_UTF8(&slice, "sd", sd);
+    BSON_APPEND_DOCUMENT(&array, "0", &slice);
+    result = bson_new();
+    bson_copy_to_excluding_noinit(doc, result, "slice", NULL);
+    BSON_APPEND_ARRAY(result, "slice", &array);
+    bson_destroy(&slice);
+    bson_destroy(&array);
+    bson_destroy(doc);
+    ogs_free(sd);
+    return result;
+}
+
+/* Verify opaque PDCP data, long/short SN, optional fields and End Marker. */
+static void forwarding_probe(abts_case *tc, test_ue_t *ue,
+        ogs_socknode_t *source, ogs_socknode_t *target, bool direct)
+{
+    test_sess_t *sess;
+    ogs_list_for_each(&ue->sess_list, sess) {
+        uint32_t used[64];
+        unsigned int count = 0;
+        unsigned int drb;
+        for (drb = 0; drb < sess->handover.drb_count; drb++) {
+            unsigned int direction;
+            for (direction = 0; direction < 2; direction++) {
+                ogs_ip_t *ip = &sess->handover.drb[drb][direction].ip;
+                uint32_t ingress = sess->handover.drb[drb][direction].teid;
+                uint32_t egress = sess->gnb_n3_teid + 100 + drb * 2 + direction;
+                ogs_sockaddr_t address;
+                uint8_t packet[] = {0x37, 0xff, 0, 24, 0, 0, 0, 0,
+                    0xab, 0xcd, 7, 0x82, 2, 0, 3, 0xff, 0xff, 0, 0, 0xc0,
+                    1, 0x45, 0x67, 0x40, 1, 0x08, 0x68, 0,
+                    1, 0x10, 1, 0, 0xde, 0xad, 0xbe, 0xef};
+                uint8_t received[128];
+                struct pollfd wait = {target->sock->fd, POLLIN, 0};
+                uint32_t wire;
+                int length;
+                if (!(sess->handover.drb_directions & (1U << direction))) {
+                    ABTS_INT_EQUAL(tc, 0, ingress);
+                    continue;
+                }
+                ABTS_ASSERT(tc, "DRB forwarding endpoint exists", ingress && ip->ipv4);
+                if (!ingress || !ip->ipv4) return;
+                ABTS_ASSERT(tc, "Direct endpoint is target, indirect endpoint differs",
+                    direct ? (ingress == egress &&
+                        ip->addr == sess->gnb_n3_addr->sin.sin_addr.s_addr) :
+                        ip->addr != sess->gnb_n3_addr->sin.sin_addr.s_addr);
+                unsigned int k;
+                for (k = 0; k < count; k++)
+                    ABTS_ASSERT(tc, "Distinct TEIDs for DRB and direction", used[k] != ingress);
+                used[count++] = ingress;
+                memset(&address, 0, sizeof(address));
+                address.ogs_sa_family = AF_INET;
+                address.sin.sin_addr.s_addr = ip->addr;
+                address.sin.sin_port = htobe16(2152);
+                wire = htobe32(ingress);
+                memcpy(packet + 4, &wire, sizeof(wire));
+                unsigned int sample;
+                for (sample = 0; sample < 64; sample++) {
+                    size_t packet_len = (sample & 1) ? sizeof(packet) : sizeof(packet) - 4;
+                    size_t payload = packet_len - 4;
+                    packet[3] = packet_len - 8;
+                    packet[27] = (sample & 1) ? 0x85 : 0;
+                    if (sample & 1) {
+                        packet[28] = 1;
+                        packet[29] = 0x10;
+                        packet[30] = 1;
+                        packet[31] = 0;
+                    }
+                    packet[payload] = sess->psi;
+                    packet[payload + 1] = drb + 1;
+                    packet[payload + 2] = direction;
+                    packet[payload + 3] = sample;
+                    wire = htobe32(ingress);
+                    memcpy(packet + 4, &wire, sizeof(wire));
+                    ABTS_INT_EQUAL(tc, packet_len, ogs_sendto(source->sock->fd,
+                            packet, packet_len, 0, &address));
+                    ABTS_INT_EQUAL(tc, 1, poll(&wait, 1, 2000));
+                    if (!(wait.revents & POLLIN)) return;
+                    length = recv(target->sock->fd, received, sizeof(received), 0);
+                    ABTS_INT_EQUAL(tc, packet_len, length);
+                    wire = htobe32(egress);
+                    memcpy(packet + 4, &wire, sizeof(wire));
+                    ABTS_ASSERT(tc, "PDCP packet and extensions preserved byte for byte",
+                        length == packet_len && !memcmp(packet, received, packet_len));
+                }
+                /* Marker follows the same ingress/egress mapping without payload. */
+                packet[0] = 0x30;
+                packet[1] = 0xfe;
+                packet[2] = packet[3] = 0;
+                wire = htobe32(ingress);
+                memcpy(packet + 4, &wire, sizeof(wire));
+                ABTS_INT_EQUAL(tc, 8, ogs_sendto(source->sock->fd, packet, 8, 0, &address));
+                wait.revents = 0;
+                ABTS_INT_EQUAL(tc, 1, poll(&wait, 1, 2000));
+                if (!(wait.revents & POLLIN)) return;
+                length = recv(target->sock->fd, received, sizeof(received), 0);
+                wire = htobe32(egress);
+                memcpy(packet + 4, &wire, sizeof(wire));
+                ABTS_ASSERT(tc, "End Marker relayed with correct TEID",
+                    length == 8 && !memcmp(packet, received, 8));
+            }
+        }
+    }
+}
+
 static void indirect_complete_func(abts_case *tc, void *data)
 {
+    const forwarding_case_t *testcase = data;
+    const char *msin = getenv("XCN_FORWARDING_TEST_MSIN");
     int rv;
     ogs_socknode_t *ngap1, *ngap2;
     ogs_socknode_t *gtpu1, *gtpu2;
@@ -1519,7 +1654,10 @@ static void indirect_complete_func(abts_case *tc, void *data)
     mobile_identity_suci.protection_scheme_id = OGS_PROTECTION_SCHEME_NULL;
     mobile_identity_suci.home_network_pki_value = 0;
 
-    test_ue = test_ue_add_by_suci(&mobile_identity_suci, "0000000004");
+    if (msin)
+        ogs_assert(strlen(msin) == 10 && strspn(msin, "0123456789") == 10);
+    test_ue = test_ue_add_by_suci(&mobile_identity_suci,
+            msin ? msin : "0000000004");
     ogs_assert(test_ue);
 
     test_ue->nr_cgi.cell_id = 0x40001;
@@ -1567,7 +1705,7 @@ static void indirect_complete_func(abts_case *tc, void *data)
     testngap_recv(test_ue, recvbuf);
 
     /********** Insert Subscriber in Database */
-    doc = test_db_new_session(test_ue);
+    doc = forwarding_subscriber(test_ue);
     ABTS_PTR_NOTNULL(tc, doc);
     ABTS_INT_EQUAL(tc, OGS_OK, test_db_insert_ue(test_ue, doc));
 
@@ -1805,7 +1943,7 @@ static void indirect_complete_func(abts_case *tc, void *data)
             0x4001, 28,
             NGAP_Cause_PR_radioNetwork,
             NGAP_CauseRadioNetwork_handover_desirable_for_radio_reason,
-            false);
+            testcase ? testcase->direct : false);
     ABTS_PTR_NOTNULL(tc, sendbuf);
     rv = testgnb_ngap_send(ngap1, sendbuf);
     ABTS_INT_EQUAL(tc, OGS_OK, rv);
@@ -1816,8 +1954,13 @@ static void indirect_complete_func(abts_case *tc, void *data)
     testngap_recv(test_ue, recvbuf);
 
     /* Send HandoverRequestAcknowledge */
-    ogs_list_for_each(&test_ue->sess_list, sess)
+    ogs_list_for_each(&test_ue->sess_list, sess) {
         sess->gnb_n3_addr = test_self()->gnb2_addr;
+        if (testcase) {
+            sess->handover.drb_count = testcase->drbs;
+            sess->handover.drb_directions = testcase->directions;
+        }
+    }
 
     sendbuf = testngap_build_handover_request_ack(test_ue);
     ABTS_PTR_NOTNULL(tc, sendbuf);
@@ -1841,21 +1984,27 @@ static void indirect_complete_func(abts_case *tc, void *data)
     recvbuf = testgnb_gtpu_read(gtpu1);
     ABTS_PTR_NOTNULL(tc, recvbuf);
 
-    /* Copy ICMP Packet */
-    pkbuf = ogs_pkbuf_copy(recvbuf);
-    ABTS_PTR_NOTNULL(tc, pkbuf);
-    ogs_pkbuf_pull(pkbuf, OGS_GTPV1U_5GC_HEADER_LEN);
+    if (testcase) {
+        ogs_pkbuf_free(recvbuf);
+        forwarding_probe(tc, test_ue, gtpu1, gtpu2, testcase->direct);
+    } else {
+        /* Copy ICMP Packet */
+        pkbuf = ogs_pkbuf_copy(recvbuf);
+        ABTS_PTR_NOTNULL(tc, pkbuf);
+        ogs_pkbuf_pull(pkbuf, OGS_GTPV1U_5GC_HEADER_LEN);
 
-    ogs_pkbuf_free(recvbuf);
+        ogs_pkbuf_free(recvbuf);
 
-    /* Send GTP-U Packet with Indirect Data Forwarding */
-    rv = test_gtpu_send_indirect_data_forwarding(gtpu1, qos_flow, pkbuf);
-    ABTS_INT_EQUAL(tc, OGS_OK, rv);
+        /* Send GTP-U Packet with Indirect Data Forwarding */
+        rv = test_gtpu_send_indirect_data_forwarding(gtpu1, qos_flow, pkbuf);
+        ABTS_INT_EQUAL(tc, OGS_OK, rv);
 
-    /* Receive GTP-U ICMP Packet */
-    recvbuf = testgnb_gtpu_read(gtpu2);
-    ABTS_PTR_NOTNULL(tc, recvbuf);
-    ogs_pkbuf_free(recvbuf);
+        /* Receive GTP-U ICMP Packet */
+        recvbuf = testgnb_gtpu_read(gtpu2);
+        ABTS_PTR_NOTNULL(tc, recvbuf);
+        ogs_pkbuf_free(recvbuf);
+
+    }
 
     /* Send UplinkRANStatusTransfer */
     sendbuf = testngap_build_uplink_ran_status_transfer(test_ue);
@@ -1946,8 +2095,8 @@ static void indirect_complete_func(abts_case *tc, void *data)
     ABTS_PTR_NOTNULL(tc, recvbuf);
     ogs_pkbuf_free(recvbuf);
 
-    /* Waiting for removing Indirect Data Forwarding */
-    ogs_msleep(100);
+    /* The configured forwarding lifetime is 300 ms; wait for N4 removal. */
+    ogs_msleep(400);
 
     /* Send HandoverRequired */
     sendbuf = testngap_build_handover_required(
@@ -1955,7 +2104,7 @@ static void indirect_complete_func(abts_case *tc, void *data)
             0x4000, 28,
             NGAP_Cause_PR_radioNetwork,
             NGAP_CauseRadioNetwork_handover_desirable_for_radio_reason,
-            false);
+            testcase ? (testcase->direct != testcase->alternate) : false);
     ABTS_PTR_NOTNULL(tc, sendbuf);
     rv = testgnb_ngap_send(ngap2, sendbuf);
     ABTS_INT_EQUAL(tc, OGS_OK, rv);
@@ -1966,8 +2115,13 @@ static void indirect_complete_func(abts_case *tc, void *data)
     testngap_recv(test_ue, recvbuf);
 
     /* Send HandoverRequestAcknowledge */
-    ogs_list_for_each(&test_ue->sess_list, sess)
+    ogs_list_for_each(&test_ue->sess_list, sess) {
         sess->gnb_n3_addr = test_self()->gnb1_addr;
+        if (testcase) {
+            sess->handover.drb_count = testcase->drbs;
+            sess->handover.drb_directions = testcase->directions;
+        }
+    }
 
     sendbuf = testngap_build_handover_request_ack(test_ue);
     ABTS_PTR_NOTNULL(tc, sendbuf);
@@ -1991,21 +2145,28 @@ static void indirect_complete_func(abts_case *tc, void *data)
     recvbuf = testgnb_gtpu_read(gtpu2);
     ABTS_PTR_NOTNULL(tc, recvbuf);
 
-    /* Copy ICMP Packet */
-    pkbuf = ogs_pkbuf_copy(recvbuf);
-    ABTS_PTR_NOTNULL(tc, pkbuf);
-    ogs_pkbuf_pull(pkbuf, OGS_GTPV1U_5GC_HEADER_LEN);
+    if (testcase) {
+        ogs_pkbuf_free(recvbuf);
+        forwarding_probe(tc, test_ue, gtpu2, gtpu1,
+                testcase->direct != testcase->alternate);
+    } else {
+        /* Copy ICMP Packet */
+        pkbuf = ogs_pkbuf_copy(recvbuf);
+        ABTS_PTR_NOTNULL(tc, pkbuf);
+        ogs_pkbuf_pull(pkbuf, OGS_GTPV1U_5GC_HEADER_LEN);
 
-    ogs_pkbuf_free(recvbuf);
+        ogs_pkbuf_free(recvbuf);
 
-    /* Send GTP-U Packet with Indirect Data Forwarding */
-    rv = test_gtpu_send_indirect_data_forwarding(gtpu2, qos_flow, pkbuf);
-    ABTS_INT_EQUAL(tc, OGS_OK, rv);
+        /* Send GTP-U Packet with Indirect Data Forwarding */
+        rv = test_gtpu_send_indirect_data_forwarding(gtpu2, qos_flow, pkbuf);
+        ABTS_INT_EQUAL(tc, OGS_OK, rv);
 
-    /* Receive GTP-U ICMP Packet */
-    recvbuf = testgnb_gtpu_read(gtpu1);
-    ABTS_PTR_NOTNULL(tc, recvbuf);
-    ogs_pkbuf_free(recvbuf);
+        /* Receive GTP-U ICMP Packet */
+        recvbuf = testgnb_gtpu_read(gtpu1);
+        ABTS_PTR_NOTNULL(tc, recvbuf);
+        ogs_pkbuf_free(recvbuf);
+
+    }
 
     /* Send UplinkRANStatusTransfer */
     sendbuf = testngap_build_uplink_ran_status_transfer(test_ue);
@@ -2096,10 +2257,43 @@ static void indirect_complete_func(abts_case *tc, void *data)
     ABTS_PTR_NOTNULL(tc, recvbuf);
     ogs_pkbuf_free(recvbuf);
 
+    if (testcase) {
+        /* Each endurance cycle releases its PDU sessions and SDM subscriptions. */
+        ogs_list_for_each(&test_ue->sess_list, sess) {
+            sess->ul_nas_transport_param.request_type = 0;
+            sess->ul_nas_transport_param.dnn = 0;
+            sess->ul_nas_transport_param.s_nssai = 0;
+            sess->pdu_session_establishment_param.ssc_mode = 0;
+            sess->pdu_session_establishment_param.epco = 0;
+            gsmbuf = testgsm_build_pdu_session_release_request(sess);
+            gmmbuf = testgmm_build_ul_nas_transport(sess,
+                    OGS_NAS_PAYLOAD_CONTAINER_N1_SM_INFORMATION, gsmbuf);
+            sendbuf = testngap_build_uplink_nas_transport(test_ue, gmmbuf);
+            ABTS_INT_EQUAL(tc, OGS_OK, testgnb_ngap_send(ngap1, sendbuf));
+            recvbuf = testgnb_ngap_read(ngap1);
+            ABTS_PTR_NOTNULL(tc, recvbuf);
+            testngap_recv(test_ue, recvbuf);
+            ABTS_INT_EQUAL(tc, NGAP_ProcedureCode_id_PDUSessionResourceRelease,
+                    test_ue->ngap_procedure_code);
+            sendbuf = testngap_build_pdu_session_resource_release_response(sess);
+            ABTS_INT_EQUAL(tc, OGS_OK, testgnb_ngap_send(ngap1, sendbuf));
+            gsmbuf = testgsm_build_pdu_session_release_complete(sess);
+            gmmbuf = testgmm_build_ul_nas_transport(sess,
+                    OGS_NAS_PAYLOAD_CONTAINER_N1_SM_INFORMATION, gsmbuf);
+            sendbuf = testngap_build_uplink_nas_transport(test_ue, gmmbuf);
+            ABTS_INT_EQUAL(tc, OGS_OK, testgnb_ngap_send(ngap1, sendbuf));
+        }
+    }
+
     /* Send UEContextReleaseRequest */
-    sendbuf = testngap_build_ue_context_release_request(test_ue,
+    if (testcase) {
+        gmmbuf = testgmm_build_de_registration_request(test_ue, 1, true, true);
+        sendbuf = testngap_build_uplink_nas_transport(test_ue, gmmbuf);
+    } else {
+        sendbuf = testngap_build_ue_context_release_request(test_ue,
             NGAP_Cause_PR_radioNetwork, NGAP_CauseRadioNetwork_user_inactivity,
             false);
+    }
     ABTS_PTR_NOTNULL(tc, sendbuf);
     rv = testgnb_ngap_send(ngap1, sendbuf);
     ABTS_INT_EQUAL(tc, OGS_OK, rv);
@@ -2137,6 +2331,7 @@ static void indirect_complete_func(abts_case *tc, void *data)
 
 static void indirect_cancel_func(abts_case *tc, void *data)
 {
+    const forwarding_case_t *testcase = data;
     int rv;
     ogs_socknode_t *ngap1, *ngap2;
     ogs_socknode_t *gtpu1, *gtpu2;
@@ -2456,13 +2651,16 @@ static void indirect_cancel_func(abts_case *tc, void *data)
     ABTS_PTR_NOTNULL(tc, recvbuf);
     ogs_pkbuf_free(recvbuf);
 
+    /* Wait for the previous temporary forwarding rules to expire. */
+    ogs_msleep(400);
+
     /* Send HandoverRequired */
     sendbuf = testngap_build_handover_required(
             test_ue, NGAP_HandoverType_intra5gs,
             0x4001, 28,
             NGAP_Cause_PR_radioNetwork,
             NGAP_CauseRadioNetwork_handover_desirable_for_radio_reason,
-            false);
+            testcase ? testcase->direct : false);
     ABTS_PTR_NOTNULL(tc, sendbuf);
     rv = testgnb_ngap_send(ngap1, sendbuf);
     ABTS_INT_EQUAL(tc, OGS_OK, rv);
@@ -2473,8 +2671,13 @@ static void indirect_cancel_func(abts_case *tc, void *data)
     testngap_recv(test_ue, recvbuf);
 
     /* Send HandoverRequestAcknowledge */
-    ogs_list_for_each(&test_ue->sess_list, sess)
+    ogs_list_for_each(&test_ue->sess_list, sess) {
         sess->gnb_n3_addr = test_self()->gnb2_addr;
+        if (testcase) {
+            sess->handover.drb_count = testcase->drbs;
+            sess->handover.drb_directions = testcase->directions;
+        }
+    }
 
     sendbuf = testngap_build_handover_request_ack(test_ue);
     ABTS_PTR_NOTNULL(tc, sendbuf);
@@ -2498,21 +2701,27 @@ static void indirect_cancel_func(abts_case *tc, void *data)
     recvbuf = testgnb_gtpu_read(gtpu1);
     ABTS_PTR_NOTNULL(tc, recvbuf);
 
-    /* Copy ICMP Packet */
-    pkbuf = ogs_pkbuf_copy(recvbuf);
-    ABTS_PTR_NOTNULL(tc, pkbuf);
-    ogs_pkbuf_pull(pkbuf, OGS_GTPV1U_5GC_HEADER_LEN);
+    if (testcase) {
+        ogs_pkbuf_free(recvbuf);
+        forwarding_probe(tc, test_ue, gtpu1, gtpu2, testcase->direct);
+    } else {
+        /* Copy ICMP Packet */
+        pkbuf = ogs_pkbuf_copy(recvbuf);
+        ABTS_PTR_NOTNULL(tc, pkbuf);
+        ogs_pkbuf_pull(pkbuf, OGS_GTPV1U_5GC_HEADER_LEN);
 
-    ogs_pkbuf_free(recvbuf);
+        ogs_pkbuf_free(recvbuf);
 
-    /* Send GTP-U Packet with Indirect Data Forwarding */
-    rv = test_gtpu_send_indirect_data_forwarding(gtpu1, qos_flow, pkbuf);
-    ABTS_INT_EQUAL(tc, OGS_OK, rv);
+        /* Send GTP-U Packet with Indirect Data Forwarding */
+        rv = test_gtpu_send_indirect_data_forwarding(gtpu1, qos_flow, pkbuf);
+        ABTS_INT_EQUAL(tc, OGS_OK, rv);
 
-    /* Receive GTP-U ICMP Packet */
-    recvbuf = testgnb_gtpu_read(gtpu2);
-    ABTS_PTR_NOTNULL(tc, recvbuf);
-    ogs_pkbuf_free(recvbuf);
+        /* Receive GTP-U ICMP Packet */
+        recvbuf = testgnb_gtpu_read(gtpu2);
+        ABTS_PTR_NOTNULL(tc, recvbuf);
+        ogs_pkbuf_free(recvbuf);
+
+    }
 
     /* Send UplinkRANStatusTransfer */
     sendbuf = testngap_build_uplink_ran_status_transfer(test_ue);
@@ -2603,13 +2812,16 @@ static void indirect_cancel_func(abts_case *tc, void *data)
     ABTS_PTR_NOTNULL(tc, recvbuf);
     ogs_pkbuf_free(recvbuf);
 
+    /* Wait for the previous temporary forwarding rules to expire. */
+    ogs_msleep(400);
+
     /* Send HandoverRequired */
     sendbuf = testngap_build_handover_required(
             test_ue, NGAP_HandoverType_intra5gs,
             0x4000, 28,
             NGAP_Cause_PR_radioNetwork,
             NGAP_CauseRadioNetwork_handover_desirable_for_radio_reason,
-            false);
+            testcase ? testcase->direct : false);
     ABTS_PTR_NOTNULL(tc, sendbuf);
     rv = testgnb_ngap_send(ngap2, sendbuf);
     ABTS_INT_EQUAL(tc, OGS_OK, rv);
@@ -2620,8 +2832,13 @@ static void indirect_cancel_func(abts_case *tc, void *data)
     testngap_recv(test_ue, recvbuf);
 
     /* Send HandoverRequestAcknowledge */
-    ogs_list_for_each(&test_ue->sess_list, sess)
+    ogs_list_for_each(&test_ue->sess_list, sess) {
         sess->gnb_n3_addr = test_self()->gnb1_addr;
+        if (testcase) {
+            sess->handover.drb_count = testcase->drbs;
+            sess->handover.drb_directions = testcase->directions;
+        }
+    }
 
     sendbuf = testngap_build_handover_request_ack(test_ue);
     ABTS_PTR_NOTNULL(tc, sendbuf);
@@ -2645,21 +2862,27 @@ static void indirect_cancel_func(abts_case *tc, void *data)
     recvbuf = testgnb_gtpu_read(gtpu2);
     ABTS_PTR_NOTNULL(tc, recvbuf);
 
-    /* Copy ICMP Packet */
-    pkbuf = ogs_pkbuf_copy(recvbuf);
-    ABTS_PTR_NOTNULL(tc, pkbuf);
-    ogs_pkbuf_pull(pkbuf, OGS_GTPV1U_5GC_HEADER_LEN);
+    if (testcase) {
+        ogs_pkbuf_free(recvbuf);
+        forwarding_probe(tc, test_ue, gtpu2, gtpu1, testcase->direct);
+    } else {
+        /* Copy ICMP Packet */
+        pkbuf = ogs_pkbuf_copy(recvbuf);
+        ABTS_PTR_NOTNULL(tc, pkbuf);
+        ogs_pkbuf_pull(pkbuf, OGS_GTPV1U_5GC_HEADER_LEN);
 
-    ogs_pkbuf_free(recvbuf);
+        ogs_pkbuf_free(recvbuf);
 
-    /* Send GTP-U Packet with Indirect Data Forwarding */
-    rv = test_gtpu_send_indirect_data_forwarding(gtpu2, qos_flow, pkbuf);
-    ABTS_INT_EQUAL(tc, OGS_OK, rv);
+        /* Send GTP-U Packet with Indirect Data Forwarding */
+        rv = test_gtpu_send_indirect_data_forwarding(gtpu2, qos_flow, pkbuf);
+        ABTS_INT_EQUAL(tc, OGS_OK, rv);
 
-    /* Receive GTP-U ICMP Packet */
-    recvbuf = testgnb_gtpu_read(gtpu1);
-    ABTS_PTR_NOTNULL(tc, recvbuf);
-    ogs_pkbuf_free(recvbuf);
+        /* Receive GTP-U ICMP Packet */
+        recvbuf = testgnb_gtpu_read(gtpu1);
+        ABTS_PTR_NOTNULL(tc, recvbuf);
+        ogs_pkbuf_free(recvbuf);
+
+    }
 
     /* Send HandoverCancel */
     sendbuf = testngap_build_handover_cancel(test_ue,
@@ -2684,6 +2907,16 @@ static void indirect_cancel_func(abts_case *tc, void *data)
     recvbuf = testgnb_ngap_read(ngap2);
     ABTS_PTR_NOTNULL(tc, recvbuf);
     testngap_recv(test_ue, recvbuf);
+
+    if (testcase) {
+        sess = test_sess_find_by_psi(test_ue, 5);
+        qos_flow = test_qos_flow_find_by_qfi(sess, 1);
+        rv = test_gtpu_send_ping(gtpu2, qos_flow, TEST_PING_IPV4);
+        ABTS_INT_EQUAL(tc, OGS_OK, rv);
+        recvbuf = testgnb_gtpu_read(gtpu2);
+        ABTS_PTR_NOTNULL(tc, recvbuf);
+        ogs_pkbuf_free(recvbuf);
+    }
 
     /* Send UEContextReleaseRequest */
     sendbuf = testngap_build_ue_context_release_request(test_ue,
@@ -3083,12 +3316,45 @@ abts_suite *test_5gc_n2(abts_suite *suite)
 {
     suite = ADD_SUITE(suite)
 
-    abts_run_test(suite, failure_func, NULL);
-    abts_run_test(suite, direct_complete_func, NULL);
-    abts_run_test(suite, direct_cancel_func, NULL);
-    abts_run_test(suite, indirect_complete_func, NULL);
-    abts_run_test(suite, indirect_cancel_func, NULL);
-    abts_run_test(suite, partial_handover_func, NULL);
+    if (!getenv("XCN_FORWARDING_MATRIX_ONLY")) {
+        abts_run_test(suite, failure_func, NULL);
+        abts_run_test(suite, direct_complete_func, NULL);
+        abts_run_test(suite, direct_cancel_func, NULL);
+        abts_run_test(suite, indirect_complete_func, NULL);
+        abts_run_test(suite, indirect_cancel_func, NULL);
+    }
+    static forwarding_case_t cases[] = {
+        {false, 1, 1, false}, {false, 1, 2, false}, {false, 2, 3, false}, {false, 32, 3, false},
+        {true, 1, 1, false}, {true, 1, 2, false}, {true, 2, 3, false}, {true, 32, 3, false},
+    };
+    unsigned int i;
+    for (i = 0; i < sizeof(cases)/sizeof(cases[0]); i++)
+        abts_run_test(suite, indirect_complete_func, &cases[i]);
+    if (!getenv("XCN_FORWARDING_MATRIX_ONLY")) {
+        abts_run_test(suite, indirect_cancel_func, &cases[2]);
+        abts_run_test(suite, indirect_cancel_func, &cases[3]);
+        abts_run_test(suite, indirect_cancel_func, &cases[6]);
+    }
+    /* Opt-in endurance test: keep the real NFs alive across repeated UEs. */
+    if (getenv("XCN_FORWARDING_STRESS_SECONDS")) {
+        forwarding_case_t alternating = {false, 2, 3, true};
+        unsigned int seconds = strtoul(getenv("XCN_FORWARDING_STRESS_SECONDS"), NULL, 10);
+        unsigned int cycles = 0;
+        ogs_time_t start = ogs_get_monotonic_time();
+        ogs_assert(seconds >= 1 && seconds <= 86400);
+        do {
+            abts_run_test(suite, indirect_complete_func, &alternating);
+            cycles++;
+            if (!(cycles % 25))
+                fprintf(stderr, "Forwarding stress: %u handovers, %.1f seconds\n",
+                    cycles * 2, (double)(ogs_get_monotonic_time() - start) / OGS_USEC_PER_SEC);
+        } while (cycles < 500 ||
+                 ogs_get_monotonic_time() - start < ogs_time_from_sec(seconds));
+        fprintf(stderr, "Forwarding stress complete: %u handovers, %.1f seconds\n",
+            cycles * 2, (double)(ogs_get_monotonic_time() - start) / OGS_USEC_PER_SEC);
+    }
+    if (!getenv("XCN_FORWARDING_MATRIX_ONLY"))
+        abts_run_test(suite, partial_handover_func, NULL);
 
     return suite;
 }

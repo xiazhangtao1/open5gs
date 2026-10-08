@@ -766,7 +766,10 @@ int ogs_pfcp_xact_receive(
                 xid, type, ogs_sockaddr_to_string_static(node->addr_list));
         new = ogs_pfcp_xact_remote_create(node, sqn);
     }
-    ogs_assert(new);
+    if (!new) {
+        ogs_error("Cannot allocate PFCP transaction [%d] type %u", xid, type);
+        return OGS_ERROR;
+    }
 
     ogs_debug("[%d] %s Receive peer %s",
             new->xid,

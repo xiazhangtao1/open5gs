@@ -188,6 +188,10 @@ static void pin_current_thread_when_ready(
 
 void upf_dataplane_pin_control_thread(const char *name)
 {
+    /* UDP/TUN mode has no dedicated dispatcher CPU allocation to await. */
+    if (!upf_self()->n3.memif && !upf_self()->n6.memif &&
+        !upf_self()->dataplane.session_workers)
+        return;
     pin_current_thread_when_ready(
             upf_self()->dataplane.worker_count + 2, name);
 }

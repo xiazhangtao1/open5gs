@@ -1,6 +1,28 @@
 #!/bin/sh
 set -eu
 
+# Host-network UDP deployments can opt in to a dedicated, persistent N3 alias.
+if [ -n "${UPF_N3_HOST_INTERFACE:-}" ]; then
+    if [ "${UPF_N3_BACKEND:-udp}" != "udp" ]; then
+        echo "N3 host interface provisioning requires UDP" >&2
+        exit 1
+    fi
+    ip link show dev "$UPF_N3_HOST_INTERFACE" >/dev/null
+    if ! ip -o link show dev "$UPF_N3_HOST_INTERFACE" | grep -q '<[^>]*UP'; then
+        echo "N3 host interface is administratively down" >&2
+        exit 1
+    fi
+    case "${UPF_GTPU_SERVER_ADDRESS:-}" in
+        ''|*[!0-9.]*) echo "N3 host provisioning requires an IPv4 address" >&2; exit 1 ;;
+    esac
+    if ! ip -o -4 addr show dev "$UPF_N3_HOST_INTERFACE" |
+        awk -v address="$UPF_GTPU_SERVER_ADDRESS" '
+            { split($4, parts, "/"); if (parts[1] == address) found = 1 }
+            END { exit found ? 0 : 1 }'; then
+        ip addr add "${UPF_GTPU_SERVER_ADDRESS}/32" dev "$UPF_N3_HOST_INTERFACE"
+    fi
+fi
+
 ensure_iptables_rule() {
     table="${1:-}"
     chain="${2:-}"

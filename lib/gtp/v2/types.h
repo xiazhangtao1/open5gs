@@ -92,6 +92,7 @@ typedef struct ogs_gtp2_header_desc_s {
     uint8_t pdu_type;
     ogs_port_t udp;
     bool pdcp_number_presence;
+    bool pdcp_pdu_presence; /* Short or long PDCP PDU Number extension. */
     uint16_t pdcp_number;
 } ogs_gtp2_header_desc_t;
 

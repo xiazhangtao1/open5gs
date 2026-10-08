@@ -84,7 +84,7 @@ void upf_n4_handle_session_establishment_request(
     if (req->pfcpsereq_flags.presence == 1)
         sereq_flags.value = req->pfcpsereq_flags.u8;
 
-    for (i = 0; i < OGS_MAX_NUM_OF_PDR; i++) {
+    for (i = 0; i < OGS_MAX_NUM_OF_PFCP_RULES_PER_MESSAGE; i++) {
         created_pdr[i] = ogs_pfcp_handle_create_pdr(&sess->pfcp,
                 &req->create_pdr[i], &sereq_flags,
                 &cause_value, &offending_ie_value);
@@ -95,7 +95,7 @@ void upf_n4_handle_session_establishment_request(
     if (cause_value != OGS_PFCP_CAUSE_REQUEST_ACCEPTED)
         goto cleanup;
 
-    for (i = 0; i < OGS_MAX_NUM_OF_FAR; i++) {
+    for (i = 0; i < OGS_MAX_NUM_OF_PFCP_RULES_PER_MESSAGE; i++) {
         if (ogs_pfcp_handle_create_far(&sess->pfcp, &req->create_far[i],
                     &cause_value, &offending_ie_value) == NULL)
             break;
@@ -255,6 +255,9 @@ void upf_n4_handle_session_modification_request(
     uint8_t cause_value = 0;
     uint8_t offending_ie_value = 0;
     int i;
+    bool forwarding_only;
+    bool new_pdr[OGS_MAX_NUM_OF_PFCP_RULES_PER_MESSAGE] = {false};
+    bool new_far[OGS_MAX_NUM_OF_PFCP_RULES_PER_MESSAGE] = {false};
 
     ogs_assert(xact);
     ogs_assert(req);
@@ -262,6 +265,14 @@ void upf_n4_handle_session_modification_request(
     ogs_debug("Session Modification Request");
 
     cause_value = OGS_PFCP_CAUSE_REQUEST_ACCEPTED;
+    forwarding_only = req->create_pdr[0].presence;
+    for (i = 0; i < OGS_MAX_NUM_OF_PFCP_RULES_PER_MESSAGE; i++) {
+        if (!req->create_pdr[i].presence) break;
+        if (!req->create_pdr[i].pdi.source_interface_type.presence ||
+            req->create_pdr[i].pdi.source_interface_type.u8 !=
+                OGS_PFCP_3GPP_INTERFACE_TYPE_SGW_UPF_GTP_U_FOR_UL_DATA_FORWARDING)
+            forwarding_only = false;
+    }
 
     if (!sess) {
         ogs_error("No Context");
@@ -271,7 +282,28 @@ void upf_n4_handle_session_modification_request(
         return;
     }
 
-    for (i = 0; i < OGS_MAX_NUM_OF_PDR; i++) {
+    if (forwarding_only) {
+        for (i = 0; i < OGS_MAX_NUM_OF_PFCP_RULES_PER_MESSAGE; i++) {
+            if (req->create_pdr[i].presence && req->create_pdr[i].pdr_id.presence) {
+                new_pdr[i] = !ogs_pfcp_pdr_find(&sess->pfcp,
+                    req->create_pdr[i].pdr_id.u16);
+                if (!new_pdr[i]) {
+                    cause_value = OGS_PFCP_CAUSE_RULE_CREATION_MODIFICATION_FAILURE;
+                    goto cleanup;
+                }
+            }
+            if (req->create_far[i].presence && req->create_far[i].far_id.presence) {
+                new_far[i] = !ogs_pfcp_far_find(&sess->pfcp,
+                    req->create_far[i].far_id.u32);
+                if (!new_far[i]) {
+                    cause_value = OGS_PFCP_CAUSE_RULE_CREATION_MODIFICATION_FAILURE;
+                    goto cleanup;
+                }
+            }
+        }
+    }
+
+    for (i = 0; i < OGS_MAX_NUM_OF_PFCP_RULES_PER_MESSAGE; i++) {
         created_pdr[i] = ogs_pfcp_handle_create_pdr(&sess->pfcp,
                 &req->create_pdr[i], NULL, &cause_value, &offending_ie_value);
         if (created_pdr[i] == NULL)
@@ -281,7 +313,7 @@ void upf_n4_handle_session_modification_request(
     if (cause_value != OGS_PFCP_CAUSE_REQUEST_ACCEPTED)
         goto cleanup;
 
-    for (i = 0; i < OGS_MAX_NUM_OF_PDR; i++) {
+    for (i = 0; i < OGS_MAX_NUM_OF_PFCP_RULES_PER_MESSAGE; i++) {
         if (ogs_pfcp_handle_update_pdr(&sess->pfcp, &req->update_pdr[i],
                     &cause_value, &offending_ie_value) == NULL)
             break;
@@ -289,7 +321,7 @@ void upf_n4_handle_session_modification_request(
     if (cause_value != OGS_PFCP_CAUSE_REQUEST_ACCEPTED)
         goto cleanup;
 
-    for (i = 0; i < OGS_MAX_NUM_OF_PDR; i++) {
+    for (i = 0; i < OGS_MAX_NUM_OF_PFCP_RULES_PER_MESSAGE; i++) {
         if (ogs_pfcp_handle_remove_pdr(&sess->pfcp, &req->remove_pdr[i],
                 &cause_value, &offending_ie_value) == false)
             break;
@@ -297,7 +329,7 @@ void upf_n4_handle_session_modification_request(
     if (cause_value != OGS_PFCP_CAUSE_REQUEST_ACCEPTED)
         goto cleanup;
 
-    for (i = 0; i < OGS_MAX_NUM_OF_FAR; i++) {
+    for (i = 0; i < OGS_MAX_NUM_OF_PFCP_RULES_PER_MESSAGE; i++) {
         if (ogs_pfcp_handle_create_far(&sess->pfcp, &req->create_far[i],
                     &cause_value, &offending_ie_value) == NULL)
             break;
@@ -305,7 +337,7 @@ void upf_n4_handle_session_modification_request(
     if (cause_value != OGS_PFCP_CAUSE_REQUEST_ACCEPTED)
         goto cleanup;
 
-    for (i = 0; i < OGS_MAX_NUM_OF_FAR; i++) {
+    for (i = 0; i < OGS_MAX_NUM_OF_PFCP_RULES_PER_MESSAGE; i++) {
         if (ogs_pfcp_handle_update_far_flags(&sess->pfcp, &req->update_far[i],
                     &cause_value, &offending_ie_value) == NULL)
             break;
@@ -325,7 +357,7 @@ void upf_n4_handle_session_modification_request(
     ogs_list_for_each(&sess->pfcp.far_list, far)
         far->smreq_flags.value = 0;
 
-    for (i = 0; i < OGS_MAX_NUM_OF_FAR; i++) {
+    for (i = 0; i < OGS_MAX_NUM_OF_PFCP_RULES_PER_MESSAGE; i++) {
         if (ogs_pfcp_handle_update_far(&sess->pfcp, &req->update_far[i],
                     &cause_value, &offending_ie_value) == NULL)
             break;
@@ -333,7 +365,7 @@ void upf_n4_handle_session_modification_request(
     if (cause_value != OGS_PFCP_CAUSE_REQUEST_ACCEPTED)
         goto cleanup;
 
-    for (i = 0; i < OGS_MAX_NUM_OF_FAR; i++) {
+    for (i = 0; i < OGS_MAX_NUM_OF_PFCP_RULES_PER_MESSAGE; i++) {
         if (ogs_pfcp_handle_remove_far(&sess->pfcp, &req->remove_far[i],
                 &cause_value, &offending_ie_value) == false)
             break;
@@ -443,7 +475,21 @@ void upf_n4_handle_session_modification_request(
     return;
 
 cleanup:
-    ogs_pfcp_sess_clear(&sess->pfcp);
+    if (forwarding_only) {
+        /* A failed forwarding allocation must not destroy normal traffic. */
+        for (i = 0; i < OGS_MAX_NUM_OF_PFCP_RULES_PER_MESSAGE; i++) {
+            if (new_pdr[i]) {
+                pdr = ogs_pfcp_pdr_find(&sess->pfcp, req->create_pdr[i].pdr_id.u16);
+                if (pdr) ogs_pfcp_pdr_remove(pdr);
+            }
+            if (new_far[i]) {
+                far = ogs_pfcp_far_find(&sess->pfcp, req->create_far[i].far_id.u32);
+                if (far) ogs_pfcp_far_remove(far);
+            }
+        }
+    } else {
+        ogs_pfcp_sess_clear(&sess->pfcp);
+    }
     ogs_pfcp_send_error_message(xact, sess ? sess->smf_n4_f_seid.seid : 0,
             OGS_PFCP_SESSION_MODIFICATION_RESPONSE_TYPE,
             cause_value, offending_ie_value);

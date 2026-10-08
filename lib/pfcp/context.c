@@ -1313,6 +1313,7 @@ ogs_pfcp_pdr_t *ogs_pfcp_pdr_add(ogs_pfcp_sess_t *sess)
     ogs_pool_alloc(&sess->pdr_id_pool, &pdr->id_node);
     if (pdr->id_node == NULL) {
         ogs_error("pdr_id_pool() failed");
+        ogs_pool_free(&ogs_pfcp_pdr_teid_pool, pdr->teid_node);
         ogs_pool_free(&ogs_pfcp_pdr_pool, pdr);
         return NULL;
     }

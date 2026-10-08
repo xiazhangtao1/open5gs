@@ -289,6 +289,9 @@ static void sess_5gc_timeout(ogs_pfcp_xact_t *xact, void *data)
         ogs_error("Session has already been removed [%d]", type);
         return;
     }
+    if ((xact->modify_flags & OGS_PFCP_MODIFY_INDIRECT) &&
+        xact->handover_generation != sess->handover.generation)
+        return;
     smf_ue = smf_ue_find_by_id(sess->smf_ue_id);
     ogs_assert(smf_ue);
 
@@ -319,6 +322,13 @@ static void sess_5gc_timeout(ogs_pfcp_xact_t *xact, void *data)
                 stream, OGS_SBI_HTTP_STATUS_GATEWAY_TIMEOUT, strerror, NULL);
         }
         ogs_free(strerror);
+        if ((xact->modify_flags & OGS_PFCP_MODIFY_INDIRECT) &&
+            !(xact->modify_flags & OGS_PFCP_MODIFY_REMOVE)) {
+            sess->handover.prepared = false;
+            sess->handover.batch_offset = 0;
+            ogs_expect(OGS_OK == smf_5gc_pfcp_send_all_pdr_modification_request(
+                sess, NULL, OGS_PFCP_MODIFY_INDIRECT|OGS_PFCP_MODIFY_REMOVE, 0, 0));
+        }
         if (xact->modify_flags & OGS_PFCP_MODIFY_SM_POLICY_UPDATE)
             smf_npcf_smpolicycontrol_complete_update(sess);
         break;
@@ -621,7 +631,7 @@ int smf_5gc_pfcp_send_all_pdr_modification_request(
     ogs_pfcp_pdr_t *pdr = NULL;
 
     ogs_assert(sess);
-    if ((flags & OGS_PFCP_MODIFY_ERROR_INDICATION) == 0)
+    if ((flags & (OGS_PFCP_MODIFY_ERROR_INDICATION|OGS_PFCP_MODIFY_INDIRECT)) == 0)
         ogs_assert(stream);
 
     xact = ogs_pfcp_xact_local_create(
@@ -642,8 +652,35 @@ int smf_5gc_pfcp_send_all_pdr_modification_request(
     xact->delete_trigger = trigger;
 
     ogs_list_init(&sess->pdr_to_modify_list);
-    ogs_list_for_each(&sess->pfcp.pdr_list, pdr)
-        ogs_list_add(&sess->pdr_to_modify_list, &pdr->to_modify_node);
+    if (flags & OGS_PFCP_MODIFY_INDIRECT) {
+        unsigned int index = 0, count = 0;
+        xact->handover_generation = sess->handover.generation;
+        ogs_list_for_each(&sess->pfcp.pdr_list, pdr) {
+            if (!pdr->far || pdr->src_if != OGS_PFCP_INTERFACE_ACCESS ||
+                pdr->far->dst_if != OGS_PFCP_INTERFACE_ACCESS)
+                continue;
+            if (index++ < sess->handover.batch_offset) continue;
+            if (count == OGS_MAX_NUM_OF_PFCP_RULES_PER_MESSAGE) {
+                xact->handover_more = true;
+                break;
+            }
+            ogs_list_add(&sess->pdr_to_modify_list, &pdr->to_modify_node);
+            count++;
+        }
+        xact->handover_next_offset = sess->handover.batch_offset + count;
+        if (!count) {
+            ogs_pfcp_xact_delete(xact);
+            return OGS_ERROR;
+        }
+    } else {
+        ogs_list_for_each(&sess->pfcp.pdr_list, pdr) {
+            /* Temporary forwarding rules have their own batched lifecycle. */
+            if (pdr->far && pdr->src_if == OGS_PFCP_INTERFACE_ACCESS &&
+                pdr->far->dst_if == OGS_PFCP_INTERFACE_ACCESS)
+                continue;
+            ogs_list_add(&sess->pdr_to_modify_list, &pdr->to_modify_node);
+        }
+    }
 
     rv = smf_pfcp_send_modify_list(
             sess, smf_n4_build_pdr_to_modify_list, xact, duration);

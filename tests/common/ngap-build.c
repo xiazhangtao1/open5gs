@@ -105,7 +105,7 @@ ogs_pkbuf_t *testngap_build_ng_setup_request(uint32_t gnb_id, uint8_t bitsize)
 
     ie = CALLOC(1, sizeof(NGAP_NGSetupRequestIEs_t));
     ASN_SEQUENCE_ADD(&NGSetupRequest->protocolIEs, ie);
-    
+
     ie->id = NGAP_ProtocolIE_ID_id_DefaultPagingDRX;
     ie->criticality = NGAP_Criticality_ignore;
     ie->value.present = NGAP_NGSetupRequestIEs__value_PR_PagingDRX;
@@ -2585,7 +2585,7 @@ static ogs_pkbuf_t *testngap_build_handover_request_ack_transfer(
     ogs_asn_ip_to_BIT_STRING(&ip, &gTPTunnel->transportLayerAddress);
     ogs_asn_uint32_to_OCTET_STRING(sess->gnb_n3_teid, &gTPTunnel->gTP_TEID);
 
-    if (sess->handover.data_forwarding_not_possible) {
+    if (!sess->handover.data_forwarding_not_possible && !sess->handover.drb_count) {
         NGAP_GTPTunnel_t *gTPTunnelForDLForwarding = NULL;
         message.dLForwardingUP_TNLInformation = dLForwardingUP_TNLInformation =
             CALLOC(1, sizeof(*dLForwardingUP_TNLInformation));
@@ -2614,6 +2614,38 @@ static ogs_pkbuf_t *testngap_build_handover_request_ack_transfer(
                 qosFlowSetupResponseItem);
 
         qosFlowSetupResponseItem->qosFlowIdentifier = qos_flow->qfi;
+        if (!sess->handover.data_forwarding_not_possible) {
+            qosFlowSetupResponseItem->dataForwardingAccepted =
+                CALLOC(1, sizeof(*qosFlowSetupResponseItem->dataForwardingAccepted));
+            *qosFlowSetupResponseItem->dataForwardingAccepted =
+                NGAP_DataForwardingAccepted_data_forwarding_accepted;
+        }
+    }
+
+    if (!sess->handover.data_forwarding_not_possible && sess->handover.drb_count) {
+        message.dataForwardingResponseDRBList =
+            CALLOC(1, sizeof(*message.dataForwardingResponseDRBList));
+        unsigned int drb;
+        for (drb = 0; drb < sess->handover.drb_count; drb++) {
+            NGAP_DataForwardingResponseDRBItem_t *item = CALLOC(1, sizeof(*item));
+            item->dRB_ID = drb + 1;
+            ASN_SEQUENCE_ADD(&message.dataForwardingResponseDRBList->list, item);
+            int direction;
+            for (direction = 0; direction < 2; direction++) {
+                NGAP_UPTransportLayerInformation_t *info;
+                NGAP_GTPTunnel_t *gtp;
+                if (!(sess->handover.drb_directions & (1U << direction))) continue;
+                info = CALLOC(1, sizeof(*info));
+                gtp = CALLOC(1, sizeof(*gtp));
+                info->present = NGAP_UPTransportLayerInformation_PR_gTPTunnel;
+                info->choice.gTPTunnel = gtp;
+                ogs_asn_ip_to_BIT_STRING(&ip, &gtp->transportLayerAddress);
+                ogs_asn_uint32_to_OCTET_STRING(
+                    sess->gnb_n3_teid + 100 + drb * 2 + direction, &gtp->gTP_TEID);
+                if (direction == 0) item->dLForwardingUP_TNLInformation = info;
+                else item->uLForwardingUP_TNLInformation = info;
+            }
+        }
     }
 
     return ogs_asn_encode(

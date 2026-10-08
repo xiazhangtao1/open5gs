@@ -603,7 +603,7 @@ static void upf_gtp_handle_n3_packet(
     ogs_assert(from);
 
     ogs_assert(pkbuf);
-    ogs_assert(pkbuf->len);
+    if (pkbuf->len < OGS_GTPV1U_HEADER_LEN) goto cleanup;
 
     gtp_h = (ogs_gtp2_header_t *)pkbuf->data;
     if (gtp_h->version != OGS_GTP2_VERSION_1) {
@@ -656,7 +656,25 @@ static void upf_gtp_handle_n3_packet(
     ogs_assert(ogs_pkbuf_pull(pkbuf, len));
 
     if (header_desc.type == OGS_GTPU_MSGTYPE_END_MARKER) {
-        /* Nothing */
+        ogs_pfcp_object_t *object =
+            ogs_pfcp_object_find_by_teid(header_desc.teid);
+        if (object && object->type == OGS_PFCP_OBJ_SESS_TYPE) {
+            ogs_pfcp_sess_t *pfcp_sess = (ogs_pfcp_sess_t *)object;
+            ogs_pfcp_pdr_t *pdr;
+            ogs_list_for_each(&pfcp_sess->pdr_list, pdr) {
+                if (pdr->f_teid.teid == header_desc.teid &&
+                    (!pdr->qfi || pdr->qfi == header_desc.qos_flow_identifier) &&
+                    pdr->src_if == OGS_PFCP_INTERFACE_ACCESS && pdr->far &&
+                    pdr->far->dst_if == OGS_PFCP_INTERFACE_ACCESS) {
+                    ogs_pkbuf_t *forward = ogs_pkbuf_copy(pkbuf);
+                    if (forward) {
+                        ogs_pkbuf_push(forward, len);
+                        ogs_pfcp_send_gtpu(pdr, forward);
+                    }
+                    break;
+                }
+            }
+        }
 
     } else if (header_desc.type == OGS_GTPU_MSGTYPE_ERR_IND) {
         ogs_pfcp_far_t *far = NULL;
@@ -890,6 +908,12 @@ static void upf_gtp_handle_n3_packet(
          * This is because IP source spoofing checks are performed only
          * in such cases.
          */
+        /* Forwarded PDCP is opaque; normal IP traffic needs a full header. */
+        if (far->dst_if != OGS_PFCP_INTERFACE_ACCESS &&
+            ((ip_h->ip_v == 4 && pkbuf->len < sizeof(struct ip)) ||
+             (ip_h->ip_v == 6 && pkbuf->len < sizeof(struct ip6_hdr))))
+            goto cleanup;
+
         if (pdr->src_if == OGS_PFCP_INTERFACE_ACCESS &&
             pdr->src_if_type_presence == true &&
             (pdr->src_if_type == OGS_PFCP_3GPP_INTERFACE_TYPE_N3_3GPP_ACCESS ||

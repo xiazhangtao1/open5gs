@@ -691,6 +691,28 @@ cleanup:
     return rv;
 }
 
+/* Validate before using the fixed-size ASN.1 endpoint helpers. */
+static int handover_tunnel_decode(NGAP_UPTransportLayerInformation_t *info,
+        ogs_ip_t *ip, uint32_t *teid)
+{
+    NGAP_GTPTunnel_t *tunnel;
+    if (!info || info->present != NGAP_UPTransportLayerInformation_PR_gTPTunnel ||
+        !(tunnel = info->choice.gTPTunnel) ||
+        tunnel->gTP_TEID.size != 4 || !tunnel->gTP_TEID.buf ||
+        !tunnel->transportLayerAddress.buf ||
+        tunnel->transportLayerAddress.bits_unused != 0 ||
+        ogs_asn_BIT_STRING_to_ip(&tunnel->transportLayerAddress, ip) != OGS_OK ||
+        (!ip->ipv4 && !ip->ipv6))
+        return OGS_ERROR;
+    ogs_asn_OCTET_STRING_to_uint32(&tunnel->gTP_TEID, teid);
+    if (!*teid || (ip->ipv4 && (!ip->addr ||
+                ip->addr == UINT32_MAX || (be32toh(ip->addr) >> 28) == 0xe)) ||
+        (ip->ipv6 && (IN6_IS_ADDR_UNSPECIFIED((struct in6_addr *)ip->addr6) ||
+                     IN6_IS_ADDR_MULTICAST((struct in6_addr *)ip->addr6))))
+        return OGS_ERROR;
+    return OGS_OK;
+}
+
 int ngap_handle_handover_required_transfer(
         smf_sess_t *sess, ogs_sbi_stream_t *stream, ogs_pkbuf_t *pkbuf)
 {
@@ -725,8 +747,27 @@ int ngap_handle_handover_required_transfer(
     }
 
     directForwardingPathAvailability = message.directForwardingPathAvailability;
-    if (!directForwardingPathAvailability)
-        sess->handover.data_forwarding_not_possible = true;
+    /* Keep previous forwarding rules alive until their removal completes. */
+    if (sess->handover.prepared || smf_sess_have_indirect_data_forwarding(sess)) {
+        smf_sbi_send_sm_context_update_error_log(stream,
+                OGS_SBI_HTTP_STATUS_CONFLICT, "Previous handover still active", NULL);
+        rv = OGS_ERROR;
+        goto cleanup;
+    }
+    sess->handover.generation++;
+    sess->handover.direct_data_forwarding = directForwardingPathAvailability &&
+        *directForwardingPathAvailability ==
+            NGAP_DirectForwardingPathAvailability_direct_path_available;
+    sess->handover.indirect_data_forwarding = false;
+    sess->handover.batch_offset = 0;
+    sess->handover.forwarding_qfi = 0;
+    sess->handover.forwarding_dl_teid = 0;
+    memset(sess->handover.drb, 0, sizeof(sess->handover.drb));
+    /* Same-UPF indirect forwarding uses the configured N3 transport. */
+    sess->handover.data_forwarding_not_possible =
+        !sess->handover.direct_data_forwarding &&
+        ((!sess->local_ul_addr && !sess->local_ul_addr6) ||
+         HOME_ROUTED_ROAMING_IN_VSMF(sess));
 
     n2smbuf = ngap_build_pdu_session_resource_setup_request_transfer(sess);
     ogs_assert(n2smbuf);
@@ -756,8 +797,6 @@ int ngap_handle_handover_request_ack(
     NGAP_UPTransportLayerInformation_t *dLForwardingUP_TNLInformation = NULL;
     NGAP_QosFlowListWithDataForwarding_t *qosFlowSetupResponseList = NULL;
     NGAP_QosFlowItemWithDataForwarding_t *qosFlowSetupResponseItem = NULL;
-    NGAP_GTPTunnel_t *gTPTunnel = NULL;
-
     ogs_assert(pkbuf);
     ogs_assert(stream);
 
@@ -792,36 +831,10 @@ int ngap_handle_handover_request_ack(
         goto cleanup;
     }
 
-    gTPTunnel = dL_NGU_UP_TNLInformation->choice.gTPTunnel;
-    if (!gTPTunnel) {
-        ogs_error("[%s:%d] No GTPTunnel", smf_ue->supi, sess->psi);
-        smf_sbi_send_sm_context_update_error_log(
-                stream, OGS_SBI_HTTP_STATUS_BAD_REQUEST,
-                "No GTPTunnel", smf_ue->supi);
-        goto cleanup;
-    }
-
-    rv = ogs_asn_BIT_STRING_to_ip(&gTPTunnel->transportLayerAddress,
-            &remote_dl_ip);
-    if (rv != OGS_OK) {
-        ogs_error("[%s:%d] No transportLayerAddress", smf_ue->supi, sess->psi);
-        smf_sbi_send_sm_context_update_error_log(
-                stream, OGS_SBI_HTTP_STATUS_BAD_REQUEST,
-                "No transportLayerAddress", smf_ue->supi);
-        goto cleanup;
-    }
-    if (!remote_dl_ip.ipv4 && !remote_dl_ip.ipv6) {
-        ogs_error("[%s:%d] Invalid GTP Tunnel IP (IPv4/IPv6 all zero)",
-                smf_ue->supi, sess->psi);
-        smf_sbi_send_sm_context_update_error_log(
-                stream, OGS_SBI_HTTP_STATUS_BAD_REQUEST,
-                "Invalid GTP Tunnel IP (IPv4/IPv6 all zero)", smf_ue->supi);
-        goto cleanup;
-    }
-    memcpy(&sess->handover.remote_dl_ip, &remote_dl_ip,
-            sizeof(sess->handover.remote_dl_ip));
-    ogs_asn_OCTET_STRING_to_uint32(&gTPTunnel->gTP_TEID,
-            &sess->handover.remote_dl_teid);
+    if (handover_tunnel_decode(dL_NGU_UP_TNLInformation,
+                &remote_dl_ip, &sess->handover.remote_dl_teid) != OGS_OK)
+        goto invalid_tunnel;
+    sess->handover.remote_dl_ip = remote_dl_ip;
 
     if (HOME_ROUTED_ROAMING_IN_VSMF(sess)) {
         ogs_list_for_each(&sess->bearer_list, qos_flow) {
@@ -849,53 +862,63 @@ int ngap_handle_handover_request_ack(
         }
     }
 
+    sess->handover.forwarding_qfi = 0;
+    for (i = 0; i < message.qosFlowSetupResponseList.list.count; i++) {
+        NGAP_QosFlowItemWithDataForwarding_t *item =
+            message.qosFlowSetupResponseList.list.array[i];
+        if (item && item->dataForwardingAccepted &&
+            *item->dataForwardingAccepted ==
+                NGAP_DataForwardingAccepted_data_forwarding_accepted &&
+            item->qosFlowIdentifier > 0 && item->qosFlowIdentifier < 64 &&
+            smf_qos_flow_find_by_qfi(sess, item->qosFlowIdentifier))
+            sess->handover.forwarding_qfi |=
+                UINT64_C(1) << item->qosFlowIdentifier;
+    }
+
     dLForwardingUP_TNLInformation = message.dLForwardingUP_TNLInformation;
     if (dLForwardingUP_TNLInformation) {
-        if (dLForwardingUP_TNLInformation->present !=
-                NGAP_UPTransportLayerInformation_PR_gTPTunnel) {
-            ogs_error(
-                "[%s:%d] Unknown dLForwardingUP_TNLInformation->present [%d]",
-                smf_ue->supi, sess->psi, dL_NGU_UP_TNLInformation->present);
-            smf_sbi_send_sm_context_update_error_log(
-                    stream, OGS_SBI_HTTP_STATUS_BAD_REQUEST,
-                    "Unknown dLForwardingUP_TNLInformation->present",
-                    smf_ue->supi);
-            goto cleanup;
-        }
+        if (sess->handover.data_forwarding_not_possible ||
+            !sess->handover.forwarding_qfi ||
+            handover_tunnel_decode(dLForwardingUP_TNLInformation,
+                &sess->handover.forwarding_dl_ip,
+                &sess->handover.forwarding_dl_teid) != OGS_OK)
+            goto invalid_tunnel;
+        sess->handover.indirect_data_forwarding =
+            !sess->handover.direct_data_forwarding;
+    }
 
-        gTPTunnel = dLForwardingUP_TNLInformation->choice.gTPTunnel;
-        if (!gTPTunnel) {
-            ogs_error("[%s:%d] No GTPTunnel", smf_ue->supi, sess->psi);
-            smf_sbi_send_sm_context_update_error_log(
-                    stream, OGS_SBI_HTTP_STATUS_BAD_REQUEST,
-                    "No GTPTunnel", smf_ue->supi);
-            goto cleanup;
+    if (message.dataForwardingResponseDRBList) {
+        uint32_t seen = 0;
+        if (sess->handover.data_forwarding_not_possible ||
+            message.dataForwardingResponseDRBList->list.count >
+                SMF_MAX_FORWARDING_DRB)
+            goto invalid_tunnel;
+        for (i = 0; i < message.dataForwardingResponseDRBList->list.count; i++) {
+            NGAP_DataForwardingResponseDRBItem_t *item =
+                message.dataForwardingResponseDRBList->list.array[i];
+            NGAP_UPTransportLayerInformation_t *info[2];
+            int direction;
+            if (!item || item->dRB_ID < 1 || item->dRB_ID > SMF_MAX_FORWARDING_DRB ||
+                (seen & (UINT32_C(1) << (item->dRB_ID - 1))) ||
+                (!item->dLForwardingUP_TNLInformation &&
+                 !item->uLForwardingUP_TNLInformation))
+                goto invalid_tunnel;
+            seen |= UINT32_C(1) << (item->dRB_ID - 1);
+            info[SMF_FORWARDING_DL] = item->dLForwardingUP_TNLInformation;
+            info[SMF_FORWARDING_UL] = item->uLForwardingUP_TNLInformation;
+            for (direction = 0; direction < 2; direction++) {
+                smf_forwarding_tunnel_t *tunnel =
+                    &sess->handover.drb[item->dRB_ID - 1][direction];
+                if (!info[direction])
+                    continue;
+                if (handover_tunnel_decode(info[direction],
+                        &tunnel->remote_ip, &tunnel->remote_teid) != OGS_OK)
+                    goto invalid_tunnel;
+                tunnel->present = true;
+                sess->handover.indirect_data_forwarding =
+                    !sess->handover.direct_data_forwarding;
+            }
         }
-
-        rv = ogs_asn_BIT_STRING_to_ip(&gTPTunnel->transportLayerAddress,
-                &remote_dl_ip);
-        if (rv != OGS_OK) {
-            ogs_error("[%s:%d] No transportLayerAddress",
-                    smf_ue->supi, sess->psi);
-            smf_sbi_send_sm_context_update_error_log(
-                    stream, OGS_SBI_HTTP_STATUS_BAD_REQUEST,
-                    "No transportLayerAddress", smf_ue->supi);
-            goto cleanup;
-        }
-        if (!remote_dl_ip.ipv4 && !remote_dl_ip.ipv6) {
-            ogs_error("[%s:%d] Invalid GTP Tunnel IP (IPv4/IPv6 all zero)",
-                    smf_ue->supi, sess->psi);
-            smf_sbi_send_sm_context_update_error_log(
-                    stream, OGS_SBI_HTTP_STATUS_BAD_REQUEST,
-                    "Invalid GTP Tunnel IP (IPv4/IPv6 all zero)", smf_ue->supi);
-            goto cleanup;
-        }
-        memcpy(&sess->handover.remote_dl_ip, &remote_dl_ip,
-                sizeof(sess->handover.remote_dl_ip));
-        ogs_asn_OCTET_STRING_to_uint32(&gTPTunnel->gTP_TEID,
-                &sess->handover.remote_dl_teid);
-
-        sess->handover.indirect_data_forwarding = true;
     }
 
     sess->handover.prepared = true;
@@ -925,7 +948,8 @@ int ngap_handle_handover_request_ack(
                     0, 0));
         } else {
 
-            smf_sess_create_indirect_data_forwarding(sess);
+            if (smf_sess_create_indirect_data_forwarding(sess) != OGS_OK)
+                goto invalid_tunnel;
 
             ogs_assert(OGS_OK ==
                 smf_5gc_pfcp_send_all_pdr_modification_request(
@@ -943,6 +967,14 @@ int ngap_handle_handover_request_ack(
     }
 
     rv = OGS_OK;
+
+    goto cleanup;
+
+invalid_tunnel:
+    rv = OGS_ERROR;
+    sess->handover.prepared = false;
+    smf_sbi_send_sm_context_update_error_log(stream,
+        OGS_SBI_HTTP_STATUS_BAD_REQUEST, "Invalid handover forwarding endpoint", NULL);
 
 cleanup:
     ogs_asn_free(&asn_DEF_NGAP_HandoverRequestAcknowledgeTransfer, &message);

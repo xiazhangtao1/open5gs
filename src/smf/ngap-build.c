@@ -150,6 +150,18 @@ ogs_pkbuf_t *ngap_build_pdu_session_resource_setup_request_transfer(
                 &upf_n3_ip, &gTPTunnel->transportLayerAddress));
     ogs_asn_uint32_to_OCTET_STRING(sess->local_ul_teid, &gTPTunnel->gTP_TEID);
 
+    if (sess->handover.direct_data_forwarding) {
+        ie = CALLOC(1, sizeof(*ie));
+        ogs_assert(ie);
+        ASN_SEQUENCE_ADD(&message.protocolIEs, ie);
+        ie->id = NGAP_ProtocolIE_ID_id_DirectForwardingPathAvailability;
+        ie->criticality = NGAP_Criticality_ignore;
+        ie->value.present =
+            NGAP_PDUSessionResourceSetupRequestTransferIEs__value_PR_DirectForwardingPathAvailability;
+        ie->value.choice.DirectForwardingPathAvailability =
+            NGAP_DirectForwardingPathAvailability_direct_path_available;
+    }
+
     if (sess->handover.data_forwarding_not_possible == true) {
         ie = CALLOC(1,
                 sizeof(NGAP_PDUSessionResourceSetupRequestTransferIEs_t));
@@ -654,9 +666,7 @@ ogs_pkbuf_t *ngap_build_handover_command_transfer(smf_sess_t *sess)
     ogs_debug("HandoverCommandTransfer");
     memset(&message, 0, sizeof(NGAP_HandoverCommandTransfer_t));
 
-    if (sess->handover.indirect_data_forwarding == true) {
-        ogs_pfcp_pdr_t *pdr = NULL;
-
+    if (sess->handover.forwarding_dl_teid) {
         NGAP_UPTransportLayerInformation_t
             *dLForwardingUP_TNLInformation = NULL;
         NGAP_GTPTunnel_t *gTPTunnel = NULL;
@@ -672,42 +682,68 @@ ogs_pkbuf_t *ngap_build_handover_command_transfer(smf_sess_t *sess)
             CALLOC(1, sizeof(*gTPTunnel));
         ogs_assert(gTPTunnel);
 
-        ogs_assert(OGS_OK == ogs_sockaddr_to_ip(
+        if (sess->handover.direct_data_forwarding)
+            local_dl_ip = sess->handover.forwarding_dl_ip;
+        else
+            ogs_assert(OGS_OK == ogs_sockaddr_to_ip(
                 sess->handover.local_dl_addr, sess->handover.local_dl_addr6,
                 &local_dl_ip));
         ogs_assert(OGS_OK == ogs_asn_ip_to_BIT_STRING(
                     &local_dl_ip, &gTPTunnel->transportLayerAddress));
         ogs_asn_uint32_to_OCTET_STRING(
-                sess->handover.local_dl_teid, &gTPTunnel->gTP_TEID);
+                sess->handover.direct_data_forwarding ?
+                    sess->handover.forwarding_dl_teid : sess->handover.local_dl_teid,
+                &gTPTunnel->gTP_TEID);
 
-        ogs_list_for_each(&sess->pfcp.pdr_list, pdr) {
-            ogs_pfcp_far_t *far = pdr->far;
-            ogs_assert(far);
 
-            if (pdr->src_if == OGS_PFCP_INTERFACE_ACCESS &&
-                far->dst_if == OGS_PFCP_INTERFACE_ACCESS) {
-                NGAP_QosFlowToBeForwardedItem_t *qosFlowToBeForwardedItem;
-                NGAP_QosFlowIdentifier_t *qosFlowIdentifier = NULL;
-
-                if (!qosFlowToBeForwardedList) {
-                    message.qosFlowToBeForwardedList =
-                        qosFlowToBeForwardedList =
-                            CALLOC(1, sizeof(*qosFlowToBeForwardedList));
-                    ogs_assert(qosFlowToBeForwardedList);
-                }
-
-                qosFlowToBeForwardedItem =
-                    CALLOC(1, sizeof(*qosFlowToBeForwardedItem));
-                ogs_assert(qosFlowToBeForwardedItem);
-
-                ASN_SEQUENCE_ADD(&qosFlowToBeForwardedList->list,
-                        qosFlowToBeForwardedItem);
-
-                qosFlowIdentifier =
-                    &qosFlowToBeForwardedItem->qosFlowIdentifier;
-
-                *qosFlowIdentifier = pdr->qfi;
+        for (int qfi = 1; qfi < 64; qfi++) {
+            NGAP_QosFlowToBeForwardedItem_t *item;
+            if (!(sess->handover.forwarding_qfi & (UINT64_C(1) << qfi)))
+                continue;
+            if (!qosFlowToBeForwardedList) {
+                message.qosFlowToBeForwardedList = qosFlowToBeForwardedList =
+                    CALLOC(1, sizeof(*qosFlowToBeForwardedList));
+                ogs_assert(qosFlowToBeForwardedList);
             }
+            item = CALLOC(1, sizeof(*item));
+            ogs_assert(item);
+            item->qosFlowIdentifier = qfi;
+            ASN_SEQUENCE_ADD(&qosFlowToBeForwardedList->list, item);
+        }
+    }
+
+    for (int drb = 0; drb < SMF_MAX_FORWARDING_DRB; drb++) {
+        NGAP_DataForwardingResponseDRBItem_t *item = NULL;
+        for (int direction = 0; direction < 2; direction++) {
+            smf_forwarding_tunnel_t *tunnel = &sess->handover.drb[drb][direction];
+            NGAP_UPTransportLayerInformation_t *info;
+            NGAP_GTPTunnel_t *gtp;
+            if (!tunnel->present) continue;
+            if (!message.dataForwardingResponseDRBList) {
+                message.dataForwardingResponseDRBList =
+                    CALLOC(1, sizeof(*message.dataForwardingResponseDRBList));
+                ogs_assert(message.dataForwardingResponseDRBList);
+            }
+            if (!item) {
+                item = CALLOC(1, sizeof(*item));
+                ogs_assert(item);
+                item->dRB_ID = drb + 1;
+                ASN_SEQUENCE_ADD(&message.dataForwardingResponseDRBList->list, item);
+            }
+            info = CALLOC(1, sizeof(*info));
+            gtp = CALLOC(1, sizeof(*gtp));
+            ogs_assert(info && gtp);
+            info->present = NGAP_UPTransportLayerInformation_PR_gTPTunnel;
+            info->choice.gTPTunnel = gtp;
+            if (direction == SMF_FORWARDING_DL)
+                item->dLForwardingUP_TNLInformation = info;
+            else
+                item->uLForwardingUP_TNLInformation = info;
+            ogs_assert(OGS_OK == ogs_asn_ip_to_BIT_STRING(
+                sess->handover.direct_data_forwarding ? &tunnel->remote_ip :
+                    &tunnel->local_ip, &gtp->transportLayerAddress));
+            ogs_asn_uint32_to_OCTET_STRING(sess->handover.direct_data_forwarding ?
+                tunnel->remote_teid : tunnel->local_teid, &gtp->gTP_TEID);
         }
     }
 
