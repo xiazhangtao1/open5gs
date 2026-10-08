@@ -179,6 +179,23 @@ UDP/memif or memif/TUN mixed combinations are invalid and fail Helm rendering.
 The memif mode is currently IPv4-first; the chart does not configure IPv6 N6
 routing or NAT.
 
+Keep subscriber static IPv4 addresses outside the SMF dynamic pool in both
+modes. `networking.smf.ipv4PoolRanges` optionally limits dynamic allocation
+within `10.45.0.0/16`; an empty list retains the default pool. For example, when
+existing subscribers use `10.45.0.2` and `10.45.0.3`, configure:
+
+```yaml
+networking:
+  smf:
+    ipv4PoolRanges:
+      - 10.45.1.2-10.45.255.254
+```
+
+Overlapping static and dynamic allocations can replace a UE's downlink address
+lookup. Check N3/N6 addresses for ARP conflicts before enabling VPP/memif. See
+[the QoS validation record](../../docs/qos-priority-validation.md) for the actual
+two-VF, two-Worker memif deployment and dedicated-bearer tests.
+
 The old `n3.backend`, `n6.backend`, `dataplane.sessionWorkers.enabled`,
 `vpp.enabled`, `gtpu.*Address`, and `n3.memif.localAddress` values remain as
 advanced compatibility overrides only when `networking.upf.mode` is explicitly

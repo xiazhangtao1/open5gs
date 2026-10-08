@@ -318,14 +318,50 @@ static test_sess_t *establish_session(abts_case *tc, test_ue_t *ue,
     return sess;
 }
 
-static void ping_flow(abts_case *tc, ogs_socknode_t *gtpu, test_bearer_t *flow)
+static void probe_flow(abts_case *tc, ogs_socknode_t *gtpu,
+        test_bearer_t *flow, bool warmup)
 {
     struct pollfd fd = {.fd = gtpu->sock->fd, .events = POLLIN};
     ogs_pkbuf_t *buf;
-    ABTS_INT_EQUAL(tc, OGS_OK, test_gtpu_send_ping(gtpu, flow, TEST_PING_IPV4));
-    ogs_assert(poll(&fd, 1, 15000) == 1 && (fd.revents & POLLIN));
+    const char *destination = getenv("XCN_QOS_PING_IP");
+    ogs_gtp2_header_desc_t header;
+    ogs_ipsubnet_t peer;
+    const uint8_t *ip;
+    uint32_t address;
+    int attempt, ready = 0, offset, ip_length;
+
+    if (!destination) destination = TEST_PING_IPV4;
+    ogs_assert(ogs_ipsubnet(&peer, destination, NULL) == OGS_OK);
+    ogs_assert(peer.family == AF_INET);
+    /* VPP may drop the first packet while learning an ARP neighbor. */
+    for (attempt = 0; attempt < (warmup ? 3 : 1); attempt++) {
+        ABTS_INT_EQUAL(tc, OGS_OK, test_gtpu_send_ping(gtpu, flow, destination));
+        ready = poll(&fd, 1, warmup ? 1000 : 15000);
+        if (ready) break;
+    }
+    ogs_assert(ready == 1 && (fd.revents & POLLIN));
     buf = testgnb_gtpu_read(gtpu);
+    offset = ogs_gtpu_parse_header(&header, buf);
+    ogs_assert(offset >= 8 && (unsigned int)offset + 20 <= buf->len);
+    ABTS_INT_EQUAL(tc, OGS_GTPU_MSGTYPE_GPDU, header.type);
+    ABTS_INT_EQUAL(tc, flow->sess->gnb_n3_teid, header.teid);
+    ABTS_INT_EQUAL(tc, flow->qfi, header.qos_flow_identifier);
+    ip = (const uint8_t *)buf->data + offset;
+    ip_length = (ip[0] & 15) * 4;
+    ogs_assert((ip[0] >> 4) == 4 && ip_length >= 20 &&
+            (unsigned int)(offset + ip_length + 8) <= buf->len);
+    ABTS_INT_EQUAL(tc, IPPROTO_ICMP, ip[9]);
+    ABTS_INT_EQUAL(tc, 0, ip[ip_length]); /* ICMP Echo Reply */
+    memcpy(&address, ip + 12, sizeof(address));
+    ogs_assert(address == peer.sub[0]);
+    memcpy(&address, ip + 16, sizeof(address));
+    ogs_assert(address == flow->sess->ue_ip.addr);
     ogs_pkbuf_free(buf);
+}
+
+static void ping_flow(abts_case *tc, ogs_socknode_t *gtpu, test_bearer_t *flow)
+{
+    probe_flow(tc, gtpu, flow, false);
 }
 
 static void recover_access(abts_case *tc, test_sess_t *sess,
@@ -376,7 +412,7 @@ static void priority_lifecycle(abts_case *tc, void *data)
     const char *cycle_env = getenv("XCN_QOS_CYCLES");
     if (cycle_env) cycles = strtoul(cycle_env, NULL, 10);
     ogs_assert(cycles >= 1 && cycles <= 10000);
-    ping_flow(tc, gtpu, test_qos_flow_find_by_qfi(sess, 1));
+    probe_flow(tc, gtpu, test_qos_flow_find_by_qfi(sess, 1), true);
 
     /* Omitted priority on creation must not be replaced by the ARP value. */
     body = bearer_body(sess, 0);
@@ -483,6 +519,8 @@ static void concurrent_lifecycle(abts_case *tc, void *data)
     ogs_assert(cycles >= 1 && cycles <= 10000);
     sessions[0] = establish_session(tc, ue, ngap, 5);
     sessions[1] = establish_session(tc, ue, ngap, 6);
+    for (j = 0; j < 2; j++)
+        probe_flow(tc, gtpu, test_qos_flow_find_by_qfi(sessions[j], 1), true);
     for (cycle = 0; cycle < cycles; cycle++) {
         bodies[0] = bearer_body(sessions[0], 1);
         bodies[1] = bearer_body(sessions[1], 127);

@@ -1,6 +1,7 @@
 # 可选 5QI 调度优先级实现与验证
 
-验证日期：2026-10-08。核心网已部署本次实现，下面区分通过项与环境限制。
+验证日期：2026-10-08。核心网已部署本次实现；下文分别记录 TUN 初验和
+随后完成的 VPP/memif 验收，并区分通过项与环境限制。
 
 ## API 行为
 
@@ -135,6 +136,123 @@ UPF RSS 小幅增加 112 KiB，因此不据此声称整个核心网内存完全�
 - `resource-observation.json`、`resource-observation.log`；
 - `oai-ping-observation.log`、`deployed-{amf,smf,pcf,upf}.log`；
 - `af-baseline.log`、`deploy.log`、`runtime-push.log`。
+
+## VPP/memif 实际部署验收
+
+随后将当前 Kubernetes `xcn` 切换为真实双 VF 的 VPP/memif 模式。
+最终 Helm revision 为 154，核心网仍使用前文的正式
+`qos-priority-1008` 镜像及 digest；临时诊断镜像已撤销，没有保留诊断代码。
+
+```text
+gNB / 受控 NGAP、GTP-U 对端
+  → SR-IOV/DPDK dpdk-n3（10.2.0.231/20，FIB 10）
+  → N3 memif2/0 → UPF（N3 10.2.0.230）
+  → N6 memif1/0 → VPP NAT44 → dpdk-n6（10.2.0.232/20）
+  → 10.2.7.254 → 外网
+```
+
+VPP 为 26.06，实际使用两张 iAVF VF。UPF 分配 5 个 CPU，自动解析为
+2 个 Session Worker；VPP 分配 3 个 CPU，实际启动主线程和 2 个 Worker。
+两条 IP 模式 memif 都连接成功，每条有 2 个 RX/TX 队列，ring size 8192。
+验证确认两个 UPF Worker、两个 memif 队列均有实际数据，未以开启配置代替运行。
+
+本次排查并修正了两个部署配置问题：
+
+1. 原 N3/N6 地址收到其他 MAC 的 ARP 应答。经过 ARP 探测后改用上述
+   `10.2.0.230/231/232`；受控 gNB 临时使用 `10.2.0.233`。
+2. 已有订阅配置了静态 UE 地址 `10.45.0.2`、`10.45.0.3`，原动态池包含
+   这些地址。SMF 日志曾同时向 OAI 和测试 UE 分配 `.3`，测试会话释放后影响
+   OAI 下行地址查询。新增可选 `networking.smf.ipv4PoolRanges`，最终配置为
+   `10.45.1.2-10.45.255.254`，避开静态订阅。空列表保持原动态池行为，
+   此参数同时适用于 TUN 和 memif；没有修改用户订阅。
+
+最终部署关键参数如下；其余参数保留本次部署原有值：
+
+```yaml
+networking:
+  smf:
+    ipv4PoolRanges: ["10.45.1.2-10.45.255.254"]
+  upf:
+    mode: memif
+    n3:
+      address: 10.2.0.230
+      hostInterface: ""
+resources:
+  fivegc:
+    upf:
+      requests: {cpu: 5}
+      limits: {cpu: 5}
+vpp:
+  resources:
+    requests: {cpu: 3}
+    limits: {cpu: 3}
+  n3:
+    interfaceAddress: 10.2.0.231/20
+    defaultGateway: 10.2.7.254
+  n6:
+    externalAddress: 10.2.0.232/20
+    defaultGateway: 10.2.7.254
+    nat44: {enabled: true}
+```
+
+最终受控对端测试使用正式核心网镜像，配置 `XCN_QOS_CYCLES=100` 和
+`XCN_QOS_PING_IP=8.8.8.8`。100 次顺序生命周期、100 轮双会话并发生命周期
+全部通过，合计 300 次承载周期。覆盖优先级边界、非法值、仅修改优先级、取消
+覆盖、恢复 access、查询、删除及清理。每次数据探测校验 GTP-U TEID、QFI、
+ICMP Echo Reply 和内层源/目的地址，经过真实 N3/N6 memif、DPDK N6 和 NAT。
+测试 UE 使用 `10.45.1.6/7/8`，OAI 保持静态 `.3`，同时运行期间没有再冲突。
+
+测试仅在每个会话首次探测时允许最多 3 次、各 1 秒的重试，以处理 ARP 首包
+丢弃；后续探测保持单次发送、15 秒超时。外网目标可通过 `XCN_QOS_PING_IP`
+配置，默认仍为 `10.45.0.1`。复验命令：
+
+```bash
+XCN_QOS_PCF_URL=http://10.2.0.119:30777 \
+XCN_QOS_TEST_MSIN=0000000905 XCN_QOS_CYCLES=100 \
+XCN_QOS_PING_IP=8.8.8.8 XCN_FORWARDING_GNB1_ADDR=10.2.0.233 \
+  build/tests/vonr/vonr -q \
+  -c /tmp/xcn-qos-memif-results/qos-live.yaml dedicated-bearer-test
+```
+
+配置修正前还完成了 1000 次顺序和 1000 轮双会话并发，共 3000 次承载周期。
+这些协议测试通过且没有核心网崩溃，但当时共享地址池冲突尚未排除，因此不把
+这轮结果记为整个 OAI 共存环境的完整验收。最终验收使用修正配置及加强回包
+断言后的 `accepted-final-stress.log`。
+
+Helm lint、9 项 CPU 分配/入口回归通过；默认渲染确认未配置 ranges 时不生成
+`range`，实际 SMF 配置确认应用了上述范围。临时测试订阅最终计数为 0，SMF
+会话数恢复为 1，仅保留原 OAI 会话。
+
+最终部署连续观察 600 秒，每 30 秒采样一次，共 21 个样本；期间所有容器
+保持就绪、没有新增重启。资源数据如下（观察开始包含最终压力测试）：
+
+| NF | RSS 范围（KiB） | 文件描述符范围 |
+| --- | --- | --- |
+| AMF | 82192–99336 | 36–37 |
+| SMF | 147596–157148 | 29–29 |
+| PCF | 23012–27520 | 25–25 |
+| UPF | 179116–196088 | 30–30 |
+| VPP | 1518772–1533396 | 53–53 |
+
+压力完成后，AMF/SMF/PCF RSS 分别保持在 99336/157148/27520 KiB。
+UPF/VPP 在持续数据流量下仍有小幅 RSS 增长，未将此结果解释为全库内存完全
+不增长或长期泄漏排除证明。两个 UPF Worker 的 drops、queue-full、push-fail
+均为 0，N3/N6 两组队列的 RX/refill 错误、dispatch-drop 和 TX drop 均为 0。
+当前 Pod 的核心 NF/VPP 日志没有 FATAL 或断言。
+
+OAI UE 同时持续外网 ping 600 次，599 次成功；逐条核对日志确认只缺失首次
+探测，后续序号 2–600 全部成功。该首包结果单独记录，没有记作 0% 丢包。
+同时到核心网网关 `10.45.0.1` 的持续 ping 为 480/480 成功、0% 丢包。
+临时验证容器、gNB 地址 `10.2.0.233` 及其 VPP 静态邻居项均已清理。
+当前保留上述 memif 部署与互不重叠的地址池配置。
+
+本机证据目录为 `/tmp/xcn-qos-memif-results/`：`accepted-values.yaml`、
+`accepted-pods.json`、`accepted-final-stress.log`、`memif-final.txt`、
+`vpp-threads-final.txt`、`final-observation.json`、`oai-accepted-ping.log`、
+`oai-accepted-gateway.log` 和 N3/N6 抓包。初始失败及诊断日志保留，未记为通过。
+
+自动审批拒绝了具有主机 PID、读写主机 `/proc` 及解除安全限制的调试命令，
+没有执行该命令。随后采用临时 UPF 收包日志定位；诊断实例已替换回正式镜像。
 
 ## 已知限制
 

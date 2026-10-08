@@ -142,6 +142,10 @@ data:
       session:
         - subnet: 10.45.0.0/16
           gateway: 10.45.0.1
+          {{- with .Values.networking.smf.ipv4PoolRanges }}
+          range:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
         - subnet: 2001:db8:cafe::/48
           gateway: 2001:db8:cafe::1
       dns:
