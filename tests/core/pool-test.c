@@ -228,6 +228,31 @@ static void test3_func(abts_case *tc, void *data)
     ogs_pool_final(&testpool);
 }
 
+static void test_id_pool_teardown(abts_case *tc, void *data)
+{
+    typedef struct { ogs_pool_id_t id; } id_node_t;
+    OGS_POOL(pool, id_node_t) = {0};
+    id_node_t *node;
+    ogs_pool_id_t id;
+
+    ogs_pool_init(&pool, 1);
+    ogs_pool_alloc(&pool, &node);
+    ABTS_PTR_NOTNULL(tc, node);
+    id = node->id = 1;
+    ogs_hash_set(pool.id_hash, &node->id, sizeof(node->id), node);
+    ABTS_PTR_EQUAL(tc, node, ogs_pool_find_by_id(&pool, id));
+    /* Shutdown may leave an ID entry; its key must outlive hash teardown. */
+    ogs_pool_final(&pool);
+
+    ogs_pool_create(&pool, 1);
+    ogs_pool_alloc(&pool, &node);
+    ABTS_PTR_NOTNULL(tc, node);
+    id = node->id = 1;
+    ogs_hash_set(pool.id_hash, &node->id, sizeof(node->id), node);
+    ABTS_PTR_EQUAL(tc, node, ogs_pool_find_by_id(&pool, id));
+    ogs_pool_destroy(&pool);
+}
+
 abts_suite *test_pool(abts_suite *suite)
 {
     suite = ADD_SUITE(suite)
@@ -235,6 +260,7 @@ abts_suite *test_pool(abts_suite *suite)
     abts_run_test(suite, test1_func, NULL);
     abts_run_test(suite, test2_func, NULL);
     abts_run_test(suite, test3_func, NULL);
+    abts_run_test(suite, test_id_pool_teardown, NULL);
 
     return suite;
 }

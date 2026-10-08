@@ -33,13 +33,11 @@ void test_context_init(void)
     int rv;
     const char *gnb1 = "127.0.0.2", *gnb2 = "127.0.0.3";
 
-    /* External forwarding matrix may need routable, non-loopback endpoints. */
-    if (getenv("XCN_FORWARDING_MATRIX_ONLY")) {
-        if (getenv("XCN_FORWARDING_GNB1_ADDR"))
-            gnb1 = getenv("XCN_FORWARDING_GNB1_ADDR");
-        if (getenv("XCN_FORWARDING_GNB2_ADDR"))
-            gnb2 = getenv("XCN_FORWARDING_GNB2_ADDR");
-    }
+    /* External/VPP forwarding tests need routable, non-loopback endpoints. */
+    if (getenv("XCN_FORWARDING_GNB1_ADDR"))
+        gnb1 = getenv("XCN_FORWARDING_GNB1_ADDR");
+    if (getenv("XCN_FORWARDING_GNB2_ADDR"))
+        gnb2 = getenv("XCN_FORWARDING_GNB2_ADDR");
 
     ogs_assert(context_initialized == 0);
 

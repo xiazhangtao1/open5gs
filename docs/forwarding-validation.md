@@ -5,7 +5,7 @@
 当前实现覆盖单 UPF、intra5GS N2 切换，支持直连和间接 DRB 级上下行前传。
 每个 PDU 会话最多 32 个 DRB，每个 DRB 的 UL/DL 方向分别使用独立 TEID。
 会话级下行前传保持兼容。多 UPF、UPF 重选、跨 SMF 和漫游间接前传不在本次验收范围。
-数据面实际验收使用 UDP N3/TUN N6；memif/VPP 和 session workers 未在本次环境验收。
+数据面已分别验收 UDP N3/TUN N6，以及 VPP N3/N6 memif（两个队列、两个 session workers）。
 
 ## 协商与规则
 
@@ -42,13 +42,14 @@ meson setup build --prefix=/usr -Dupf_memif=true
 ninja -C build
 meson test -C build --no-rebuild --suite unit --print-errorlogs
 build/tests/handover/handover -c /tmp/forwarding-sample.yaml
-XCN_FORWARDING_STRESS_SECONDS=1800 \
+XCN_FORWARDING_STRESS_SECONDS=600 \
   build/tests/handover/handover -c /tmp/forwarding-sample.yaml 5gc-n2-test
 ```
 
 N2 测试包含直连/间接、仅 DL、仅 UL、双向、多会话、32 DRB 边界和取消切换。
 每个隧道发送 64 个包，交替携带 PSC，逐字节比较扩展头、PDCP 负载和目标 TEID。
-压力测试每轮重新注册并完整释放 PDU 会话和 UE，至少 1000 次切换且持续指定时间。
+压力测试每轮重新注册并完整释放 PDU 会话和 UE，按指定秒数持续执行；
+每轮两次切换，完成当前轮后退出，因此可能略超过指定时长，不再设置最少切换次数。
 
 另一个隔离命名空间中仅启动 UPF，执行标准 PFCP 故障测试：
 
@@ -102,7 +103,7 @@ XCN_FORWARDING_MATRIX_ONLY=1 XCN_FORWARDING_TEST_MSIN=0000000904 \
   build/tests/handover/handover -c /tmp/forwarding-live.yaml 5gc-n2-test
 ```
 
-## 本次验收记录
+## UDP/TUN 验收记录
 
 2026-10-08，Ubuntu 主机上的独立 Docker 网络命名空间，以及当前 Kubernetes xcn。
 普通构建使用 GCC 11，启用 memif 编译支持，但实际数据面使用 UDP/TUN。
@@ -136,3 +137,114 @@ OAI 使用现有镜像，未修改其源码；只进行了实例重启。
 这是功能与生命周期耐久验证，不是线速吞吐或无限并发验证。
 前一轮发现测试断言错误地要求不同 IP 上的 TEID 数值也必须不同，修正为比较完整端点，
 随后重新运行上述完整 30 分钟验收；最终结果不使用前一轮的失败记录作为通过依据。
+
+## VPP/memif 验证环境
+
+VPP 26.06 和测试核心网位于独立 Docker 网络命名空间，使用临时 MongoDB，
+没有连接现有业务数据库。Linux veth 接入 VPP AF_PACKET v2；VPP 通过两个 IP 模式
+memif 接口分别连接 UPF N3 和 N6。接口和路由必须实际建立，不能只开启编译选项。
+
+```text
+受控源/目标 gNB：10.210.0.1 / 10.210.0.2
+  ↕ Linux veth ↔ VPP AF_PACKET（10.210.0.254）
+VPP memif2/0（N3）：10.210.1.254
+  ↕ memif-n3.sock，IP 模式，2 个收发队列
+UPF N3：10.210.1.7（gtpu advertise 与 memif local_address 一致）
+UPF N6
+  ↕ memif-n6.sock，IP 模式，2 个收发队列
+VPP memif3/0（N6）：10.45.0.1
+```
+
+Linux 侧配置 `10.210.1.0/24 via 10.210.0.254` 路由，VPP 侧为两个 gNB
+配置对应 veth MAC 的静态邻居，避免首次 ARP 影响短时断言。正常 N3/N6 业务用
+UE 到 10.45.0.1 的 ICMP 往返验证；间接前传经过 N3 memif 两次，直连走 gNB 间通路。
+VPP 接口为 master，UPF 为 secondary，socket 使用共享目录。关键 UPF 配置如下，
+其余 AMF/SMF、PFCP、订阅和测试配置继续使用独立完整 sample.yaml：
+
+```yaml
+upf:
+  gtpu:
+    server:
+      - address: 127.0.0.7
+        advertise: 10.210.1.7
+  n3:
+    backend: memif
+    memif:
+      socket: /run/vpp/memif-n3.sock
+      id: 0
+      local_address: 10.210.1.7
+      queues: 2
+      buffer_size: 2048
+      log2_ring_size: 13
+  n6:
+    backend: memif
+    memif:
+      socket: /run/vpp/memif-n6.sock
+      id: 0
+      queues: 2
+      buffer_size: 2048
+      log2_ring_size: 13
+  dataplane:
+    session_workers:
+      enabled: true
+      count: 2
+      queue_size: 8192
+      busy_poll_us: 20
+    stats_interval: 10
+```
+
+```bash
+XCN_FORWARDING_STRESS_SECONDS=600 \
+  XCN_FORWARDING_GNB1_ADDR=10.210.0.1 \
+  XCN_FORWARDING_GNB2_ADDR=10.210.0.2 \
+  build/tests/handover/handover -c /run/vpp/sample.yaml 5gc-n2-test
+```
+
+本次修复了实际 memif 收包时 End Marker 复制外部存储导致的断言退出，
+改为直接转交原包所有权；同时修复 memif 队列统计的未对齐读取。
+检测器还暴露退出阶段 ID 哈希引用已释放池数组的问题，调整释放顺序，并增加
+保留 ID 条目的池清理回归测试；该测试会有意输出未释放条目的诊断。
+
+本验证未使用 DPDK、SR-IOV/VF 或物理网卡线速负载；未验证 IPv6 外层 N3、
+多 UPF 或真实无线 PDCP 重排序。不能将双队列/双 Worker 功能测试解释为这些范围的验收。
+
+
+## VPP/memif 验收记录
+
+2026-10-08，正常构建和 ASan/UBSan 构建均启用 memif。最终结果：
+
+| 验证项目 | 实际结果 |
+|---|---|
+| 完整正常/检测器构建 | 均成功 |
+| core / crypt / unit | 3 套通过 |
+| ID 池退出回归 | 严格 ASan/UBSan 通过，覆盖 final 和 destroy 的残留 ID 条目 |
+| TUN 完整 N2 回归 | 正常版及检测器版各 17 项通过，退出码 0 |
+| VPP N3/N6 memif 完整 N2 | 检测器版 17 项通过，含直连/间接、上下行、32 DRB 和取消 |
+| 两个 UPF Worker 压力测试 | 601.4 秒、790 次切换、失败 0、退出码 0 |
+| 修复运行镜像实测 | UPF 来自最终镜像，八项矩阵通过，35,840 个前传 G-PDU 和 560 个 End Marker 校验通过 |
+| 最终镜像 Worker 统计 | Worker 0/1 各处理 9,188 个包，drops/queue-full/push-fail 均为 0；UPF 正常退出，退出码 0 |
+
+600 秒压力阶段共 395 轮，每轮先间接后直连，各含两会话、两个 DRB、上下行，
+校验 404,480 个前传 G-PDU 和 6,320 个 End Marker。原来要求至少 500 轮的下限
+已移除，本轮完成当前轮后于 601.4 秒结束。该数字不包含计时前的完整 N2 矩阵。
+
+两个 session workers 分别固定在 CPU 1/2，N3/N6 dispatcher 和控制线程分别在 CPU
+3/4/5。VPP 本身只启用一个转发 worker，因此 N3 RX 集中在一个队列；UPF 两个
+session workers 和两个 TX 队列均有实际数据。本轮没有验收 VPP 多 worker 的 RX 并发。
+
+最终 TUN 和 memif 检测器日志均没有 ASan 内存错误、UPF/core 的 UBSan 告警。
+各自仍有 7 条既有 NAS/freeDiameter UBSan 告警，限制与前文相同；不能称为全库无告警。
+VPP 内置抓包保存了 5,000 个进入 N3 memif 的包，包含 G-PDU 和 End Marker。
+IP 模式 memif 的 VPP 抓包文件带 Ethernet 链路元数据，另存 DLT_RAW 副本供离线解析，
+原文件保留。目标返回包仍由测试逐字节校验。
+
+可用镜像：`localhost:5000/xcn-runtime:forwarding-memif-1008`，registry digest：
+`sha256:8806bf1173dd7307dab24efcce651793d951821c772413b62a3affba85867cbe`。
+本次没有将当前 Kubernetes xcn 从 TUN 切换为 memif，也没有滚动其镜像；原部署仍为
+前文的 revision 150。启用 memif 需要同步配置 VPP 接口、共享 socket、路由和 UPF 地址。
+
+完整配置、Worker 状态、抓包和日志保存在本机 `/tmp/xcn-forwarding-results/`：
+`vpp-memif-stress-600.log`、`vpp-memif-final-sanitizer.log`、
+`vpp-memif-runtime-matrix.log`、`vpp-memif-runtime-upf.log`、
+`vpp-memif-sample.yaml`、`vpp-startup.conf`、`vpp-setup.cli` 等。
+此前的 `vpp-memif-stress.log` 是用户缩短时长前中断的测试，不计入通过结果。

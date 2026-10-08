@@ -666,12 +666,10 @@ static void upf_gtp_handle_n3_packet(
                     (!pdr->qfi || pdr->qfi == header_desc.qos_flow_identifier) &&
                     pdr->src_if == OGS_PFCP_INTERFACE_ACCESS && pdr->far &&
                     pdr->far->dst_if == OGS_PFCP_INTERFACE_ACCESS) {
-                    ogs_pkbuf_t *forward = ogs_pkbuf_copy(pkbuf);
-                    if (forward) {
-                        ogs_pkbuf_push(forward, len);
-                        ogs_pfcp_send_gtpu(pdr, forward);
-                    }
-                    break;
+                    /* Transfer ownership; memif uses external packet storage. */
+                    ogs_pkbuf_push(pkbuf, len);
+                    ogs_pfcp_send_gtpu(pdr, pkbuf);
+                    return;
                 }
             }
         }

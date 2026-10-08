@@ -793,14 +793,17 @@ void upf_n3_memif_log_stats(void)
                 (unsigned long long)__atomic_load_n(
                     &state[i].tx_burst_gap_gt_100us, __ATOMIC_RELAXED));
         if (details_valid && i < details.tx_queues_num) {
-            memif_queue_details_t *tx = &details.tx_queues[i];
-            uint16_t used = tx->head - tx->tail;
+            memif_queue_details_t tx;
+            /* libmemif packs queue details after variable-length strings. */
+            memcpy(&tx, (const char *)details.tx_queues + i * sizeof(tx),
+                    sizeof(tx));
+            uint16_t used = tx.head - tx.tail;
             uint32_t free_slots =
-                used <= tx->ring_size ? tx->ring_size - used : 0;
+                used <= tx.ring_size ? tx.ring_size - used : 0;
 
             ogs_info("N3 memif TX qid:%u ring-snapshot "
                     "[size:%u head:%u tail:%u used:%u free:%u]",
-                    i, tx->ring_size, tx->head, tx->tail,
+                    i, tx.ring_size, tx.head, tx.tail,
                     used, free_slots);
         }
     }

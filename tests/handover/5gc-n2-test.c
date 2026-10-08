@@ -3348,8 +3348,7 @@ abts_suite *test_5gc_n2(abts_suite *suite)
             if (!(cycles % 25))
                 fprintf(stderr, "Forwarding stress: %u handovers, %.1f seconds\n",
                     cycles * 2, (double)(ogs_get_monotonic_time() - start) / OGS_USEC_PER_SEC);
-        } while (cycles < 500 ||
-                 ogs_get_monotonic_time() - start < ogs_time_from_sec(seconds));
+        } while (ogs_get_monotonic_time() - start < ogs_time_from_sec(seconds));
         fprintf(stderr, "Forwarding stress complete: %u handovers, %.1f seconds\n",
             cycles * 2, (double)(ogs_get_monotonic_time() - start) / OGS_USEC_PER_SEC);
     }

@@ -77,12 +77,12 @@ typedef int32_t ogs_pool_id_t;
     if (((pool)->size != (pool)->avail)) \
         ogs_error("%d in '%s[%d]' were not released.", \
                 (pool)->size - (pool)->avail, (pool)->name, (pool)->size); \
+    /* ID hash keys point into array; destroy them before array. */ \
+    ogs_assert((pool)->id_hash); \
+    ogs_hash_destroy((pool)->id_hash); \
     free((pool)->free); \
     free((pool)->array); \
     free((pool)->index); \
-    \
-    ogs_assert((pool)->id_hash); \
-    ogs_hash_destroy((pool)->id_hash); \
 } while (0)
 
 /*
@@ -121,12 +121,12 @@ typedef int32_t ogs_pool_id_t;
     if (((pool)->size != (pool)->avail)) \
         ogs_error("%d in '%s[%d]' were not released.", \
                 (pool)->size - (pool)->avail, (pool)->name, (pool)->size); \
+    /* ID hash keys point into array; destroy them before array. */ \
+    ogs_assert((pool)->id_hash); \
+    ogs_hash_destroy((pool)->id_hash); \
     ogs_free((pool)->free); \
     ogs_free((pool)->array); \
     ogs_free((pool)->index); \
-    \
-    ogs_assert((pool)->id_hash); \
-    ogs_hash_destroy((pool)->id_hash); \
 } while (0)
 
 #define ogs_pool_alloc(pool, node) do { \
