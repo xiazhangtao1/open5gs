@@ -482,6 +482,7 @@ typedef struct test_bearer_s {
     uint32_t        index;
 
     uint8_t         qfi;            /* 5GC */
+    ogs_qos_t       qos;            /* Decoded NGAP QoS profile */
     uint8_t         ebi;            /* EPC */
 
     uint32_t        sgw_s1u_teid;   /* SGW-S1U TEID */

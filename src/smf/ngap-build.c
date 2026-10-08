@@ -20,7 +20,7 @@
 #include "ngap-build.h"
 
 /**
- * Fill common QoS flow level parameters: 5QI, ARP, and optional GBR/MBR.
+ * Fill common QoS flow parameters: 5QI, scheduling priority, ARP and GBR/MBR.
  */
 static void fill_qos_level_parameters(
     NGAP_QosFlowLevelQosParameters_t *params,
@@ -52,6 +52,13 @@ static void fill_qos_level_parameters(
     qosCharacteristics->present = NGAP_QosCharacteristics_PR_nonDynamic5QI;
 
     nonDynamic5QI->fiveQI = qos->index;
+    if (qos->priority_level) {
+        ogs_assert(qos->priority_level <= 127);
+        nonDynamic5QI->priorityLevelQos =
+            CALLOC(1, sizeof(*nonDynamic5QI->priorityLevelQos));
+        ogs_assert(nonDynamic5QI->priorityLevelQos);
+        *nonDynamic5QI->priorityLevelQos = qos->priority_level;
+    }
 
     /* Optional GBR/MBR Information */
     if (include_gbr &&
@@ -320,6 +327,9 @@ ogs_pkbuf_t *ngap_build_pdu_session_resource_setup_request_transfer(
         memset(&qos, 0, sizeof(qos));
 
         qos.index = qosFlowProfile->_5qi;
+        if (qosFlowProfile->non_dynamic5_qi &&
+            qosFlowProfile->non_dynamic5_qi->is_priority_level)
+            qos.priority_level = qosFlowProfile->non_dynamic5_qi->priority_level;
         ogs_assert(qosFlowProfile->arp);
         qos.arp.priority_level = qosFlowProfile->arp->priority_level;
         if (qosFlowProfile->arp->preempt_cap ==
@@ -422,6 +432,10 @@ ogs_pkbuf_t *ngap_build_pdu_session_resource_modify_request_transfer(
                     memset(&qos, 0, sizeof(qos));
 
                     qos.index = qosFlowProfile->_5qi;
+                    if (qosFlowProfile->non_dynamic5_qi &&
+                        qosFlowProfile->non_dynamic5_qi->is_priority_level)
+                        qos.priority_level =
+                            qosFlowProfile->non_dynamic5_qi->priority_level;
                     ogs_assert(qosFlowProfile->arp);
                     qos.arp.priority_level =
                         qosFlowProfile->arp->priority_level;

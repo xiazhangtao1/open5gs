@@ -568,6 +568,14 @@ void smf_sbi_send_pdu_session_created_data(
     ogs_assert(qosFlowProfile);
     qosFlowProfile->arp = Arp;
     qosFlowProfile->_5qi = qos_flow->qos.index;
+    if (qos_flow->qos.priority_level) {
+        qosFlowProfile->non_dynamic5_qi =
+            ogs_calloc(1, sizeof(*qosFlowProfile->non_dynamic5_qi));
+        ogs_assert(qosFlowProfile->non_dynamic5_qi);
+        qosFlowProfile->non_dynamic5_qi->is_priority_level = true;
+        qosFlowProfile->non_dynamic5_qi->priority_level =
+            qos_flow->qos.priority_level;
+    }
 
     qosFlowSetupItem->qos_flow_profile = qosFlowProfile;
 

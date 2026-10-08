@@ -1021,6 +1021,40 @@ static void sbi_message_test10(abts_case *tc, void *param)
     }
 }
 
+static void qos_priority_test(abts_case *tc, void *data)
+{
+    ogs_pcc_rule_t rule = {0};
+    const uint8_t priorities[] = {0, 1, 20, 127};
+    unsigned int i;
+
+    rule.id = "priority-test";
+    rule.qos.index = 2;
+    rule.qos.arp.priority_level = 8;
+    rule.qos.arp.pre_emption_capability = OGS_5GC_PRE_EMPTION_DISABLED;
+    rule.qos.arp.pre_emption_vulnerability = OGS_5GC_PRE_EMPTION_ENABLED;
+    for (i = 0; i < OGS_ARRAY_SIZE(priorities); i++) {
+        OpenAPI_qos_data_t *built, *parsed;
+        cJSON *json, *priority;
+
+        rule.qos.priority_level = priorities[i];
+        built = ogs_sbi_build_qos_data(&rule);
+        ogs_assert(built);
+        json = OpenAPI_qos_data_convertToJSON(built);
+        ogs_assert(json);
+        priority = cJSON_GetObjectItemCaseSensitive(json, "priorityLevel");
+        ABTS_INT_EQUAL(tc, priorities[i] != 0, priority != NULL);
+        parsed = OpenAPI_qos_data_parseFromJSON(json);
+        ogs_assert(parsed);
+        ABTS_INT_EQUAL(tc, priorities[i] != 0, parsed->is_priority_level);
+        ABTS_INT_EQUAL(tc, priorities[i], parsed->priority_level);
+        ABTS_INT_EQUAL(tc, 8, parsed->arp->priority_level);
+        ABTS_INT_EQUAL(tc, 2, parsed->_5qi);
+        OpenAPI_qos_data_free(parsed);
+        cJSON_Delete(json);
+        ogs_sbi_free_qos_data(built);
+    }
+}
+
 abts_suite *test_sbi_message(abts_suite *suite)
 {
     suite = ADD_SUITE(suite)
@@ -1035,6 +1069,7 @@ abts_suite *test_sbi_message(abts_suite *suite)
     abts_run_test(suite, sbi_message_test8, NULL);
     abts_run_test(suite, sbi_message_test9, NULL);
     abts_run_test(suite, sbi_message_test10, NULL);
+    abts_run_test(suite, qos_priority_test, NULL);
 
     return suite;
 }

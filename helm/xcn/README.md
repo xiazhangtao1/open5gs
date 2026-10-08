@@ -555,6 +555,7 @@ curl --http2-prior-knowledge -sS -i -X POST \
     ],
     "qos": {
       "5qi": 2,
+      "priorityLevel": 20,
       "arp": {
         "priorityLevel": 8,
         "preemptionCapability": "NOT_PREEMPT",
@@ -569,6 +570,20 @@ curl --http2-prior-knowledge -sS -i -X POST \
 ```
 
 The request is translated inside PCF into the normal policy authorization path and triggers SM policy/session modification when the target UE session exists. Required fields are `supi`, `pduSessionId`, and `flowDescriptions`. `mediaType` is still supported for legacy automatic QoS mapping (`audio` -> 5QI 1, `video` -> 5QI 2, `control` -> 5QI 5). New callers can directly specify `qos.5qi` or `qos.index`, `qos.arp.priorityLevel`, `qos.arp.preemptionCapability`, `qos.arp.preemptionVulnerability`, `qos.maxbrDl`, `qos.maxbrUl`, `qos.gbrDl`, and `qos.gbrUl`. Legacy top-level bandwidth fields `marBwDl`, `marBwUl`, `mirBwDl`, `mirBwUl`, `rrBw`, and `rsBw` are also supported.
+
+`qos.priorityLevel` optionally overrides the 5QI scheduling priority. It accepts
+an integer from `1` to `127`, with lower values meaning higher priority, and is
+independent of the admission/preemption priority `qos.arp.priorityLevel` (`1..15`).
+For example, add `"priorityLevel": 20` beside `"5qi": 2` to override the standard
+5QI 2 default priority of 40. When omitted, NGAP contains no explicit scheduling
+priority and the RAN uses the standardized or pre-configured 5QI default. Query
+responses include `pccRules[].qos.priorityLevel` only for an explicit override.
+Invalid values, including fractions, strings and `null`, return HTTP 400.
+PATCH replaces the complete QoS configuration: omitting `qos.priorityLevel`
+clears an existing override and restores use of the 5QI default. Keep sending the
+required `qos.5qi` and `flowDescriptions`, including when only changing priority.
+See [the implementation validation record](../../docs/qos-priority-validation.md)
+for protocol, concurrency and regression test results.
 
 The target session can be selected by `ueIp`, `ngapId` + `pduSessionId`, or the legacy `supi` + `pduSessionId` pair. If multiple selectors are present, PCF uses only the highest priority selector: `ueIp` first, then NGAP ID + `pduSessionId`, then `supi` + `pduSessionId`. An NGAP ID identifies the UE connection, not a PDU session, so `pduSessionId` is required with `ngapId`, `amfUeNgapId`, or `ranUeNgapId`. `ngapId` matches AMF UE NGAP ID first and then RAN UE NGAP ID.
 
@@ -595,6 +610,7 @@ curl --http2-prior-knowledge -sS -i -X PATCH \
     ],
     "qos": {
       "5qi": 3,
+      "priorityLevel": 30,
       "arp": {
         "priorityLevel": 9,
         "preemptionCapability": "NOT_PREEMPT",

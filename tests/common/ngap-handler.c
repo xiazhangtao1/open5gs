@@ -19,6 +19,28 @@
 
 #include "test-common.h"
 
+static void store_qos_profile(test_bearer_t *flow,
+        const NGAP_QosFlowLevelQosParameters_t *params)
+{
+    const NGAP_NonDynamic5QIDescriptor_t *descriptor;
+    if (!params)
+        return;
+    memset(&flow->qos, 0, sizeof(flow->qos));
+    flow->qos.arp.priority_level =
+        params->allocationAndRetentionPriority.priorityLevelARP;
+    if (params->qosCharacteristics.present !=
+            NGAP_QosCharacteristics_PR_nonDynamic5QI)
+        return;
+    descriptor = params->qosCharacteristics.choice.nonDynamic5QI;
+    ogs_assert(descriptor);
+    flow->qos.index = descriptor->fiveQI;
+    if (descriptor->priorityLevelQos) {
+        ogs_assert(*descriptor->priorityLevelQos >= 1 &&
+                   *descriptor->priorityLevelQos <= 127);
+        flow->qos.priority_level = *descriptor->priorityLevelQos;
+    }
+}
+
 void testngap_handle_ng_setup_response(
         test_ue_t *test_ue, ogs_ngap_message_t *message)
 {
@@ -228,6 +250,8 @@ void testngap_handle_initial_context_setup_request(
 
                         qos_flow->qfi =
                             QosFlowSetupRequestItem->qosFlowIdentifier;
+                        store_qos_profile(qos_flow,
+                            &QosFlowSetupRequestItem->qosFlowLevelQosParameters);
                     }
                     break;
                 case NGAP_ProtocolIE_ID_id_UL_NGU_UP_TNLInformation:
@@ -415,6 +439,8 @@ void testngap_handle_pdu_session_resource_setup_request(
 
                         qos_flow->qfi =
                             QosFlowSetupRequestItem->qosFlowIdentifier;
+                        store_qos_profile(qos_flow,
+                            &QosFlowSetupRequestItem->qosFlowLevelQosParameters);
                     }
                     break;
                 case NGAP_ProtocolIE_ID_id_UL_NGU_UP_TNLInformation:
@@ -534,6 +560,9 @@ void testngap_handle_pdu_session_resource_modify_request(
 
                             qos_flow->qfi = QosFlowAddOrModifyRequestItem->
                                                 qosFlowIdentifier;
+                            store_qos_profile(qos_flow,
+                                QosFlowAddOrModifyRequestItem->
+                                    qosFlowLevelQosParameters);
                         }
                         break;
                     default:

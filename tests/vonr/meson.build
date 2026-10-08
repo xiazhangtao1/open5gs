@@ -22,6 +22,7 @@ test5gc_vonr_sources = files('''
     simple-test.c
     af-test.c
     video-test.c
+    dedicated-bearer-test.c
 '''.split())
 
 test5gc_vonr_exe = executable('vonr',

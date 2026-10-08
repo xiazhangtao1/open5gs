@@ -695,6 +695,14 @@ ogs_sbi_request_t *smf_nsmf_pdusession_build_vsmf_update_data(
                 ogs_assert(qosFlowProfile);
                 qosFlowProfile->arp = Arp;
                 qosFlowProfile->_5qi = qos_flow->qos.index;
+                if (qos_flow->qos.priority_level) {
+                    qosFlowProfile->non_dynamic5_qi =
+                        ogs_calloc(1, sizeof(*qosFlowProfile->non_dynamic5_qi));
+                    ogs_assert(qosFlowProfile->non_dynamic5_qi);
+                    qosFlowProfile->non_dynamic5_qi->is_priority_level = true;
+                    qosFlowProfile->non_dynamic5_qi->priority_level =
+                        qos_flow->qos.priority_level;
+                }
                 qosFlowProfile->gbr_qos_flow_info = gbrQosFlowInfo;
 
                 qosFlowAddModRequestItem =

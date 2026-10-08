@@ -27,10 +27,12 @@ testunit_unit_sources = files('''
     crash-test.c
     ipfw-test.c
     precedence-test.c
+    qos-priority-test.c
 '''.split())
 
 testunit_unit_exe = executable('unit',
     sources : testunit_unit_sources,
+    include_directories : include_directories('../../src/smf'),
     c_args : [testunit_core_cc_flags, sbi_cc_flags],
     dependencies : [libs1ap_dep,
                     libgtp_dep,
@@ -39,6 +41,7 @@ testunit_unit_exe = executable('unit',
                     libnas_5gs_dep,
                     libipfw_dep,
                     libpcf_dep,
+                    libsmf_dep,
                     libsbi_dep])
 
 test('unit', testunit_unit_exe, is_parallel : false, suite: 'unit')

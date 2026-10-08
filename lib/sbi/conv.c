@@ -1568,8 +1568,8 @@ OpenAPI_qos_data_t *ogs_sbi_build_qos_data(ogs_pcc_rule_t *pcc_rule)
 
     QosData->is__5qi = true;
     QosData->_5qi = pcc_rule->qos.index;
-    QosData->is_priority_level = true;
-    QosData->priority_level = pcc_rule->qos.arp.priority_level;
+    QosData->is_priority_level = pcc_rule->qos.priority_level != 0;
+    QosData->priority_level = pcc_rule->qos.priority_level;
 
     QosData->arp = ogs_calloc(1, sizeof(OpenAPI_arp_t));
     ogs_assert(QosData->arp);

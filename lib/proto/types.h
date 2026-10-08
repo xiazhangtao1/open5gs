@@ -463,6 +463,8 @@ typedef struct ogs_qos_s {
 #define OGS_QOS_INDEX_2                                       2
 #define OGS_QOS_INDEX_5                                       5
     uint8_t         index;
+    /* 5QI scheduling priority (1..127); 0 means no explicit override. */
+    uint8_t         priority_level;
 
     struct {
     /* Values 1 to 8 should only be assigned for services that are

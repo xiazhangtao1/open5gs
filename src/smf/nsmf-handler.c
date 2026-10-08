@@ -1951,6 +1951,10 @@ bool smf_nsmf_handle_created_data_in_vsmf(
             qosFlowProfile = src->qos_flow_profile;
             if (!qosFlowProfile ||
                 !qosFlowProfile->_5qi ||
+                (qosFlowProfile->non_dynamic5_qi &&
+                 qosFlowProfile->non_dynamic5_qi->is_priority_level &&
+                 (qosFlowProfile->non_dynamic5_qi->priority_level < 1 ||
+                  qosFlowProfile->non_dynamic5_qi->priority_level > 127)) ||
                 !qosFlowProfile->arp ||
                 !qosFlowProfile->arp->priority_level ||
                 !(qosFlowProfile->arp->preempt_cap ==
@@ -2429,6 +2433,10 @@ bool smf_nsmf_handle_update_data_in_vsmf(
             qosFlowProfile = src->qos_flow_profile;
             if (!qosFlowProfile ||
                 !qosFlowProfile->_5qi ||
+                (qosFlowProfile->non_dynamic5_qi &&
+                 qosFlowProfile->non_dynamic5_qi->is_priority_level &&
+                 (qosFlowProfile->non_dynamic5_qi->priority_level < 1 ||
+                  qosFlowProfile->non_dynamic5_qi->priority_level > 127)) ||
                 !qosFlowProfile->arp ||
                 !qosFlowProfile->arp->priority_level ||
                 !(qosFlowProfile->arp->preempt_cap ==

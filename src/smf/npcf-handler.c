@@ -183,6 +183,15 @@ static void update_authorized_pcc_rule_and_qos(
                 continue;
             }
 
+            if (QosData->is_priority_level &&
+                !QosData->is_priority_level_null &&
+                (QosData->priority_level < 1 ||
+                 QosData->priority_level > 127)) {
+                ogs_error("Invalid 5QI priority level [%d]",
+                        QosData->priority_level);
+                continue;
+            }
+
             pcc_rule->type = OGS_PCC_RULE_TYPE_INSTALL;
             pcc_rule->id = ogs_strdup(PccRule->pcc_rule_id);
             ogs_assert(pcc_rule->id);
@@ -240,7 +249,9 @@ static void update_authorized_pcc_rule_and_qos(
             }
 
             pcc_rule->qos.index = QosData->_5qi;
-            pcc_rule->qos.arp.priority_level = QosData->priority_level;
+            pcc_rule->qos.priority_level =
+                QosData->is_priority_level && !QosData->is_priority_level_null ?
+                QosData->priority_level : 0;
 
             if (QosData->arp) {
                 pcc_rule->qos.arp.priority_level = QosData->arp->priority_level;

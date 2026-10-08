@@ -480,7 +480,8 @@ static bool xcn_parse_qos_override(
         cJSON *item, ogs_pcc_rule_t *pcc_rule, const char **error_detail)
 {
     cJSON *qos = NULL, *arp = NULL;
-    int qos_index = 0, priority_level = 8, precedence = -1;
+    int qos_index = 0, priority_level = 8, qos_priority_level = 0;
+    int precedence = -1;
     const char *value = NULL;
 
     ogs_assert(item);
@@ -500,6 +501,19 @@ static bool xcn_parse_qos_override(
     if (qos_index <= 0 || qos_index > UINT8_MAX) {
         *error_detail = "qos.5qi or qos.index must be 1..255";
         return false;
+    }
+
+    {
+        cJSON *value = cJSON_GetObjectItemCaseSensitive(qos, "priorityLevel");
+        if (value) {
+            if (!cJSON_IsNumber(value) ||
+                !(value->valuedouble >= 1 && value->valuedouble <= 127) ||
+                value->valuedouble > value->valueint) {
+                *error_detail = "qos.priorityLevel must be an integer in 1..127";
+                return false;
+            }
+            qos_priority_level = value->valueint;
+        }
     }
 
     arp = cJSON_GetObjectItemCaseSensitive(qos, "arp");
@@ -532,6 +546,7 @@ static bool xcn_parse_qos_override(
     memset(pcc_rule, 0, sizeof(*pcc_rule));
     pcc_rule->id = (char *)XCN_SVC_DEDICATED_BEARER;
     pcc_rule->qos.index = (uint8_t)qos_index;
+    pcc_rule->qos.priority_level = (uint8_t)qos_priority_level;
     pcc_rule->qos.arp.priority_level = (uint8_t)priority_level;
 
     value = arp ? xcn_json_string_from_any(arp,
@@ -2851,6 +2866,9 @@ static cJSON *xcn_pcc_rule_to_json(ogs_pcc_rule_t *pcc_rule)
     qos = cJSON_AddObjectToObject(item, "qos");
     ogs_assert(qos);
     cJSON_AddNumberToObject(qos, "5qi", pcc_rule->qos.index);
+    if (pcc_rule->qos.priority_level)
+        cJSON_AddNumberToObject(qos, "priorityLevel",
+                pcc_rule->qos.priority_level);
 
     arp = cJSON_AddObjectToObject(qos, "arp");
     ogs_assert(arp);

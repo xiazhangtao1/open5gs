@@ -770,6 +770,8 @@ bool smf_qos_flow_binding(smf_sess_t *sess)
 
             if (qos_flow_created == false && xcn_dedicated &&
                 (qos_flow->qos.index != pcc_rule->qos.index ||
+                 qos_flow->qos.priority_level !=
+                    pcc_rule->qos.priority_level ||
                  qos_flow->qos.arp.priority_level !=
                     pcc_rule->qos.arp.priority_level ||
                  qos_flow->qos.arp.pre_emption_capability !=
