@@ -31,9 +31,11 @@ helm template xcn helm/xcn
 ```
 
 For the selected lightweight approach, see the Chinese
-[RANNodeName admission design](../../docs/gnb-ran-node-name-admission-design.md).
-It describes exact device-name matching, identity bindings, and the proposed
-AMF checks. Those checks and the new AMF/Chart options are not implemented yet.
+[RANNodeName HMAC admission design](../../docs/gnb-ran-node-name-hmac-admission-design.md).
+It specifies per-device keys, timestamps, nonces, HMAC verification, and replay
+protection. The earlier
+[fixed-name design](../../docs/gnb-ran-node-name-admission-design.md) is retained
+for comparison. The proposed gNB/AMF checks and Chart options are not implemented yet.
 
 For device certificates, IPsec admission, device authorization, and the proposed
 AMF/Helm integration, see the Chinese
