@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="700" viewBox="0 0 1200 700" role="img" aria-labelledby="title desc">
+  <title id="title">一次基站接入的认证时序</title>
+  <desc id="desc">基站生成时间和新随机数，用本地密钥计算 HMAC，发送接入申请。AMF 核验身份、HMAC、时间和随机数，记录已使用随机数并继续原有业务检查，全部通过后批准当前连接，任一步失败则拒绝。</desc>
+  <defs>
+    <marker id="blue" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0L8 4L0 8Z" fill="#2563eb"/></marker>
+    <marker id="green" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0L8 4L0 8Z" fill="#059669"/></marker>
+  </defs>
+  <rect width="1200" height="700" rx="20" fill="#f8fafc"/>
+  <g font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" fill="#0f172a">
+    <text x="40" y="45" font-size="28" font-weight="700">一次连接，从申请到放行</text>
+    <text x="40" y="75" font-size="17" fill="#475569">密钥不传输；每次新的接入申请都使用新凭据。</text>
+    <rect x="120" y="109" width="280" height="67" rx="12" fill="#dbeafe" stroke="#60a5fa"/>
+    <text x="260" y="137" font-size="23" font-weight="700" text-anchor="middle">基站</text>
+    <text x="260" y="161" font-size="15" text-anchor="middle" fill="#475569">保存本设备密钥</text>
+    <rect x="800" y="109" width="280" height="67" rx="12" fill="#dbeafe" stroke="#60a5fa"/>
+    <text x="940" y="137" font-size="23" font-weight="700" text-anchor="middle">核心网 AMF</text>
+    <text x="940" y="161" font-size="15" text-anchor="middle" fill="#475569">保存设备名单和对应密钥</text>
+    <path d="M260 176V610M940 176V610" stroke="#94a3b8" stroke-width="2" stroke-dasharray="7 6"/>
+    <rect x="100" y="207" width="320" height="88" rx="12" fill="#eff6ff" stroke="#93c5fd"/>
+    <text x="260" y="237" font-size="20" text-anchor="middle">① 准备本次凭据</text>
+    <text x="260" y="263" font-size="18" text-anchor="middle">当前时间 + 新随机数</text>
+    <text x="260" y="285" font-size="16" text-anchor="middle" fill="#475569">用本地密钥计算 HMAC</text>
+    <path d="M260 326H940" stroke="#2563eb" stroke-width="3" marker-end="url(#blue)"/>
+    <text x="600" y="315" font-size="19" text-anchor="middle" fill="#1d4ed8">② 接入申请：身份 + 时间 + 随机数 + HMAC</text>
+    <rect x="790" y="354" width="300" height="100" rx="12" fill="#eff6ff" stroke="#93c5fd"/>
+    <text x="940" y="385" font-size="20" text-anchor="middle">③ 核验设备与凭据</text>
+    <text x="940" y="412" font-size="16" text-anchor="middle">身份、HMAC、时间、随机数</text>
+    <text x="940" y="438" font-size="16" text-anchor="middle" fill="#475569">不通过就拒绝</text>
+    <rect x="790" y="483" width="300" height="73" rx="12" fill="#ecfdf5" stroke="#6ee7b7"/>
+    <text x="940" y="513" font-size="20" text-anchor="middle">④ 记住已用随机数</text>
+    <text x="940" y="540" font-size="17" text-anchor="middle" fill="#475569">继续检查原有业务条件</text>
+    <path d="M940 593H260" stroke="#059669" stroke-width="3" marker-end="url(#green)"/>
+    <text x="600" y="579" font-size="20" text-anchor="middle" fill="#047857">⑤ 全部通过，允许当前连接接入</text>
+    <rect x="40" y="633" width="1120" height="46" rx="12" fill="#fff1f2" stroke="#fda4af"/>
+    <text x="600" y="662" font-size="18" text-anchor="middle" fill="#be123c">任一步失败：拒绝接入；基站等待后用新凭据重新申请</text>
+  </g>
+</svg>

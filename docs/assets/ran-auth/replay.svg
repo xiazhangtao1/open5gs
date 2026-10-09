@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="540" viewBox="0 0 1200 540" role="img" aria-labelledby="title desc">
+  <title id="title">为什么旧抓包不能重复接入</title>
+  <desc id="desc">AMF 批准合法申请并记录其随机数之后，复制相同凭据会被随机数查重拒绝；长时间保存再发送会被时间窗口拒绝；修改时间或随机数会导致 HMAC 不匹配。尚未使用凭据的抢先提交、实时中继及密钥泄露仍是能力边界。</desc>
+  <defs>
+    <marker id="blue" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0L8 4L0 8Z" fill="#2563eb"/></marker>
+    <marker id="gray" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0L8 4L0 8Z" fill="#64748b"/></marker>
+    <marker id="green" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0L8 4L0 8Z" fill="#059669"/></marker>
+    <marker id="red" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0L8 4L0 8Z" fill="#e11d48"/></marker>
+  </defs>
+  <rect width="1200" height="540" rx="20" fill="#f8fafc"/>
+  <g font-family="Noto Sans CJK SC, Microsoft YaHei, sans-serif" fill="#0f172a">
+    <text x="40" y="45" font-size="28" font-weight="700">为什么旧抓包不能重复接入？</text>
+    <text x="40" y="75" font-size="17" fill="#475569">先看合法请求已被使用，再看复制、过期和修改三种情况。</text>
+    <rect x="48" y="106" width="280" height="62" rx="12" fill="#eff6ff" stroke="#93c5fd"/>
+    <text x="188" y="144" font-size="20" text-anchor="middle">合法基站提交本次申请</text>
+    <path d="M328 137H456" stroke="#2563eb" stroke-width="2" marker-end="url(#blue)"/>
+    <rect x="456" y="106" width="340" height="62" rx="12" fill="#ecfdf5" stroke="#6ee7b7"/>
+    <text x="626" y="144" font-size="20" text-anchor="middle">AMF 核验，并记住已用随机数</text>
+    <path d="M796 137H900" stroke="#059669" stroke-width="2" marker-end="url(#green)"/>
+    <rect x="900" y="106" width="252" height="62" rx="12" fill="#ecfdf5" stroke="#6ee7b7"/>
+    <text x="1026" y="144" font-size="20" text-anchor="middle">全部通过，允许接入</text>
+    <rect x="48" y="254" width="280" height="112" rx="14" fill="#fff7ed" stroke="#fdba74"/>
+    <text x="188" y="290" font-size="23" text-anchor="middle" fill="#9a3412">抓包者</text>
+    <text x="188" y="324" font-size="19" text-anchor="middle">复制或修改旧凭据</text>
+    <path d="M328 310H366M366 244V404" fill="none" stroke="#64748b" stroke-width="2"/>
+    <path d="M366 244H418" stroke="#64748b" stroke-width="2" marker-end="url(#gray)"/>
+    <path d="M366 324H418" stroke="#64748b" stroke-width="2" marker-end="url(#gray)"/>
+    <path d="M366 404H418" stroke="#64748b" stroke-width="2" marker-end="url(#gray)"/>
+    <rect x="418" y="215" width="300" height="58" rx="10" fill="#fff" stroke="#cbd5e1"/>
+    <text x="568" y="250" font-size="18" text-anchor="middle">原样复制，凭据已经用过</text>
+    <path d="M718 244H854" stroke="#e11d48" stroke-width="2" marker-end="url(#red)"/>
+    <rect x="854" y="215" width="298" height="58" rx="10" fill="#fff1f2" stroke="#fda4af"/>
+    <text x="1003" y="250" font-size="21" text-anchor="middle" fill="#be123c">拒绝：随机数重复</text>
+    <rect x="418" y="295" width="300" height="58" rx="10" fill="#fff" stroke="#cbd5e1"/>
+    <text x="568" y="330" font-size="18" text-anchor="middle">超过有效时间后再使用</text>
+    <path d="M718 324H854" stroke="#e11d48" stroke-width="2" marker-end="url(#red)"/>
+    <rect x="854" y="295" width="298" height="58" rx="10" fill="#fff1f2" stroke="#fda4af"/>
+    <text x="1003" y="330" font-size="21" text-anchor="middle" fill="#be123c">拒绝：时间过期</text>
+    <rect x="418" y="375" width="300" height="58" rx="10" fill="#fff" stroke="#cbd5e1"/>
+    <text x="568" y="410" font-size="17" text-anchor="middle">修改时间或随机数，冒充新申请</text>
+    <path d="M718 404H854" stroke="#e11d48" stroke-width="2" marker-end="url(#red)"/>
+    <rect x="854" y="375" width="298" height="58" rx="10" fill="#fff1f2" stroke="#fda4af"/>
+    <text x="1003" y="410" font-size="21" text-anchor="middle" fill="#be123c">拒绝：HMAC 不匹配</text>
+    <rect x="48" y="463" width="1104" height="51" rx="12" fill="#fff7ed" stroke="#fed7aa"/>
+    <text x="600" y="495" font-size="17" text-anchor="middle" fill="#9a3412">能力边界：尚未使用凭据的抢先提交、实时中继、密钥泄露，仍需要更强保护。</text>
+  </g>
+</svg>
