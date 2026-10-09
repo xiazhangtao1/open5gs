@@ -30,6 +30,12 @@ Render the manifests without installing:
 helm template xcn helm/xcn
 ```
 
+For device certificates, IPsec admission, device authorization, and the proposed
+AMF/Helm integration, see the Chinese
+[gNB access control design](../../docs/gnb-access-control-design.md). The design
+includes Ubuntu lab commands and distinguishes existing chart behavior from
+features that still need implementation.
+
 ## Common Overrides
 
 Schedule all xcn workloads on one node by its Kubernetes hostname label:
