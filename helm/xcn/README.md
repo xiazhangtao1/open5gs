@@ -30,6 +30,11 @@ Render the manifests without installing:
 helm template xcn helm/xcn
 ```
 
+For the selected lightweight approach, see the Chinese
+[RANNodeName admission design](../../docs/gnb-ran-node-name-admission-design.md).
+It describes exact device-name matching, identity bindings, and the proposed
+AMF checks. Those checks and the new AMF/Chart options are not implemented yet.
+
 For device certificates, IPsec admission, device authorization, and the proposed
 AMF/Helm integration, see the Chinese
 [gNB access control design](../../docs/gnb-access-control-design.md). The design
