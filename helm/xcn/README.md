@@ -179,10 +179,33 @@ UDP/memif or memif/TUN mixed combinations are invalid and fail Helm rendering.
 The memif mode is currently IPv4-first; the chart does not configure IPv6 N6
 routing or NAT.
 
-Keep subscriber static IPv4 addresses outside the SMF dynamic pool in both
-modes. `networking.smf.ipv4PoolRanges` optionally limits dynamic allocation
-within `10.45.0.0/16`; an empty list retains the default pool. For example, when
-existing subscribers use `10.45.0.2` and `10.45.0.3`, configure:
+`networking.ue.ipv4Subnet` and `networking.ue.ipv4Gateway` configure the shared
+UE IPv4 network in both modes. Their defaults are `10.45.0.0/16` and
+`10.45.0.1`. The chart applies them to SMF/UPF session configuration, the TUN
+interface and IPv4 masquerade rule, and the VPP N6 inner memif address/prefix.
+For a different network, for example:
+
+```yaml
+networking:
+  ue:
+    ipv4Subnet: 10.66.12.0/24
+    ipv4Gateway: 10.66.12.254
+  smf:
+    ipv4PoolRanges:
+      - 10.66.12.10-10.66.12.199
+```
+
+The subnet must be a network address with prefix `1..30`; the gateway must be
+a usable host in that subnet. `ipv4PoolRanges` accepts up to 16 non-overlapping
+`start-end` strings within the subnet, excluding the network, broadcast, and
+gateway addresses. An empty list uses the subnet's default dynamic pool; SMF
+automatically excludes network, broadcast, and gateway addresses. Invalid
+configuration fails Helm rendering before deployment.
+
+Keep subscriber static IPv4 addresses within the configured subnet, distinct
+from the gateway, and outside the dynamic pool. Helm cannot inspect subscriber
+records in MongoDB; check them before changing the network. For example, when
+retaining the defaults with static `10.45.0.2` and `10.45.0.3`, configure:
 
 ```yaml
 networking:
@@ -191,10 +214,27 @@ networking:
       - 10.45.1.2-10.45.255.254
 ```
 
+`vpp.n6.interfaceAddress` now defaults to empty and is derived from the shared
+gateway/prefix. A legacy explicit value must match the derived address when
+VPP is enabled. `vpp.n6.externalAddress` remains the external interface address;
+`vpp.n6.defaultGateway` remains its external next hop. Neither is the UE gateway.
+Updating the UE network requires upgrading the release and re-establishing UE
+sessions; existing sessions do not change addresses in place. TUN deployments
+must use a runtime image containing the updated `docker/runtime/setup.sh`.
+That script replaces the IPv4 address on its managed `ogstun` interface and
+removes the previous subnet's matching masquerade rule when the subnet changes.
+Actual TUN and two-VF memif results are recorded in
+[the UE IPv4 validation record](../../docs/ue-ipv4-validation.md).
+
 Overlapping static and dynamic allocations can replace a UE's downlink address
 lookup. Check N3/N6 addresses for ARP conflicts before enabling VPP/memif. See
 [the QoS validation record](../../docs/qos-priority-validation.md) for the actual
 two-VF, two-Worker memif deployment and dedicated-bearer tests.
+When switching from UDP/TUN to memif, remove the old host N3 alias so local
+routing does not intercept packets intended for VPP. VF reassignment can also
+change the N3 MAC address; allow peers to refresh their ARP/neighbor state before
+testing first-packet connectivity. The UE IPv4 validation record includes the
+targeted neighbor refresh used by the controlled test peer after VF restart.
 
 The old `n3.backend`, `n6.backend`, `dataplane.sessionWorkers.enabled`,
 `vpp.enabled`, `gtpu.*Address`, and `n3.memif.localAddress` values remain as

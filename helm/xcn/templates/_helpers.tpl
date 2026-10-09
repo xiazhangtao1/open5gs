@@ -2,6 +2,89 @@
 {{- printf "%s-%s" .Chart.Name .Chart.Version | replace "+" "_" | trunc 63 | trimSuffix "-" -}}
 {{- end -}}
 
+{{/* Parse a canonical dotted IPv4 address using integer arithmetic. */}}
+{{- define "xcn.ipv4Number" -}}
+{{- if not (kindIs "string" .value) -}}
+{{- fail (printf "%s must be an IPv4 address string" .path) -}}
+{{- end -}}
+{{- if not (regexMatch "^[0-9]{1,3}(\\.[0-9]{1,3}){3}$" .value) -}}
+{{- fail (printf "%s must be a dotted IPv4 address" .path) -}}
+{{- end -}}
+{{- $number := int64 0 -}}
+{{- range $octet := splitList "." .value -}}
+{{- if or (gt (atoi $octet) 255) (and (gt (len $octet) 1) (hasPrefix "0" $octet)) -}}
+{{- fail (printf "%s contains an invalid IPv4 octet" $.path) -}}
+{{- end -}}
+{{- $number = add (mul $number 256) (atoi $octet) -}}
+{{- end -}}
+{{- $number -}}
+{{- end -}}
+
+{{/* One validated IPv4 network for SMF, UPF/TUN and VPP N6. */}}
+{{- define "xcn.ueIpv4" -}}
+{{- $ue := .Values.networking.ue -}}
+{{- $subnet := $ue.ipv4Subnet -}}
+{{- if not (kindIs "string" $subnet) -}}
+{{- fail "networking.ue.ipv4Subnet must be an IPv4 CIDR string" -}}
+{{- end -}}
+{{- if not (regexMatch "^[0-9.]+/([1-9]|[12][0-9]|30)$" $subnet) -}}
+{{- fail "networking.ue.ipv4Subnet must be an IPv4 network with prefix 1..30" -}}
+{{- end -}}
+{{- $parts := splitList "/" $subnet -}}
+{{- $prefix := atoi (index $parts 1) -}}
+{{- $network := include "xcn.ipv4Number" (dict "value" (index $parts 0) "path" "networking.ue.ipv4Subnet") | int64 -}}
+{{- $size := int64 1 -}}
+{{- range until (int (sub 32 $prefix)) -}}
+{{- $size = mul $size 2 -}}
+{{- end -}}
+{{- if ne (mod $network $size) (int64 0) -}}
+{{- fail "networking.ue.ipv4Subnet must use the network address, without host bits" -}}
+{{- end -}}
+{{- $broadcast := sub (add $network $size) 1 -}}
+{{- $gateway := include "xcn.ipv4Number" (dict "value" $ue.ipv4Gateway "path" "networking.ue.ipv4Gateway") | int64 -}}
+{{- if or (le $gateway $network) (ge $gateway $broadcast) -}}
+{{- fail "networking.ue.ipv4Gateway must be a usable host address within networking.ue.ipv4Subnet" -}}
+{{- end -}}
+{{- $ranges := .Values.networking.smf.ipv4PoolRanges -}}
+{{- if not (kindIs "slice" $ranges) -}}
+{{- fail "networking.smf.ipv4PoolRanges must be a list (empty uses the default pool)" -}}
+{{- end -}}
+{{- if gt (len $ranges) 16 -}}
+{{- fail "networking.smf.ipv4PoolRanges supports at most 16 ranges" -}}
+{{- end -}}
+{{- $seen := list -}}
+{{- range $index, $range := $ranges -}}
+{{- $path := printf "networking.smf.ipv4PoolRanges[%d]" $index -}}
+{{- if not (kindIs "string" $range) -}}
+{{- fail (printf "%s must be an IPv4 start-end string" $path) -}}
+{{- end -}}
+{{- $ends := splitList "-" $range -}}
+{{- if ne (len $ends) 2 -}}
+{{- fail (printf "%s must be an IPv4 start-end string" $path) -}}
+{{- end -}}
+{{- $start := include "xcn.ipv4Number" (dict "value" (index $ends 0) "path" $path) | int64 -}}
+{{- $end := include "xcn.ipv4Number" (dict "value" (index $ends 1) "path" $path) | int64 -}}
+{{- if or (gt $start $end) (le $start $network) (ge $end $broadcast) -}}
+{{- fail (printf "%s must be ordered usable host addresses within networking.ue.ipv4Subnet" $path) -}}
+{{- end -}}
+{{- if and (le $start $gateway) (ge $end $gateway) -}}
+{{- fail (printf "%s must exclude networking.ue.ipv4Gateway" $path) -}}
+{{- end -}}
+{{- range $previous := $seen -}}
+{{- if and (le $start $previous.end) (ge $end $previous.start) -}}
+{{- fail (printf "%s overlaps another dynamic range" $path) -}}
+{{- end -}}
+{{- end -}}
+{{- $seen = append $seen (dict "start" $start "end" $end) -}}
+{{- end -}}
+{{- $interface := printf "%s/%d" $ue.ipv4Gateway $prefix -}}
+{{- $legacy := .Values.vpp.n6.interfaceAddress -}}
+{{- if and (eq (include "xcn.vppEnabled" .) "true") (ne $legacy "") (ne $legacy $interface) -}}
+{{- fail "vpp.n6.interfaceAddress must be empty or equal networking.ue.ipv4Gateway/subnet-prefix; configure networking.ue instead" -}}
+{{- end -}}
+{{- dict "subnet" $subnet "gateway" $ue.ipv4Gateway "interfaceAddress" $interface | toJson -}}
+{{- end -}}
+
 {{- define "xcn.fullname" -}}
 {{- if .Values.fullnameOverride -}}
 {{- .Values.fullnameOverride | trunc 63 | trimSuffix "-" -}}

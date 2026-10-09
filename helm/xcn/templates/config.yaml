@@ -1,4 +1,5 @@
 {{- $n3FibTable := default 10 .Values.vpp.n3.fibTable }}
+{{- $ueIpv4 := include "xcn.ueIpv4" . | fromJson }}
 {{- $upfRateStats := default (dict) .Values.networking.upf.rateStats }}
 {{- $upfN3Backend := include "xcn.upfN3Backend" . }}
 {{- $upfN6Backend := include "xcn.upfN6Backend" . }}
@@ -140,8 +141,8 @@ data:
           - address: 0.0.0.0
             port: 9092
       session:
-        - subnet: 10.45.0.0/16
-          gateway: 10.45.0.1
+        - subnet: {{ $ueIpv4.subnet }}
+          gateway: {{ $ueIpv4.gateway }}
           {{- with .Values.networking.smf.ipv4PoolRanges }}
           range:
             {{- toYaml . | nindent 12 }}
@@ -205,8 +206,8 @@ data:
           log2_ring_size: {{ .Values.networking.upf.n6.memif.log2RingSize }}
           queues: {{ include "xcn.upfMemifQueueCount" (dict "root" . "value" .Values.networking.upf.n6.memif.queues "path" "networking.upf.n6.memif.queues") }}
       session:
-        - subnet: 10.45.0.0/16
-          gateway: 10.45.0.1
+        - subnet: {{ $ueIpv4.subnet }}
+          gateway: {{ $ueIpv4.gateway }}
         - subnet: 2001:db8:cafe::/48
           gateway: 2001:db8:cafe::1
       metrics:
@@ -263,7 +264,7 @@ data:
     create memif socket id {{ .Values.networking.upf.n6.memif.socketId }} filename {{ .Values.networking.upf.n6.memif.socket }}
     create interface memif id {{ .Values.networking.upf.n6.memif.id }} socket-id {{ .Values.networking.upf.n6.memif.socketId }} master mode ip ring-size {{ .Values.networking.upf.n6.memif.ringSize }} buffer-size {{ .Values.networking.upf.n6.memif.bufferSize }} rx-queues {{ include "xcn.upfMemifQueueCount" (dict "root" . "value" .Values.networking.upf.n6.memif.queues "path" "networking.upf.n6.memif.queues") }} tx-queues {{ include "xcn.upfMemifQueueCount" (dict "root" . "value" .Values.networking.upf.n6.memif.queues "path" "networking.upf.n6.memif.queues") }}
     set interface state memif{{ .Values.networking.upf.n6.memif.socketId }}/{{ .Values.networking.upf.n6.memif.id }} up
-    set interface ip address memif{{ .Values.networking.upf.n6.memif.socketId }}/{{ .Values.networking.upf.n6.memif.id }} {{ .Values.vpp.n6.interfaceAddress }}
+    set interface ip address memif{{ .Values.networking.upf.n6.memif.socketId }}/{{ .Values.networking.upf.n6.memif.id }} {{ $ueIpv4.interfaceAddress }}
     set interface state dpdk-n3 up
     set interface state dpdk-n6 up
     ip table add {{ $n3FibTable }}

@@ -1,4 +1,5 @@
 {{- $amfNgapAddress := toString .Values.networking.amf.ngap.serverAddress }}
+{{- $ueIpv4 := include "xcn.ueIpv4" . | fromJson }}
 {{- $upfN3Backend := include "xcn.upfN3Backend" . }}
 {{- $upfN6Backend := include "xcn.upfN6Backend" . }}
 {{- $vppEnabled := eq (include "xcn.vppEnabled" .) "true" }}
@@ -387,6 +388,10 @@ spec:
               value: {{ $upfGtpuAdvertiseAddress | quote }}
             - name: UPF_N6_BACKEND
               value: {{ $upfN6Backend | quote }}
+            - name: UE_IPV4_SUBNET
+              value: {{ $ueIpv4.subnet | quote }}
+            - name: UE_IPV4_GATEWAY
+              value: {{ $ueIpv4.gateway | quote }}
             - name: UPF_N3_BACKEND
               value: {{ $upfN3Backend | quote }}
             - name: UPF_N3_HOST_INTERFACE

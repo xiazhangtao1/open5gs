@@ -174,8 +174,12 @@ hostPorts:
     port: 9999
 
 networking:
+  ue:
+    # Shared by SMF, UPF/TUN, and the VPP N6 inner interface.
+    ipv4Subnet: 10.45.0.0/16
+    ipv4Gateway: 10.45.0.1
   smf:
-    # Optional dynamic IPv4 ranges within 10.45.0.0/16. Keep subscriber
+    # Optional dynamic IPv4 ranges within networking.ue.ipv4Subnet. Keep subscriber
     # static IPv4 addresses outside these ranges to prevent collisions.
     ipv4PoolRanges: []
   amf:
@@ -289,7 +293,9 @@ vpp:
     defaultGateway: ""
     fibTable: 10
   n6:
-    interfaceAddress: 10.45.0.1/16
+    # Empty derives gateway/prefix from networking.ue. A legacy explicit value
+    # must match that derived address when VPP is enabled.
+    interfaceAddress: ""
     externalAddress: ""
     defaultGateway: ""
     nat44:

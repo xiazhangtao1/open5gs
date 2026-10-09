@@ -79,13 +79,24 @@ sysctl -w net.ipv4.ip_forward=1 > /dev/null
 sysctl -w net.ipv6.conf.all.forwarding=1 > /dev/null
 sysctl -w net.ipv6.conf.ogstun.disable_ipv6=0 > /dev/null || true
 
-ip addr del 10.45.0.1/16 dev ogstun 2> /dev/null || true
-ip addr add 10.45.0.1/16 dev ogstun
+ue_ipv4_subnet="${UE_IPV4_SUBNET:-10.45.0.0/16}"
+ue_ipv4_gateway="${UE_IPV4_GATEWAY:-10.45.0.1}"
+# ogstun is managed by this script. Remove its previous IPv4 NAT rule when
+# changing subnets, without touching unrelated interfaces or firewall rules.
+for previous_subnet in $(ip -4 route show dev ogstun proto kernel scope link | awk '{print $1}'); do
+    if [ "$previous_subnet" != "$ue_ipv4_subnet" ]; then
+        while iptables -t nat -C POSTROUTING -s "$previous_subnet" ! -o ogstun -j MASQUERADE 2>/dev/null; do
+            iptables -t nat -D POSTROUTING -s "$previous_subnet" ! -o ogstun -j MASQUERADE
+        done
+    fi
+done
+ip -4 addr flush dev ogstun scope global
+ip addr add "${ue_ipv4_gateway}/${ue_ipv4_subnet##*/}" dev ogstun
 ip addr del 2001:db8:cafe::1/48 dev ogstun 2> /dev/null || true
 ip addr add 2001:db8:cafe::1/48 dev ogstun
 ip link set ogstun up
 
-ensure_iptables_rule nat POSTROUTING -s 10.45.0.0/16 ! -o ogstun -j MASQUERADE
+ensure_iptables_rule nat POSTROUTING -s "$ue_ipv4_subnet" ! -o ogstun -j MASQUERADE
 ensure_iptables_rule filter INPUT -i ogstun -j ACCEPT
 ensure_iptables_rule filter FORWARD -i ogstun -j ACCEPT
 ensure_iptables_rule filter FORWARD -o ogstun -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
