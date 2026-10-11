@@ -18,6 +18,7 @@
  */
 
 #include "context.h"
+#include "user-intent.h"
 #include "gtp-path.h"
 #include "pfcp-path.h"
 #include "npcf-handler.h"
@@ -163,6 +164,8 @@ smf_context_t *smf_self(void)
 
 static int smf_context_prepare(void)
 {
+    self.user_intent.container_id = 0xff10;
+    self.user_intent.notify_uri = "http://10.2.5.125:8000/api/v1/intent/notify";
     self.diam_config->cnf_port = DIAMETER_PORT;
     self.diam_config->cnf_port_tls = DIAMETER_SECURE_PORT;
 
@@ -173,6 +176,9 @@ static int smf_context_validation(void)
 {
     ogs_sbi_nf_instance_t *nf_instance = NULL;
     ogs_sbi_nf_info_t *nf_info = NULL;
+
+    if (smf_user_intent_config_validate() != OGS_OK)
+        return OGS_ERROR;
 
     nf_instance = ogs_sbi_self()->nf_instance;
     ogs_assert(nf_instance);
@@ -508,6 +514,19 @@ int smf_context_parse_config(void)
                     /* handle config in gtp library */
                 } else if (!strcmp(smf_key, "gtpu")) {
                     /* handle config in gtp library */
+                } else if (!strcmp(smf_key, "user_intent")) {
+                    ogs_yaml_iter_t it;
+                    ogs_yaml_iter_recurse(&smf_iter, &it);
+                    while (ogs_yaml_iter_next(&it)) {
+                        const char *key = ogs_yaml_iter_key(&it);
+                        const char *value = ogs_yaml_iter_value(&it);
+                        if (!strcmp(key, "enabled"))
+                            self.user_intent.enabled = value && !strcmp(value, "true");
+                        else if (!strcmp(key, "mcc")) self.user_intent.mcc = value;
+                        else if (!strcmp(key, "mnc")) self.user_intent.mnc = value;
+                        else if (!strcmp(key, "notify_uri")) self.user_intent.notify_uri = value;
+                        else ogs_warn("Unknown user_intent option [%s]", key);
+                    }
                 } else if (!strcmp(smf_key, "dns")) {
                     ogs_yaml_iter_t dns_iter;
                     ogs_yaml_iter_recurse(&smf_iter, &dns_iter);
@@ -1801,6 +1820,7 @@ void smf_sess_remove(smf_sess_t *sess)
     char buf2[OGS_ADDRSTRLEN];
 
     ogs_assert(sess);
+    smf_user_intent_clear(sess);
     smf_ue = smf_ue_find_by_id(sess->smf_ue_id);
     ogs_assert(smf_ue);
 

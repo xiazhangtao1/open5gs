@@ -20,6 +20,7 @@
 #include "sbi-path.h"
 #include "pfcp-path.h"
 #include "npcf-handler.h"
+#include "user-intent.h"
 
 /* Converts PFCP "Usage Report" "Report Trigger" bitmask to Gy "Reporting-Reason" AVP enum value.
  * PFCP: 3GPP TS 29.244 sec 8.2.41
@@ -329,6 +330,9 @@ static void sess_5gc_timeout(ogs_pfcp_xact_t *xact, void *data)
             ogs_expect(OGS_OK == smf_5gc_pfcp_send_all_pdr_modification_request(
                 sess, NULL, OGS_PFCP_MODIFY_INDIRECT|OGS_PFCP_MODIFY_REMOVE, 0, 0));
         }
+        if ((xact->modify_flags & OGS_PFCP_MODIFY_USER_INTENT) &&
+            xact->intent_generation == smf_user_intent_generation(sess))
+            smf_user_intent_pfcp(sess, xact->modify_flags, false);
         if (xact->modify_flags & OGS_PFCP_MODIFY_SM_POLICY_UPDATE)
             smf_npcf_smpolicycontrol_complete_update(sess);
         break;
@@ -649,6 +653,8 @@ int smf_5gc_pfcp_send_all_pdr_modification_request(
 
     xact->local_seid = sess->smf_n4_seid;
     xact->modify_flags = flags | OGS_PFCP_MODIFY_SESSION;
+    if (flags & OGS_PFCP_MODIFY_USER_INTENT)
+        xact->intent_generation = smf_user_intent_generation(sess);
     xact->delete_trigger = trigger;
 
     ogs_list_init(&sess->pdr_to_modify_list);
@@ -713,6 +719,8 @@ int smf_5gc_pfcp_send_qos_flow_list_modification_request(
 
     xact->local_seid = sess->smf_n4_seid;
     xact->modify_flags = flags | OGS_PFCP_MODIFY_SESSION;
+    if (flags & OGS_PFCP_MODIFY_USER_INTENT)
+        xact->intent_generation = smf_user_intent_generation(sess);
 
     rv = smf_pfcp_send_modify_list(
             sess, smf_n4_build_qos_flow_to_modify_list, xact, duration);

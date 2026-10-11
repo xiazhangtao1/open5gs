@@ -120,6 +120,12 @@ typedef struct smf_nsmf_pdusession_param_s {
 } smf_nsmf_pdusession_param_t;
 
 typedef struct smf_context_s {
+    struct {
+        bool enabled;
+        const char *mcc, *mnc, *notify_uri;
+        uint16_t container_id;
+        ogs_plmn_id_t plmn;
+    } user_intent;
     smf_ctf_config_t    ctf_config;
     const char*         diam_conf_path;   /* SMF Diameter conf path */
     ogs_diam_config_t   *diam_config;     /* SMF Diameter config */
@@ -697,6 +703,7 @@ typedef struct smf_sess_s {
     /* Serialize asynchronous SM policy updates for this PDU session. */
     ogs_list_t      sm_policy_update_list;
     bool            sm_policy_update_in_progress;
+    struct smf_user_intent_s *user_intent;
 
     ogs_gtp_node_t  *gnode;
     ogs_pfcp_node_t *pfcp_node;

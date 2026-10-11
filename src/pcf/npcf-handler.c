@@ -1532,6 +1532,8 @@ static bool pcf_build_app_policy_decision(
     ogs_assert(*QosDecisionList);
 
     ogs_list_for_each(&sess->app_list, app_session) {
+        if (app_session->intent_owned)
+            continue; /* Intent rules are sent only through their owning transaction. */
         for (i = 0; i < app_session->num_of_pcc_rule; i++) {
             OpenAPI_pcc_rule_t *PccRule = NULL;
             OpenAPI_qos_data_t *QosData = NULL;
@@ -2926,6 +2928,12 @@ static cJSON *xcn_app_to_json(pcf_app_t *app)
         cJSON_AddItemToArray(pcc_rules,
                 xcn_pcc_rule_to_json(&app->pcc_rule[i]));
     cJSON_AddNumberToObject(item, "pccRuleCount", app->num_of_pcc_rule);
+    if (app->intent_owned) {
+        cJSON_AddBoolToObject(item, "intentManaged", true);
+        cJSON_AddStringToObject(item, "operationState",
+                app->intent_uncertain ? "UNCERTAIN" :
+                app->intent_transaction ? "PENDING" : "COMMITTED");
+    }
 
     return item;
 }
@@ -2958,6 +2966,9 @@ bool pcf_xcn_dedicated_bearer_handle_update(
     if (!app || !xcn_app_is_dedicated_bearer(app))
         return xcn_send_error(stream, recvmsg,
                 OGS_SBI_HTTP_STATUS_NOT_FOUND, "No dedicated bearer");
+    if (app->intent_owned)
+        return xcn_send_error(stream, recvmsg, OGS_SBI_HTTP_STATUS_CONFLICT,
+                "Bearer is managed by ePCO intent");
     if (app->num_of_pcc_rule != 1)
         return xcn_send_error(stream, recvmsg,
                 OGS_SBI_HTTP_STATUS_CONFLICT,
@@ -3148,6 +3159,9 @@ bool pcf_xcn_dedicated_bearer_handle_delete(
         return xcn_send_error(stream, recvmsg,
                 OGS_SBI_HTTP_STATUS_NOT_FOUND, "No appSessionId");
 
+    if (app_session->intent_owned)
+        return xcn_send_error(stream, recvmsg, OGS_SBI_HTTP_STATUS_CONFLICT,
+                "Bearer is managed by ePCO intent");
     return pcf_npcf_policyauthorization_handle_delete(
             app_session->sess, app_session, stream, recvmsg);
 }
@@ -3399,4 +3413,180 @@ bool pcf_xcn_query_handle_sessions(
 
     cJSON_Delete(root);
     return true;
+}
+
+/* Internal two-phase adapter for UE-requested modifications. Unlike the public
+ * trigger API it returns the authorized delta to the requesting SMF: sending a
+ * second network-requested modification would overwrite the UE's PTI. */
+bool pcf_xcn_intent_handle(ogs_sbi_stream_t *stream,
+        ogs_sbi_message_t *message, const char *content)
+{
+    cJSON *body = content ? cJSON_Parse(content) : NULL;
+    cJSON *result = NULL, *decision_json = NULL;
+    pcf_sess_t *sess = NULL;
+    pcf_app_t *app = NULL, *candidate;
+    pcf_ue_sm_t *ue;
+    ogs_session_data_t subscription = {0};
+    ogs_pcc_rule_t target = {0};
+    OpenAPI_sm_policy_decision_t decision = {0};
+    OpenAPI_list_t *rules = NULL, *qos = NULL;
+    const char *error = "Invalid intent operation";
+    const char *transaction, *operation, *app_id, *outcome;
+    int status = OGS_SBI_HTTP_STATUS_BAD_REQUEST, op = 0, precedence;
+    bool sent, created = false;
+
+    if (!cJSON_IsObject(body)) goto fail;
+    transaction = xcn_json_string(body, "transaction");
+    operation = xcn_json_string(body, "operation");
+    app_id = xcn_json_string(body, "appSessionId");
+    outcome = xcn_json_string(body, "outcome");
+    if (!transaction || !*transaction || strlen(transaction) > 80) goto fail;
+    if (!xcn_parse_bearer_request(body, &sess, &error) || !sess) {
+        status = OGS_SBI_HTTP_STATUS_NOT_FOUND;
+        if (!error) error = "No PCF session";
+        goto fail;
+    }
+    if (app_id) {
+        app = pcf_app_find_by_app_session_id((char *)app_id);
+        if (!app || app->sess != sess || !app->intent_owned) {
+            error = "No owned intent bearer in target session";
+            status = OGS_SBI_HTTP_STATUS_NOT_FOUND;
+            goto fail;
+        }
+    }
+    if (!strcmp(message->h.method, OGS_SBI_HTTP_METHOD_PATCH)) {
+        if (!app || !outcome || !app->intent_transaction ||
+            strcmp(app->intent_transaction, transaction)) {
+            error = "Intent transaction mismatch";
+            status = OGS_SBI_HTTP_STATUS_CONFLICT;
+            goto fail;
+        }
+        if (!strcmp(outcome, "uncertain")) {
+            /* Retain ownership and staged state until session teardown. */
+            app->intent_uncertain = true;
+            cJSON_Delete(body);
+            return ogs_sbi_send_http_status_no_content(stream);
+        }
+        if (strcmp(outcome, "commit") && strcmp(outcome, "abort")) goto fail;
+        if ((!strcmp(outcome, "commit") && app->intent_operation == 3) ||
+            (!strcmp(outcome, "abort") && app->intent_operation == 1)) {
+            pcf_app_remove(app);
+        } else {
+            if (!strcmp(outcome, "commit"))
+                OGS_STORE_PCC_RULE(&app->pcc_rule[0], &app->intent_target);
+            OGS_PCC_RULE_FREE(&app->intent_target);
+            ogs_free(app->intent_transaction);
+            app->intent_transaction = NULL;
+            app->intent_operation = 0;
+        }
+        cJSON_Delete(body);
+        return ogs_sbi_send_http_status_no_content(stream);
+    }
+    if (strcmp(message->h.method, OGS_SBI_HTTP_METHOD_POST) || !operation)
+        goto fail;
+    if (!strcmp(operation, "create")) op = 1;
+    else if (!strcmp(operation, "modify")) op = 2;
+    else if (!strcmp(operation, "delete")) op = 3;
+    if (!op || ((op == 1) == (app != NULL))) goto fail;
+    ogs_list_for_each(&sess->app_list, candidate) {
+        if ((candidate->intent_owned && op == 1) || candidate->intent_transaction) {
+            error = "Intent bearer or operation already exists";
+            status = OGS_SBI_HTTP_STATUS_CONFLICT;
+            goto fail;
+        }
+    }
+    ue = pcf_ue_sm_find_by_id(sess->pcf_ue_sm_id);
+    if (!ue || pcf_get_session_data(ue->supi,
+            sess->home.presence ? &sess->home.plmn_id : NULL,
+            &sess->s_nssai, sess->dnn, &subscription, 0) != OGS_OK) {
+        error = "Subscriber policy unavailable";
+        status = OGS_SBI_HTTP_STATUS_FORBIDDEN;
+        goto fail;
+    }
+    if (op != 3) {
+        bool valid = xcn_parse_qos_override(body, &target, &error);
+        /* The override parser uses a borrowed constant ID. */
+        target.id = NULL;
+        if (!valid) goto fail;
+        if ((target.qos.index != 2 && target.qos.index != 3) ||
+            !target.qos.priority_level) goto fail;
+    }
+    if (op == 1) {
+        if (ogs_list_count(&sess->app_list) >= OGS_MAX_NUM_OF_BEARER - 1) {
+            error = "Maximum application bearer count reached";
+            status = OGS_SBI_HTTP_STATUS_CONFLICT;
+            goto fail;
+        }
+        precedence = pcf_select_qos_precedence(sess, &subscription, -1);
+        if (precedence < 0) {
+            error = "QoS precedence unavailable";
+            status = OGS_SBI_HTTP_STATUS_CONFLICT;
+            goto fail;
+        }
+        app = pcf_app_add(sess);
+        created = true;
+        app->intent_owned = true;
+        app->af_app_id = ogs_strdup(XCN_SVC_DEDICATED_BEARER);
+        target.id = ogs_msprintf("%s-a%s", XCN_SVC_DEDICATED_BEARER,
+                app->app_session_id);
+        target.precedence = precedence;
+        target.num_of_flow = 2;
+        target.flow[0].direction = OGS_FLOW_DOWNLINK_ONLY;
+        target.flow[0].description = ogs_strdup("permit out ip from 0.0.0.0/0 to assigned");
+        target.flow[1].direction = OGS_FLOW_UPLINK_ONLY;
+        /* PCC stores uplink filters in the normalized downlink orientation;
+         * direction carries the uplink meaning (see flow_rx_to_gx). */
+        target.flow[1].description = ogs_strdup("permit out ip from 0.0.0.0/0 to assigned");
+        /* Reserve the identity/precedence; excluded from aggregate decisions. */
+        OGS_STORE_PCC_RULE(&app->pcc_rule[0], &target);
+        app->num_of_pcc_rule = 1;
+    } else {
+        ogs_qos_t requested_qos = target.qos;
+        OGS_STORE_PCC_RULE(&target, &app->pcc_rule[0]);
+        if (op == 2) target.qos = requested_qos;
+    }
+    target.type = op == 3 ? OGS_PCC_RULE_TYPE_REMOVE : OGS_PCC_RULE_TYPE_INSTALL;
+    rules = OpenAPI_list_create();
+    qos = OpenAPI_list_create();
+    decision.pcc_rules = rules;
+    decision.qos_decs = qos;
+    if (op == 3) {
+        OpenAPI_list_add(rules, OpenAPI_map_create(target.id, NULL));
+    } else {
+        OpenAPI_pcc_rule_t *rule = ogs_sbi_build_pcc_rule(&target, 1);
+        OpenAPI_qos_data_t *q = ogs_sbi_build_qos_data(&target);
+        OpenAPI_list_add(rules, OpenAPI_map_create(rule->pcc_rule_id, rule));
+        OpenAPI_list_add(qos, OpenAPI_map_create(q->qos_id, q));
+    }
+    decision_json = OpenAPI_sm_policy_decision_convertToJSON(&decision);
+    result = cJSON_CreateObject();
+    cJSON_AddStringToObject(result, "transaction", transaction);
+    cJSON_AddStringToObject(result, "appSessionId", app->app_session_id);
+    cJSON_AddStringToObject(result, "pccRuleId", target.id);
+    cJSON_AddItemToObject(result, "decision", decision_json);
+    app->intent_transaction = ogs_strdup(transaction);
+    app->intent_operation = op;
+    OGS_STORE_PCC_RULE(&app->intent_target, &target);
+    sent = xcn_send_json_response(stream, OGS_SBI_HTTP_STATUS_OK, result);
+    if (!sent) {
+        if (created) pcf_app_remove(app);
+        else {
+            ogs_free(app->intent_transaction);
+            app->intent_transaction = NULL;
+            OGS_PCC_RULE_FREE(&app->intent_target);
+        }
+    }
+    cJSON_Delete(result);
+    pcf_free_policy_decision_lists(&rules, &qos);
+    OGS_PCC_RULE_FREE(&target);
+    OGS_SESSION_DATA_FREE(&subscription);
+    cJSON_Delete(body);
+    return sent;
+fail:
+    if (created) pcf_app_remove(app);
+    OGS_PCC_RULE_FREE(&target);
+    OGS_SESSION_DATA_FREE(&subscription);
+    cJSON_Delete(body);
+    return xcn_send_error(stream, message, status,
+            error ? error : "Invalid intent operation");
 }

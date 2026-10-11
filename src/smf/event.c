@@ -77,6 +77,8 @@ const char *smf_event_get_name(smf_event_t *e)
     case SMF_EVT_5GSM_TIMER:
         return "SMF_EVT_5GSM_TIMER";
 
+    case SMF_EVT_USER_INTENT:
+        return "SMF_EVT_USER_INTENT";
     case SMF_EVT_SESSION_RELEASE:
         return "SMF_EVT_SESSION_RELEASE";
 

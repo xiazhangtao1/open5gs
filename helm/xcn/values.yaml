@@ -182,6 +182,11 @@ networking:
     # Optional dynamic IPv4 ranges within networking.ue.ipv4Subnet. Keep subscriber
     # static IPv4 addresses outside these ranges to prevent collisions.
     ipv4PoolRanges: []
+    userIntent:
+      enabled: false
+      mcc: ""
+      mnc: ""
+      notifyUri: http://10.2.5.125:8000/api/v1/intent/notify
   amf:
     ngap:
       serverAddress: 0.0.0.0

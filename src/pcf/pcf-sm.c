@@ -357,6 +357,11 @@ void pcf_state_operational(ogs_fsm_t *s, pcf_event_t *e)
             break;
 
         CASE(XCN_SVC_DEDICATED_BEARER)
+            if (message.h.resource.component[0] &&
+                !strcmp(message.h.resource.component[0], "intent-operations")) {
+                pcf_xcn_intent_handle(stream, &message, request->http.content);
+                break;
+            }
             SWITCH(message.h.resource.component[0])
             CASE(XCN_RESOURCE_BEARERS)
                 SWITCH(message.h.method)

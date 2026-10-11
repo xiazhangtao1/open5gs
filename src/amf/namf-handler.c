@@ -477,6 +477,23 @@ int amf_namf_comm_handle_n1_n2_message_transfer(
             return OGS_ERROR;
         }
 
+        /* N1-only modification commands/rejects do not release the session.
+         * In particular, T3591 retransmission needs no repeated N2 operation. */
+        if (n1buf->len >= sizeof(ogs_nas_5gsm_header_t) &&
+            n1buf->data[0] == OGS_NAS_EXTENDED_PROTOCOL_DISCRIMINATOR_5GSM &&
+            (n1buf->data[3] == OGS_NAS_5GS_PDU_SESSION_MODIFICATION_COMMAND ||
+             n1buf->data[3] == OGS_NAS_5GS_PDU_SESSION_MODIFICATION_REJECT)) {
+            ran_ue_t *ran_ue = ran_ue_find_by_id(sess->ran_ue_id);
+            if (!ran_ue) {
+                ogs_pkbuf_free(n1buf);
+                return OGS_ERROR;
+            }
+            r = nas_5gs_send_dl_nas_transport(ran_ue, sess,
+                    OGS_NAS_PAYLOAD_CONTAINER_N1_SM_INFORMATION, n1buf, 0, 0);
+            ogs_expect(r == OGS_OK);
+            break;
+        }
+
         ogs_error("[%d:%d] PDU session establishment reject",
                 sess->psi, sess->pti);
 

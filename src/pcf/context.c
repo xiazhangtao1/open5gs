@@ -897,6 +897,9 @@ int pcf_app_remove(pcf_app_t *app)
         OGS_PCC_RULE_FREE(&app->pcc_rule[i]);
     }
 
+    ogs_free(app->intent_transaction);
+    OGS_PCC_RULE_FREE(&app->intent_target);
+
     if (app->notif_uri)
         ogs_free(app->notif_uri);
     if (app->af_app_id)

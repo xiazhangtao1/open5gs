@@ -32,6 +32,7 @@
 #include "npcf-handler.h"
 #include "nsmf-handler.h"
 #include "binding.h"
+#include "user-intent.h"
 
 void smf_state_initial(ogs_fsm_t *s, smf_event_t *e)
 {
@@ -99,6 +100,10 @@ void smf_state_operational(ogs_fsm_t *s, smf_event_t *e)
         break;
 
     case OGS_FSM_EXIT_SIG:
+        break;
+
+    case SMF_EVT_USER_INTENT:
+        smf_user_intent_event(e);
         break;
 
     case SMF_EVT_S5C_MESSAGE:

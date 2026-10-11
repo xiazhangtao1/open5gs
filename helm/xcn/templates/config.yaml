@@ -149,6 +149,11 @@ data:
           {{- end }}
         - subnet: 2001:db8:cafe::/48
           gateway: 2001:db8:cafe::1
+      user_intent:
+        enabled: {{ .Values.networking.smf.userIntent.enabled }}
+        mcc: {{ .Values.networking.smf.userIntent.mcc | quote }}
+        mnc: {{ .Values.networking.smf.userIntent.mnc | quote }}
+        notify_uri: {{ .Values.networking.smf.userIntent.notifyUri | quote }}
       dns:
         - 8.8.8.8
         - 8.8.4.4

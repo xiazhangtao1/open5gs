@@ -33,6 +33,9 @@ bool smf_npcf_smpolicycontrol_handle_update_notify(
 bool smf_npcf_smpolicycontrol_handle_terminate_notify(
         smf_sess_t *sess, ogs_sbi_stream_t *stream, ogs_sbi_message_t *recvmsg);
 
+bool smf_npcf_apply_intent_decision(smf_sess_t *sess,
+        OpenAPI_sm_policy_decision_t *decision);
+void smf_npcf_smpolicycontrol_resume_updates(smf_sess_t *sess);
 void smf_npcf_smpolicycontrol_complete_update(smf_sess_t *sess);
 void smf_npcf_smpolicycontrol_clear_update_queue(smf_sess_t *sess);
 

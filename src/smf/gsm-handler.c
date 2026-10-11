@@ -18,6 +18,7 @@
  */
 
 #include "gsm-handler.h"
+#include "user-intent.h"
 #include "sbi-path.h"
 #include "pfcp-path.h"
 
@@ -470,6 +471,17 @@ int gsm_handle_pdu_session_modification_request(
     ogs_assert(smf_ue);
     ogs_assert(stream);
     ogs_assert(pdu_session_modification_request);
+
+    if (smf_user_intent_request(sess, stream, pdu_session_modification_request))
+        return OGS_OK;
+    if (smf_user_intent_busy(sess)) {
+        n1smbuf = gsm_build_pdu_session_modification_reject(sess,
+                OGS_5GSM_CAUSE_PTI_ALREADY_IN_USE);
+        smf_sbi_send_sm_context_update_error_n1_n2_message(stream,
+                OGS_SBI_HTTP_STATUS_CONFLICT, n1smbuf,
+                OpenAPI_n2_sm_info_type_NULL, NULL);
+        return OGS_OK;
+    }
 
     ogs_list_init(&sess->qos_flow_to_modify_list);
 

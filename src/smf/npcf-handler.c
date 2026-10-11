@@ -22,6 +22,7 @@
 #include "nas-path.h"
 #include "local-path.h"
 #include "binding.h"
+#include "user-intent.h"
 
 #include "npcf-handler.h"
 
@@ -823,7 +824,8 @@ static void smf_npcf_smpolicycontrol_process_update_queue(
 
     ogs_assert(sess);
 
-    while (sess->sm_policy_update_in_progress == false) {
+    while (sess->sm_policy_update_in_progress == false &&
+            !smf_user_intent_busy(sess)) {
         update = ogs_list_first(&sess->sm_policy_update_list);
         if (!update)
             return;
@@ -850,6 +852,7 @@ void smf_npcf_smpolicycontrol_complete_update(smf_sess_t *sess)
         return;
 
     sess->sm_policy_update_in_progress = false;
+    smf_user_intent_resume(sess);
     smf_npcf_smpolicycontrol_process_update_queue(sess);
 }
 
@@ -887,4 +890,17 @@ bool smf_npcf_smpolicycontrol_handle_terminate_notify(
             sess, NULL, OGS_PFCP_DELETE_TRIGGER_PCF_INITIATED);
 
     return true;
+}
+
+
+bool smf_npcf_apply_intent_decision(smf_sess_t *sess,
+        OpenAPI_sm_policy_decision_t *decision)
+{
+    update_authorized_pcc_rule_and_qos(sess, decision);
+    return smf_qos_flow_binding(sess);
+}
+
+void smf_npcf_smpolicycontrol_resume_updates(smf_sess_t *sess)
+{
+    smf_npcf_smpolicycontrol_process_update_queue(sess);
 }

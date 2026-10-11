@@ -189,6 +189,12 @@ struct pcf_sess_s {
 typedef struct pcf_app_s {
     ogs_lnode_t lnode;
 
+    /* Private ePCO operation: staged until SMF confirms enforcement. */
+    bool intent_owned;
+    bool intent_uncertain;
+    char *intent_transaction;
+    int intent_operation; /* 1=create, 2=modify, 3=delete */
+    ogs_pcc_rule_t intent_target;
     char *app_session_id;
     char *af_app_id;
 

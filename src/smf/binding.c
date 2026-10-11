@@ -18,6 +18,7 @@
  */
 
 #include "binding.h"
+#include "user-intent.h"
 #include "s5c-build.h"
 #include "pfcp-path.h"
 #include "gtp-path.h"
@@ -861,6 +862,10 @@ bool smf_qos_flow_binding(smf_sess_t *sess)
     }
 
     if (ogs_list_count(&sess->qos_flow_to_modify_list)) {
+        if (smf_user_intent_binding(sess)) {
+            pfcp_flags &= ~OGS_PFCP_MODIFY_NETWORK_REQUESTED;
+            pfcp_flags |= OGS_PFCP_MODIFY_USER_INTENT;
+        }
         if (sess->sm_policy_update_in_progress)
             pfcp_flags |= OGS_PFCP_MODIFY_SM_POLICY_UPDATE;
 

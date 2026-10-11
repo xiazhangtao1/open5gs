@@ -637,6 +637,10 @@ typedef struct ogs_sbi_request_s {
     ogs_sbi_header_t h;
     ogs_sbi_http_message_t http;
 
+    /* Optional per-request deadline; zero retains the configured default. */
+    ogs_time_t deadline;
+    bool no_proxy;
+
     /* Used in microhttpd */
     bool suspended;
     struct {

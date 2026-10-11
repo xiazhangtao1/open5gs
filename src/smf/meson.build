@@ -75,6 +75,7 @@ libsmf_sources = files('''
     init.c
     event.c
     timer.c
+    user-intent.c
     context.c
     smf-sm.c
     gsm-sm.c

@@ -583,9 +583,159 @@ static void concurrent_lifecycle(abts_case *tc, void *data)
     fprintf(stderr, "QoS priority: %u concurrent two-session lifecycles complete\n", cycles);
 }
 
+static ogs_pkbuf_t *intent_nas(test_sess_t *sess, int on, int model, int gpu)
+{
+    uint8_t contents[] = {0x80,0xff,0x10,6,0x64,0xf0,0,0,0,0,0,0x0d,0};
+    ogs_nas_5gs_message_t message = {0};
+    ogs_nas_5gs_pdu_session_modification_request_t *req =
+        &message.gsm.pdu_session_modification_request;
+    contents[7] = on; contents[8] = model; contents[9] = gpu;
+    message.gsm.h.extended_protocol_discriminator = OGS_NAS_EXTENDED_PROTOCOL_DISCRIMINATOR_5GSM;
+    message.gsm.h.pdu_session_identity = sess->psi;
+    message.gsm.h.procedure_transaction_identity = sess->pti;
+    message.gsm.h.message_type = OGS_NAS_5GS_PDU_SESSION_MODIFICATION_REQUEST;
+    req->presencemask = OGS_NAS_5GS_PDU_SESSION_MODIFICATION_REQUEST_EXTENDED_PROTOCOL_CONFIGURATION_OPTIONS_PRESENT;
+    req->extended_protocol_configuration_options.buffer = contents;
+    req->extended_protocol_configuration_options.length = sizeof(contents);
+    return ogs_nas_5gs_plain_encode(&message);
+}
+
+static void intent_transaction(abts_case *tc, test_sess_t *sess,
+        ogs_socknode_t *ngap, int on, int model, int gpu,
+        int expected_5qi, int expected_priority, bool change, bool retransmit)
+{
+    ogs_pkbuf_t *nas;
+    test_bearer_t *flow;
+    uint8_t pti = sess->pti;
+    sess->ul_nas_transport_param.request_type = OGS_NAS_5GS_REQUEST_TYPE_MODIFICATION_REQUEST;
+    sess->ul_nas_transport_param.dnn = sess->ul_nas_transport_param.s_nssai = 0;
+    nas = intent_nas(sess, on, model, gpu);
+    send_sm(tc, sess, ngap, nas);
+    receive_ngap(tc, sess->test_ue, ngap, change ?
+            NGAP_ProcedureCode_id_PDUSessionResourceModify : NGAP_ProcedureCode_id_DownlinkNASTransport);
+    ABTS_INT_EQUAL(tc, OGS_NAS_5GS_PDU_SESSION_MODIFICATION_COMMAND, sess->test_ue->gsm_message_type);
+    ABTS_INT_EQUAL(tc, pti, sess->pti);
+    if (getenv("XCN_INTENT_TIMER_TEST") && !on && !change) {
+        /* Withhold Complete and receive a NAS-only T3591 retransmission. */
+        receive_ngap(tc, sess->test_ue, ngap, NGAP_ProcedureCode_id_DownlinkNASTransport);
+        ABTS_INT_EQUAL(tc, pti, sess->pti);
+        ABTS_INT_EQUAL(tc, OGS_NAS_5GS_PDU_SESSION_MODIFICATION_COMMAND, sess->test_ue->gsm_message_type);
+    }
+    if (retransmit) {
+        send_sm(tc, sess, ngap, intent_nas(sess, on, model, gpu));
+        receive_ngap(tc, sess->test_ue, ngap, change ?
+                NGAP_ProcedureCode_id_PDUSessionResourceModify : NGAP_ProcedureCode_id_DownlinkNASTransport);
+        ABTS_INT_EQUAL(tc, pti, sess->pti);
+    }
+    flow = dedicated_flow(sess);
+    if (change) {
+        ogs_assert(flow);
+        if (on) {
+            ABTS_INT_EQUAL(tc, expected_5qi, flow->qos.index);
+            ABTS_INT_EQUAL(tc, expected_priority, flow->qos.priority_level);
+            send_ngap(tc, ngap, testngap_build_qos_flow_resource_modify_response(flow));
+        } else send_ngap(tc, ngap, testngap_build_qos_flow_resource_release_response(flow));
+    }
+    send_sm(tc, sess, ngap, testgsm_build_pdu_session_modification_complete(sess));
+    ogs_msleep(150);
+    if (change && !on) test_bearer_remove(flow);
+}
+
+static void intent_reject_command(abts_case *tc, test_sess_t *sess,
+        ogs_socknode_t *ngap, bool resource)
+{
+    ogs_nas_5gs_message_t message = {0};
+    send_sm(tc, sess, ngap, intent_nas(sess, 1, resource ? 2 : 1, 2));
+    receive_ngap(tc, sess->test_ue, ngap, resource ?
+            NGAP_ProcedureCode_id_PDUSessionResourceModify : NGAP_ProcedureCode_id_DownlinkNASTransport);
+    message.gsm.h.extended_protocol_discriminator = OGS_NAS_EXTENDED_PROTOCOL_DISCRIMINATOR_5GSM;
+    message.gsm.h.pdu_session_identity = sess->psi;
+    message.gsm.h.procedure_transaction_identity = sess->pti;
+    message.gsm.h.message_type = OGS_NAS_5GS_PDU_SESSION_MODIFICATION_COMMAND_REJECT;
+    message.gsm.pdu_session_modification_command_reject.gsm_cause =
+        OGS_5GSM_CAUSE_SEMANTIC_ERROR_IN_THE_QOS_OPERATION;
+    send_sm(tc, sess, ngap, ogs_nas_5gs_plain_encode(&message));
+    ogs_msleep(200);
+}
+
+static void intent_lifecycle(abts_case *tc, void *data)
+{
+    ogs_socknode_t *ngap = testngap_client(1, AF_INET);
+    ogs_socknode_t *gtpu = test_gtpu_server(1, AF_INET);
+    test_ue_t *ue = register_ue(tc, ngap);
+    test_sess_t *sess = establish_session(tc, ue, ngap, 5);
+    test_bearer_t *flow;
+    uint8_t qfi;
+    unsigned i;
+    /* Invalid business enums must reject without releasing this session. */
+    sess->pti = 4;
+    sess->ul_nas_transport_param.request_type = OGS_NAS_5GS_REQUEST_TYPE_MODIFICATION_REQUEST;
+    sess->ul_nas_transport_param.dnn = sess->ul_nas_transport_param.s_nssai = 0;
+    send_sm(tc, sess, ngap, intent_nas(sess, 1, 9, 2));
+    receive_ngap(tc, ue, ngap, NGAP_ProcedureCode_id_DownlinkNASTransport);
+    ABTS_INT_EQUAL(tc, OGS_NAS_5GS_PDU_SESSION_MODIFICATION_REJECT, ue->gsm_message_type);
+    sess->pti = 3;
+    intent_reject_command(tc, sess, ngap, false);
+    sess->pti = 5;
+    intent_transaction(tc, sess, ngap, 1,1,3, 0,0, false, false);
+    sess->pti = 6;
+    intent_transaction(tc, sess, ngap, 1,2,2, 2,40, true, true);
+    flow = dedicated_flow(sess); ogs_assert(flow); qfi = flow->qfi;
+    ping_flow(tc, gtpu, flow);
+    /* Identical payload in a new transaction must decrement once. */
+    sess->pti = 7;
+    intent_transaction(tc, sess, ngap, 1,2,2, 2,39, true, true);
+    sess->pti = 8;
+    intent_transaction(tc, sess, ngap, 1,1,3, 2,39, false, false);
+    sess->pti = 9;
+    intent_transaction(tc, sess, ngap, 1,2,2, 2,38, true, false);
+    sess->pti = 10;
+    intent_transaction(tc, sess, ngap, 1,3,1, 3,30, true, false);
+    ABTS_INT_EQUAL(tc, qfi, dedicated_flow(sess)->qfi);
+    sess->pti = 11;
+    intent_transaction(tc, sess, ngap, 1,3,3, 3,29, true, false);
+    sess->pti = 12;
+    intent_transaction(tc, sess, ngap, 1,2,2, 2,40, true, false);
+    ABTS_INT_EQUAL(tc, qfi, dedicated_flow(sess)->qfi);
+    /* Reuse a completed PTI; identical bytes are a new NAS procedure. */
+    for (i = 39; i >= 1; i--) {
+        sess->pti = 12;
+        intent_transaction(tc, sess, ngap, 1,2,2, 2,i, true, false);
+    }
+    sess->pti = 13;
+    intent_transaction(tc, sess, ngap, 1,2,2, 2,1, false, true);
+    sess->pti = 14;
+    intent_transaction(tc, sess, ngap, 0,1,3, 0,0, true, false);
+    ABTS_TRUE(tc, !dedicated_flow(sess));
+    ping_flow(tc, gtpu, test_qos_flow_find_by_qfi(sess, 1));
+    sess->pti = 15;
+    intent_transaction(tc, sess, ngap, 0,1,3, 0,0, false, false);
+    if (getenv("XCN_INTENT_FAILURE_TEST")) {
+        sess->pti = 16;
+        intent_reject_command(tc, sess, ngap, true);
+        ping_flow(tc, gtpu, test_qos_flow_find_by_qfi(sess, 1));
+    }
+    ogs_msleep(1200); /* Allow final notification timeouts to be observed. */
+
+    release_session(tc, sess, ngap);
+    send_ngap(tc, ngap, testngap_build_ue_context_release_request(ue,
+                NGAP_Cause_PR_radioNetwork, NGAP_CauseRadioNetwork_user_inactivity, true));
+    receive_ngap(tc, ue, ngap, NGAP_ProcedureCode_id_UEContextRelease);
+    send_ngap(tc, ngap, testngap_build_ue_context_release_complete(ue));
+    ogs_msleep(100);
+    ABTS_INT_EQUAL(tc, OGS_OK, test_db_remove_ue(ue));
+    testgnb_gtpu_close(gtpu);
+    testgnb_ngap_close(ngap);
+    test_ue_remove(ue);
+}
+
 abts_suite *test_dedicated_bearer(abts_suite *suite)
 {
     suite = ADD_SUITE(suite);
+    if (getenv("XCN_INTENT_TEST")) {
+        abts_run_test(suite, intent_lifecycle, NULL);
+        return suite;
+    }
     abts_run_test(suite, priority_lifecycle, NULL);
     abts_run_test(suite, concurrent_lifecycle, NULL);
     return suite;

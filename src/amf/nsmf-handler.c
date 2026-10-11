@@ -514,6 +514,22 @@ int amf_nsmf_pdusession_handle_update_sm_context(
 
         } else {
             SmContextUpdatedData = recvmsg->SmContextUpdatedData;
+            /* A session modification may carry N1 only (e.g. ePCO/no-op).
+             * Forward the opaque SM payload without requiring an N2 update. */
+            if (SmContextUpdatedData && SmContextUpdatedData->n1_sm_msg) {
+                n1SmMsg = SmContextUpdatedData->n1_sm_msg;
+                n1smbuf = n1SmMsg->content_id ?
+                    ogs_sbi_find_part_by_content_id(recvmsg, n1SmMsg->content_id) : NULL;
+                if (!n1smbuf || !ran_ue) {
+                    ogs_error("[%s:%u] Missing N1 content or RAN context",
+                            amf_ue->supi, sess->psi);
+                    return OGS_ERROR;
+                }
+                r = nas_5gs_send_dl_nas_transport(ran_ue, sess,
+                        OGS_NAS_PAYLOAD_CONTAINER_N1_SM_INFORMATION,
+                        ogs_pkbuf_copy(n1smbuf), 0, 0);
+                if (r != OGS_OK) return r;
+            }
 
             if (state == AMF_UPDATE_SM_CONTEXT_ACTIVATED) {
                 /*
@@ -1059,6 +1075,15 @@ int amf_nsmf_pdusession_handle_update_sm_context(
                  * NOTE : The pkbuf created in the SBI message will be removed
                  *        from ogs_sbi_message_free(), so it must be copied.
                  */
+                if (n1smbuf->len >= sizeof(ogs_nas_5gsm_header_t) &&
+                    n1smbuf->data[0] == OGS_NAS_EXTENDED_PROTOCOL_DISCRIMINATOR_5GSM &&
+                    n1smbuf->data[3] == OGS_NAS_5GS_PDU_SESSION_MODIFICATION_REJECT) {
+                    r = nas_5gs_send_dl_nas_transport(ran_ue, sess,
+                            OGS_NAS_PAYLOAD_CONTAINER_N1_SM_INFORMATION,
+                            ogs_pkbuf_copy(n1smbuf), 0, 0);
+                    return r;
+                }
+
                 ogs_error("[%d:%d] PDU session establishment reject [state:%d]",
                         sess->psi, sess->pti, state);
 

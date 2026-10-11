@@ -18,6 +18,7 @@
  */
 
 #include "binding.h"
+#include "user-intent.h"
 #include "sbi-path.h"
 #include "gn-handler.h"
 #include "gx-handler.h"
@@ -1857,7 +1858,13 @@ void smf_gsm_state_operational(ogs_fsm_t *s, smf_event_t *e)
             }
             break;
 
+        case OGS_NAS_5GS_PDU_SESSION_MODIFICATION_COMMAND_REJECT:
+            smf_user_intent_rejected(sess, nas_message->gsm.h.procedure_transaction_identity);
+            ogs_sbi_send_http_status_no_content(stream);
+            break;
+
         case OGS_NAS_5GS_PDU_SESSION_MODIFICATION_COMPLETE:
+            smf_user_intent_complete(sess, nas_message->gsm.h.procedure_transaction_identity);
             ogs_assert(true == ogs_sbi_send_http_status_no_content(stream));
             if (HOME_ROUTED_ROAMING_IN_VSMF(sess)) {
     /*
@@ -1902,6 +1909,7 @@ void smf_gsm_state_operational(ogs_fsm_t *s, smf_event_t *e)
             break;
 
         case OGS_NAS_5GS_PDU_SESSION_RELEASE_REQUEST:
+            smf_user_intent_clear(sess);
             memset(&sess->nsmf_param, 0, sizeof(sess->nsmf_param));
 
             sess->nsmf_param.gsm_cause =
@@ -1977,6 +1985,8 @@ void smf_gsm_state_operational(ogs_fsm_t *s, smf_event_t *e)
             break;
 
         case OpenAPI_n2_sm_info_type_PDU_RES_MOD_RSP:
+            if (smf_user_intent_n2(sess, stream, pkbuf))
+                break;
     /*
      * Network-requested PDU Session Modification
      *

@@ -28,6 +28,7 @@ testunit_unit_sources = files('''
     ipfw-test.c
     precedence-test.c
     qos-priority-test.c
+    user-intent-test.c
 '''.split())
 
 testunit_unit_exe = executable('unit',

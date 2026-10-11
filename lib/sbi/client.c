@@ -468,6 +468,7 @@ static connection_t *connection_add(
     /* If http response is not received within deadline,
      * Open5GS will discard this request. */
     ogs_timer_start(conn->timer,
+            request->deadline ? request->deadline :
             ogs_local_conf()->time.message.sbi.connection_deadline);
 
     conn->easy = curl_easy_init();
@@ -559,6 +560,8 @@ static connection_t *connection_add(
     ogs_list_add(&client->connection_list, conn);
 
     curl_easy_setopt(conn->easy, CURLOPT_URL, request->h.uri);
+    if (request->no_proxy)
+        curl_easy_setopt(conn->easy, CURLOPT_NOPROXY, "*");
 
     if (client->resolve) {
         conn->resolve_list = curl_slist_append(NULL, client->resolve);
