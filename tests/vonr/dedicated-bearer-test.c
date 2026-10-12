@@ -658,6 +658,76 @@ static void intent_reject_command(abts_case *tc, test_sess_t *sess,
     ogs_msleep(200);
 }
 
+static void query_intent_qos(abts_case *tc, test_sess_t *sess, char *app_id,
+        int five_qi, int priority, int max_dl, int max_ul, int gbr_dl, int gbr_ul)
+{
+    char *path = ogs_msprintf("?supi=imsi-%s&pduSessionId=%d",
+            sess->test_ue->imsi, sess->psi);
+    cJSON *root = request(tc, "GET", path, NULL, 200, NULL);
+    cJSON *bearers = cJSON_GetObjectItemCaseSensitive(root, "bearers");
+    cJSON *bearer = cJSON_GetArrayItem(bearers, 0);
+    cJSON *rules, *qos;
+    const char *id;
+    test_bearer_t *flow = dedicated_flow(sess);
+    ogs_assert(flow);
+    /* Compare RAN-facing N2 values with the committed PCF policy. */
+    ABTS_INT_EQUAL(tc, max_dl, flow->qos.mbr.downlink);
+    ABTS_INT_EQUAL(tc, max_ul, flow->qos.mbr.uplink);
+    ABTS_INT_EQUAL(tc, gbr_dl, flow->qos.gbr.downlink);
+    ABTS_INT_EQUAL(tc, gbr_ul, flow->qos.gbr.uplink);
+    ABTS_INT_EQUAL(tc, 1, cJSON_GetArraySize(bearers));
+    ogs_assert(bearer);
+    id = cJSON_GetObjectItemCaseSensitive(bearer, "appSessionId")->valuestring;
+    if (*app_id) ABTS_STR_EQUAL(tc, app_id, id);
+    else ogs_cpystrn(app_id, id, 256);
+    rules = cJSON_GetObjectItemCaseSensitive(bearer, "pccRules");
+    ABTS_INT_EQUAL(tc, 1, cJSON_GetArraySize(rules));
+    qos = cJSON_GetObjectItemCaseSensitive(cJSON_GetArrayItem(rules, 0), "qos");
+    ABTS_INT_EQUAL(tc, five_qi, cJSON_GetObjectItemCaseSensitive(qos, "5qi")->valueint);
+    ABTS_INT_EQUAL(tc, priority, cJSON_GetObjectItemCaseSensitive(qos, "priorityLevel")->valueint);
+    ABTS_INT_EQUAL(tc, max_dl, cJSON_GetObjectItemCaseSensitive(qos, "mbrDl")->valueint);
+    ABTS_INT_EQUAL(tc, max_ul, cJSON_GetObjectItemCaseSensitive(qos, "mbrUl")->valueint);
+    ABTS_INT_EQUAL(tc, gbr_dl, cJSON_GetObjectItemCaseSensitive(qos, "gbrDl")->valueint);
+    ABTS_INT_EQUAL(tc, gbr_ul, cJSON_GetObjectItemCaseSensitive(qos, "gbrUl")->valueint);
+    cJSON_Delete(root);
+    ogs_free(path);
+}
+
+/* Run with the custom profiles documented in docs/epco-user-intent.md. */
+static void intent_profiles(abts_case *tc, test_sess_t *sess,
+        ogs_socknode_t *ngap, ogs_socknode_t *gtpu, bool control_plane_only)
+{
+    char app_id[256] = "";
+    uint8_t qfi;
+    sess->pti = 6;
+    intent_transaction(tc, sess, ngap, 1,2,2, 2,55, true, true);
+    qfi = dedicated_flow(sess)->qfi;
+    query_intent_qos(tc, sess, app_id, 2,55, 120000000,80000000,12000000,8000000);
+    if (!control_plane_only) ping_flow(tc, gtpu, dedicated_flow(sess));
+    sess->pti = 7;
+    intent_transaction(tc, sess, ngap, 1,2,2, 2,54, true, true);
+    query_intent_qos(tc, sess, app_id, 2,54, 120000000,80000000,12000000,8000000);
+    sess->pti = 8;
+    intent_transaction(tc, sess, ngap, 1,3,1, 3,25, true, false);
+    ABTS_INT_EQUAL(tc, qfi, dedicated_flow(sess)->qfi);
+    query_intent_qos(tc, sess, app_id, 3,25, 240000000,160000000,24000000,16000000);
+    sess->pti = 9;
+    intent_transaction(tc, sess, ngap, 1,3,3, 3,24, true, false);
+    query_intent_qos(tc, sess, app_id, 3,24, 240000000,160000000,24000000,16000000);
+    sess->pti = 10;
+    intent_transaction(tc, sess, ngap, 1,1,3, 3,24, false, false);
+    query_intent_qos(tc, sess, app_id, 3,24, 240000000,160000000,24000000,16000000);
+    sess->pti = 11;
+    intent_transaction(tc, sess, ngap, 1,2,2, 2,55, true, false);
+    ABTS_INT_EQUAL(tc, qfi, dedicated_flow(sess)->qfi);
+    query_intent_qos(tc, sess, app_id, 2,55, 120000000,80000000,12000000,8000000);
+    sess->pti = 12;
+    intent_transaction(tc, sess, ngap, 0,1,3, 0,0, true, false);
+    ABTS_TRUE(tc, !dedicated_flow(sess));
+    if (!control_plane_only)
+        ping_flow(tc, gtpu, test_qos_flow_find_by_qfi(sess, 1));
+}
+
 static void intent_lifecycle(abts_case *tc, void *data)
 {
     ogs_socknode_t *ngap = testngap_client(1, AF_INET);
@@ -670,58 +740,62 @@ static void intent_lifecycle(abts_case *tc, void *data)
     bool control_plane_only = getenv("XCN_INTENT_CONTROL_PLANE_ONLY") != NULL;
     if (control_plane_only)
         fprintf(stderr, "Intent test: NAS/N2/PFCP only; GTP-U ping is explicitly skipped\n");
-    /* Invalid business enums must reject without releasing this session. */
-    sess->pti = 4;
-    sess->ul_nas_transport_param.request_type = OGS_NAS_5GS_REQUEST_TYPE_MODIFICATION_REQUEST;
-    sess->ul_nas_transport_param.dnn = sess->ul_nas_transport_param.s_nssai = 0;
-    send_sm(tc, sess, ngap, intent_nas(sess, 1, 9, 2));
-    receive_ngap(tc, ue, ngap, NGAP_ProcedureCode_id_DownlinkNASTransport);
-    ABTS_INT_EQUAL(tc, OGS_NAS_5GS_PDU_SESSION_MODIFICATION_REJECT, ue->gsm_message_type);
-    sess->pti = 3;
-    intent_reject_command(tc, sess, ngap, false);
-    sess->pti = 5;
-    intent_transaction(tc, sess, ngap, 1,1,3, 0,0, false, false);
-    sess->pti = 6;
-    intent_transaction(tc, sess, ngap, 1,2,2, 2,40, true, true);
-    flow = dedicated_flow(sess); ogs_assert(flow); qfi = flow->qfi;
-    if (!control_plane_only)
-        ping_flow(tc, gtpu, flow);
-    /* Identical payload in a new transaction must decrement once. */
-    sess->pti = 7;
-    intent_transaction(tc, sess, ngap, 1,2,2, 2,39, true, true);
-    sess->pti = 8;
-    intent_transaction(tc, sess, ngap, 1,1,3, 2,39, false, false);
-    sess->pti = 9;
-    intent_transaction(tc, sess, ngap, 1,2,2, 2,38, true, false);
-    sess->pti = 10;
-    intent_transaction(tc, sess, ngap, 1,3,1, 3,30, true, false);
-    ABTS_INT_EQUAL(tc, qfi, dedicated_flow(sess)->qfi);
-    sess->pti = 11;
-    intent_transaction(tc, sess, ngap, 1,3,3, 3,29, true, false);
-    sess->pti = 12;
-    intent_transaction(tc, sess, ngap, 1,2,2, 2,40, true, false);
-    ABTS_INT_EQUAL(tc, qfi, dedicated_flow(sess)->qfi);
-    /* Reuse a completed PTI; identical bytes are a new NAS procedure. */
-    for (i = 39; i >= 1; i--) {
+    if (getenv("XCN_INTENT_PROFILE_TEST")) {
+        intent_profiles(tc, sess, ngap, gtpu, control_plane_only);
+    } else {
+        /* Invalid business enums must reject without releasing this session. */
+        sess->pti = 4;
+        sess->ul_nas_transport_param.request_type = OGS_NAS_5GS_REQUEST_TYPE_MODIFICATION_REQUEST;
+        sess->ul_nas_transport_param.dnn = sess->ul_nas_transport_param.s_nssai = 0;
+        send_sm(tc, sess, ngap, intent_nas(sess, 1, 9, 2));
+        receive_ngap(tc, ue, ngap, NGAP_ProcedureCode_id_DownlinkNASTransport);
+        ABTS_INT_EQUAL(tc, OGS_NAS_5GS_PDU_SESSION_MODIFICATION_REJECT, ue->gsm_message_type);
+        sess->pti = 3;
+        intent_reject_command(tc, sess, ngap, false);
+        sess->pti = 5;
+        intent_transaction(tc, sess, ngap, 1,1,3, 0,0, false, false);
+        sess->pti = 6;
+        intent_transaction(tc, sess, ngap, 1,2,2, 2,40, true, true);
+        flow = dedicated_flow(sess); ogs_assert(flow); qfi = flow->qfi;
+        if (!control_plane_only)
+            ping_flow(tc, gtpu, flow);
+        /* Identical payload in a new transaction must decrement once. */
+        sess->pti = 7;
+        intent_transaction(tc, sess, ngap, 1,2,2, 2,39, true, true);
+        sess->pti = 8;
+        intent_transaction(tc, sess, ngap, 1,1,3, 2,39, false, false);
+        sess->pti = 9;
+        intent_transaction(tc, sess, ngap, 1,2,2, 2,38, true, false);
+        sess->pti = 10;
+        intent_transaction(tc, sess, ngap, 1,3,1, 3,30, true, false);
+        ABTS_INT_EQUAL(tc, qfi, dedicated_flow(sess)->qfi);
+        sess->pti = 11;
+        intent_transaction(tc, sess, ngap, 1,3,3, 3,29, true, false);
         sess->pti = 12;
-        intent_transaction(tc, sess, ngap, 1,2,2, 2,i, true, false);
-    }
-    sess->pti = 13;
-    intent_transaction(tc, sess, ngap, 1,2,2, 2,1, false, true);
-    sess->pti = 14;
-    intent_transaction(tc, sess, ngap, 0,1,3, 0,0, true, false);
-    ABTS_TRUE(tc, !dedicated_flow(sess));
-    if (!control_plane_only)
-        ping_flow(tc, gtpu, test_qos_flow_find_by_qfi(sess, 1));
-    sess->pti = 15;
-    intent_transaction(tc, sess, ngap, 0,1,3, 0,0, false, false);
-    if (getenv("XCN_INTENT_FAILURE_TEST")) {
-        sess->pti = 16;
-        intent_reject_command(tc, sess, ngap, true);
+        intent_transaction(tc, sess, ngap, 1,2,2, 2,40, true, false);
+        ABTS_INT_EQUAL(tc, qfi, dedicated_flow(sess)->qfi);
+        /* Reuse a completed PTI; identical bytes are a new NAS procedure. */
+        for (i = 39; i >= 1; i--) {
+            sess->pti = 12;
+            intent_transaction(tc, sess, ngap, 1,2,2, 2,i, true, false);
+        }
+        sess->pti = 13;
+        intent_transaction(tc, sess, ngap, 1,2,2, 2,1, false, true);
+        sess->pti = 14;
+        intent_transaction(tc, sess, ngap, 0,1,3, 0,0, true, false);
+        ABTS_TRUE(tc, !dedicated_flow(sess));
         if (!control_plane_only)
             ping_flow(tc, gtpu, test_qos_flow_find_by_qfi(sess, 1));
+        sess->pti = 15;
+        intent_transaction(tc, sess, ngap, 0,1,3, 0,0, false, false);
+        if (getenv("XCN_INTENT_FAILURE_TEST")) {
+            sess->pti = 16;
+            intent_reject_command(tc, sess, ngap, true);
+            if (!control_plane_only)
+                ping_flow(tc, gtpu, test_qos_flow_find_by_qfi(sess, 1));
+        }
+        ogs_msleep(1200); /* Allow final notification timeouts to be observed. */
     }
-    ogs_msleep(1200); /* Allow final notification timeouts to be observed. */
 
     release_session(tc, sess, ngap);
     /* A rejected create can leave an owned, uncertain PCF app. Releasing it

@@ -119,12 +119,18 @@ typedef struct smf_nsmf_pdusession_param_s {
 
 } smf_nsmf_pdusession_param_t;
 
+typedef struct {
+    int priority_level;
+    const char *maxbr_dl, *maxbr_ul, *gbr_dl, *gbr_ul;
+} smf_intent_qos_config_t;
+
 typedef struct smf_context_s {
     struct {
         bool enabled;
         const char *mcc, *mnc, *notify_uri;
         uint16_t container_id;
         ogs_plmn_id_t plmn;
+        smf_intent_qos_config_t face_recognition, object_recognition;
     } user_intent;
     smf_ctf_config_t    ctf_config;
     const char*         diam_conf_path;   /* SMF Diameter conf path */

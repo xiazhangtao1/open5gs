@@ -166,6 +166,10 @@ static int smf_context_prepare(void)
 {
     self.user_intent.container_id = 0xff10;
     self.user_intent.notify_uri = "http://10.2.5.125:8000/api/v1/intent/notify";
+    self.user_intent.face_recognition = (smf_intent_qos_config_t){
+        40, "500 Mbps", "500 Mbps", "5 Mbps", "5 Mbps"};
+    self.user_intent.object_recognition = (smf_intent_qos_config_t){
+        30, "500 Mbps", "500 Mbps", "5 Mbps", "5 Mbps"};
     self.diam_config->cnf_port = DIAMETER_PORT;
     self.diam_config->cnf_port_tls = DIAMETER_SECURE_PORT;
 
@@ -517,9 +521,28 @@ int smf_context_parse_config(void)
                 } else if (!strcmp(smf_key, "user_intent")) {
                     ogs_yaml_iter_t it;
                     ogs_yaml_iter_recurse(&smf_iter, &it);
+                    if (ogs_yaml_iter_type(&it) != YAML_MAPPING_NODE) {
+                        ogs_error("user_intent must be a mapping");
+                        return OGS_ERROR;
+                    }
                     while (ogs_yaml_iter_next(&it)) {
                         const char *key = ogs_yaml_iter_key(&it);
-                        const char *value = ogs_yaml_iter_value(&it);
+                        const char *value;
+                        if (!strcmp(key, "face_recognition") ||
+                            !strcmp(key, "object_recognition")) {
+                            smf_intent_qos_config_t *qos =
+                                !strcmp(key, "face_recognition") ?
+                                &self.user_intent.face_recognition :
+                                &self.user_intent.object_recognition;
+                            if (smf_user_intent_qos_config_parse(&it, qos) != OGS_OK)
+                                return OGS_ERROR;
+                            continue;
+                        }
+                        if (!ogs_yaml_iter_has_value(&it)) {
+                            ogs_error("user_intent.%s must be a scalar", key);
+                            return OGS_ERROR;
+                        }
+                        value = ogs_yaml_iter_value(&it);
                         if (!strcmp(key, "enabled"))
                             self.user_intent.enabled = value && !strcmp(value, "true");
                         else if (!strcmp(key, "mcc")) self.user_intent.mcc = value;

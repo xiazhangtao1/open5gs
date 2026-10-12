@@ -94,7 +94,7 @@ int smf_intent_parse(const uint8_t *data, size_t length, uint16_t id,
 }
 
 smf_intent_plan_t smf_intent_plan(const smf_intent_value_t *v,
-        bool exists, uint8_t five_qi, uint8_t priority)
+        bool exists, uint8_t five_qi, uint8_t priority, uint8_t initial_priority)
 {
     smf_intent_plan_t p = {SMF_INTENT_NONE, five_qi, priority};
     if (!v->comm_status) {
@@ -103,7 +103,7 @@ smf_intent_plan_t smf_intent_plan(const smf_intent_value_t *v,
     }
     if (v->ai_model == 1) return p;
     p.five_qi = v->ai_model;
-    p.priority = v->ai_model == 2 ? 40 : 30;
+    p.priority = initial_priority;
     if (!exists) p.operation = SMF_INTENT_CREATE;
     else {
         p.operation = SMF_INTENT_MODIFY;
@@ -145,10 +145,85 @@ static bool decimal(const char *s, size_t min, size_t max)
     return true;
 }
 
+int smf_user_intent_qos_config_parse(ogs_yaml_iter_t *parent,
+        smf_intent_qos_config_t *qos)
+{
+    ogs_yaml_iter_t it;
+    const char *profile = ogs_yaml_iter_key(parent);
+    ogs_yaml_iter_recurse(parent, &it);
+    if (ogs_yaml_iter_type(&it) != YAML_MAPPING_NODE) {
+        ogs_error("user_intent.%s must be a mapping", profile);
+        return OGS_ERROR;
+    }
+    while (ogs_yaml_iter_next(&it)) {
+        const char *key = ogs_yaml_iter_key(&it), *value;
+        if (!ogs_yaml_iter_has_value(&it)) {
+            ogs_error("user_intent.%s.%s must be a scalar", profile, key);
+            return OGS_ERROR;
+        }
+        value = ogs_yaml_iter_value(&it);
+        if (!strcmp(key, "priority_level")) {
+            if (!decimal(value, 1, 3) || atoi(value) < 1 || atoi(value) > 127) {
+                ogs_error("user_intent.%s.priority_level must be 1..127", profile);
+                return OGS_ERROR;
+            }
+            qos->priority_level = atoi(value);
+        } else if (!strcmp(key, "maxbr_dl")) qos->maxbr_dl = value;
+        else if (!strcmp(key, "maxbr_ul")) qos->maxbr_ul = value;
+        else if (!strcmp(key, "gbr_dl")) qos->gbr_dl = value;
+        else if (!strcmp(key, "gbr_ul")) qos->gbr_ul = value;
+        else ogs_warn("Unknown user_intent.%s option [%s]", profile, key);
+    }
+    return OGS_OK;
+}
+
+static bool intent_bitrate(const char *value, uint64_t *bitrate)
+{
+    char *unit;
+    double number;
+    uint64_t multiplier = 0;
+    if (!value || (!(value[0] >= '0' && value[0] <= '9') && value[0] != '.'))
+        return false;
+    errno = 0;
+    number = strtod(value, &unit);
+    if (errno == ERANGE || unit == value || *unit != ' ') return false;
+    if (!strcmp(unit + 1, "bps")) multiplier = 1;
+    else if (!strcmp(unit + 1, "Kbps")) multiplier = 1000ULL;
+    else if (!strcmp(unit + 1, "Mbps")) multiplier = 1000000ULL;
+    else if (!strcmp(unit + 1, "Gbps")) multiplier = 1000000000ULL;
+    else if (!strcmp(unit + 1, "Tbps")) multiplier = 1000000000000ULL;
+    if (!multiplier || !(number > 0) ||
+        !(number <= (double)OGS_MAX_BITRATE_NGAP / multiplier) ||
+        number * multiplier < 1) return false;
+    *bitrate = (uint64_t)(number * multiplier);
+    return true;
+}
+
+static bool intent_qos_valid(const smf_intent_qos_config_t *qos,
+        const char *profile)
+{
+    uint64_t max_dl, max_ul, gbr_dl, gbr_ul;
+    if (qos->priority_level < 1 || qos->priority_level > 127 ||
+        !intent_bitrate(qos->maxbr_dl, &max_dl) ||
+        !intent_bitrate(qos->maxbr_ul, &max_ul) ||
+        !intent_bitrate(qos->gbr_dl, &gbr_dl) ||
+        !intent_bitrate(qos->gbr_ul, &gbr_ul) ||
+        gbr_dl > max_dl || gbr_ul > max_ul) {
+        ogs_error("Invalid user_intent.%s QoS: priority_level=1..127, "
+                "positive bitrate with bps/Kbps/Mbps/Gbps/Tbps unit, "
+                "GBR <= MBR <= 4 Tbps required", profile);
+        return false;
+    }
+    return true;
+}
+
 int smf_user_intent_config_validate(void)
 {
     smf_context_t *c = smf_self();
     if (!c->user_intent.enabled) return OGS_OK;
+    if (!intent_qos_valid(&c->user_intent.face_recognition, "face_recognition") ||
+        !intent_qos_valid(&c->user_intent.object_recognition, "object_recognition"))
+        return OGS_ERROR;
     if (!decimal(c->user_intent.mcc, 3, 3) ||
         !decimal(c->user_intent.mnc, 2, 3) ||
         !c->user_intent.notify_uri ||
@@ -465,6 +540,7 @@ static void start_next(smf_sess_t *sess)
     intent_state_t *st = sess->user_intent;
     ogs_sbi_stream_t *stream;
     smf_bearer_t *bearer;
+    const smf_intent_qos_config_t *profile;
     ogs_uuid_t uuid;
     cJSON *body, *qos, *arp;
     ogs_nas_5gs_message_t decoded;
@@ -494,7 +570,11 @@ static void start_next(smf_sess_t *sess)
         st->previous_qos = bearer->qos;
         st->qfi = bearer->qfi;
     }
-    st->plan = smf_intent_plan(&st->request->value, st->exists, st->five_qi, st->priority);
+    profile = st->request->value.ai_model == 2 ?
+        &smf_self()->user_intent.face_recognition :
+        &smf_self()->user_intent.object_recognition;
+    st->plan = smf_intent_plan(&st->request->value, st->exists,
+            st->five_qi, st->priority, profile->priority_level);
     if (ogs_nas_5gsm_decode(&decoded, st->request->nas) != OGS_OK) {
         finish(sess, false, false); return;
     }
@@ -523,17 +603,36 @@ static void start_next(smf_sess_t *sess)
     cJSON_AddStringToObject(body, "operation", st->plan.operation == SMF_INTENT_CREATE ?
             "create" : st->plan.operation == SMF_INTENT_MODIFY ? "modify" : "delete");
     cJSON_AddStringToObject(body, "mediaType", "audio");
-    qos = cJSON_AddObjectToObject(body, "qos");
-    cJSON_AddNumberToObject(qos, "5qi", st->plan.five_qi);
-    cJSON_AddNumberToObject(qos, "priorityLevel", st->plan.priority);
-    cJSON_AddStringToObject(qos, "maxbrDl", "500 Mbps");
-    cJSON_AddStringToObject(qos, "maxbrUl", "500 Mbps");
-    cJSON_AddStringToObject(qos, "gbrDl", "5 Mbps");
-    cJSON_AddStringToObject(qos, "gbrUl", "5 Mbps");
-    arp = cJSON_AddObjectToObject(qos, "arp");
-    cJSON_AddNumberToObject(arp, "priorityLevel", 8);
-    cJSON_AddStringToObject(arp, "preemptionCapability", "NOT_PREEMPT");
-    cJSON_AddStringToObject(arp, "preemptionVulnerability", "PREEMPTABLE");
+    if (st->plan.operation != SMF_INTENT_DELETE) {
+        const char *max_dl = profile->maxbr_dl, *max_ul = profile->maxbr_ul;
+        const char *gbr_dl = profile->gbr_dl, *gbr_ul = profile->gbr_ul;
+        char bandwidth[4][32];
+        /* Same-model requests change only priority, preserving effective QoS
+         * even if another authorized policy has adjusted the bandwidth. */
+        if (bearer && st->five_qi == st->plan.five_qi) {
+            ogs_snprintf(bandwidth[0], sizeof(bandwidth[0]), "%" PRIu64 " bps",
+                    bearer->qos.mbr.downlink);
+            ogs_snprintf(bandwidth[1], sizeof(bandwidth[1]), "%" PRIu64 " bps",
+                    bearer->qos.mbr.uplink);
+            ogs_snprintf(bandwidth[2], sizeof(bandwidth[2]), "%" PRIu64 " bps",
+                    bearer->qos.gbr.downlink);
+            ogs_snprintf(bandwidth[3], sizeof(bandwidth[3]), "%" PRIu64 " bps",
+                    bearer->qos.gbr.uplink);
+            max_dl = bandwidth[0]; max_ul = bandwidth[1];
+            gbr_dl = bandwidth[2]; gbr_ul = bandwidth[3];
+        }
+        qos = cJSON_AddObjectToObject(body, "qos");
+        cJSON_AddNumberToObject(qos, "5qi", st->plan.five_qi);
+        cJSON_AddNumberToObject(qos, "priorityLevel", st->plan.priority);
+        cJSON_AddStringToObject(qos, "maxbrDl", max_dl);
+        cJSON_AddStringToObject(qos, "maxbrUl", max_ul);
+        cJSON_AddStringToObject(qos, "gbrDl", gbr_dl);
+        cJSON_AddStringToObject(qos, "gbrUl", gbr_ul);
+        arp = cJSON_AddObjectToObject(qos, "arp");
+        cJSON_AddNumberToObject(arp, "priorityLevel", 8);
+        cJSON_AddStringToObject(arp, "preemptionCapability", "NOT_PREEMPT");
+        cJSON_AddStringToObject(arp, "preemptionVulnerability", "PREEMPTABLE");
+    }
     if (!pcf_request(sess, body, false)) finish(sess, false, false);
     cJSON_Delete(body);
 }

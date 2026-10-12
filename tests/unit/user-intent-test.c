@@ -66,36 +66,122 @@ static void standard_pco_test(abts_case *tc, void *data)
 static void policy_test(abts_case *tc, void *data)
 {
     smf_intent_value_t v = {1,2,2};
-    smf_intent_plan_t p = smf_intent_plan(&v, false, 0, 0);
+    smf_intent_plan_t p = smf_intent_plan(&v, false, 0, 0, 40);
     unsigned i;
     ABTS_INT_EQUAL(tc, SMF_INTENT_CREATE, p.operation);
     ABTS_INT_EQUAL(tc, 2, p.five_qi);
     ABTS_INT_EQUAL(tc, 40, p.priority);
     for (i = 40; i > 1; i--) {
-        p = smf_intent_plan(&v, true, 2, i);
+        p = smf_intent_plan(&v, true, 2, i, 40);
         ABTS_INT_EQUAL(tc, SMF_INTENT_MODIFY, p.operation);
         ABTS_INT_EQUAL(tc, i-1, p.priority);
     }
-    p = smf_intent_plan(&v, true, 2, 1);
+    p = smf_intent_plan(&v, true, 2, 1, 40);
     ABTS_INT_EQUAL(tc, SMF_INTENT_NONE, p.operation);
     ABTS_INT_EQUAL(tc, 1, p.priority);
     v.ai_model = 3;
-    p = smf_intent_plan(&v, true, 2, 1);
+    p = smf_intent_plan(&v, true, 2, 1, 30);
     ABTS_INT_EQUAL(tc, 3, p.five_qi);
     ABTS_INT_EQUAL(tc, 30, p.priority);
     v.ai_model = 1;
-    p = smf_intent_plan(&v, true, 3, 29);
+    p = smf_intent_plan(&v, true, 3, 29, 30);
     ABTS_INT_EQUAL(tc, SMF_INTENT_NONE, p.operation);
     ABTS_INT_EQUAL(tc, 29, p.priority);
     ABTS_INT_EQUAL(tc, 3, p.five_qi);
     v.ai_model = 2;
-    p = smf_intent_plan(&v, true, 3, 29);
+    p = smf_intent_plan(&v, true, 3, 29, 40);
     ABTS_INT_EQUAL(tc, 40, p.priority);
+    p = smf_intent_plan(&v, false, 0, 0, 55);
+    ABTS_INT_EQUAL(tc, 55, p.priority);
+    p = smf_intent_plan(&v, true, 3, 29, 55);
+    ABTS_INT_EQUAL(tc, 55, p.priority);
+    p = smf_intent_plan(&v, true, 2, 55, 55);
+    ABTS_INT_EQUAL(tc, 54, p.priority);
+    v.ai_model = 3;
+    p = smf_intent_plan(&v, true, 2, 54, 25);
+    ABTS_INT_EQUAL(tc, 25, p.priority);
+    p = smf_intent_plan(&v, false, 0, 0, 1);
+    ABTS_INT_EQUAL(tc, SMF_INTENT_CREATE, p.operation);
+    ABTS_INT_EQUAL(tc, 1, p.priority);
     v.comm_status = 0;
-    p = smf_intent_plan(&v, true, 3, 29);
+    p = smf_intent_plan(&v, true, 3, 29, 25);
     ABTS_INT_EQUAL(tc, SMF_INTENT_DELETE, p.operation);
-    p = smf_intent_plan(&v, false, 0, 0);
+    p = smf_intent_plan(&v, false, 0, 0, 25);
     ABTS_INT_EQUAL(tc, SMF_INTENT_NONE, p.operation);
+}
+
+static void config_test(abts_case *tc, void *data)
+{
+    smf_context_t *c = smf_self();
+    smf_intent_qos_config_t face = {
+        55, "120 Mbps", "80 Mbps", "12 Mbps", "8 Mbps"};
+    const char *invalid_rates[] = {NULL, "", "500", "5 mbps", "0 Mbps",
+        "-1 Mbps", "NaN Mbps", "inf Mbps", "1e999 Mbps", "4.1 Tbps",
+        "0.1 bps", "5 Mbps junk"};
+    const char *valid_rates[] = {"12000000 bps", "12000 Kbps", "12 Mbps",
+        ".012 Gbps", "0.000012 Tbps"};
+    const char *invalid_yaml[] = {
+        "face_recognition: 55\n", "face_recognition: [55]\n",
+        "face_recognition: {priority_level: [55]}\n",
+        "face_recognition: {priority_level: 0}\n",
+        "face_recognition: {priority_level: 128}\n",
+        "face_recognition: {priority_level: 257}\n",
+        "face_recognition: {priority_level: 999999999999999999999}\n",
+        "face_recognition: {priority_level: 1.5}\n"};
+    const char *valid_yaml = "face_recognition: {priority_level: 127, "
+        "maxbr_dl: 200 Mbps, gbr_ul: 1.5 Mbps}\n";
+    size_t i;
+    c->user_intent.enabled = true;
+    c->user_intent.mcc = "460";
+    c->user_intent.mnc = "00";
+    c->user_intent.notify_uri = "http://127.0.0.1:8000/api/v1/intent/notify";
+    c->user_intent.face_recognition = face;
+    c->user_intent.object_recognition = (smf_intent_qos_config_t){
+        25, "240 Mbps", "160 Mbps", "24 Mbps", "16 Mbps"};
+    ABTS_INT_EQUAL(tc, OGS_OK, smf_user_intent_config_validate());
+    for (i = 0; i < OGS_ARRAY_SIZE(invalid_rates); i++) {
+        c->user_intent.face_recognition.maxbr_dl = invalid_rates[i];
+        ABTS_INT_EQUAL(tc, OGS_ERROR, smf_user_intent_config_validate());
+    }
+    c->user_intent.face_recognition = face;
+    for (i = 0; i < OGS_ARRAY_SIZE(valid_rates); i++) {
+        c->user_intent.face_recognition.gbr_dl = valid_rates[i];
+        ABTS_INT_EQUAL(tc, OGS_OK, smf_user_intent_config_validate());
+    }
+    c->user_intent.face_recognition.priority_level = 128;
+    ABTS_INT_EQUAL(tc, OGS_ERROR, smf_user_intent_config_validate());
+    c->user_intent.face_recognition = face;
+    c->user_intent.face_recognition.gbr_dl = "121 Mbps";
+    ABTS_INT_EQUAL(tc, OGS_ERROR, smf_user_intent_config_validate());
+    c->user_intent.face_recognition = face;
+    c->user_intent.object_recognition.gbr_ul = "161 Mbps";
+    ABTS_INT_EQUAL(tc, OGS_ERROR, smf_user_intent_config_validate());
+
+    for (i = 0; i <= OGS_ARRAY_SIZE(invalid_yaml); i++) {
+        yaml_parser_t parser;
+        yaml_document_t document;
+        ogs_yaml_iter_t it;
+        const char *input = i == OGS_ARRAY_SIZE(invalid_yaml) ?
+            valid_yaml : invalid_yaml[i];
+        smf_intent_qos_config_t parsed = face;
+        ABTS_TRUE(tc, yaml_parser_initialize(&parser));
+        yaml_parser_set_input_string(&parser,
+                (const unsigned char *)input, strlen(input));
+        ABTS_TRUE(tc, yaml_parser_load(&parser, &document));
+        ogs_yaml_iter_init(&it, &document);
+        ABTS_TRUE(tc, ogs_yaml_iter_next(&it));
+        ABTS_INT_EQUAL(tc, i == OGS_ARRAY_SIZE(invalid_yaml) ? OGS_OK : OGS_ERROR,
+                smf_user_intent_qos_config_parse(&it, &parsed));
+        if (i == OGS_ARRAY_SIZE(invalid_yaml)) {
+            ABTS_INT_EQUAL(tc, 127, parsed.priority_level);
+            ABTS_STR_EQUAL(tc, "200 Mbps", parsed.maxbr_dl);
+            ABTS_STR_EQUAL(tc, "80 Mbps", parsed.maxbr_ul);
+            ABTS_STR_EQUAL(tc, "1.5 Mbps", parsed.gbr_ul);
+        }
+        yaml_document_delete(&document);
+        yaml_parser_delete(&parser);
+    }
+    memset(&c->user_intent, 0, sizeof(c->user_intent));
 }
 
 static void json_test(abts_case *tc, void *data)
@@ -122,6 +208,7 @@ abts_suite *test_user_intent(abts_suite *suite)
     suite = ADD_SUITE(suite);
     abts_run_test(suite, parse_test, NULL);
     abts_run_test(suite, policy_test, NULL);
+    abts_run_test(suite, config_test, NULL);
     abts_run_test(suite, standard_pco_test, NULL);
     abts_run_test(suite, json_test, NULL);
     return suite;

@@ -187,6 +187,22 @@ networking:
       mcc: ""
       mnc: ""
       notifyUri: http://10.2.5.125:8000/api/v1/intent/notify
+      # Initial QoS for creation and model switches. Same-model requests only
+      # decrement priorityLevel (minimum 1), preserving the active bandwidth.
+      # 人脸识别 (aiModel=2, 5QI=2)
+      faceRecognition:
+        priorityLevel: 40
+        maxbrDl: "500 Mbps"
+        maxbrUl: "500 Mbps"
+        gbrDl: "5 Mbps"
+        gbrUl: "5 Mbps"
+      # 物体识别 (aiModel=3, 5QI=3)
+      objectRecognition:
+        priorityLevel: 30
+        maxbrDl: "500 Mbps"
+        maxbrUl: "500 Mbps"
+        gbrDl: "5 Mbps"
+        gbrUl: "5 Mbps"
   amf:
     ngap:
       serverAddress: 0.0.0.0

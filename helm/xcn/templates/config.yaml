@@ -154,6 +154,22 @@ data:
         mcc: {{ .Values.networking.smf.userIntent.mcc | quote }}
         mnc: {{ .Values.networking.smf.userIntent.mnc | quote }}
         notify_uri: {{ .Values.networking.smf.userIntent.notifyUri | quote }}
+        {{- with .Values.networking.smf.userIntent.faceRecognition }}
+        face_recognition:
+          priority_level: {{ .priorityLevel }}
+          maxbr_dl: {{ .maxbrDl | quote }}
+          maxbr_ul: {{ .maxbrUl | quote }}
+          gbr_dl: {{ .gbrDl | quote }}
+          gbr_ul: {{ .gbrUl | quote }}
+        {{- end }}
+        {{- with .Values.networking.smf.userIntent.objectRecognition }}
+        object_recognition:
+          priority_level: {{ .priorityLevel }}
+          maxbr_dl: {{ .maxbrDl | quote }}
+          maxbr_ul: {{ .maxbrUl | quote }}
+          gbr_dl: {{ .gbrDl | quote }}
+          gbr_ul: {{ .gbrUl | quote }}
+        {{- end }}
       dns:
         - 8.8.8.8
         - 8.8.4.4

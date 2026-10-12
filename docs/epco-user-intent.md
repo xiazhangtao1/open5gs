@@ -13,9 +13,45 @@ smf:
     mcc: "460"
     mnc: "00"
     notify_uri: http://10.2.5.125:8000/api/v1/intent/notify
+    face_recognition:
+      priority_level: 40
+      maxbr_dl: "500 Mbps"
+      maxbr_ul: "500 Mbps"
+      gbr_dl: "5 Mbps"
+      gbr_ul: "5 Mbps"
+    object_recognition:
+      priority_level: 30
+      maxbr_dl: "500 Mbps"
+      maxbr_ul: "500 Mbps"
+      gbr_dl: "5 Mbps"
+      gbr_ul: "5 Mbps"
 ```
 
 MCC/MNC 是应用运营商标识，必须显式填写；MNC 字符串保留两位/三位区别。容器固定 `0xFF10`，部署前检查编号冲突。Helm 对应 `networking.smf.userIntent.enabled/mcc/mnc/notifyUri`，默认 `enabled: false`。双栈会话当前选择已分配 IPv4；纯 IPv6 会话尚未提供可确认的业务 IPv6 主机地址，通知会记录失败，不能将 IPv6 前缀当作 UE 主机地址。
+
+Helm 的初始 QoS 配置位于 `helm/xcn/values.yaml`：
+
+```yaml
+networking:
+  smf:
+    userIntent:
+      faceRecognition:       # 人脸识别，aiModel=2，固定 5QI=2
+        priorityLevel: 40
+        maxbrDl: "500 Mbps"
+        maxbrUl: "500 Mbps"
+        gbrDl: "5 Mbps"
+        gbrUl: "5 Mbps"
+      objectRecognition:     # 物体识别，aiModel=3，固定 5QI=3
+        priorityLevel: 30
+        maxbrDl: "500 Mbps"
+        maxbrUl: "500 Mbps"
+        gbrDl: "5 Mbps"
+        gbrUl: "5 Mbps"
+```
+
+创建专载和模型互切时应用目标模型的全部五项配置；同模型的新事务只在当前已生效优先级上减 1，最低 1，保留当前带宽。On+LLM 保留全部已有参数。旧 SMF 配置省略这些配置组或个别字段时采用以上默认值。优先级范围为 1～127；带宽必须为带单位的正数字符串，支持 `bps/Kbps/Mbps/Gbps/Tbps`，每项不超过 4 Tbps，且同方向 GBR 不超过 MBR。启用功能后，非法 QoS 配置会导致 SMF 启动失败并记录错误。
+
+修改 values 后需 Helm 升级并重建 SMF 所在 Pod，使 SMF 重新读取配置；不支持热加载，也不主动重设存量专载。后续创建或模型切换使用新值，同模型请求继续基于存量状态递减。
 
 ## 消息及策略
 
@@ -24,13 +60,13 @@ MCC/MNC 是应用运营商标识，必须显式填写；MNC 字符串保留两�
 | 输入 | 本功能专载操作 |
 | --- | --- |
 | On + LLM | 保留当前资源与全 IP 过滤规则，无资源时不创建 |
-| On + 人脸，无专载 | 创建 5QI 2、priorityLevel 40 |
-| On + 物体，无专载 | 创建 5QI 3、priorityLevel 30 |
+| On + 人脸，无专载 | 创建 5QI 2，使用 faceRecognition 配置（默认 priorityLevel 40） |
+| On + 物体，无专载 | 创建 5QI 3，使用 objectRecognition 配置（默认 priorityLevel 30） |
 | On + 同一实际 5QI | priorityLevel 递减，最低 1；到 1 后允许 no-op |
-| On + 模型切换 | 同一 appSessionId/QFI 修改，优先级重置 40/30 |
+| On + 模型切换 | 同一 appSessionId/QFI 修改，优先级及带宽重置为目标模型配置 |
 | Off | 删除本功能专载，保留默认流；本来无专载则 no-op |
 
-GPU 仅通知，不参与 QoS。ARP 8、NOT_PREEMPT/PREEMPTABLE；双向 MBR 500 Mbps、GBR 5 Mbps。过滤规则等效于 `permit out ip from 0.0.0.0/0 to assigned` 和 `permit in ip from assigned to 0.0.0.0/0`；后者按现有 PCC/IPFW 约定归一化存储为反向描述加 UPLINK 方向。
+GPU 仅通知，不参与 QoS。ARP 8、NOT_PREEMPT/PREEMPTABLE；MBR/GBR 使用对应模型配置，默认双向 MBR 500 Mbps、GBR 5 Mbps。过滤规则等效于 `permit out ip from 0.0.0.0/0 to assigned` 和 `permit in ip from assigned to 0.0.0.0/0`；后者按现有 PCC/IPFW 约定归一化存储为反向描述加 UPLINK 方向。
 
 标准 ePCO 配置项逐项复用现有响应构造，包括 DNS；先检查 PAP/CHAP/IPCP 长度，再调用旧入口，输出受缓冲区容量限制。不回显私有意图容器。
 
@@ -80,6 +116,17 @@ python3 tests/helpers/verify-intent-notifications.py \
 不设 `XCN_INTENT_FAILURE_TEST` 时不添加最后一次资源 Command Reject，通知总数 51；设置时 52。`XCN_INTENT_TIMER_TEST` 会暂缓 Complete 以验证 Command 重发。测试检查优先级 40→1、模型互切 QFI 不变、LLM 保留、PTI 复用、重传、非法枚举、UE 拒绝、删除后的默认流 GTP-U ping，以及通知完整序列与次数。
 
 通知 fixture 可用 `--status 400/500/200`、`--delay 1.2` 模拟失败；关闭接收端验证连接失败。原有 dedicated-bearer 回归直接运行上述测试二进制、不设置 `XCN_INTENT_TEST`。
+
+自定义初始 QoS 测试：在隔离配置中将 `smf.user_intent.face_recognition` 设置为优先级 55、MBR 下行/上行 120/80 Mbps、GBR 下行/上行 12/8 Mbps；`object_recognition` 设置为优先级 25、MBR 240/160 Mbps、GBR 24/16 Mbps，再执行：
+
+```bash
+XCN_INTENT_TEST=1 XCN_INTENT_PROFILE_TEST=1 \
+  build/tests/vonr/vonr -e info -c /tmp/intent-profiles.yaml dedicated-bearer-test
+```
+
+此场景验证 NAS/N2/PFCP 闭环、创建与模型互切后的五项 QoS、同模型递减时带宽保留、LLM 保留、appSessionId/QFI 不变、重传和删除后的默认流用户面 ping。共 7 个新意图事务，使用独立通知日志，不能套用默认场景的 51/52 条通知校验。
+
+2026-10-12 初始 QoS 配置实测：全量编译、unit、Helm lint 及默认/自定义渲染通过；上述自定义场景中 PCF 已生效策略和实际 N2 下发带宽逐项一致，7 次通知无重复。未增加新配置的旧 YAML 通过原有意图生命周期及 52 条通知校验，原 dedicated-bearer 单会话和并发回归通过。非法优先级、错误配置类型、带宽超限和 GBR 大于 MBR 的独立 SMF 启动均受控拒绝，无断言退出。通知使用隔离接收端。
 
 本次隔离 Docker 实测：全量构建和 unit 通过；意图成功/拒绝生命周期及默认用户面 ping 通过；T3591 重发通过；通知 400/500/200/超时/连接失败五组全部通过，每组原 QoS/NAS 流程正常且无通知重试；原 dedicated-bearer 单会话及并发双会话回归通过。
 

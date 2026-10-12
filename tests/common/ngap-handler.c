@@ -39,6 +39,17 @@ static void store_qos_profile(test_bearer_t *flow,
                    *descriptor->priorityLevelQos <= 127);
         flow->qos.priority_level = *descriptor->priorityLevelQos;
     }
+    if (params->gBR_QosInformation) {
+        const NGAP_GBR_QosInformation_t *gbr = params->gBR_QosInformation;
+        ogs_assert(asn_INTEGER2uint64(&gbr->maximumFlowBitRateDL,
+                    &flow->qos.mbr.downlink) == 0);
+        ogs_assert(asn_INTEGER2uint64(&gbr->maximumFlowBitRateUL,
+                    &flow->qos.mbr.uplink) == 0);
+        ogs_assert(asn_INTEGER2uint64(&gbr->guaranteedFlowBitRateDL,
+                    &flow->qos.gbr.downlink) == 0);
+        ogs_assert(asn_INTEGER2uint64(&gbr->guaranteedFlowBitRateUL,
+                    &flow->qos.gbr.uplink) == 0);
+    }
 }
 
 void testngap_handle_ng_setup_response(
