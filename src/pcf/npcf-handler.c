@@ -3511,8 +3511,9 @@ bool pcf_xcn_intent_handle(ogs_sbi_stream_t *stream,
         /* The override parser uses a borrowed constant ID. */
         target.id = NULL;
         if (!valid) goto fail;
-        if ((target.qos.index != 2 && target.qos.index != 3) ||
-            !target.qos.priority_level) goto fail;
+        /* 5QI has already been validated by the common override parser;
+         * intent profiles are configurable independently of model enums. */
+        if (!target.qos.priority_level) goto fail;
     }
     if (op == 1) {
         if (ogs_list_count(&sess->app_list) >= OGS_MAX_NUM_OF_BEARER - 1) {

@@ -65,48 +65,65 @@ static void standard_pco_test(abts_case *tc, void *data)
 
 static void policy_test(abts_case *tc, void *data)
 {
+    smf_intent_qos_config_t face = {.five_qi = 2, .priority_level = 40};
+    smf_intent_qos_config_t object = {.five_qi = 3, .priority_level = 30};
     smf_intent_value_t v = {1,2,2};
-    smf_intent_plan_t p = smf_intent_plan(&v, false, 0, 0, 40);
+    smf_intent_plan_t p = smf_intent_plan(&v, false, 0, 0, 0, &face);
     unsigned i;
     ABTS_INT_EQUAL(tc, SMF_INTENT_CREATE, p.operation);
     ABTS_INT_EQUAL(tc, 2, p.five_qi);
     ABTS_INT_EQUAL(tc, 40, p.priority);
     for (i = 40; i > 1; i--) {
-        p = smf_intent_plan(&v, true, 2, i, 40);
+        p = smf_intent_plan(&v, true, 2, 2, i, &face);
         ABTS_INT_EQUAL(tc, SMF_INTENT_MODIFY, p.operation);
         ABTS_INT_EQUAL(tc, i-1, p.priority);
     }
-    p = smf_intent_plan(&v, true, 2, 1, 40);
+    p = smf_intent_plan(&v, true, 2, 2, 1, &face);
     ABTS_INT_EQUAL(tc, SMF_INTENT_NONE, p.operation);
     ABTS_INT_EQUAL(tc, 1, p.priority);
     v.ai_model = 3;
-    p = smf_intent_plan(&v, true, 2, 1, 30);
+    p = smf_intent_plan(&v, true, 2, 2, 1, &object);
     ABTS_INT_EQUAL(tc, 3, p.five_qi);
     ABTS_INT_EQUAL(tc, 30, p.priority);
     v.ai_model = 1;
-    p = smf_intent_plan(&v, true, 3, 29, 30);
+    p = smf_intent_plan(&v, true, 3, 3, 29, NULL);
     ABTS_INT_EQUAL(tc, SMF_INTENT_NONE, p.operation);
     ABTS_INT_EQUAL(tc, 29, p.priority);
     ABTS_INT_EQUAL(tc, 3, p.five_qi);
     v.ai_model = 2;
-    p = smf_intent_plan(&v, true, 3, 29, 40);
-    ABTS_INT_EQUAL(tc, 40, p.priority);
-    p = smf_intent_plan(&v, false, 0, 0, 55);
+    face.five_qi = 1; face.priority_level = 55;
+    p = smf_intent_plan(&v, false, 0, 0, 0, &face);
+    ABTS_INT_EQUAL(tc, 1, p.five_qi);
     ABTS_INT_EQUAL(tc, 55, p.priority);
-    p = smf_intent_plan(&v, true, 3, 29, 55);
+    p = smf_intent_plan(&v, true, 3, 3, 29, &face);
+    ABTS_INT_EQUAL(tc, 1, p.five_qi);
     ABTS_INT_EQUAL(tc, 55, p.priority);
-    p = smf_intent_plan(&v, true, 2, 55, 55);
+    p = smf_intent_plan(&v, true, 2, 1, 55, &face);
     ABTS_INT_EQUAL(tc, 54, p.priority);
+    /* An authorized 5QI change must be restored to this model's profile. */
+    p = smf_intent_plan(&v, true, 2, 4, 54, &face);
+    ABTS_INT_EQUAL(tc, 1, p.five_qi);
+    ABTS_INT_EQUAL(tc, 55, p.priority);
     v.ai_model = 3;
-    p = smf_intent_plan(&v, true, 2, 54, 25);
+    object.five_qi = 4; object.priority_level = 25;
+    p = smf_intent_plan(&v, true, 2, 1, 54, &object);
+    ABTS_INT_EQUAL(tc, 4, p.five_qi);
     ABTS_INT_EQUAL(tc, 25, p.priority);
-    p = smf_intent_plan(&v, false, 0, 0, 1);
+    /* Equal configured 5QIs still select the new model's priority. */
+    object.five_qi = 1;
+    p = smf_intent_plan(&v, true, 2, 1, 54, &object);
+    ABTS_INT_EQUAL(tc, 25, p.priority);
+    p = smf_intent_plan(&v, true, 3, 1, 25, &object);
+    ABTS_INT_EQUAL(tc, 24, p.priority);
+    object.five_qi = 255; object.priority_level = 1;
+    p = smf_intent_plan(&v, false, 0, 0, 0, &object);
     ABTS_INT_EQUAL(tc, SMF_INTENT_CREATE, p.operation);
+    ABTS_INT_EQUAL(tc, 255, p.five_qi);
     ABTS_INT_EQUAL(tc, 1, p.priority);
     v.comm_status = 0;
-    p = smf_intent_plan(&v, true, 3, 29, 25);
+    p = smf_intent_plan(&v, true, 3, 1, 29, NULL);
     ABTS_INT_EQUAL(tc, SMF_INTENT_DELETE, p.operation);
-    p = smf_intent_plan(&v, false, 0, 0, 25);
+    p = smf_intent_plan(&v, false, 0, 0, 0, NULL);
     ABTS_INT_EQUAL(tc, SMF_INTENT_NONE, p.operation);
 }
 
@@ -114,7 +131,7 @@ static void config_test(abts_case *tc, void *data)
 {
     smf_context_t *c = smf_self();
     smf_intent_qos_config_t face = {
-        55, "120 Mbps", "80 Mbps", "12 Mbps", "8 Mbps"};
+        1, 55, "120 Mbps", "80 Mbps", "12 Mbps", "8 Mbps"};
     const char *invalid_rates[] = {NULL, "", "500", "5 mbps", "0 Mbps",
         "-1 Mbps", "NaN Mbps", "inf Mbps", "1e999 Mbps", "4.1 Tbps",
         "0.1 bps", "5 Mbps junk"};
@@ -127,8 +144,14 @@ static void config_test(abts_case *tc, void *data)
         "face_recognition: {priority_level: 128}\n",
         "face_recognition: {priority_level: 257}\n",
         "face_recognition: {priority_level: 999999999999999999999}\n",
-        "face_recognition: {priority_level: 1.5}\n"};
-    const char *valid_yaml = "face_recognition: {priority_level: 127, "
+        "face_recognition: {priority_level: 1.5}\n",
+        "face_recognition: {five_qi: 0}\n",
+        "face_recognition: {five_qi: 256}\n",
+        "face_recognition: {five_qi: -1}\n",
+        "face_recognition: {five_qi: 1.5}\n",
+        "face_recognition: {five_qi: 999999999999999999999}\n",
+        "face_recognition: {five_qi: [1]}\n"};
+    const char *valid_yaml = "face_recognition: {five_qi: 255, priority_level: 127, "
         "maxbr_dl: 200 Mbps, gbr_ul: 1.5 Mbps}\n";
     size_t i;
     c->user_intent.enabled = true;
@@ -137,7 +160,7 @@ static void config_test(abts_case *tc, void *data)
     c->user_intent.notify_uri = "http://127.0.0.1:8000/api/v1/intent/notify";
     c->user_intent.face_recognition = face;
     c->user_intent.object_recognition = (smf_intent_qos_config_t){
-        25, "240 Mbps", "160 Mbps", "24 Mbps", "16 Mbps"};
+        4, 25, "240 Mbps", "160 Mbps", "24 Mbps", "16 Mbps"};
     ABTS_INT_EQUAL(tc, OGS_OK, smf_user_intent_config_validate());
     for (i = 0; i < OGS_ARRAY_SIZE(invalid_rates); i++) {
         c->user_intent.face_recognition.maxbr_dl = invalid_rates[i];
@@ -148,6 +171,9 @@ static void config_test(abts_case *tc, void *data)
         c->user_intent.face_recognition.gbr_dl = valid_rates[i];
         ABTS_INT_EQUAL(tc, OGS_OK, smf_user_intent_config_validate());
     }
+    c->user_intent.face_recognition.five_qi = 256;
+    ABTS_INT_EQUAL(tc, OGS_ERROR, smf_user_intent_config_validate());
+    c->user_intent.face_recognition = face;
     c->user_intent.face_recognition.priority_level = 128;
     ABTS_INT_EQUAL(tc, OGS_ERROR, smf_user_intent_config_validate());
     c->user_intent.face_recognition = face;
@@ -173,6 +199,7 @@ static void config_test(abts_case *tc, void *data)
         ABTS_INT_EQUAL(tc, i == OGS_ARRAY_SIZE(invalid_yaml) ? OGS_OK : OGS_ERROR,
                 smf_user_intent_qos_config_parse(&it, &parsed));
         if (i == OGS_ARRAY_SIZE(invalid_yaml)) {
+            ABTS_INT_EQUAL(tc, 255, parsed.five_qi);
             ABTS_INT_EQUAL(tc, 127, parsed.priority_level);
             ABTS_STR_EQUAL(tc, "200 Mbps", parsed.maxbr_dl);
             ABTS_STR_EQUAL(tc, "80 Mbps", parsed.maxbr_ul);
@@ -195,6 +222,12 @@ static void json_test(abts_case *tc, void *data)
     body = smf_intent_notification(&v, "10.45.0.2", "imsi-460001234567890", false, 2);
     ABTS_TRUE(tc, !cJSON_HasObjectItem(body, "fiveQi"));
     ABTS_STR_EQUAL(tc, "FAILURE", cJSON_GetObjectItem(body, "qosResult")->valuestring);
+    cJSON_Delete(body);
+    body = smf_intent_notification(&v, "10.45.0.2", "imsi-460001234567890", true, 255);
+    ABTS_INT_EQUAL(tc, 255, cJSON_GetObjectItem(body, "fiveQi")->valueint);
+    cJSON_Delete(body);
+    body = smf_intent_notification(&v, "10.45.0.2", "imsi-460001234567890", true, 0);
+    ABTS_TRUE(tc, !cJSON_HasObjectItem(body, "fiveQi"));
     cJSON_Delete(body);
     v.comm_status = 0;
     body = smf_intent_notification(&v, "10.45.0.2", "imsi-460001234567890", true, 2);

@@ -37,7 +37,7 @@ struct smf_user_intent_s {
     char *app_id, *rule_id;
     bool exists, active, binding, uncertain, prepared;
     bool command_sent, complete, n2_done, pfcp_done, finalizing, success;
-    uint8_t five_qi, priority, qfi;
+    uint8_t model, five_qi, priority, qfi;
     smf_intent_plan_t plan;
     ogs_qos_t previous_qos;
     ogs_pkbuf_t *command, *n2;
@@ -94,7 +94,8 @@ int smf_intent_parse(const uint8_t *data, size_t length, uint16_t id,
 }
 
 smf_intent_plan_t smf_intent_plan(const smf_intent_value_t *v,
-        bool exists, uint8_t five_qi, uint8_t priority, uint8_t initial_priority)
+        bool exists, uint8_t model, uint8_t five_qi, uint8_t priority,
+        const smf_intent_qos_config_t *profile)
 {
     smf_intent_plan_t p = {SMF_INTENT_NONE, five_qi, priority};
     if (!v->comm_status) {
@@ -102,12 +103,12 @@ smf_intent_plan_t smf_intent_plan(const smf_intent_value_t *v,
         return p;
     }
     if (v->ai_model == 1) return p;
-    p.five_qi = v->ai_model;
-    p.priority = initial_priority;
+    p.five_qi = profile->five_qi;
+    p.priority = profile->priority_level;
     if (!exists) p.operation = SMF_INTENT_CREATE;
     else {
         p.operation = SMF_INTENT_MODIFY;
-        if (five_qi == p.five_qi) {
+        if (model == v->ai_model && five_qi == p.five_qi) {
             p.priority = priority > 1 ? priority - 1 : 1;
             if (priority == 1) p.operation = SMF_INTENT_NONE;
         }
@@ -130,7 +131,7 @@ cJSON *smf_intent_notification(const smf_intent_value_t *v,
     cJSON_AddNumberToObject(body, "aiModel", v->ai_model);
     cJSON_AddNumberToObject(body, "gpuLevel", v->gpu_level);
     cJSON_AddStringToObject(body, "qosResult", success ? "SUCCESS" : "FAILURE");
-    if (success && v->comm_status && (five_qi == 2 || five_qi == 3))
+    if (success && v->comm_status && five_qi)
         cJSON_AddNumberToObject(body, "fiveQi", five_qi);
     cJSON_AddStringToObject(body, "rawPco", raw);
     cJSON_AddNumberToObject(body, "timestamp", ogs_time_now() / 1000);
@@ -162,7 +163,13 @@ int smf_user_intent_qos_config_parse(ogs_yaml_iter_t *parent,
             return OGS_ERROR;
         }
         value = ogs_yaml_iter_value(&it);
-        if (!strcmp(key, "priority_level")) {
+        if (!strcmp(key, "five_qi")) {
+            if (!decimal(value, 1, 3) || atoi(value) < 1 || atoi(value) > 255) {
+                ogs_error("user_intent.%s.five_qi must be 1..255", profile);
+                return OGS_ERROR;
+            }
+            qos->five_qi = atoi(value);
+        } else if (!strcmp(key, "priority_level")) {
             if (!decimal(value, 1, 3) || atoi(value) < 1 || atoi(value) > 127) {
                 ogs_error("user_intent.%s.priority_level must be 1..127", profile);
                 return OGS_ERROR;
@@ -203,18 +210,34 @@ static bool intent_qos_valid(const smf_intent_qos_config_t *qos,
         const char *profile)
 {
     uint64_t max_dl, max_ul, gbr_dl, gbr_ul;
-    if (qos->priority_level < 1 || qos->priority_level > 127 ||
+    if (qos->five_qi < 1 || qos->five_qi > 255 ||
+        qos->priority_level < 1 || qos->priority_level > 127 ||
         !intent_bitrate(qos->maxbr_dl, &max_dl) ||
         !intent_bitrate(qos->maxbr_ul, &max_ul) ||
         !intent_bitrate(qos->gbr_dl, &gbr_dl) ||
         !intent_bitrate(qos->gbr_ul, &gbr_ul) ||
         gbr_dl > max_dl || gbr_ul > max_ul) {
-        ogs_error("Invalid user_intent.%s QoS: priority_level=1..127, "
+        ogs_error("Invalid user_intent.%s QoS: five_qi=1..255, priority_level=1..127, "
                 "positive bitrate with bps/Kbps/Mbps/Gbps/Tbps unit, "
                 "GBR <= MBR <= 4 Tbps required", profile);
         return false;
     }
     return true;
+}
+
+static bool intent_qos_unchanged(const ogs_qos_t *qos,
+        const smf_intent_qos_config_t *profile)
+{
+    uint64_t max_dl, max_ul, gbr_dl, gbr_ul;
+    return qos->index == profile->five_qi &&
+        qos->priority_level == profile->priority_level &&
+        qos->arp.priority_level == 8 &&
+        qos->arp.pre_emption_capability == OGS_5GC_PRE_EMPTION_DISABLED &&
+        qos->arp.pre_emption_vulnerability == OGS_5GC_PRE_EMPTION_ENABLED &&
+        intent_bitrate(profile->maxbr_dl, &max_dl) && qos->mbr.downlink == max_dl &&
+        intent_bitrate(profile->maxbr_ul, &max_ul) && qos->mbr.uplink == max_ul &&
+        intent_bitrate(profile->gbr_dl, &gbr_dl) && qos->gbr.downlink == gbr_dl &&
+        intent_bitrate(profile->gbr_ul, &gbr_ul) && qos->gbr.uplink == gbr_ul;
 }
 
 int smf_user_intent_config_validate(void)
@@ -574,7 +597,13 @@ static void start_next(smf_sess_t *sess)
         &smf_self()->user_intent.face_recognition :
         &smf_self()->user_intent.object_recognition;
     st->plan = smf_intent_plan(&st->request->value, st->exists,
-            st->five_qi, st->priority, profile->priority_level);
+            st->model, st->five_qi, st->priority, profile);
+    /* A model switch may select an identical profile. Complete it as a
+     * NAS-only transaction rather than asking binding to apply an empty delta. */
+    if (bearer && st->plan.operation == SMF_INTENT_MODIFY &&
+        st->model != st->request->value.ai_model &&
+        intent_qos_unchanged(&bearer->qos, profile))
+        st->plan.operation = SMF_INTENT_NONE;
     if (ogs_nas_5gsm_decode(&decoded, st->request->nas) != OGS_OK) {
         finish(sess, false, false); return;
     }
@@ -609,7 +638,8 @@ static void start_next(smf_sess_t *sess)
         char bandwidth[4][32];
         /* Same-model requests change only priority, preserving effective QoS
          * even if another authorized policy has adjusted the bandwidth. */
-        if (bearer && st->five_qi == st->plan.five_qi) {
+        if (bearer && st->model == st->request->value.ai_model &&
+            st->five_qi == st->plan.five_qi) {
             ogs_snprintf(bandwidth[0], sizeof(bandwidth[0]), "%" PRIu64 " bps",
                     bearer->qos.mbr.downlink);
             ogs_snprintf(bandwidth[1], sizeof(bandwidth[1]), "%" PRIu64 " bps",
@@ -647,7 +677,11 @@ static void settle(smf_sess_t *sess)
         if (st->exists) {
             st->five_qi = st->plan.five_qi;
             st->priority = st->plan.priority;
+            /* LLM keeps the resource's last successfully applied model. */
+            if (st->request->value.comm_status && st->request->value.ai_model != 1)
+                st->model = st->request->value.ai_model;
         } else if (st->plan.operation == SMF_INTENT_DELETE) {
+            st->model = 0;
             bearer = smf_qos_flow_find_by_pcc_rule_id(sess, st->rule_id);
             if (bearer) smf_bearer_remove(bearer);
             ogs_free(st->app_id); st->app_id = NULL;

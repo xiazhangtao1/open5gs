@@ -18,7 +18,8 @@ typedef struct {
 int smf_intent_parse(const uint8_t *data, size_t length, uint16_t id,
         const ogs_plmn_id_t *plmn, smf_intent_value_t *value);
 smf_intent_plan_t smf_intent_plan(const smf_intent_value_t *value,
-        bool exists, uint8_t five_qi, uint8_t priority, uint8_t initial_priority);
+        bool exists, uint8_t model, uint8_t five_qi, uint8_t priority,
+        const smf_intent_qos_config_t *profile);
 cJSON *smf_intent_notification(const smf_intent_value_t *value,
         const char *ue_ip, const char *supi, bool success, uint8_t five_qi);
 int smf_user_intent_config_validate(void);

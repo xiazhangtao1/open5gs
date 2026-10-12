@@ -167,9 +167,9 @@ static int smf_context_prepare(void)
     self.user_intent.container_id = 0xff10;
     self.user_intent.notify_uri = "http://10.2.5.125:8000/api/v1/intent/notify";
     self.user_intent.face_recognition = (smf_intent_qos_config_t){
-        40, "500 Mbps", "500 Mbps", "5 Mbps", "5 Mbps"};
+        2, 40, "500 Mbps", "500 Mbps", "5 Mbps", "5 Mbps"};
     self.user_intent.object_recognition = (smf_intent_qos_config_t){
-        30, "500 Mbps", "500 Mbps", "5 Mbps", "5 Mbps"};
+        3, 30, "500 Mbps", "500 Mbps", "5 Mbps", "5 Mbps"};
     self.diam_config->cnf_port = DIAMETER_PORT;
     self.diam_config->cnf_port_tls = DIAMETER_SECURE_PORT;
 

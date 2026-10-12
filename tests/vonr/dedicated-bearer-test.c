@@ -699,29 +699,58 @@ static void intent_profiles(abts_case *tc, test_sess_t *sess,
 {
     char app_id[256] = "";
     uint8_t qfi;
+    int face_qi = 1, object_qi = getenv("XCN_INTENT_SHARED_5QI_TEST") ? 1 : 4;
     sess->pti = 6;
-    intent_transaction(tc, sess, ngap, 1,2,2, 2,55, true, true);
+    intent_transaction(tc, sess, ngap, 1,2,2, face_qi,55, true, true);
     qfi = dedicated_flow(sess)->qfi;
-    query_intent_qos(tc, sess, app_id, 2,55, 120000000,80000000,12000000,8000000);
+    query_intent_qos(tc, sess, app_id, face_qi,55, 120000000,80000000,12000000,8000000);
     if (!control_plane_only) ping_flow(tc, gtpu, dedicated_flow(sess));
     sess->pti = 7;
-    intent_transaction(tc, sess, ngap, 1,2,2, 2,54, true, true);
-    query_intent_qos(tc, sess, app_id, 2,54, 120000000,80000000,12000000,8000000);
+    intent_transaction(tc, sess, ngap, 1,2,2, face_qi,54, true, true);
+    query_intent_qos(tc, sess, app_id, face_qi,54, 120000000,80000000,12000000,8000000);
     sess->pti = 8;
-    intent_transaction(tc, sess, ngap, 1,3,1, 3,25, true, false);
+    intent_transaction(tc, sess, ngap, 1,3,1, object_qi,25, true, false);
     ABTS_INT_EQUAL(tc, qfi, dedicated_flow(sess)->qfi);
-    query_intent_qos(tc, sess, app_id, 3,25, 240000000,160000000,24000000,16000000);
+    query_intent_qos(tc, sess, app_id, object_qi,25, 240000000,160000000,24000000,16000000);
     sess->pti = 9;
-    intent_transaction(tc, sess, ngap, 1,3,3, 3,24, true, false);
-    query_intent_qos(tc, sess, app_id, 3,24, 240000000,160000000,24000000,16000000);
+    intent_transaction(tc, sess, ngap, 1,3,3, object_qi,24, true, false);
+    query_intent_qos(tc, sess, app_id, object_qi,24, 240000000,160000000,24000000,16000000);
     sess->pti = 10;
-    intent_transaction(tc, sess, ngap, 1,1,3, 3,24, false, false);
-    query_intent_qos(tc, sess, app_id, 3,24, 240000000,160000000,24000000,16000000);
+    intent_transaction(tc, sess, ngap, 1,1,3, object_qi,24, false, false);
+    query_intent_qos(tc, sess, app_id, object_qi,24, 240000000,160000000,24000000,16000000);
     sess->pti = 11;
-    intent_transaction(tc, sess, ngap, 1,2,2, 2,55, true, false);
+    intent_transaction(tc, sess, ngap, 1,2,2, face_qi,55, true, false);
     ABTS_INT_EQUAL(tc, qfi, dedicated_flow(sess)->qfi);
-    query_intent_qos(tc, sess, app_id, 2,55, 120000000,80000000,12000000,8000000);
+    query_intent_qos(tc, sess, app_id, face_qi,55, 120000000,80000000,12000000,8000000);
     sess->pti = 12;
+    intent_transaction(tc, sess, ngap, 0,1,3, 0,0, true, false);
+    ABTS_TRUE(tc, !dedicated_flow(sess));
+    if (!control_plane_only)
+        ping_flow(tc, gtpu, test_qos_flow_find_by_qfi(sess, 1));
+}
+
+/* Both models use the same complete profile: an unchanged switch is N1-only. */
+static void intent_equal_profiles(abts_case *tc, test_sess_t *sess,
+        ogs_socknode_t *ngap, ogs_socknode_t *gtpu, bool control_plane_only)
+{
+    char app_id[256] = "";
+    uint8_t qfi;
+    sess->pti = 6;
+    intent_transaction(tc, sess, ngap, 1,2,2, 1,55, true, true);
+    qfi = dedicated_flow(sess)->qfi;
+    sess->pti = 7;
+    intent_transaction(tc, sess, ngap, 1,3,1, 1,55, false, true);
+    query_intent_qos(tc, sess, app_id, 1,55, 120000000,80000000,12000000,8000000);
+    sess->pti = 8;
+    intent_transaction(tc, sess, ngap, 1,1,3, 1,55, false, false);
+    sess->pti = 9;
+    intent_transaction(tc, sess, ngap, 1,3,3, 1,54, true, false);
+    query_intent_qos(tc, sess, app_id, 1,54, 120000000,80000000,12000000,8000000);
+    sess->pti = 10;
+    intent_transaction(tc, sess, ngap, 1,2,2, 1,55, true, false);
+    ABTS_INT_EQUAL(tc, qfi, dedicated_flow(sess)->qfi);
+    query_intent_qos(tc, sess, app_id, 1,55, 120000000,80000000,12000000,8000000);
+    sess->pti = 11;
     intent_transaction(tc, sess, ngap, 0,1,3, 0,0, true, false);
     ABTS_TRUE(tc, !dedicated_flow(sess));
     if (!control_plane_only)
@@ -740,7 +769,9 @@ static void intent_lifecycle(abts_case *tc, void *data)
     bool control_plane_only = getenv("XCN_INTENT_CONTROL_PLANE_ONLY") != NULL;
     if (control_plane_only)
         fprintf(stderr, "Intent test: NAS/N2/PFCP only; GTP-U ping is explicitly skipped\n");
-    if (getenv("XCN_INTENT_PROFILE_TEST")) {
+    if (getenv("XCN_INTENT_EQUAL_PROFILE_TEST")) {
+        intent_equal_profiles(tc, sess, ngap, gtpu, control_plane_only);
+    } else if (getenv("XCN_INTENT_PROFILE_TEST")) {
         intent_profiles(tc, sess, ngap, gtpu, control_plane_only);
     } else {
         /* Invalid business enums must reject without releasing this session. */

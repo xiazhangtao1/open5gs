@@ -120,6 +120,7 @@ typedef struct smf_nsmf_pdusession_param_s {
 } smf_nsmf_pdusession_param_t;
 
 typedef struct {
+    int five_qi;
     int priority_level;
     const char *maxbr_dl, *maxbr_ul, *gbr_dl, *gbr_ul;
 } smf_intent_qos_config_t;
