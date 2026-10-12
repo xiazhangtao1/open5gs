@@ -667,6 +667,9 @@ static void intent_lifecycle(abts_case *tc, void *data)
     test_bearer_t *flow;
     uint8_t qfi;
     unsigned i;
+    bool control_plane_only = getenv("XCN_INTENT_CONTROL_PLANE_ONLY") != NULL;
+    if (control_plane_only)
+        fprintf(stderr, "Intent test: NAS/N2/PFCP only; GTP-U ping is explicitly skipped\n");
     /* Invalid business enums must reject without releasing this session. */
     sess->pti = 4;
     sess->ul_nas_transport_param.request_type = OGS_NAS_5GS_REQUEST_TYPE_MODIFICATION_REQUEST;
@@ -681,7 +684,8 @@ static void intent_lifecycle(abts_case *tc, void *data)
     sess->pti = 6;
     intent_transaction(tc, sess, ngap, 1,2,2, 2,40, true, true);
     flow = dedicated_flow(sess); ogs_assert(flow); qfi = flow->qfi;
-    ping_flow(tc, gtpu, flow);
+    if (!control_plane_only)
+        ping_flow(tc, gtpu, flow);
     /* Identical payload in a new transaction must decrement once. */
     sess->pti = 7;
     intent_transaction(tc, sess, ngap, 1,2,2, 2,39, true, true);
@@ -707,17 +711,28 @@ static void intent_lifecycle(abts_case *tc, void *data)
     sess->pti = 14;
     intent_transaction(tc, sess, ngap, 0,1,3, 0,0, true, false);
     ABTS_TRUE(tc, !dedicated_flow(sess));
-    ping_flow(tc, gtpu, test_qos_flow_find_by_qfi(sess, 1));
+    if (!control_plane_only)
+        ping_flow(tc, gtpu, test_qos_flow_find_by_qfi(sess, 1));
     sess->pti = 15;
     intent_transaction(tc, sess, ngap, 0,1,3, 0,0, false, false);
     if (getenv("XCN_INTENT_FAILURE_TEST")) {
         sess->pti = 16;
         intent_reject_command(tc, sess, ngap, true);
-        ping_flow(tc, gtpu, test_qos_flow_find_by_qfi(sess, 1));
+        if (!control_plane_only)
+            ping_flow(tc, gtpu, test_qos_flow_find_by_qfi(sess, 1));
     }
     ogs_msleep(1200); /* Allow final notification timeouts to be observed. */
 
     release_session(tc, sess, ngap);
+    /* A rejected create can leave an owned, uncertain PCF app. Releasing it
+     * must remove the session without attempting a nonexistent AF callback. */
+    {
+        char *path = ogs_msprintf("?supi=imsi-%s&pduSessionId=%d",
+                ue->imsi, sess->psi);
+        ogs_msleep(100);
+        cJSON_Delete(request(tc, "GET", path, NULL, 404, NULL));
+        ogs_free(path);
+    }
     send_ngap(tc, ngap, testngap_build_ue_context_release_request(ue,
                 NGAP_Cause_PR_radioNetwork, NGAP_CauseRadioNetwork_user_inactivity, true));
     receive_ngap(tc, ue, ngap, NGAP_ProcedureCode_id_UEContextRelease);

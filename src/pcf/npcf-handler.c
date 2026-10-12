@@ -1443,6 +1443,9 @@ bool pcf_npcf_smpolicycontrol_handle_delete(pcf_sess_t *sess,
     }
 
     ogs_list_for_each(&sess->app_list, app_session) {
+        /* Intent resources have no AF callback; session teardown frees them. */
+        if (app_session->intent_owned)
+            continue;
         pcf_sbi_send_policyauthorization_terminate_notify(app_session);
     }
 
