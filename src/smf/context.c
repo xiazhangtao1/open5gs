@@ -545,8 +545,8 @@ int smf_context_parse_config(void)
                         value = ogs_yaml_iter_value(&it);
                         if (!strcmp(key, "enabled"))
                             self.user_intent.enabled = value && !strcmp(value, "true");
-                        else if (!strcmp(key, "mcc")) self.user_intent.mcc = value;
-                        else if (!strcmp(key, "mnc")) self.user_intent.mnc = value;
+                        else if (!strcmp(key, "mcc") || !strcmp(key, "mnc"))
+                            ogs_warn("user_intent.%s is ignored for the 3-byte test payload", key);
                         else if (!strcmp(key, "notify_uri")) self.user_intent.notify_uri = value;
                         else ogs_warn("Unknown user_intent option [%s]", key);
                     }

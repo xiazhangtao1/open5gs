@@ -10,8 +10,6 @@ SMF YAML：
 smf:
   user_intent:
     enabled: true
-    mcc: "460"
-    mnc: "00"
     notify_uri: http://10.2.5.125:8000/api/v1/intent/notify
     face_recognition:
       five_qi: 2
@@ -29,7 +27,7 @@ smf:
       gbr_ul: "5 Mbps"
 ```
 
-MCC/MNC 是应用运营商标识，必须显式填写；MNC 字符串保留两位/三位区别。容器固定 `0xFF10`，部署前检查编号冲突。Helm 对应 `networking.smf.userIntent.enabled/mcc/mnc/notifyUri`，默认 `enabled: false`。双栈会话当前选择已分配 IPv4；纯 IPv6 会话尚未提供可确认的业务 IPv6 主机地址，通知会记录失败，不能将 IPv6 前缀当作 UE 主机地址。
+按终端侧最新确认，当前使用功能测试格式：容器内容只有三个业务字节，不含 MCC/MNC，不需要配置应用运营商标识。旧 SMF YAML 中的 `user_intent.mcc/mnc` 会告警并忽略；旧 Helm values 中的同名配置不再渲染。容器固定 `0xFF10`，部署前检查编号冲突。Helm 对应 `networking.smf.userIntent.enabled/notifyUri`，默认 `enabled: false`。双栈会话当前选择已分配 IPv4；纯 IPv6 会话尚未提供可确认的业务 IPv6 主机地址，通知会记录失败，不能将 IPv6 前缀当作 UE 主机地址。
 
 Helm 的初始 QoS 配置位于 `helm/xcn/values.yaml`：
 
@@ -59,7 +57,9 @@ networking:
 
 ## 消息及策略
 
-示例完整 IE：`7b 00 0a 80 ff 10 06 64 f0 00 01 02 02`。容器内容必须为 PLMN 三字节加 `commStatus/aiModel/gpuLevel` 三字节。按容器 ID 遍历，校验长度、重复 ID、PLMN、枚举；有目标容器时 INFO 十六进制日志包括 ID、长度、PLMN 和业务字节。截断日志只打印实际可用数据。
+示例完整 IE：`7b 00 07 80 ff 10 03 01 02 02`，表示 On、人脸识别、GPU 中档。ePCO 内容长 7 字节，完整 IE 长 10 字节；`0xFF10` 容器长度固定为 3，内容从偏移 0 起依次为 `commStatus/aiModel/gpuLevel`。本格式是双方确认的功能测试约定，不是带运营商标识的标准运营商自定义容器格式；不自动兼容旧 6 字节载荷，旧格式会受控拒绝，避免错位解析。
+
+按容器 ID 遍历，校验长度、重复 ID、枚举；有目标容器时 INFO 十六进制日志包括 ID、长度和三个业务字节，例如 `ff 10 03 01 02 02`。截断日志只打印实际可用数据。前期联调记录中的 6 字节 PLMN 前缀报文属于历史格式，不再作为当前终端报文依据。
 
 | 输入 | 本功能专载操作 |
 | --- | --- |
@@ -133,6 +133,8 @@ XCN_INTENT_TEST=1 XCN_INTENT_PROFILE_TEST=1 \
 此场景验证 NAS/N2/PFCP 闭环、创建与模型互切后的六项 QoS、同模型递减时带宽保留、LLM 保留、appSessionId/QFI 不变、重传和删除后的默认流用户面 ping。共 7 个新意图事务，使用独立通知日志，不能套用默认场景的 51/52 条通知校验。
 
 相同 5QI 场景：将上述物体配置的 `five_qi` 改为 1，加环境变量 `XCN_INTENT_SHARED_5QI_TEST=1` 运行，验证切换时仍重置物体的优先级和带宽。完全相同配置场景：将物体的全部配置复制为人脸配置，使用 `XCN_INTENT_TEST=1 XCN_INTENT_EQUAL_PROFILE_TEST=1` 运行同一测试，验证切换时仅发 NAS Command，接着同模型递减；该场景有 6 次通知。
+
+2026-10-12 三字节功能测试格式实测：全量编译、unit 和 Helm lint/渲染通过；解析覆盖全部 18 种合法字段组合，截断、非法长度/枚举、重复容器和旧六字节格式均受控拒绝。无 MCC/MNC 配置的隔离 NAS/N2/PFCP 集成测试通过：默认策略生命周期（含 Command 重发、资源拒绝）通知 52 条，自定义 5QI 1/4 场景通知 7 条，字段与顺序正确，无重复；创建及删除后的 GTP-U ping 和原 dedicated-bearer 单会话/并发回归通过。ASan/UBSan 单测通过，仅抑制下述已知 talloc 基线分配。此处使用软件模拟 UE，不代替终端团队实际三字节上报验收。
 
 2026-10-12 可配置 5QI 实测：全量编译、unit、Helm 默认/自定义及省略新字段渲染通过；5QI 1/4、两模型同为 1、两组完整配置相同三组隔离集成测试通过，通知分别为 7/7/6 条，无重复。原默认配置意图生命周期的 52 条通知及原 dedicated-bearer 单会话/并发回归通过。5QI 为 0、256、小数、超大整数和数组时，独立 SMF 启动均受控拒绝。新模块 ASan/UBSan 单测通过，沿用下文的已知 talloc 基线分配抑制。
 
