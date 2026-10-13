@@ -165,7 +165,7 @@ smf_context_t *smf_self(void)
 static int smf_context_prepare(void)
 {
     self.user_intent.container_id = 0xff10;
-    self.user_intent.notify_uri = "http://10.2.5.125:8000/api/v1/intent/notify";
+    self.user_intent.notify_uri = "http://10.2.0.102:8000/api/v1/intent/notify";
     self.user_intent.face_recognition = (smf_intent_qos_config_t){
         2, 40, "500 Mbps", "500 Mbps", "5 Mbps", "5 Mbps"};
     self.user_intent.object_recognition = (smf_intent_qos_config_t){

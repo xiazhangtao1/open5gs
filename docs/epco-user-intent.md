@@ -12,7 +12,7 @@ smf:
     enabled: true
     mcc: "460"
     mnc: "00"
-    notify_uri: http://10.2.5.125:8000/api/v1/intent/notify
+    notify_uri: http://10.2.0.102:8000/api/v1/intent/notify
     face_recognition:
       five_qi: 2
       priority_level: 40
