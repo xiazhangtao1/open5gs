@@ -2,7 +2,7 @@
 
 实现范围为 AMF、SMF、PCF 及配置和测试。UE/AP/modem 与算力服务器由其他团队实现；`tests/helpers/intent-notify-server.py` 仅为隔离测试接收端。功能默认关闭，不改变未携带目标容器请求的正常入口。尚未进行真实 UE/gNB 联调，不能据软件模拟测试宣称独立 DRB 已建立。
 
-2026-10-13 算力服务已迁移至 `10.2.0.102:8000`，实际核心网与新服务器的验证结果及算力端待处理问题见[迁移联调记录](epco-user-intent-server-migration-test.md)。
+2026-10-13 算力服务已迁移至 `10.2.0.102:8000`，实际核心网与新服务器的验证及算力端修复复测结果见[迁移联调记录](epco-user-intent-server-migration-test.md)。
 
 ## 配置
 
