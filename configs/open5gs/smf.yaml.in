@@ -41,7 +41,9 @@ smf:
       gateway: 2001:db8:cafe::1
   user_intent:
     enabled: false
-    # Functional-test 0xFF10 payload: commStatus/aiModel/gpuLevel (3 bytes).
+    # Application operator identity (not necessarily the serving PLMN).
+    # mcc: "460"
+    # mnc: "00"
     notify_uri: http://10.2.5.125:8000/api/v1/intent/notify
   dns:
     - 8.8.8.8

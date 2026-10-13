@@ -52,12 +52,12 @@ static void finish(smf_sess_t *sess, bool success, bool uncertain);
 static void settle(smf_sess_t *sess);
 
 int smf_intent_parse(const uint8_t *data, size_t length, uint16_t id,
-        smf_intent_value_t *value)
+        const ogs_plmn_id_t *plmn, smf_intent_value_t *value)
 {
     ogs_pco_t pco;
     int i, found = -1;
     size_t offset = 1;
-    if (!data || !length || length > UINT16_MAX || !value)
+    if (!data || !length || length > UINT16_MAX || !plmn || !value)
         return OGS_ERROR;
     /* Bounded diagnostic pass also shows the available bytes of a malformed
      * target container; never trust the advertised length for a hexdump. */
@@ -82,9 +82,9 @@ int smf_intent_parse(const uint8_t *data, size_t length, uint16_t id,
         found = i;
     }
     if (found < 0) return OGS_DONE;
-    /* The terminal's functional-test payload contains only the three fields. */
-    if (data[0] != 0x80 || pco.ids[found].len != 3) return OGS_ERROR;
-    data = (const uint8_t *)pco.ids[found].data;
+    if (data[0] != 0x80 || pco.ids[found].len != 6 ||
+        memcmp(pco.ids[found].data, plmn, 3)) return OGS_ERROR;
+    data = (const uint8_t *)pco.ids[found].data + 3;
     if (data[0] > 1 || data[1] < 1 || data[1] > 3 ||
         data[2] < 1 || data[2] > 3) return OGS_ERROR;
     value->comm_status = data[0];
@@ -247,11 +247,15 @@ int smf_user_intent_config_validate(void)
     if (!intent_qos_valid(&c->user_intent.face_recognition, "face_recognition") ||
         !intent_qos_valid(&c->user_intent.object_recognition, "object_recognition"))
         return OGS_ERROR;
-    if (!c->user_intent.notify_uri ||
+    if (!decimal(c->user_intent.mcc, 3, 3) ||
+        !decimal(c->user_intent.mnc, 2, 3) ||
+        !c->user_intent.notify_uri ||
         strncmp(c->user_intent.notify_uri, "http://", 7)) {
-        ogs_error("user_intent requires http:// notify_uri");
+        ogs_error("user_intent requires explicit MCC, 2/3-digit MNC and http:// notify_uri");
         return OGS_ERROR;
     }
+    ogs_plmn_id_build(&c->user_intent.plmn, atoi(c->user_intent.mcc),
+            atoi(c->user_intent.mnc), strlen(c->user_intent.mnc));
     return OGS_OK;
 }
 
@@ -492,7 +496,7 @@ bool smf_user_intent_request(smf_sess_t *sess, ogs_sbi_stream_t *stream,
         return false;
     parsed = smf_intent_parse(req->extended_protocol_configuration_options.buffer,
             req->extended_protocol_configuration_options.length,
-            smf_self()->user_intent.container_id, &value);
+            smf_self()->user_intent.container_id, &smf_self()->user_intent.plmn, &value);
     if (parsed == OGS_DONE) return false;
     if (parsed != OGS_OK || !sess->pti || sess->pti == 255) {
         reject(sess, stream, sess->pti, parsed != OGS_OK ?

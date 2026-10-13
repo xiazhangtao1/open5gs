@@ -184,8 +184,8 @@ networking:
     ipv4PoolRanges: []
     userIntent:
       enabled: false
-      # Functional-test format: 0xFF10 contains commStatus/aiModel/gpuLevel
-      # only (3 bytes); no MCC/MNC prefix or configuration is required.
+      mcc: ""
+      mnc: ""
       notifyUri: http://10.2.5.125:8000/api/v1/intent/notify
       # Initial QoS for creation and model switches. Same-model requests only
       # decrement priorityLevel (minimum 1), preserving the active bandwidth.

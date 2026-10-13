@@ -585,11 +585,11 @@ static void concurrent_lifecycle(abts_case *tc, void *data)
 
 static ogs_pkbuf_t *intent_nas(test_sess_t *sess, int on, int model, int gpu)
 {
-    uint8_t contents[] = {0x80,0xff,0x10,3,0,0,0,0,0x0d,0};
+    uint8_t contents[] = {0x80,0xff,0x10,6,0x64,0xf0,0,0,0,0,0,0x0d,0};
     ogs_nas_5gs_message_t message = {0};
     ogs_nas_5gs_pdu_session_modification_request_t *req =
         &message.gsm.pdu_session_modification_request;
-    contents[4] = on; contents[5] = model; contents[6] = gpu;
+    contents[7] = on; contents[8] = model; contents[9] = gpu;
     message.gsm.h.extended_protocol_discriminator = OGS_NAS_EXTENDED_PROTOCOL_DISCRIMINATOR_5GSM;
     message.gsm.h.pdu_session_identity = sess->psi;
     message.gsm.h.procedure_transaction_identity = sess->pti;

@@ -128,8 +128,9 @@ typedef struct {
 typedef struct smf_context_s {
     struct {
         bool enabled;
-        const char *notify_uri;
+        const char *mcc, *mnc, *notify_uri;
         uint16_t container_id;
+        ogs_plmn_id_t plmn;
         smf_intent_qos_config_t face_recognition, object_recognition;
     } user_intent;
     smf_ctf_config_t    ctf_config;

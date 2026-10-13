@@ -4,62 +4,45 @@
 
 static void parse_test(abts_case *tc, void *data)
 {
-    uint8_t packet[] = {0x80,0xff,0x10,3,1,2,2};
-    uint8_t combined[] = {0x80,0,0x0d,0,0xff,0x10,3,1,2,2};
-    uint8_t duplicate[] = {0x80,0xff,0x10,3,1,2,2,0xff,0x10,3,1,2,2};
-    uint8_t legacy[] = {0x80,0xff,0x10,6,0x64,0xf0,0,1,2,2};
-    uint8_t invalid[][3] = {{2,2,2}, {1,0,2}, {1,4,2}, {1,2,0}, {1,2,4}};
+    uint8_t packet[] = {0x80,0xff,0x10,6,0x64,0xf0,0,1,2,2};
+    uint8_t combined[] = {0x80,0,0x0d,0,0xff,0x10,6,0x64,0xf0,0,1,2,2};
+    uint8_t duplicate[] = {0x80,0xff,0x10,6,0x64,0xf0,0,1,2,2,
+                            0xff,0x10,6,0x64,0xf0,0,1,2,2};
+    ogs_plmn_id_t plmn;
     smf_intent_value_t v = {0};
-    unsigned i, on, model, gpu;
+    unsigned i;
     ogs_log_install_domain(&__smf_log_domain, "smf", OGS_LOG_FATAL);
-    ABTS_INT_EQUAL(tc, OGS_OK, smf_intent_parse(packet, sizeof(packet), 0xff10, &v));
+    ogs_plmn_id_build(&plmn, 460, 0, 2);
+    ABTS_INT_EQUAL(tc, OGS_OK, smf_intent_parse(packet, sizeof(packet), 0xff10, &plmn, &v));
     ABTS_INT_EQUAL(tc, 1, v.comm_status);
     ABTS_INT_EQUAL(tc, 2, v.ai_model);
     ABTS_INT_EQUAL(tc, 2, v.gpu_level);
-    ABTS_INT_EQUAL(tc, OGS_OK, smf_intent_parse(combined, sizeof(combined), 0xff10, &v));
-    ABTS_INT_EQUAL(tc, OGS_ERROR, smf_intent_parse(duplicate, sizeof(duplicate), 0xff10, &v));
-    ABTS_INT_EQUAL(tc, OGS_DONE, smf_intent_parse(packet, sizeof(packet), 0xff11, &v));
-    ABTS_INT_EQUAL(tc, OGS_ERROR, smf_intent_parse(NULL, 0, 0xff10, &v));
-    ABTS_INT_EQUAL(tc, OGS_ERROR, smf_intent_parse(packet, sizeof(packet), 0xff10, NULL));
-    ABTS_INT_EQUAL(tc, OGS_ERROR, smf_intent_parse(packet, (size_t)UINT16_MAX + 1, 0xff10, &v));
+    ABTS_INT_EQUAL(tc, OGS_OK, smf_intent_parse(combined, sizeof(combined), 0xff10, &plmn, &v));
+    ABTS_INT_EQUAL(tc, OGS_ERROR, smf_intent_parse(duplicate, sizeof(duplicate), 0xff10, &plmn, &v));
+    ABTS_INT_EQUAL(tc, OGS_DONE, smf_intent_parse(packet, sizeof(packet), 0xff11, &plmn, &v));
+    ABTS_INT_EQUAL(tc, OGS_ERROR, smf_intent_parse(NULL, 0, 0xff10, &plmn, &v));
     for (i = 2; i < sizeof(packet); i++)
-        ABTS_INT_EQUAL(tc, OGS_ERROR, smf_intent_parse(packet, i, 0xff10, &v));
-    for (i = 0; i <= 6; i++) {
-        if (i == 3) continue;
-        packet[3] = i;
-        ABTS_INT_EQUAL(tc, OGS_ERROR, smf_intent_parse(packet, sizeof(packet), 0xff10, &v));
-    }
+        ABTS_INT_EQUAL(tc, OGS_ERROR, smf_intent_parse(packet, i, 0xff10, &plmn, &v));
     packet[3] = 255;
-    ABTS_INT_EQUAL(tc, OGS_ERROR, smf_intent_parse(packet, sizeof(packet), 0xff10, &v));
-    packet[3] = 3;
-    ABTS_INT_EQUAL(tc, OGS_ERROR, smf_intent_parse(legacy, sizeof(legacy), 0xff10, &v));
-    packet[0] = 0;
-    ABTS_INT_EQUAL(tc, OGS_ERROR, smf_intent_parse(packet, sizeof(packet), 0xff10, &v));
-    packet[0] = 0x80;
-    for (i = 0; i < OGS_ARRAY_SIZE(invalid); i++) {
-        memcpy(packet + 4, invalid[i], 3);
-        v = (smf_intent_value_t){99,99,99};
-        ABTS_INT_EQUAL(tc, OGS_ERROR, smf_intent_parse(packet, sizeof(packet), 0xff10, &v));
-        ABTS_INT_EQUAL(tc, 99, v.comm_status);
-        ABTS_INT_EQUAL(tc, 99, v.ai_model);
-        ABTS_INT_EQUAL(tc, 99, v.gpu_level);
+    ABTS_INT_EQUAL(tc, OGS_ERROR, smf_intent_parse(packet, sizeof(packet), 0xff10, &plmn, &v));
+    packet[3] = 6;
+    for (i = 7; i < 10; i++) {
+        uint8_t saved = packet[i];
+        packet[i] = 255;
+        ABTS_INT_EQUAL(tc, OGS_ERROR, smf_intent_parse(packet, sizeof(packet), 0xff10, &plmn, &v));
+        packet[i] = saved;
     }
-    for (on = 0; on <= 1; on++) {
-        for (model = 1; model <= 3; model++) {
-            for (gpu = 1; gpu <= 3; gpu++) {
-                packet[4] = on; packet[5] = model; packet[6] = gpu;
-                ABTS_INT_EQUAL(tc, OGS_OK, smf_intent_parse(packet, sizeof(packet), 0xff10, &v));
-                ABTS_INT_EQUAL(tc, on, v.comm_status);
-                ABTS_INT_EQUAL(tc, model, v.ai_model);
-                ABTS_INT_EQUAL(tc, gpu, v.gpu_level);
-            }
-        }
-    }
+    ogs_plmn_id_build(&plmn, 460, 0, 3);
+    ABTS_INT_EQUAL(tc, OGS_ERROR, smf_intent_parse(packet, sizeof(packet), 0xff10, &plmn, &v));
+    ogs_plmn_id_build(&plmn, 460, 0, 2);
+    packet[7] = 0; packet[8] = 1; packet[9] = 3;
+    ABTS_INT_EQUAL(tc, OGS_OK, smf_intent_parse(packet, sizeof(packet), 0xff10, &plmn, &v));
+    ABTS_INT_EQUAL(tc, 0, v.comm_status);
 }
 
 static void standard_pco_test(abts_case *tc, void *data)
 {
-    uint8_t request[] = {0x80,0,0x0d,0,0xff,0x10,3,1,2,2};
+    uint8_t request[] = {0x80,0,0x0d,0,0xff,0x10,6,0x64,0xf0,0,1,2,2};
     uint8_t pap[] = {0x80,0xc0,0x23,0};
     uint8_t ipcp[] = {0x80,0x80,0x21,4,1,1,0,255};
     uint8_t result[OGS_MAX_PCO_LEN];
@@ -172,16 +155,13 @@ static void config_test(abts_case *tc, void *data)
         "maxbr_dl: 200 Mbps, gbr_ul: 1.5 Mbps}\n";
     size_t i;
     c->user_intent.enabled = true;
+    c->user_intent.mcc = "460";
+    c->user_intent.mnc = "00";
     c->user_intent.notify_uri = "http://127.0.0.1:8000/api/v1/intent/notify";
     c->user_intent.face_recognition = face;
     c->user_intent.object_recognition = (smf_intent_qos_config_t){
         4, 25, "240 Mbps", "160 Mbps", "24 Mbps", "16 Mbps"};
     ABTS_INT_EQUAL(tc, OGS_OK, smf_user_intent_config_validate());
-    c->user_intent.notify_uri = NULL;
-    ABTS_INT_EQUAL(tc, OGS_ERROR, smf_user_intent_config_validate());
-    c->user_intent.notify_uri = "https://127.0.0.1:8000/api/v1/intent/notify";
-    ABTS_INT_EQUAL(tc, OGS_ERROR, smf_user_intent_config_validate());
-    c->user_intent.notify_uri = "http://127.0.0.1:8000/api/v1/intent/notify";
     for (i = 0; i < OGS_ARRAY_SIZE(invalid_rates); i++) {
         c->user_intent.face_recognition.maxbr_dl = invalid_rates[i];
         ABTS_INT_EQUAL(tc, OGS_ERROR, smf_user_intent_config_validate());

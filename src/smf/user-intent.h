@@ -14,10 +14,9 @@ typedef struct {
     uint8_t five_qi, priority;
 } smf_intent_plan_t;
 
-/* Three-byte functional-test payload, without MCC/MNC.
- * OGS_OK: found; OGS_DONE: absent; OGS_ERROR: invalid. */
+/* OGS_OK: found; OGS_DONE: absent; OGS_ERROR: invalid. */
 int smf_intent_parse(const uint8_t *data, size_t length, uint16_t id,
-        smf_intent_value_t *value);
+        const ogs_plmn_id_t *plmn, smf_intent_value_t *value);
 smf_intent_plan_t smf_intent_plan(const smf_intent_value_t *value,
         bool exists, uint8_t model, uint8_t five_qi, uint8_t priority,
         const smf_intent_qos_config_t *profile);
