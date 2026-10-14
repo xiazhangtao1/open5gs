@@ -506,8 +506,9 @@ data:
             "__v": 0
         });
     }
+{{- range $plmn := list "46011" "46000" "46001" }}
     for (var i = 1; i <= 200; i++) {
-        var imsi = '460110000000' + ('000' + i).slice(-3);
+        var imsi = '{{ $plmn }}0000000' + ('000' + i).slice(-3);
         db.subscribers.updateOne(
             { imsi: imsi },
             {
@@ -560,8 +561,9 @@ data:
                 }
             },
             { upsert: true }
-        );    
+        );
     }
+{{- end }}
 ---
 apiVersion: v1
 kind: Secret
