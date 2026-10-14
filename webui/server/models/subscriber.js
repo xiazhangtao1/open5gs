@@ -1,6 +1,8 @@
 const mongoose = require('mongoose');
 const Schema = mongoose.Schema;
 require('mongoose-long')(mongoose);
+const { MAX_IPV4_FRAMED_ROUTES, IPV4_CIDR_PATTERN } = require('../../src/helpers/framed-routes');
+const ipv4Cidr = new RegExp(IPV4_CIDR_PATTERN);
 
 const Subscriber = new Schema({
 
@@ -57,6 +59,23 @@ const Subscriber = new Schema({
       smf: {
         ipv4: String,
         ipv6: String
+      },
+      ipv4_framed_routes: {
+        $type: [String],
+        default: undefined,
+        set: routes => {
+          if (routes !== undefined && !Array.isArray(routes)) {
+            throw new mongoose.Error.CastError('Array', routes, 'ipv4_framed_routes');
+          }
+          return routes;
+        },
+        validate: {
+          validator: routes => routes === undefined || (
+            Array.isArray(routes) && routes.length <= MAX_IPV4_FRAMED_ROUTES &&
+            routes.every(route => typeof route === 'string' && ipv4Cidr.test(route))
+          ),
+          message: 'Use up to 8 IPv4 CIDR routes per session, e.g. 192.168.0.0/16'
+        }
       },
       pcc_rule: [{
         flow: [{

@@ -7,7 +7,8 @@ const Subscriber = require('../models/subscriber');
 restify.serve(router, Subscriber, {
   prefix: '',
   version: '',
-  idProperty: 'imsi'
+  idProperty: 'imsi',
+  runValidators: true
 });
 
 const Profile = require('../models/profile');

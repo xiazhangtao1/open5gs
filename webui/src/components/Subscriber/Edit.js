@@ -3,6 +3,7 @@ import PropTypes from 'prop-types';
 
 import withWidth, { SMALL } from 'helpers/with-width';
 import { Form } from 'components';
+import { MAX_IPV4_FRAMED_ROUTES, IPV4_CIDR_PATTERN } from 'helpers/framed-routes';
 
 import traverse from 'traverse';
 
@@ -318,6 +319,25 @@ const schema = {
                     },
                   }
                 },
+                "ipv4_framed_routes": {
+                  "type": "array",
+                  "title": "IPv4 Framed Routes",
+                  "maxItems": MAX_IPV4_FRAMED_ROUTES,
+                  "messages": {
+                    "maxItems": "Up to 8 IPv4 framed routes are supported per session"
+                  },
+                  "items": {
+                    "type": "string",
+                    "title": "IPv4 Route (CIDR)",
+                    "minLength": 1,
+                    "pattern": IPV4_CIDR_PATTERN,
+                    "messages": {
+                      "type": "Enter an IPv4 CIDR route, e.g. 192.168.0.0/16",
+                      "minLength": "Enter an IPv4 CIDR route, e.g. 192.168.0.0/16",
+                      "pattern": "Enter an IPv4 CIDR route, e.g. 192.168.0.0/16 (prefix 0-32)"
+                    }
+                  }
+                },
                 "pcc_rule": {
                   "type": "array",
                   "title": "PCC Rules",
@@ -614,6 +634,14 @@ const uiSchema = {
             "ipv6" : {
               classNames: "col-xs-6"
             },
+          },
+          "ipv4_framed_routes": {
+            classNames: "col-xs-12",
+            "ui:help": "Networks behind this UE, e.g. 192.168.0.0/16. Re-establish the UE session to apply changes.",
+            "ui:options": { "orderable": false },
+            "items": {
+              "ui:placeholder": "192.168.0.0/16"
+            }
           },
           "pcc_rule": {
             classNames: "col-xs-12",

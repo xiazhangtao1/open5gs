@@ -455,6 +455,17 @@ const View = ({ visible, disableOnClickOutside, subscriber, onEdit, onDelete, on
                           <div className="large_data">{(session.smf || {}).ipv6}</div>
                         </div>
                       }
+                      {session.ipv4_framed_routes && session.ipv4_framed_routes.length > 0 &&
+                        <div className="body">
+                          <div className="medium_data"></div>
+                          <div className="medium_data" style={{color:oc.gray[5]}}>IPv4 Framed Routes</div>
+                          <div className="large_data">
+                            {session.ipv4_framed_routes.map((route, index) =>
+                              <div key={index}>{route}</div>
+                            )}
+                          </div>
+                        </div>
+                      }
                       {session['pcc_rule'] !== undefined &&
                         session.pcc_rule.map((pcc_rule, index) =>
                           <div key={index}>
