@@ -29,6 +29,12 @@ data:
         - plmn_id:
             mcc: 460
             mnc: 11
+        - plmn_id:
+            mcc: 460
+            mnc: "00"
+        - plmn_id:
+            mcc: 460
+            mnc: "01"
       sbi:
         server:
           - address: 0.0.0.0
@@ -80,15 +86,47 @@ data:
           amf_id:
             region: 2
             set: 0
+        - plmn_id:
+            mcc: 460
+            mnc: "00"
+          amf_id:
+            region: 2
+            set: 0
+        - plmn_id:
+            mcc: 460
+            mnc: "01"
+          amf_id:
+            region: 2
+            set: 0
       tai:
         - plmn_id:
             mcc: 460
             mnc: 11
           tac: [0, 1]
+        - plmn_id:
+            mcc: 460
+            mnc: "00"
+          tac: [0, 1]
+        - plmn_id:
+            mcc: 460
+            mnc: "01"
+          tac: [0, 1]
       plmn_support:
         - plmn_id:
             mcc: 460
             mnc: 11
+          s_nssai:
+            - sst: 1
+              sd: 010101
+        - plmn_id:
+            mcc: 460
+            mnc: "00"
+          s_nssai:
+            - sst: 1
+              sd: 010101
+        - plmn_id:
+            mcc: 460
+            mnc: "01"
           s_nssai:
             - sst: 1
               sd: 010101
