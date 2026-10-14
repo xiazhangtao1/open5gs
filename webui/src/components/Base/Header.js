@@ -51,7 +51,7 @@ const Header = ({ onSidebarToggle, onLogoutRequest }) => (
       <MenuIcon/>
     </Menu>
     <Title>
-      Open5GS
+      X-CN
     </Title>
     <Thumbnail onClick={onLogoutRequest}>
       <Tooltip bottom content='Logout' width="60px">
