@@ -12,6 +12,9 @@
 数据仍保存为 `slice[].session[].ipv4_framed_routes` 字符串数组，使用原有订阅用户
 API。保存接口与表单均校验格式及条目上限。本次不扩展 Profile 模板或 IPv6 编辑。
 
+WebUI 不自动安装 Linux/VPP 路由。实际 memif 用户会话的双向 ICMP、TCP/UDP
+验证及 NAT、MTU、代理注意事项见 [后路由实测记录](framed-routes-live-validation.md)。
+
 ## 隔离回归测试
 
 在仓库根目录执行。测试脚本仅接受名称为 `webui_framed_routes_test` 或以
