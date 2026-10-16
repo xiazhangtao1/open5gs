@@ -123,6 +123,8 @@ typedef struct {
     int five_qi;
     int priority_level;
     const char *maxbr_dl, *maxbr_ul, *gbr_dl, *gbr_ul;
+    int num_of_flow;
+    const char *flow_descriptions[OGS_MAX_NUM_OF_FLOW_IN_PCC_RULE];
 } smf_intent_qos_config_t;
 
 typedef struct smf_context_s {

@@ -3421,11 +3421,38 @@ bool pcf_xcn_query_handle_sessions(
 /* Internal two-phase adapter for UE-requested modifications. Unlike the public
  * trigger API it returns the authorized delta to the requesting SMF: sending a
  * second network-requested modification would overwrite the UE's PTI. */
+static bool xcn_intent_set_flows(ogs_pcc_rule_t *rule,
+        cJSON *flows, const char **error)
+{
+    ogs_pcc_rule_t replacement = {0};
+    cJSON *flow;
+    int i;
+    if (!cJSON_IsArray(flows) || cJSON_GetArraySize(flows) < 1 ||
+        cJSON_GetArraySize(flows) > OGS_MAX_NUM_OF_FLOW_IN_PCC_RULE) {
+        *error = "flowDescriptions must contain 1..15 filters";
+        return false;
+    }
+    cJSON_ArrayForEach(flow, flows) {
+        if (!cJSON_IsString(flow) || ogs_flow_description_parse(
+                &replacement.flow[replacement.num_of_flow], flow->valuestring) != OGS_OK) {
+            *error = "Invalid flowDescription";
+            OGS_PCC_RULE_FREE(&replacement);
+            return false;
+        }
+        replacement.num_of_flow++;
+    }
+    for (i = 0; i < rule->num_of_flow; i++) OGS_FLOW_FREE(&rule->flow[i]);
+    rule->num_of_flow = replacement.num_of_flow;
+    /* Transfer the normalized descriptions; the JSON strings remain borrowed. */
+    memcpy(rule->flow, replacement.flow, replacement.num_of_flow * sizeof(rule->flow[0]));
+    return true;
+}
+
 bool pcf_xcn_intent_handle(ogs_sbi_stream_t *stream,
         ogs_sbi_message_t *message, const char *content)
 {
     cJSON *body = content ? cJSON_Parse(content) : NULL;
-    cJSON *result = NULL, *decision_json = NULL;
+    cJSON *result = NULL, *decision_json = NULL, *flows;
     pcf_sess_t *sess = NULL;
     pcf_app_t *app = NULL, *candidate;
     pcf_ue_sm_t *ue;
@@ -3515,7 +3542,15 @@ bool pcf_xcn_intent_handle(ogs_sbi_stream_t *stream,
          * intent profiles are configurable independently of model enums. */
         if (!target.qos.priority_level) goto fail;
     }
+    flows = cJSON_GetObjectItemCaseSensitive(body, "flowDescriptions");
+    if (op == 1 && !flows) {
+        /* Keep the internal API compatible with older SMF requests. */
+        flows = cJSON_AddArrayToObject(body, "flowDescriptions");
+        cJSON_AddItemToArray(flows, cJSON_CreateString("permit out ip from 0.0.0.0/0 to assigned"));
+        cJSON_AddItemToArray(flows, cJSON_CreateString("permit in ip from assigned to 0.0.0.0/0"));
+    }
     if (op == 1) {
+        if (!xcn_intent_set_flows(&target, flows, &error)) goto fail;
         if (ogs_list_count(&sess->app_list) >= OGS_MAX_NUM_OF_BEARER - 1) {
             error = "Maximum application bearer count reached";
             status = OGS_SBI_HTTP_STATUS_CONFLICT;
@@ -3534,20 +3569,16 @@ bool pcf_xcn_intent_handle(ogs_sbi_stream_t *stream,
         target.id = ogs_msprintf("%s-a%s", XCN_SVC_DEDICATED_BEARER,
                 app->app_session_id);
         target.precedence = precedence;
-        target.num_of_flow = 2;
-        target.flow[0].direction = OGS_FLOW_DOWNLINK_ONLY;
-        target.flow[0].description = ogs_strdup("permit out ip from 0.0.0.0/0 to assigned");
-        target.flow[1].direction = OGS_FLOW_UPLINK_ONLY;
-        /* PCC stores uplink filters in the normalized downlink orientation;
-         * direction carries the uplink meaning (see flow_rx_to_gx). */
-        target.flow[1].description = ogs_strdup("permit out ip from 0.0.0.0/0 to assigned");
         /* Reserve the identity/precedence; excluded from aggregate decisions. */
         OGS_STORE_PCC_RULE(&app->pcc_rule[0], &target);
         app->num_of_pcc_rule = 1;
     } else {
         ogs_qos_t requested_qos = target.qos;
         OGS_STORE_PCC_RULE(&target, &app->pcc_rule[0]);
-        if (op == 2) target.qos = requested_qos;
+        if (op == 2) {
+            target.qos = requested_qos;
+            if (flows && !xcn_intent_set_flows(&target, flows, &error)) goto fail;
+        }
     }
     target.type = op == 3 ? OGS_PCC_RULE_TYPE_REMOVE : OGS_PCC_RULE_TYPE_INSTALL;
     rules = OpenAPI_list_create();

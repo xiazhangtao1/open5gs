@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: AGPL-3.0-or-later */
 #include "../../src/smf/user-intent.h"
 #include "core/abts.h"
+#include "ipfw/ogs-ipfw.h"
 
 static void parse_test(abts_case *tc, void *data)
 {
@@ -131,7 +132,8 @@ static void config_test(abts_case *tc, void *data)
 {
     smf_context_t *c = smf_self();
     smf_intent_qos_config_t face = {
-        1, 55, "120 Mbps", "80 Mbps", "12 Mbps", "8 Mbps"};
+        1, 55, "120 Mbps", "80 Mbps", "12 Mbps", "8 Mbps", 2,
+        {"permit out ip from 0.0.0.0/0 to assigned", "permit in ip from assigned to 0.0.0.0/0"}};
     const char *invalid_rates[] = {NULL, "", "500", "5 mbps", "0 Mbps",
         "-1 Mbps", "NaN Mbps", "inf Mbps", "1e999 Mbps", "4.1 Tbps",
         "0.1 bps", "5 Mbps junk"};
@@ -150,9 +152,18 @@ static void config_test(abts_case *tc, void *data)
         "face_recognition: {five_qi: -1}\n",
         "face_recognition: {five_qi: 1.5}\n",
         "face_recognition: {five_qi: 999999999999999999999}\n",
-        "face_recognition: {five_qi: [1]}\n"};
+        "face_recognition: {five_qi: [1]}\n",
+        "face_recognition: {flow_descriptions: []}\n",
+        "face_recognition: {flow_descriptions: invalid}\n",
+        "face_recognition: {flow_descriptions: {x: y}}\n",
+        "face_recognition: {flow_descriptions: [[x]]}\n",
+        "face_recognition: {flow_descriptions: [null]}\n",
+        "face_recognition: {flow_descriptions: [\"permit in ip from assigned\"]}\n",
+        "face_recognition: {flow_descriptions: [\"permit out ip from 999.1.1.1 to assigned\"]}\n"};
     const char *valid_yaml = "face_recognition: {five_qi: 255, priority_level: 127, "
-        "maxbr_dl: 200 Mbps, gbr_ul: 1.5 Mbps}\n";
+        "maxbr_dl: 200 Mbps, gbr_ul: 1.5 Mbps, flow_descriptions: ["
+        "\"permit out tcp from 10.2.0.102/32 8000 to assigned\","
+        "\"permit in tcp from assigned to 10.2.0.102/32 8000\"]}\n";
     size_t i;
     c->user_intent.enabled = true;
     c->user_intent.mcc = "460";
@@ -160,7 +171,8 @@ static void config_test(abts_case *tc, void *data)
     c->user_intent.notify_uri = "http://127.0.0.1:8000/api/v1/intent/notify";
     c->user_intent.face_recognition = face;
     c->user_intent.object_recognition = (smf_intent_qos_config_t){
-        4, 25, "240 Mbps", "160 Mbps", "24 Mbps", "16 Mbps"};
+        4, 25, "240 Mbps", "160 Mbps", "24 Mbps", "16 Mbps", 2,
+        {"permit out ip from 0.0.0.0/0 to assigned", "permit in ip from assigned to 0.0.0.0/0"}};
     ABTS_INT_EQUAL(tc, OGS_OK, smf_user_intent_config_validate());
     for (i = 0; i < OGS_ARRAY_SIZE(invalid_rates); i++) {
         c->user_intent.face_recognition.maxbr_dl = invalid_rates[i];
@@ -204,11 +216,93 @@ static void config_test(abts_case *tc, void *data)
             ABTS_STR_EQUAL(tc, "200 Mbps", parsed.maxbr_dl);
             ABTS_STR_EQUAL(tc, "80 Mbps", parsed.maxbr_ul);
             ABTS_STR_EQUAL(tc, "1.5 Mbps", parsed.gbr_ul);
+            ABTS_INT_EQUAL(tc, 2, parsed.num_of_flow);
+            ABTS_STR_EQUAL(tc, "permit out tcp from 10.2.0.102/32 8000 to assigned", parsed.flow_descriptions[0]);
         }
         yaml_document_delete(&document);
         yaml_parser_delete(&parser);
     }
+    /* Exercise the packet-filter limit at the YAML boundary. */
+    for (i = OGS_MAX_NUM_OF_FLOW_IN_PCC_RULE;
+            i <= OGS_MAX_NUM_OF_FLOW_IN_PCC_RULE + 1; i++) {
+        yaml_parser_t parser;
+        yaml_document_t document;
+        ogs_yaml_iter_t it;
+        smf_intent_qos_config_t parsed = face;
+        char input[2048], *p = input;
+        size_t j;
+        p = ogs_slprintf(p, input + sizeof(input), "face_recognition:\n  flow_descriptions:\n");
+        for (j = 0; j < i; j++)
+            p = ogs_slprintf(p, input + sizeof(input), "    - \"permit out ip from 0.0.0.0/0 to assigned\"\n");
+        ABTS_TRUE(tc, yaml_parser_initialize(&parser));
+        yaml_parser_set_input_string(&parser, (const unsigned char *)input, strlen(input));
+        ABTS_TRUE(tc, yaml_parser_load(&parser, &document));
+        ogs_yaml_iter_init(&it, &document);
+        ABTS_TRUE(tc, ogs_yaml_iter_next(&it));
+        ABTS_INT_EQUAL(tc, i == OGS_MAX_NUM_OF_FLOW_IN_PCC_RULE ? OGS_OK : OGS_ERROR,
+                smf_user_intent_qos_config_parse(&it, &parsed));
+        yaml_document_delete(&document);
+        yaml_parser_delete(&parser);
+    }
     memset(&c->user_intent, 0, sizeof(c->user_intent));
+}
+
+static void flow_test(abts_case *tc, void *data)
+{
+    const char *valid[] = {
+        "permit out ip from 0.0.0.0/0 to assigned",
+        "permit in ip from assigned to 0.0.0.0/0",
+        "permit out tcp from 10.2.0.102/32 8000 to assigned 10000-10010",
+        "permit in tcp from assigned 10000-10010 to 10.2.0.102/32 8000",
+        "permit out udp from 2001:db8::1/128 5000 to assigned",
+        "permit out 17 from any to assigned",
+        "permit  in  ip  from  assigned  to  192.0.2.1/32"};
+    const char *invalid[] = {NULL, "", " ", "permit", "deny out ip from any to assigned",
+        "permit in ip from assigned", "permit out ip from any", "permit out ip from any to",
+        "permit out unknown from any to assigned", "permit out 256 from any to assigned",
+        "permit out ip from 256.1.1.1 to assigned", "permit out ip from 192.0.2.1/33 to assigned",
+        "permit out udp from 2001:db8::1/129 to assigned", "permit out tcp from any 65536 to assigned",
+        "permit out tcp from any 100-99 to assigned", "permit out tcp from any 1-2-3 to assigned",
+        "permit out ip from assigned to any", "permit in ip from any to assigned",
+        "permit out ip from 192.0.2.1 to 2001:db8::1", "permit out ip from any to assigned extra junk"};
+    ogs_pcc_rule_t rule = {0};
+    smf_intent_qos_config_t profile = {.num_of_flow = 2,
+        .flow_descriptions = {valid[2], valid[3]}};
+    char long_description[513];
+    unsigned i;
+    for (i = 0; i < OGS_ARRAY_SIZE(valid); i++) {
+        ogs_flow_t flow = {0};
+        ogs_ipfw_rule_t ipfw;
+        ABTS_INT_EQUAL(tc, OGS_OK, ogs_flow_description_parse(&flow, valid[i]));
+        ABTS_INT_EQUAL(tc, OGS_OK, ogs_ipfw_compile_rule(&ipfw, flow.description));
+        if (i == 1) {
+            ABTS_INT_EQUAL(tc, OGS_FLOW_UPLINK_ONLY, flow.direction);
+            ABTS_STR_EQUAL(tc, valid[0], flow.description);
+        }
+        if (i == 3) ABTS_STR_EQUAL(tc, valid[2], flow.description);
+        OGS_FLOW_FREE(&flow);
+    }
+    for (i = 0; i < OGS_ARRAY_SIZE(invalid); i++) {
+        ogs_flow_t flow = {.direction = 99};
+        ABTS_INT_EQUAL(tc, OGS_ERROR, ogs_flow_description_parse(&flow, invalid[i]));
+        ABTS_INT_EQUAL(tc, 99, flow.direction);
+        ABTS_TRUE(tc, flow.description == NULL);
+    }
+    memset(long_description, 'x', sizeof(long_description) - 1);
+    long_description[sizeof(long_description) - 1] = 0;
+    ABTS_INT_EQUAL(tc, OGS_ERROR, ogs_flow_description_parse(&rule.flow[0], long_description));
+    for (i = 0; i < 2; i++) {
+        ABTS_INT_EQUAL(tc, OGS_OK, ogs_flow_description_parse(&rule.flow[i], profile.flow_descriptions[i]));
+        rule.num_of_flow++;
+    }
+    ABTS_TRUE(tc, smf_intent_flows_match(&rule, &profile));
+    { ogs_flow_t saved = rule.flow[0]; rule.flow[0] = rule.flow[1]; rule.flow[1] = saved; }
+    ABTS_TRUE(tc, smf_intent_flows_match(&rule, &profile));
+    profile.flow_descriptions[0] = valid[0];
+    ABTS_TRUE(tc, !smf_intent_flows_match(&rule, &profile));
+    profile.num_of_flow = OGS_MAX_NUM_OF_FLOW_IN_PCC_RULE + 1;
+    ABTS_TRUE(tc, !smf_intent_flows_match(&rule, &profile));
+    OGS_PCC_RULE_FREE(&rule);
 }
 
 static void json_test(abts_case *tc, void *data)
@@ -244,5 +338,6 @@ abts_suite *test_user_intent(abts_suite *suite)
     abts_run_test(suite, config_test, NULL);
     abts_run_test(suite, standard_pco_test, NULL);
     abts_run_test(suite, json_test, NULL);
+    abts_run_test(suite, flow_test, NULL);
     return suite;
 }

@@ -158,6 +158,34 @@ int smf_user_intent_qos_config_parse(ogs_yaml_iter_t *parent,
     }
     while (ogs_yaml_iter_next(&it)) {
         const char *key = ogs_yaml_iter_key(&it), *value;
+        if (!strcmp(key, "flow_descriptions")) {
+            ogs_yaml_iter_t flows;
+            const char *descriptions[OGS_MAX_NUM_OF_FLOW_IN_PCC_RULE];
+            int count = 0;
+            ogs_yaml_iter_recurse(&it, &flows);
+            if (ogs_yaml_iter_type(&flows) != YAML_SEQUENCE_NODE) {
+                ogs_error("user_intent.%s.flow_descriptions must be a sequence", profile);
+                return OGS_ERROR;
+            }
+            while (ogs_yaml_iter_next(&flows)) {
+                ogs_flow_t parsed = {0};
+                if (count == OGS_MAX_NUM_OF_FLOW_IN_PCC_RULE ||
+                    !ogs_yaml_iter_has_value(&flows) ||
+                    ogs_flow_description_parse(&parsed, ogs_yaml_iter_value(&flows)) != OGS_OK) {
+                    ogs_error("Invalid user_intent.%s.flow_descriptions (1..15 valid filters required)", profile);
+                    return OGS_ERROR;
+                }
+                OGS_FLOW_FREE(&parsed);
+                descriptions[count++] = ogs_yaml_iter_value(&flows);
+            }
+            if (!count) {
+                ogs_error("user_intent.%s.flow_descriptions cannot be empty", profile);
+                return OGS_ERROR;
+            }
+            memcpy(qos->flow_descriptions, descriptions, count * sizeof(descriptions[0]));
+            qos->num_of_flow = count;
+            continue;
+        }
         if (!ogs_yaml_iter_has_value(&it)) {
             ogs_error("user_intent.%s.%s must be a scalar", profile, key);
             return OGS_ERROR;
@@ -210,6 +238,19 @@ static bool intent_qos_valid(const smf_intent_qos_config_t *qos,
         const char *profile)
 {
     uint64_t max_dl, max_ul, gbr_dl, gbr_ul;
+    int i;
+    if (qos->num_of_flow < 1 || qos->num_of_flow > OGS_MAX_NUM_OF_FLOW_IN_PCC_RULE) {
+        ogs_error("user_intent.%s.flow_descriptions must contain 1..15 filters", profile);
+        return false;
+    }
+    for (i = 0; i < qos->num_of_flow; i++) {
+        ogs_flow_t parsed = {0};
+        if (ogs_flow_description_parse(&parsed, qos->flow_descriptions[i]) != OGS_OK) {
+            ogs_error("Invalid user_intent.%s.flow_descriptions[%d]", profile, i);
+            return false;
+        }
+        OGS_FLOW_FREE(&parsed);
+    }
     if (qos->five_qi < 1 || qos->five_qi > 255 ||
         qos->priority_level < 1 || qos->priority_level > 127 ||
         !intent_bitrate(qos->maxbr_dl, &max_dl) ||
@@ -223,6 +264,48 @@ static bool intent_qos_valid(const smf_intent_qos_config_t *qos,
         return false;
     }
     return true;
+}
+
+bool smf_intent_flows_match(const ogs_pcc_rule_t *rule,
+        const smf_intent_qos_config_t *profile)
+{
+    int i, j;
+    bool matched[OGS_MAX_NUM_OF_FLOW_IN_PCC_RULE] = {false};
+    if (!rule || !profile || profile->num_of_flow < 1 ||
+        profile->num_of_flow > OGS_MAX_NUM_OF_FLOW_IN_PCC_RULE ||
+        rule->num_of_flow != profile->num_of_flow) return false;
+    for (i = 0; i < profile->num_of_flow; i++) {
+        ogs_flow_t parsed = {0};
+        bool found = false;
+        if (ogs_flow_description_parse(&parsed, profile->flow_descriptions[i]) != OGS_OK)
+            return false;
+        for (j = 0; j < rule->num_of_flow; j++) {
+            if (!matched[j] && rule->flow[j].description &&
+                rule->flow[j].direction == parsed.direction &&
+                !strcmp(rule->flow[j].description, parsed.description)) {
+                found = true;
+                matched[j] = true;
+                break;
+            }
+        }
+        OGS_FLOW_FREE(&parsed);
+        if (!found) return false;
+    }
+    return true;
+}
+
+static bool intent_filters_unchanged(smf_bearer_t *bearer,
+        const smf_intent_qos_config_t *profile)
+{
+    ogs_pcc_rule_t filters = {0};
+    smf_pf_t *pf;
+    ogs_list_for_each(&bearer->pf_list, pf) {
+        if (filters.num_of_flow == OGS_MAX_NUM_OF_FLOW_IN_PCC_RULE) return false;
+        filters.flow[filters.num_of_flow].direction = pf->direction;
+        filters.flow[filters.num_of_flow++].description = pf->flow_description;
+    }
+    /* Descriptions are borrowed from the active bearer, not owned by filters. */
+    return smf_intent_flows_match(&filters, profile);
 }
 
 static bool intent_qos_unchanged(const ogs_qos_t *qos,
@@ -602,7 +685,8 @@ static void start_next(smf_sess_t *sess)
      * NAS-only transaction rather than asking binding to apply an empty delta. */
     if (bearer && st->plan.operation == SMF_INTENT_MODIFY &&
         st->model != st->request->value.ai_model &&
-        intent_qos_unchanged(&bearer->qos, profile))
+        intent_qos_unchanged(&bearer->qos, profile) &&
+        intent_filters_unchanged(bearer, profile))
         st->plan.operation = SMF_INTENT_NONE;
     if (ogs_nas_5gsm_decode(&decoded, st->request->nas) != OGS_OK) {
         finish(sess, false, false); return;
@@ -636,6 +720,13 @@ static void start_next(smf_sess_t *sess)
         const char *max_dl = profile->maxbr_dl, *max_ul = profile->maxbr_ul;
         const char *gbr_dl = profile->gbr_dl, *gbr_ul = profile->gbr_ul;
         char bandwidth[4][32];
+        if (st->plan.operation == SMF_INTENT_CREATE ||
+            st->model != st->request->value.ai_model) {
+            cJSON *flows = cJSON_AddArrayToObject(body, "flowDescriptions");
+            int i;
+            for (i = 0; i < profile->num_of_flow; i++)
+                cJSON_AddItemToArray(flows, cJSON_CreateString(profile->flow_descriptions[i]));
+        }
         /* Same-model requests change only priority, preserving effective QoS
          * even if another authorized policy has adjusted the bandwidth. */
         if (bearer && st->model == st->request->value.ai_model &&

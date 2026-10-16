@@ -167,9 +167,13 @@ static int smf_context_prepare(void)
     self.user_intent.container_id = 0xff10;
     self.user_intent.notify_uri = "http://10.2.0.102:8000/api/v1/intent/notify";
     self.user_intent.face_recognition = (smf_intent_qos_config_t){
-        2, 40, "500 Mbps", "500 Mbps", "5 Mbps", "5 Mbps"};
+        2, 40, "500 Mbps", "500 Mbps", "5 Mbps", "5 Mbps", 2,
+        {"permit out ip from 0.0.0.0/0 to assigned",
+         "permit in ip from assigned to 0.0.0.0/0"}};
     self.user_intent.object_recognition = (smf_intent_qos_config_t){
-        3, 30, "500 Mbps", "500 Mbps", "5 Mbps", "5 Mbps"};
+        3, 30, "500 Mbps", "500 Mbps", "5 Mbps", "5 Mbps", 2,
+        {"permit out ip from 0.0.0.0/0 to assigned",
+         "permit in ip from assigned to 0.0.0.0/0"}};
     self.diam_config->cnf_port = DIAMETER_PORT;
     self.diam_config->cnf_port_tls = DIAMETER_SECURE_PORT;
 

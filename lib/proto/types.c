@@ -956,6 +956,90 @@ static int flow_rx_to_gx(ogs_flow_t *rx_flow, ogs_flow_t *gx_flow)
     return OGS_OK;
 }
 
+static bool flow_number(const char *text, unsigned maximum, unsigned *result)
+{
+    unsigned value = 0;
+    if (!text || !*text) return false;
+    for (; *text; text++) {
+        if (*text < '0' || *text > '9') return false;
+        value = value * 10 + (*text - '0');
+        if (value > maximum) return false;
+    }
+    *result = value;
+    return true;
+}
+
+static bool flow_address(const char *text, int *family)
+{
+    char address[OGS_ADDRSTRLEN + 5], *prefix;
+    uint8_t binary[OGS_IPV6_LEN];
+    unsigned bits;
+    *family = AF_UNSPEC;
+    if (!strcmp(text, "any") || !strcmp(text, "assigned")) return true;
+    if (strlen(text) >= sizeof(address)) return false;
+    ogs_cpystrn(address, text, sizeof(address));
+    prefix = strchr(address, '/');
+    if (prefix) *prefix++ = 0;
+    if (inet_pton(AF_INET, address, binary) == 1) *family = AF_INET;
+    else if (inet_pton(AF_INET6, address, binary) == 1) *family = AF_INET6;
+    else return false;
+    return !prefix || flow_number(prefix, *family == AF_INET ? 32 : 128, &bits);
+}
+
+static bool flow_port(const char *text)
+{
+    char port[12], *high;
+    unsigned low_value, high_value;
+    if (!strcmp(text, "any")) return true;
+    if (strlen(text) >= sizeof(port)) return false;
+    ogs_cpystrn(port, text, sizeof(port));
+    high = strchr(port, '-');
+    if (high) *high++ = 0;
+    if (!flow_number(port, 65535, &low_value)) return false;
+    return !high || (flow_number(high, 65535, &high_value) && low_value <= high_value);
+}
+
+int ogs_flow_description_parse(ogs_flow_t *flow, const char *description)
+{
+    char buffer[512], canonical[512], *tokens[9], *token, *save = NULL;
+    char *p = canonical;
+    ogs_flow_t input = {0}, parsed = {0};
+    int count = 0, to, source_family, destination_family, i;
+    unsigned protocol;
+    bool uplink;
+    if (!flow || !description || !*description ||
+        strlen(description) >= sizeof(buffer)) return OGS_ERROR;
+    ogs_cpystrn(buffer, description, sizeof(buffer));
+    for (token = ogs_strtok_r(buffer, " \t\r\n", &save); token;
+            token = ogs_strtok_r(NULL, " \t\r\n", &save)) {
+        if (count == OGS_ARRAY_SIZE(tokens)) return OGS_ERROR;
+        tokens[count++] = token;
+    }
+    if (count < 7 || strcmp(tokens[0], "permit") ||
+        (strcmp(tokens[1], "out") && strcmp(tokens[1], "in")) ||
+        strcmp(tokens[3], "from")) return OGS_ERROR;
+    if (strcmp(tokens[2], "ip") && strcmp(tokens[2], "tcp") &&
+        strcmp(tokens[2], "udp") &&
+        (!flow_number(tokens[2], 255, &protocol) || !protocol)) return OGS_ERROR;
+    to = !strcmp(tokens[5], "to") ? 5 : 6;
+    if (count < to + 2 || count > to + 3 || strcmp(tokens[to], "to") ||
+        (to == 6 && !flow_port(tokens[5])) ||
+        (count == to + 3 && !flow_port(tokens[to + 2])) ||
+        !flow_address(tokens[4], &source_family) ||
+        !flow_address(tokens[to + 1], &destination_family)) return OGS_ERROR;
+    uplink = !strcmp(tokens[1], "in");
+    /* The IPFW adapter accepts assigned only in the normalized destination. */
+    if (!strcmp(tokens[uplink ? to + 1 : 4], "assigned") ||
+        (source_family != AF_UNSPEC && destination_family != AF_UNSPEC &&
+         source_family != destination_family)) return OGS_ERROR;
+    for (i = 0; i < count; i++)
+        p = ogs_slprintf(p, canonical + sizeof(canonical), "%s%s", i ? " " : "", tokens[i]);
+    input.description = canonical;
+    if (flow_rx_to_gx(&input, &parsed) != OGS_OK) return OGS_ERROR;
+    *flow = parsed;
+    return OGS_OK;
+}
+
 int ogs_pcc_rule_num_of_flow_equal_to_media(
         ogs_pcc_rule_t *pcc_rule, ogs_media_component_t *media_component)
 {

@@ -25,6 +25,8 @@ cJSON *smf_intent_notification(const smf_intent_value_t *value,
 int smf_user_intent_config_validate(void);
 int smf_user_intent_qos_config_parse(ogs_yaml_iter_t *parent,
         smf_intent_qos_config_t *qos);
+bool smf_intent_flows_match(const ogs_pcc_rule_t *rule,
+        const smf_intent_qos_config_t *profile);
 int smf_intent_epco_response(uint8_t *result, size_t capacity,
         const uint8_t *data, size_t data_length);
 /* true means this request was handled (including a controlled rejection). */

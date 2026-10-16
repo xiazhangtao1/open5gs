@@ -187,10 +187,14 @@ networking:
       mcc: ""
       mnc: ""
       notifyUri: http://10.2.0.102:8000/api/v1/intent/notify
-      # Initial QoS for creation and model switches. Same-model requests only
-      # decrement priorityLevel (minimum 1), preserving the active bandwidth.
+      # Initial QoS and 1..15 flowDescriptions for creation and model switches.
+      # Same-model requests decrement priorityLevel (minimum 1), preserving
+      # the active bandwidth and filters. Omitted filters use the defaults below.
       # 人脸识别 (aiModel=2)
       faceRecognition:
+        flowDescriptions:
+          - "permit out ip from 0.0.0.0/0 to assigned"
+          - "permit in ip from assigned to 0.0.0.0/0"
         fiveQi: 2
         priorityLevel: 40
         maxbrDl: "500 Mbps"
@@ -199,6 +203,9 @@ networking:
         gbrUl: "5 Mbps"
       # 物体识别 (aiModel=3)
       objectRecognition:
+        flowDescriptions:
+          - "permit out ip from 0.0.0.0/0 to assigned"
+          - "permit in ip from assigned to 0.0.0.0/0"
         fiveQi: 3
         priorityLevel: 30
         maxbrDl: "500 Mbps"

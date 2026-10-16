@@ -16,6 +16,9 @@ smf:
     mnc: "00"
     notify_uri: http://10.2.0.102:8000/api/v1/intent/notify
     face_recognition:
+      flow_descriptions:
+        - "permit out ip from 0.0.0.0/0 to assigned"
+        - "permit in ip from assigned to 0.0.0.0/0"
       five_qi: 2
       priority_level: 40
       maxbr_dl: "500 Mbps"
@@ -23,6 +26,9 @@ smf:
       gbr_dl: "5 Mbps"
       gbr_ul: "5 Mbps"
     object_recognition:
+      flow_descriptions:
+        - "permit out ip from 0.0.0.0/0 to assigned"
+        - "permit in ip from assigned to 0.0.0.0/0"
       five_qi: 3
       priority_level: 30
       maxbr_dl: "500 Mbps"
@@ -40,6 +46,9 @@ networking:
   smf:
     userIntent:
       faceRecognition:       # 人脸识别，aiModel=2
+        flowDescriptions:
+          - "permit out ip from 0.0.0.0/0 to assigned"
+          - "permit in ip from assigned to 0.0.0.0/0"
         fiveQi: 2
         priorityLevel: 40
         maxbrDl: "500 Mbps"
@@ -47,6 +56,9 @@ networking:
         gbrDl: "5 Mbps"
         gbrUl: "5 Mbps"
       objectRecognition:     # 物体识别，aiModel=3
+        flowDescriptions:
+          - "permit out ip from 0.0.0.0/0 to assigned"
+          - "permit in ip from assigned to 0.0.0.0/0"
         fiveQi: 3
         priorityLevel: 30
         maxbrDl: "500 Mbps"
@@ -55,7 +67,17 @@ networking:
         gbrUl: "5 Mbps"
 ```
 
-创建专载和模型互切时应用目标模型的全部六项配置；同模型的新事务只在当前已生效优先级上减 1，最低 1，保留当前带宽。On+LLM 保留全部已有参数。旧 SMF 配置省略这些配置组或个别字段时采用以上默认值。5QI 配置名为 `fiveQi`（SMF YAML 为 `five_qi`），整数范围为 1～255，默认人脸为 2、物体为 3；优先级范围为 1～127；带宽必须为带单位的正数字符串，支持 `bps/Kbps/Mbps/Gbps/Tbps`，每项不超过 4 Tbps，且同方向 GBR 不超过 MBR。启用功能后，非法 QoS 配置会导致 SMF 启动失败并记录错误。
+创建专载和模型互切时应用目标模型的过滤规则及全部六项 QoS 配置；同模型的新事务只在当前已生效优先级上减 1，最低 1，保留当前带宽和过滤规则。On+LLM 保留全部已有参数。旧 SMF 配置省略这些配置组或个别字段时采用以上默认值。5QI 配置名为 `fiveQi`（SMF YAML 为 `five_qi`），整数范围为 1～255，默认人脸为 2、物体为 3；优先级范围为 1～127；带宽必须为带单位的正数字符串，支持 `bps/Kbps/Mbps/Gbps/Tbps`，每项不超过 4 Tbps，且同方向 GBR 不超过 MBR。启用功能后，非法 QoS 配置会导致 SMF 启动失败并记录错误。
+
+`flowDescriptions`（SMF YAML 为 `flow_descriptions`）支持每个模型独立配置 1～15 条过滤规则。省略该字段沿用以上两条全 IP 默认规则；显式配置空列表、非字符串列表、超过 15 条或格式非法时拒绝启动。创建时使用目标模型规则；模型切换时替换同一专载的规则，即使两个模型的全部 QoS 参数相同，也不能跳过规则变更。同模型递减优先级及 On+LLM 均保留已有规则。仅操作本功能专载，不修改默认 QoS Flow 或其他业务资源。
+
+支持的规则形式为 `permit in/out ip/tcp/udp/协议号 from 地址 [端口] to 地址 [端口]`；协议号范围 1～255，地址支持数字 IPv4/IPv6、CIDR、`any` 和 UE 地址占位符 `assigned`。`assigned` 应放在 `out` 的目标端或 `in` 的源端；端口支持 `any`、0～65535 或单个递增范围，不支持域名、逗号列表和额外选项。每条规则最长 511 字节。示例只匹配算力端 TCP 8000：
+
+```yaml
+flowDescriptions:
+  - "permit out tcp from 10.2.0.102/32 8000 to assigned"
+  - "permit in tcp from assigned to 10.2.0.102/32 8000"
+```
 
 修改 values 后需 Helm 升级并重建 SMF 所在 Pod，使 SMF 重新读取配置；不支持热加载，也不主动重设存量专载。后续创建或模型切换使用新值，同模型请求继续基于存量状态递减。
 
@@ -65,16 +87,16 @@ networking:
 
 | 输入 | 本功能专载操作 |
 | --- | --- |
-| On + LLM | 保留当前资源与全 IP 过滤规则，无资源时不创建 |
+| On + LLM | 保留当前资源与过滤规则，无资源时不创建 |
 | On + 人脸，无专载 | 使用 faceRecognition 配置创建（默认 5QI 2、priorityLevel 40） |
 | On + 物体，无专载 | 使用 objectRecognition 配置创建（默认 5QI 3、priorityLevel 30） |
 | On + 同模型且实际 5QI 匹配配置 | priorityLevel 递减，最低 1；到 1 后允许 no-op |
-| On + 模型切换 | 同一 appSessionId/QFI 修改，5QI、优先级及带宽重置为目标模型配置 |
+| On + 模型切换 | 同一 appSessionId/QFI 修改，5QI、优先级、带宽及过滤规则重置为目标模型配置 |
 | Off | 删除本功能专载，保留默认流；本来无专载则 no-op |
 
-模型枚举与 5QI 分离：UE 仍上报 aiModel=2/3，不需要随配置改变枚举。两类模型可以配置相同 5QI；核心网保留最近成功生效的模型关联，切换模型时重置目标配置，同模型再递减。LLM 不清除该关联。如果切换后的全部 QoS 已与当前值相同，则走 NAS-only 成功流程，避免空策略变更。
+模型枚举与 5QI 分离：UE 仍上报 aiModel=2/3，不需要随配置改变枚举。两类模型可以配置相同 5QI；核心网保留最近成功生效的模型关联，切换模型时重置目标配置，同模型再递减。LLM 不清除该关联。如果切换后的全部 QoS 和过滤规则均与当前值相同，则走 NAS-only 成功流程，避免空策略变更。
 
-GPU 仅通知，不参与 QoS。ARP 8、NOT_PREEMPT/PREEMPTABLE；MBR/GBR 使用对应模型配置，默认双向 MBR 500 Mbps、GBR 5 Mbps。过滤规则等效于 `permit out ip from 0.0.0.0/0 to assigned` 和 `permit in ip from assigned to 0.0.0.0/0`；后者按现有 PCC/IPFW 约定归一化存储为反向描述加 UPLINK 方向。
+GPU 仅通知，不参与 QoS。ARP 8、NOT_PREEMPT/PREEMPTABLE；MBR/GBR 使用对应模型配置，默认双向 MBR 500 Mbps、GBR 5 Mbps。过滤规则默认等效于 `permit out ip from 0.0.0.0/0 to assigned` 和 `permit in ip from assigned to 0.0.0.0/0`；后者按现有 PCC/IPFW 约定归一化存储为反向描述加 UPLINK 方向。
 
 标准 ePCO 配置项逐项复用现有响应构造，包括 DNS；先检查 PAP/CHAP/IPCP 长度，再调用旧入口，输出受缓冲区容量限制。不回显私有意图容器。
 
@@ -135,6 +157,17 @@ XCN_INTENT_TEST=1 XCN_INTENT_PROFILE_TEST=1 \
 此场景验证 NAS/N2/PFCP 闭环、创建与模型互切后的六项 QoS、同模型递减时带宽保留、LLM 保留、appSessionId/QFI 不变、重传和删除后的默认流用户面 ping。共 7 个新意图事务，使用独立通知日志，不能套用默认场景的 51/52 条通知校验。
 
 相同 5QI 场景：将上述物体配置的 `five_qi` 改为 1，加环境变量 `XCN_INTENT_SHARED_5QI_TEST=1` 运行，验证切换时仍重置物体的优先级和带宽。完全相同配置场景：将物体的全部配置复制为人脸配置，使用 `XCN_INTENT_TEST=1 XCN_INTENT_EQUAL_PROFILE_TEST=1` 运行同一测试，验证切换时仅发 NAS Command，接着同模型递减；该场景有 6 次通知。
+
+独立过滤规则场景：两模型均设置为 5QI 2、priorityLevel 40、双向 MBR 500 Mbps、GBR 5 Mbps；人脸的两条规则仅匹配远端 `10.45.0.1/32`，物体仅匹配 `10.45.0.2/32`，分别使用 out/in 双向形式，再执行：
+
+```bash
+XCN_INTENT_TEST=1 XCN_INTENT_FLOW_TEST=1 \
+  build/tests/vonr/vonr -e info -c /tmp/intent-flow-flows.yaml dedicated-bearer-test
+```
+
+此场景覆盖 QoS 完全相同但规则不同的模型切换，检查 PCF 已提交规则、appSessionId/QFI 不变、重传去重、同模型及 LLM 保留过滤规则、切回人脸后的专载用户面 ping 和删除后的默认流 ping，共 6 次通知。
+
+2026-10-16 过滤规则配置实测：全量编译、完整 unit、Helm lint、默认及独立自定义规则渲染通过。上述过滤规则场景、完全相同配置场景及自定义 5QI/带宽场景通过，通知分别为 6/6/7 条；原意图生命周期 52 条通知及原 dedicated-bearer 单会话/并发回归通过。空列表、错误类型、16 条超限、非法 IP 和端口的独立 SMF 启动均按标准初始化错误退出，无断言崩溃。新增解析及匹配单测经 ASan/UBSan 检查通过，仅沿用已知 talloc 基线分配抑制。上述通知使用隔离测试接收端。
 
 2026-10-12 可配置 5QI 实测：全量编译、unit、Helm 默认/自定义及省略新字段渲染通过；5QI 1/4、两模型同为 1、两组完整配置相同三组隔离集成测试通过，通知分别为 7/7/6 条，无重复。原默认配置意图生命周期的 52 条通知及原 dedicated-bearer 单会话/并发回归通过。5QI 为 0、256、小数、超大整数和数组时，独立 SMF 启动均受控拒绝。新模块 ASan/UBSan 单测通过，沿用下文的已知 talloc 基线分配抑制。
 

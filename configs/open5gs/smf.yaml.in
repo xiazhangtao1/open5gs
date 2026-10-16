@@ -45,6 +45,15 @@ smf:
     # mcc: "460"
     # mnc: "00"
     notify_uri: http://10.2.0.102:8000/api/v1/intent/notify
+    # Optional per-model filters. Omitted fields use these bidirectional defaults.
+#    face_recognition:
+#      flow_descriptions:
+#        - "permit out ip from 0.0.0.0/0 to assigned"
+#        - "permit in ip from assigned to 0.0.0.0/0"
+#    object_recognition:
+#      flow_descriptions:
+#        - "permit out ip from 0.0.0.0/0 to assigned"
+#        - "permit in ip from assigned to 0.0.0.0/0"
   dns:
     - 8.8.8.8
     - 8.8.4.4

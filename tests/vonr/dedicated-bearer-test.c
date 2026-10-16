@@ -757,6 +757,70 @@ static void intent_equal_profiles(abts_case *tc, test_sess_t *sess,
         ping_flow(tc, gtpu, test_qos_flow_find_by_qfi(sess, 1));
 }
 
+static void query_intent_flows(abts_case *tc, test_sess_t *sess,
+        char *app_id, const char *remote)
+{
+    char *path = ogs_msprintf("?supi=imsi-%s&pduSessionId=%d",
+            sess->test_ue->imsi, sess->psi);
+    cJSON *root = request(tc, "GET", path, NULL, 200, NULL);
+    cJSON *bearers = cJSON_GetObjectItemCaseSensitive(root, "bearers");
+    cJSON *bearer = cJSON_GetArrayItem(bearers, 0);
+    cJSON *rules, *flows;
+    char expected[128];
+    const char *id;
+    int i;
+    ABTS_INT_EQUAL(tc, 1, cJSON_GetArraySize(bearers));
+    ogs_assert(bearer);
+    id = cJSON_GetObjectItemCaseSensitive(bearer, "appSessionId")->valuestring;
+    if (*app_id) ABTS_STR_EQUAL(tc, app_id, id);
+    else ogs_cpystrn(app_id, id, 256);
+    rules = cJSON_GetObjectItemCaseSensitive(bearer, "pccRules");
+    flows = cJSON_GetObjectItemCaseSensitive(cJSON_GetArrayItem(rules, 0), "flows");
+    ABTS_INT_EQUAL(tc, 2, cJSON_GetArraySize(flows));
+    ogs_snprintf(expected, sizeof(expected), "permit out ip from %s/32 to assigned", remote);
+    for (i = 0; i < 2; i++) {
+        cJSON *flow = cJSON_GetArrayItem(flows, i);
+        ABTS_STR_EQUAL(tc, expected, cJSON_GetObjectItemCaseSensitive(flow, "description")->valuestring);
+        ABTS_STR_EQUAL(tc, i == 0 ? "DOWNLINK" : "UPLINK",
+                cJSON_GetObjectItemCaseSensitive(flow, "direction")->valuestring);
+    }
+    cJSON_Delete(root);
+    ogs_free(path);
+}
+
+/* Same QoS in both profiles, distinct remote addresses: switch filters only. */
+static void intent_flow_profiles(abts_case *tc, test_sess_t *sess,
+        ogs_socknode_t *ngap, ogs_socknode_t *gtpu, bool control_plane_only)
+{
+    char app_id[256] = "";
+    uint8_t qfi;
+    sess->pti = 6;
+    intent_transaction(tc, sess, ngap, 1,2,2, 2,40, true, true);
+    qfi = dedicated_flow(sess)->qfi;
+    query_intent_flows(tc, sess, app_id, "10.45.0.1");
+    if (!control_plane_only) ping_flow(tc, gtpu, dedicated_flow(sess));
+    /* Identical QoS must not hide a filter-only model switch. */
+    sess->pti = 7;
+    intent_transaction(tc, sess, ngap, 1,3,2, 2,40, true, true);
+    ABTS_INT_EQUAL(tc, qfi, dedicated_flow(sess)->qfi);
+    query_intent_flows(tc, sess, app_id, "10.45.0.2");
+    sess->pti = 8;
+    intent_transaction(tc, sess, ngap, 1,3,3, 2,39, true, false);
+    query_intent_flows(tc, sess, app_id, "10.45.0.2");
+    sess->pti = 9;
+    intent_transaction(tc, sess, ngap, 1,1,3, 2,39, false, false);
+    query_intent_flows(tc, sess, app_id, "10.45.0.2");
+    sess->pti = 10;
+    intent_transaction(tc, sess, ngap, 1,2,2, 2,40, true, false);
+    ABTS_INT_EQUAL(tc, qfi, dedicated_flow(sess)->qfi);
+    query_intent_flows(tc, sess, app_id, "10.45.0.1");
+    if (!control_plane_only) ping_flow(tc, gtpu, dedicated_flow(sess));
+    sess->pti = 11;
+    intent_transaction(tc, sess, ngap, 0,1,3, 0,0, true, false);
+    ABTS_TRUE(tc, !dedicated_flow(sess));
+    if (!control_plane_only) ping_flow(tc, gtpu, test_qos_flow_find_by_qfi(sess, 1));
+}
+
 static void intent_lifecycle(abts_case *tc, void *data)
 {
     ogs_socknode_t *ngap = testngap_client(1, AF_INET);
@@ -769,7 +833,9 @@ static void intent_lifecycle(abts_case *tc, void *data)
     bool control_plane_only = getenv("XCN_INTENT_CONTROL_PLANE_ONLY") != NULL;
     if (control_plane_only)
         fprintf(stderr, "Intent test: NAS/N2/PFCP only; GTP-U ping is explicitly skipped\n");
-    if (getenv("XCN_INTENT_EQUAL_PROFILE_TEST")) {
+    if (getenv("XCN_INTENT_FLOW_TEST")) {
+        intent_flow_profiles(tc, sess, ngap, gtpu, control_plane_only);
+    } else if (getenv("XCN_INTENT_EQUAL_PROFILE_TEST")) {
         intent_equal_profiles(tc, sess, ngap, gtpu, control_plane_only);
     } else if (getenv("XCN_INTENT_PROFILE_TEST")) {
         intent_profiles(tc, sess, ngap, gtpu, control_plane_only);

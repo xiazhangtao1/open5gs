@@ -542,6 +542,11 @@ typedef struct ogs_flow_s {
     char *description;
 } ogs_flow_t;
 
+/* Parse a bounded numeric IP filter and allocate its PCC-normalized description.
+ * Supports permit in/out, ip/tcp/udp/numeric protocol, CIDR and port ranges.
+ * The caller owns flow->description on success; failure leaves flow unchanged. */
+int ogs_flow_description_parse(ogs_flow_t *flow, const char *description);
+
 #define OGS_FLOW_FREE(__fLOW) \
     do { \
         if ((__fLOW)->description) { \

@@ -194,6 +194,9 @@ data:
         notify_uri: {{ .Values.networking.smf.userIntent.notifyUri | quote }}
         {{- with .Values.networking.smf.userIntent.faceRecognition }}
         face_recognition:
+          {{- if hasKey . "flowDescriptions" }}
+          flow_descriptions: {{ .flowDescriptions | toJson }}
+          {{- end }}
           {{- if hasKey . "fiveQi" }}
           five_qi: {{ .fiveQi }}
           {{- end }}
@@ -205,6 +208,9 @@ data:
         {{- end }}
         {{- with .Values.networking.smf.userIntent.objectRecognition }}
         object_recognition:
+          {{- if hasKey . "flowDescriptions" }}
+          flow_descriptions: {{ .flowDescriptions | toJson }}
+          {{- end }}
           {{- if hasKey . "fiveQi" }}
           five_qi: {{ .fiveQi }}
           {{- end }}
