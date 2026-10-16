@@ -830,6 +830,7 @@ static void intent_lifecycle(abts_case *tc, void *data)
     test_bearer_t *flow;
     uint8_t qfi;
     unsigned i;
+    int psi = sess->psi;
     bool control_plane_only = getenv("XCN_INTENT_CONTROL_PLANE_ONLY") != NULL;
     if (control_plane_only)
         fprintf(stderr, "Intent test: NAS/N2/PFCP only; GTP-U ping is explicitly skipped\n");
@@ -891,15 +892,15 @@ static void intent_lifecycle(abts_case *tc, void *data)
             if (!control_plane_only)
                 ping_flow(tc, gtpu, test_qos_flow_find_by_qfi(sess, 1));
         }
-        ogs_msleep(1200); /* Allow final notification timeouts to be observed. */
     }
+    ogs_msleep(1200); /* Observe final notification timeouts for every profile. */
 
     release_session(tc, sess, ngap);
     /* A rejected create can leave an owned, uncertain PCF app. Releasing it
      * must remove the session without attempting a nonexistent AF callback. */
     {
         char *path = ogs_msprintf("?supi=imsi-%s&pduSessionId=%d",
-                ue->imsi, sess->psi);
+                ue->imsi, psi);
         ogs_msleep(100);
         cJSON_Delete(request(tc, "GET", path, NULL, 404, NULL));
         ogs_free(path);
