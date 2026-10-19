@@ -218,3 +218,9 @@ Intent ePCO rejected: invalid header [received:0x00 expected:0x80]
 PLMN 期望值来自实际 SMF `user_intent.mcc/mnc`，不是从 SUPI 或驻留 PLMN 推导。应用协议约定为 460/00 时使用字符串 `mcc: "460"`、`mnc: "00"`；若双方改为 460/11，则线上前缀应为 `64 F0 11`。只有一个目标容器时，合法完整 ePCO IE 示例为 `7B 00 0A 80 FF 10 06 64 F0 00 01 03 03`；多个容器时应按真实总长度构造，保留其他配置项。
 
 新增隔离集成用例 `XCN_INTENT_TEST=1 XCN_INTENT_VALIDATION_TEST=1`（默认模型 QoS、应用 PLMN 460/00）覆盖 PLMN 不匹配、公共头错误、内容长度 5、重复容器、非法业务枚举和尾部截断六种 cause 96，以及 PTI=0/255 两种 cause 81。每次拒绝后检查 PCF 会话仍存在、没有专载、默认流 ping 正常；随后复用 PTI=6 和上述合法六字节成功创建物体专载 5QI3/30，再切换为同一 appSessionId/QFI 的人脸专载 5QI2/40，最终 Off 删除。仅三个有效意图产生 3 条通知，八个无效请求不通知。完整 unit、该用例、旁路保护的启用/停用用例、52 条正常意图通知回归及 ASan/UBSan 单测均通过，沿用已知 talloc 基线分配抑制。通知仅指向本地接收端，另一套部署未直接更新；证据和脚本位于 `/tmp/intent-parse-evidence/`。
+
+同日用户提供完整 N1 SM 请求 `2E 05 06 C9 7B 00 0A 80 FF 10 06 64 F0 00 01 03 03`，共 17 字节：5GSM、PSI=5、PTI=6、消息类型 C9（PDU Session Modification Request），ePCO 内容长度 10、公共头 80、唯一 FF10 容器内容长度 6、应用 PLMN 460/00、业务 On/物体/GPU高。该报文本身符合当前六字节实现，应停止将公共头缺失或长度错误当作这份已提供报文的未决项。
+
+新增测试开关 `XCN_INTENT_RAW_PDU_TEST=1`：`intent_nas()` 直接复制捕获的 17 字节，不经 NAS 编码器重建，仅按测试事务替换 PSI/PTI 和三个业务字节；在 PSI=5、PTI=6、物体/GPU高时与用户报文逐字节相同，并打印原始十六进制。与 `XCN_INTENT_VALIDATION_TEST=1 XCN_INTENT_TEST=1` 一起运行，原样报文通过校验，创建 QFI=2、5QI3/30，完成 NAS/N2/PFCP 及重传去重，随后同一专载切换人脸、Off 删除，共 3 条通知。启用相同原始格式的默认意图生命周期也通过，52 条通知顺序和值正确，无重复。证据和脚本位于 `/tmp/intent-raw-evidence/`，仅使用隔离 NF 和本地通知接收端。
+
+另一套环境仍返回 96 的具体原因尚未唯一确定。一个可验证的历史版本线索是提交 `de664c580` 的三字节测试实现：同样先打印 `length:6 available:6`，随后因 `pco.ids[found].len != 3` 拒绝，并将解析失败映射为 cause 96；其 `user_intent.mcc/mnc` 配置实际被忽略，启动日志/二进制包含 `3-byte test payload` 特征文本。提交 `098878f96` 已回退此格式，恢复长度 6 和 PLMN 校验。应核对运行容器的实际 imageID、构建提交及二进制，不能由本地源码已回退或镜像标签为 latest 推断另一套环境已运行六字节版。旧三字节镜像目前是排查候选，不是已确认的现场根因；若已确认运行六字节版，应对照该请求的 SMF 输入字节、实际配置及精确拒绝日志继续定位。

@@ -585,6 +585,22 @@ static void concurrent_lifecycle(abts_case *tc, void *data)
 
 static ogs_pkbuf_t *intent_nas(test_sess_t *sess, int on, int model, int gpu)
 {
+    if (getenv("XCN_INTENT_RAW_PDU_TEST")) {
+        /* Captured UE request: PSI=5, PTI=6, On/object/high. Send it directly
+         * without using the NAS encoder; vary only session/transaction/data. */
+        uint8_t packet[] = {0x2e,0x05,0x06,0xc9,0x7b,0,0x0a,
+            0x80,0xff,0x10,6,0x64,0xf0,0,1,3,3};
+        ogs_pkbuf_t *nas = ogs_pkbuf_alloc(NULL, OGS_NAS_HEADROOM + sizeof(packet));
+        ogs_assert(nas);
+        packet[1] = sess->psi; packet[2] = sess->pti;
+        packet[14] = on; packet[15] = model; packet[16] = gpu;
+        ogs_pkbuf_reserve(nas, OGS_NAS_HEADROOM);
+        ogs_pkbuf_put_data(nas, packet, sizeof(packet));
+        ogs_info("Raw intent test request [PSI:%u PTI:%u length:%u]",
+                sess->psi, sess->pti, nas->len);
+        ogs_log_hexdump(OGS_LOG_INFO, nas->data, nas->len);
+        return nas;
+    }
     uint8_t contents[] = {0x80,0xff,0x10,6,0x64,0xf0,0,0,0,0,0,0x0d,0};
     ogs_nas_5gs_message_t message = {0};
     ogs_nas_5gs_pdu_session_modification_request_t *req =
