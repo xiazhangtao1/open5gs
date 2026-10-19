@@ -821,6 +821,78 @@ static void intent_flow_profiles(abts_case *tc, test_sess_t *sess,
     if (!control_plane_only) ping_flow(tc, gtpu, test_qos_flow_find_by_qfi(sess, 1));
 }
 
+static void intent_bypass_requests(abts_case *tc, test_sess_t *sess,
+        ogs_socknode_t *ngap, ogs_socknode_t *gtpu, bool control_plane_only)
+{
+    bool disabled = getenv("XCN_INTENT_DISABLED_TEST") != NULL;
+    test_bearer_t *flow = dedicated_flow(sess);
+    char app_id[256] = "";
+    int i;
+
+    sess->ul_nas_transport_param.request_type = OGS_NAS_5GS_REQUEST_TYPE_MODIFICATION_REQUEST;
+    sess->ul_nas_transport_param.dnn = sess->ul_nas_transport_param.s_nssai = 0;
+    for (i = 0; i < (disabled ? 3 : 2); i++) {
+        ogs_nas_5gs_message_t message = {0};
+        ogs_nas_5gs_pdu_session_modification_request_t *req =
+            &message.gsm.pdu_session_modification_request;
+        uint8_t epco[] = {0x80,0xff,0x11,6,0x64,0xf0,0,1,2,2};
+
+        sess->pti = 20 + i + (flow ? 10 : 0);
+        message.gsm.h.extended_protocol_discriminator = OGS_NAS_EXTENDED_PROTOCOL_DISCRIMINATOR_5GSM;
+        message.gsm.h.pdu_session_identity = sess->psi;
+        message.gsm.h.procedure_transaction_identity = sess->pti;
+        message.gsm.h.message_type = OGS_NAS_5GS_PDU_SESSION_MODIFICATION_REQUEST;
+        /* No ePCO, a different container, or FF10 with intent disabled. */
+        if (i) {
+            if (i == 2) epco[2] = 0x10;
+            req->presencemask = OGS_NAS_5GS_PDU_SESSION_MODIFICATION_REQUEST_EXTENDED_PROTOCOL_CONFIGURATION_OPTIONS_PRESENT;
+            req->extended_protocol_configuration_options.buffer = epco;
+            req->extended_protocol_configuration_options.length = sizeof(epco);
+        }
+        send_sm(tc, sess, ngap, ogs_nas_5gs_plain_encode(&message));
+        receive_ngap(tc, sess->test_ue, ngap, NGAP_ProcedureCode_id_DownlinkNASTransport);
+        ABTS_INT_EQUAL(tc, OGS_NAS_5GS_PDU_SESSION_MODIFICATION_REJECT, sess->test_ue->gsm_message_type);
+        ABTS_PTR_EQUAL(tc, flow, dedicated_flow(sess));
+        query_bearer(tc, sess, NULL, flow ? 40 : 0, flow ? 1 : 0);
+        if (flow)
+            query_intent_qos(tc, sess, app_id, 2,40,
+                    500000000,500000000,5000000,5000000);
+        if (!control_plane_only)
+            probe_flow(tc, gtpu, flow ? flow : test_qos_flow_find_by_qfi(sess, 1), true);
+    }
+}
+
+static void intent_standard_qos_request(abts_case *tc, test_sess_t *sess,
+        ogs_socknode_t *ngap)
+{
+    ogs_nas_5gs_message_t message = {0};
+    ogs_nas_qos_flow_description_t description = {0};
+    ogs_nas_qos_flow_descriptions_t *descriptions = &message.gsm.
+        pdu_session_modification_request.requested_qos_flow_descriptions;
+    ogs_pkbuf_t *nas;
+    test_bearer_t *flow = dedicated_flow(sess);
+    ogs_assert(flow);
+    sess->pti = 32;
+    message.gsm.h.extended_protocol_discriminator = OGS_NAS_EXTENDED_PROTOCOL_DISCRIMINATOR_5GSM;
+    message.gsm.h.pdu_session_identity = sess->psi;
+    message.gsm.h.procedure_transaction_identity = sess->pti;
+    message.gsm.h.message_type = OGS_NAS_5GS_PDU_SESSION_MODIFICATION_REQUEST;
+    message.gsm.pdu_session_modification_request.presencemask =
+        OGS_NAS_5GS_PDU_SESSION_MODIFICATION_REQUEST_REQUESTED_QOS_FLOW_DESCRIPTIONS_PRESENT;
+    description.identifier = flow->qfi;
+    description.code = OGS_NAS_MODIFY_NEW_QOS_FLOW_DESCRIPTION;
+    description.E_bit = 1;
+    description.num_of_parameter = 1;
+    description.param[0].identifier = OGS_NAX_QOS_FLOW_PARAMETER_ID_MFBR_DOWNLINK;
+    description.param[0].len = sizeof(description.param[0].br);
+    ogs_nas_bitrate_from_uint64(&description.param[0].br, 500000000);
+    ABTS_INT_EQUAL(tc, OGS_OK, ogs_nas_build_qos_flow_descriptions(descriptions, &description, 1));
+    nas = ogs_nas_5gs_plain_encode(&message);
+    ogs_free(descriptions->buffer);
+    send_sm(tc, sess, ngap, nas);
+    ABTS_PTR_EQUAL(tc, flow, modify_complete(tc, sess, ngap, 40, false));
+}
+
 static void intent_lifecycle(abts_case *tc, void *data)
 {
     ogs_socknode_t *ngap = testngap_client(1, AF_INET);
@@ -834,7 +906,20 @@ static void intent_lifecycle(abts_case *tc, void *data)
     bool control_plane_only = getenv("XCN_INTENT_CONTROL_PLANE_ONLY") != NULL;
     if (control_plane_only)
         fprintf(stderr, "Intent test: NAS/N2/PFCP only; GTP-U ping is explicitly skipped\n");
-    if (getenv("XCN_INTENT_FLOW_TEST")) {
+    if (getenv("XCN_INTENT_BYPASS_TEST")) {
+        intent_bypass_requests(tc, sess, ngap, gtpu, control_plane_only);
+        if (!getenv("XCN_INTENT_DISABLED_TEST")) {
+            sess->pti = 6;
+            intent_transaction(tc, sess, ngap, 1,2,2, 2,40, true, true);
+            intent_bypass_requests(tc, sess, ngap, gtpu, control_plane_only);
+            /* Standard QoS fields still take the original modification path. */
+            intent_standard_qos_request(tc, sess, ngap);
+            sess->pti = 7;
+            intent_transaction(tc, sess, ngap, 0,1,3, 0,0, true, false);
+            if (!control_plane_only)
+                ping_flow(tc, gtpu, test_qos_flow_find_by_qfi(sess, 1));
+        }
+    } else if (getenv("XCN_INTENT_FLOW_TEST")) {
         intent_flow_profiles(tc, sess, ngap, gtpu, control_plane_only);
     } else if (getenv("XCN_INTENT_EQUAL_PROFILE_TEST")) {
         intent_equal_profiles(tc, sess, ngap, gtpu, control_plane_only);

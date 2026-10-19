@@ -116,6 +116,7 @@ Command 等待使用 8 秒间隔、最多 4 次相同 NAS 重发；不重复执�
 - PFCP/N2/NAS 执行结果不确定时，不猜测资源已删除或回写 SUCCESS。保留关联和待确认状态，PCF 查询显示 `UNCERTAIN`，本会话后续意图返回 FAILURE；其他策略队列可以继续。当前没有跨 UE/RAN/UPF 的补偿恢复流程，通过正常会话释放收尾。
 - NAS 层没有新增请求序号。完成后相同 PTI/相同内容按新事务处理；调用方必须遵守 NAS 生命周期，不能将已经完成的旧业务请求重新提交并期待长期去重。
 - 纯 IPv6 通知地址选择、真实终端定时器差异、真实 RAN QFI/DRB 映射仍需对接验证。
+- 未被意图入口接管、且不含 Requested QoS Rules / Requested QoS Flow Descriptions 的修改请求，当前返回 Modification Reject，不提供通用的标准 ePCO-only 成功处理。2026-10-19 修复使此类拒绝保留原 PDU 会话及资源；含标准 QoS IE 的既有解析/执行异常路径未被全局改写。
 
 ## 通知
 
@@ -195,3 +196,11 @@ XCN_INTENT_TEST=1 XCN_INTENT_FLOW_TEST=1 \
 本次隔离 Docker 实测：全量构建和 unit 通过；意图成功/拒绝生命周期及默认用户面 ping 通过；T3591 重发通过；通知 400/500/200/超时/连接失败五组全部通过，每组原 QoS/NAS 流程正常且无通知重试；原 dedicated-bearer 单会话及并发双会话回归通过。
 
 新模块 ASan/UBSan 单测通过。LeakSanitizer 初始报告 96 字节 `talloc_enable_null_tracking` 全局分配，已在原有 qos-priority 单测复现；复测仅按该函数名抑制这一基线分配，未关闭其他泄漏检测。本结果不等于真实 UE/gNB 端到端验收。
+
+2026-10-19 另一套环境反馈 `Invalid modification request [modify:0] → State machine exception → Removed Session → Not found`。`modify:0` 指本次待修改 QoS Flow 列表为空，不是会话 ID、PTI 或已有专载总数。按当前代码，意图入口仅在功能关闭、没有 ePCO IE、或合法 ePCO 没有目标容器时返回原流程；PLMN、容器格式或 PTI 校验失败会在意图入口拒绝，不会回落到这个数量检查。因此另一套环境还需核验实际生效的 `user_intent.enabled`、新请求的完整 ePCO 及运行镜像，不能仅凭配置文件编辑或 AMF 的 `[PSI:PTI]` 日志认定具体旁路原因。
+
+隔离环境已复现上述错误链。最小修复在运行任何标准 QoS 解析器之前，识别未携带两类标准 QoS IE 且未被意图接管的请求，沿用原来的 NAS Reject/HTTP 错误响应，返回“本次请求已处理”，避免状态机异常删除正常会话；不将这类请求伪装成意图成功。新诊断日志包含 SUPI、PSI、实际 SMF PTI、`intent-enabled`、ePCO presence、长度和完整 presence mask，并明确记录 `keep PDU session`。
+
+回归使用隔离 NF、MongoDB、TUN 和本地通知接收端，未连接实际算力服务器：功能开启时测试无 ePCO/非 FF10 容器，分别在无专载和已有专载时拒绝并保留原会话、PCF 策略、appSessionId/QFI 和用户面 ping；同一会话随后完成合法 FF10 创建/删除及不携带 FF10 的标准 QoS Flow Descriptions 修改。功能关闭时测试无 ePCO、非 FF10 和 FF10 三类请求，全部受控拒绝，默认流 ping 正常，无意图资源或通知。新用例通过，功能开启/关闭分别产生 2/0 条通知；正常意图 52 条通知、自定义过滤规则 6 条通知及原 dedicated-bearer 单会话/并发回归、完整 unit 均通过。临时订户清理后为 0。
+
+复现新用例：使用默认人脸 QoS 的隔离配置及本地通知接收端，执行 `XCN_INTENT_TEST=1 XCN_INTENT_BYPASS_TEST=1 build/tests/vonr/vonr -e info -c /tmp/intent-bypass-enabled.yaml dedicated-bearer-test`。使用功能关闭的隔离配置时再加 `XCN_INTENT_DISABLED_TEST=1`，配置文件换为 `/tmp/intent-bypass-disabled.yaml`。修复前失败证据为 `/tmp/intent-bypass-before.log`，修复后脚本、日志及结果保存在 `/tmp/intent-bypass-evidence/`。另一套服务器需更新包含本修复的 SMF 镜像后才能获得保护和新增诊断，本次未直接修改那套环境。

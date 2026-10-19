@@ -456,6 +456,7 @@ int gsm_handle_pdu_session_modification_request(
             pdu_session_modification_request)
 {
     int rv;
+    int reject_result = OGS_ERROR;
     uint64_t pfcp_flags = 0;
 
     ogs_nas_qos_rules_t *requested_qos_rules =
@@ -481,6 +482,24 @@ int gsm_handle_pdu_session_modification_request(
                 OGS_SBI_HTTP_STATUS_CONFLICT, n1smbuf,
                 OpenAPI_n2_sm_info_type_NULL, NULL);
         return OGS_OK;
+    }
+
+    if (!(pdu_session_modification_request->presencemask &
+        (OGS_NAS_5GS_PDU_SESSION_MODIFICATION_REQUEST_REQUESTED_QOS_RULES_PRESENT |
+         OGS_NAS_5GS_PDU_SESSION_MODIFICATION_REQUEST_REQUESTED_QOS_FLOW_DESCRIPTIONS_PRESENT))) {
+        bool epco_present = !!(pdu_session_modification_request->presencemask &
+            OGS_NAS_5GS_PDU_SESSION_MODIFICATION_REQUEST_EXTENDED_PROTOCOL_CONFIGURATION_OPTIONS_PRESENT);
+        ogs_warn("[%s:%d] Reject modification without supported QoS operation "
+                "[PTI:%u intent-enabled:%d ePCO:%d length:%u presence:0x%llx]; keep PDU session",
+                smf_ue->supi, sess->psi, sess->pti,
+                smf_self()->user_intent.enabled, epco_present,
+                epco_present ? pdu_session_modification_request->
+                    extended_protocol_configuration_options.length : 0,
+                (unsigned long long)pdu_session_modification_request->presencemask);
+        /* No QoS parser has run or changed state. Reject just this request;
+         * returning OGS_ERROR here would clear a healthy established session. */
+        reject_result = OGS_OK;
+        goto cleanup;
     }
 
     ogs_list_init(&sess->qos_flow_to_modify_list);
@@ -552,5 +571,5 @@ cleanup:
             stream, OGS_SBI_HTTP_STATUS_BAD_REQUEST,
             n1smbuf, OpenAPI_n2_sm_info_type_NULL, NULL);
 
-    return OGS_ERROR;
+    return reject_result;
 }
