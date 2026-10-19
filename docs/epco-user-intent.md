@@ -204,3 +204,17 @@ XCN_INTENT_TEST=1 XCN_INTENT_FLOW_TEST=1 \
 回归使用隔离 NF、MongoDB、TUN 和本地通知接收端，未连接实际算力服务器：功能开启时测试无 ePCO/非 FF10 容器，分别在无专载和已有专载时拒绝并保留原会话、PCF 策略、appSessionId/QFI 和用户面 ping；同一会话随后完成合法 FF10 创建/删除及不携带 FF10 的标准 QoS Flow Descriptions 修改。功能关闭时测试无 ePCO、非 FF10 和 FF10 三类请求，全部受控拒绝，默认流 ping 正常，无意图资源或通知。新用例通过，功能开启/关闭分别产生 2/0 条通知；正常意图 52 条通知、自定义过滤规则 6 条通知及原 dedicated-bearer 单会话/并发回归、完整 unit 均通过。临时订户清理后为 0。
 
 复现新用例：使用默认人脸 QoS 的隔离配置及本地通知接收端，执行 `XCN_INTENT_TEST=1 XCN_INTENT_BYPASS_TEST=1 build/tests/vonr/vonr -e info -c /tmp/intent-bypass-enabled.yaml dedicated-bearer-test`。使用功能关闭的隔离配置时再加 `XCN_INTENT_DISABLED_TEST=1`，配置文件换为 `/tmp/intent-bypass-disabled.yaml`。修复前失败证据为 `/tmp/intent-bypass-before.log`，修复后脚本、日志及结果保存在 `/tmp/intent-bypass-evidence/`。另一套服务器需更新包含本修复的 SMF 镜像后才能获得保护和新增诊断，本次未直接修改那套环境。
+
+2026-10-19 后续终端诊断确认 PSI=5、PTI=6 的 Modification Request 收到 `INVALID_MANDATORY_IE`（cause 96）。日志显示的 `64 F0 00 01 03 03` 为合法 PLMN 460/00、On、物体、GPU高，长度为 6；但仅打印容器不能证明公共头、完整配置项或期望 PLMN 校验通过。PTI=6 合法；意图入口拒绝非法 PTI 的 cause 为 81。通用旁路拒绝也可能返回 96，因此应关联同次请求的 SUPI/PSI/PTI 和阶段日志，不能只凭 cause 指定根因。该片段的 FF10 行时间为 15:36:41.919，终端修改请求却在 15:37:51.49，二者是否为同次或粘贴有误仍待确认。AMF 定时清理的是旧 NG 上下文 RAN/AMF ID 25/7，新上下文为 29/8，不能把旧上下文清理当作新请求被拒原因。
+
+诊断增强保留原有校验及 NAS cause，仅补充：请求 SUPI/PSI/PTI、ePCO 内容长度与公共头、具体拒绝原因、PLMN 接收/期望编码，以及成功校验的业务值。`Intent validated` 只表示输入校验通过，资源完成仍看后续策略、NAS/N2/PFCP 和最终结果。例如：
+
+```text
+Intent ePCO rejected: PLMN mismatch [received:0x64f000 expected:0x64f011]
+Intent ePCO rejected: invalid header [received:0x00 expected:0x80]
+[imsi-...:5] Intent request rejected [PTI:6 cause:96]
+```
+
+PLMN 期望值来自实际 SMF `user_intent.mcc/mnc`，不是从 SUPI 或驻留 PLMN 推导。应用协议约定为 460/00 时使用字符串 `mcc: "460"`、`mnc: "00"`；若双方改为 460/11，则线上前缀应为 `64 F0 11`。只有一个目标容器时，合法完整 ePCO IE 示例为 `7B 00 0A 80 FF 10 06 64 F0 00 01 03 03`；多个容器时应按真实总长度构造，保留其他配置项。
+
+新增隔离集成用例 `XCN_INTENT_TEST=1 XCN_INTENT_VALIDATION_TEST=1`（默认模型 QoS、应用 PLMN 460/00）覆盖 PLMN 不匹配、公共头错误、内容长度 5、重复容器、非法业务枚举和尾部截断六种 cause 96，以及 PTI=0/255 两种 cause 81。每次拒绝后检查 PCF 会话仍存在、没有专载、默认流 ping 正常；随后复用 PTI=6 和上述合法六字节成功创建物体专载 5QI3/30，再切换为同一 appSessionId/QFI 的人脸专载 5QI2/40，最终 Off 删除。仅三个有效意图产生 3 条通知，八个无效请求不通知。完整 unit、该用例、旁路保护的启用/停用用例、52 条正常意图通知回归及 ASan/UBSan 单测均通过，沿用已知 talloc 基线分配抑制。通知仅指向本地接收端，另一套部署未直接更新；证据和脚本位于 `/tmp/intent-parse-evidence/`。

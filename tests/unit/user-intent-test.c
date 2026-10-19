@@ -27,6 +27,19 @@ static void parse_test(abts_case *tc, void *data)
     packet[3] = 255;
     ABTS_INT_EQUAL(tc, OGS_ERROR, smf_intent_parse(packet, sizeof(packet), 0xff10, &plmn, &v));
     packet[3] = 6;
+    packet[0] = 0;
+    ABTS_INT_EQUAL(tc, OGS_ERROR, smf_intent_parse(packet, sizeof(packet), 0xff10, &plmn, &v));
+    packet[0] = 0x80;
+    packet[3] = 5;
+    ABTS_INT_EQUAL(tc, OGS_ERROR, smf_intent_parse(packet, sizeof(packet) - 1, 0xff10, &plmn, &v));
+    packet[3] = 6;
+    ogs_plmn_id_build(&plmn, 460, 11, 2);
+    ABTS_INT_EQUAL(tc, OGS_ERROR, smf_intent_parse(packet, sizeof(packet), 0xff10, &plmn, &v));
+    ogs_plmn_id_build(&plmn, 460, 0, 2);
+    packet[8] = 3; packet[9] = 3;
+    ABTS_INT_EQUAL(tc, OGS_OK, smf_intent_parse(packet, sizeof(packet), 0xff10, &plmn, &v));
+    ABTS_INT_EQUAL(tc, 3, v.ai_model);
+    ABTS_INT_EQUAL(tc, 3, v.gpu_level);
     for (i = 7; i < 10; i++) {
         uint8_t saved = packet[i];
         packet[i] = 255;

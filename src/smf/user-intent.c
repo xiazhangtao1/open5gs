@@ -57,8 +57,10 @@ int smf_intent_parse(const uint8_t *data, size_t length, uint16_t id,
     ogs_pco_t pco;
     int i, found = -1;
     size_t offset = 1;
-    if (!data || !length || length > UINT16_MAX || !plmn || !value)
+    if (!data || !length || length > UINT16_MAX || !plmn || !value) {
+        ogs_warn("Intent ePCO rejected: invalid input [length:%zu]", length);
         return OGS_ERROR;
+    }
     /* Bounded diagnostic pass also shows the available bytes of a malformed
      * target container; never trust the advertised length for a hexdump. */
     while (offset + 3 <= length) {
@@ -66,27 +68,49 @@ int smf_intent_parse(const uint8_t *data, size_t length, uint16_t id,
         uint16_t container = ((uint16_t)data[offset] << 8) | data[offset + 1];
         size_t available = length - offset - 3;
         if (container == id) {
-            ogs_info("ePCO intent container 0x%04x length:%zu available:%zu",
-                    id, count, available);
+            ogs_info("ePCO intent container 0x%04x length:%zu available:%zu "
+                    "header:0x%02x ePCO-length:%zu",
+                    id, count, available, data[0], length);
             ogs_log_hexdump(OGS_LOG_INFO, data + offset,
                     3 + ogs_min(count, available));
         }
         if (count > available) break;
         offset += 3 + count;
     }
-    if (ogs_pco_parse(&pco, (uint8_t *)data, length) != (int)length)
+    if (ogs_pco_parse(&pco, (uint8_t *)data, length) != (int)length) {
+        ogs_warn("Intent ePCO rejected: malformed configuration items [length:%zu]", length);
         return OGS_ERROR;
+    }
     for (i = 0; i < pco.num_of_id; i++) {
         if (pco.ids[i].id != id) continue;
-        if (found >= 0) return OGS_ERROR;
+        if (found >= 0) {
+            ogs_warn("Intent ePCO rejected: duplicate container [id:0x%04x]", id);
+            return OGS_ERROR;
+        }
         found = i;
     }
     if (found < 0) return OGS_DONE;
-    if (data[0] != 0x80 || pco.ids[found].len != 6 ||
-        memcmp(pco.ids[found].data, plmn, 3)) return OGS_ERROR;
+    if (data[0] != 0x80) {
+        ogs_warn("Intent ePCO rejected: invalid header [received:0x%02x expected:0x80]", data[0]);
+        return OGS_ERROR;
+    }
+    if (pco.ids[found].len != 6) {
+        ogs_warn("Intent ePCO rejected: invalid container length [received:%u expected:6]",
+                pco.ids[found].len);
+        return OGS_ERROR;
+    }
+    if (memcmp(pco.ids[found].data, plmn, 3)) {
+        ogs_warn("Intent ePCO rejected: PLMN mismatch [received:0x%06x expected:0x%06x]",
+                ogs_plmn_id_hexdump(pco.ids[found].data), ogs_plmn_id_hexdump(plmn));
+        return OGS_ERROR;
+    }
     data = (const uint8_t *)pco.ids[found].data + 3;
     if (data[0] > 1 || data[1] < 1 || data[1] > 3 ||
-        data[2] < 1 || data[2] > 3) return OGS_ERROR;
+        data[2] < 1 || data[2] > 3) {
+        ogs_warn("Intent ePCO rejected: invalid business values [commStatus:%u aiModel:%u gpuLevel:%u]",
+                data[0], data[1], data[2]);
+        return OGS_ERROR;
+    }
     value->comm_status = data[0];
     value->ai_model = data[1];
     value->gpu_level = data[2];
@@ -573,19 +597,31 @@ bool smf_user_intent_request(smf_sess_t *sess, ogs_sbi_stream_t *stream,
     ogs_pkbuf_t *nas;
     intent_state_t *st = sess->user_intent;
     intent_request_t *r;
+    smf_ue_t *ue;
+    const char *supi;
     int parsed;
     if (!smf_self()->user_intent.enabled || !(req->presencemask &
             OGS_NAS_5GS_PDU_SESSION_MODIFICATION_REQUEST_EXTENDED_PROTOCOL_CONFIGURATION_OPTIONS_PRESENT))
         return false;
+    ue = smf_ue_find_by_id(sess->smf_ue_id);
+    supi = ue && ue->supi ? ue->supi : "unknown";
+    ogs_info("[%s:%u] ePCO modification request [PTI:%u length:%u]",
+            supi, sess->psi, sess->pti,
+            req->extended_protocol_configuration_options.length);
     parsed = smf_intent_parse(req->extended_protocol_configuration_options.buffer,
             req->extended_protocol_configuration_options.length,
             smf_self()->user_intent.container_id, &smf_self()->user_intent.plmn, &value);
     if (parsed == OGS_DONE) return false;
     if (parsed != OGS_OK || !sess->pti || sess->pti == 255) {
-        reject(sess, stream, sess->pti, parsed != OGS_OK ?
-                OGS_5GSM_CAUSE_INVALID_MANDATORY_INFORMATION : OGS_5GSM_CAUSE_INVALID_PTI_VALUE);
+        uint8_t cause = parsed != OGS_OK ?
+            OGS_5GSM_CAUSE_INVALID_MANDATORY_INFORMATION : OGS_5GSM_CAUSE_INVALID_PTI_VALUE;
+        ogs_warn("[%s:%u] Intent request rejected [PTI:%u cause:%u]",
+                supi, sess->psi, sess->pti, cause);
+        reject(sess, stream, sess->pti, cause);
         return true;
     }
+    ogs_info("[%s:%u] Intent validated [PTI:%u commStatus:%u aiModel:%u gpuLevel:%u]",
+            supi, sess->psi, sess->pti, value.comm_status, value.ai_model, value.gpu_level);
     if (!st) {
         st = sess->user_intent = ogs_calloc(1, sizeof(*st));
         st->sess_id = sess->id;
