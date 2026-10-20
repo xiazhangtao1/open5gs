@@ -208,8 +208,8 @@ class InspectionTest(unittest.TestCase):
         self.assertEqual(columns["CELL-ID"], "-")
         self.assertEqual(columns["LOCATION"], "identity-mismatch")
         row = self.run_cli("rate", "--with-location").stdout.splitlines()[-1]
-        self.assertEqual([c.strip() for c in row.split("|")][-4:],
-                         ["100", "28", "-", "identity-mismatch"])
+        self.assertEqual([c.strip() for c in row.split("|")][-5:],
+                         ["100", "28", "-", "[2001:db8::1]:38412", "identity-mismatch"])
 
     def test_last_known_after_gnb_removal(self):
         item = self.http.data["/ue-info"][0]
@@ -329,6 +329,7 @@ class InspectionTest(unittest.TestCase):
                 self.assertEqual(row["ul_bps"], 1234)
                 self.assertEqual(row["location"]["gnb"]["gnb_id"], 100)
                 self.assertEqual(row["location"]["gnb"]["gnb_id_bits"], 28)
+                self.assertEqual(row["location"]["gnb"]["peer"], "[2001:db8::1]:38412")
                 self.assertEqual(row["location"]["nr_cgi"]["nci"], 25603)
                 self.assertEqual(row["location"]["nr_cgi"]["cell_id"], 3)
                 if level != "user":
@@ -337,10 +338,10 @@ class InspectionTest(unittest.TestCase):
                 header, separator, row = result.stdout.strip().splitlines()
                 self.assertIn("-+-", separator)
                 self.assertEqual(len(header.split("|")), len(row.split("|")))
-                self.assertEqual([c.strip() for c in header.split("|")][-4:],
-                                 ["GNB-ID", "GNB-LEN", "CELL-ID", "LOCATION"])
-                self.assertEqual([c.strip() for c in row.split("|")][-4:],
-                                 ["100", "28", "3", "reported"])
+                self.assertEqual([c.strip() for c in header.split("|")][-5:],
+                                 ["GNB-ID", "GNB-LEN", "CELL-ID", "GNB-PEER", "LOCATION"])
+                self.assertEqual([c.strip() for c in row.split("|")][-5:],
+                                 ["100", "28", "3", "[2001:db8::1]:38412", "reported"])
                 widths = lambda line: [len(c) for c in line.split("|")]
                 self.assertEqual(widths(header), widths(row))
                 self.assertEqual(widths(header), [len(c) for c in separator.split("+")])
@@ -351,8 +352,8 @@ class InspectionTest(unittest.TestCase):
         self.assertIn("warning", result.stderr)
         self.assertEqual(json.loads(result.stdout)["rows"][0]["location"]["status"], "unknown")
         row = self.run_cli("rate", "--with-location").stdout.splitlines()[-1]
-        self.assertEqual([c.strip() for c in row.split("|")][-4:],
-                         ["-", "-", "-", "unknown"])
+        self.assertEqual([c.strip() for c in row.split("|")][-5:],
+                         ["-", "-", "-", "-", "unknown"])
         self.run_cli("rate", "--level", "session", "--active-only", expected=1)
 
     def test_watch_emits_multiple_json_documents(self):

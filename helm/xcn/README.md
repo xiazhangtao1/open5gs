@@ -144,11 +144,14 @@ Defaults are AMF `http://127.0.0.1:9091/ue-info` and `/gnb-info`, and SMF
 `--amf-gnb-info`, `--smf-pdu-info`, or `OPEN5GS_AMF_UE_INFO_URL`,
 `OPEN5GS_AMF_GNB_INFO_URL`, `OPEN5GS_SMF_PDU_INFO_URL`, respectively. Supply
 endpoint URLs without pagination parameters. `--with-location` works at all
-four rate levels, adding `GNB-ID`, `GNB-LEN`, `CELL-ID` and `LOCATION` in text,
-and a `location` object in JSON. Optional location failures retain rate output with
-unknown location; existing `--active-only` failures remain strict. JSON retains
+four rate levels, adding `GNB-ID`, `GNB-LEN`, `CELL-ID`, `GNB-PEER` and
+`LOCATION` in text, and a `location` object in JSON. `GNB-PEER` is the reporting
+gNB's NGAP/SCTP peer IP and port, for example `[10.2.0.119]:34910`; an idle
+UE retains the address from its last location report. Optional location failures
+retain rate output with unknown location; existing `--active-only` failures
+remain strict. JSON retains
 the full `location.nr_cgi.nci` and `nci_hex`, the derived `cell_id`, and the
-reporting gNB identity and `gnb_id_bits` under `location.gnb`.
+reporting gNB identity, `gnb_id_bits` and `peer` under `location.gnb`.
 
 Run the focused tests after building:
 

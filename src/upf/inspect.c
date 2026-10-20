@@ -480,7 +480,7 @@ char *xcnctl_add_location(const char *response, const cJSON *ues, bool json)
         char id[24], bits[24], cell[24];
         const cJSON *ue;
         if (header) {
-            if (!append(out, &used, "%s GNB-ID GNB-LEN CELL-ID LOCATION\n", line)) goto fail;
+            if (!append(out, &used, "%s GNB-ID GNB-LEN CELL-ID GNB-PEER LOCATION\n", line)) goto fail;
             header = false;
             continue;
         }
@@ -492,10 +492,11 @@ char *xcnctl_add_location(const char *response, const cJSON *ues, bool json)
         *end = delimiter;
         loc = location(ue);
         if (!loc) goto fail;
-        bool ok = append(out, &used, "%s %s %s %s %s\n", line,
+        bool ok = append(out, &used, "%s %s %s %s %s %s\n", line,
                 decimal(field(loc, "gnb"), "gnb_id", id, sizeof(id)),
                 decimal(field(loc, "gnb"), "gnb_id_bits", bits, sizeof(bits)),
                 decimal(field(loc, "nr_cgi"), "cell_id", cell, sizeof(cell)),
+                string(field(loc, "gnb"), "peer"),
                 location_label(loc));
         cJSON_Delete(loc);
         if (!ok) goto fail;
