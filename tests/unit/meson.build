@@ -46,3 +46,12 @@ testunit_unit_exe = executable('unit',
                     libsbi_dep])
 
 test('unit', testunit_unit_exe, is_parallel : false, suite: 'unit')
+
+amf_location_test = executable('amf-location-test',
+    sources : files('amf-location-test.c'),
+    dependencies : libamf_dep)
+test('amf-location', amf_location_test, suite: 'unit')
+
+test('xcnctl-inspect', find_program('python3'),
+    args : [meson.current_source_dir() / 'xcnctl-test.py', xcnctl_exe],
+    timeout : 60, suite: 'unit')

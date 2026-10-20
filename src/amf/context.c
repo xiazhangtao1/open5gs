@@ -1328,14 +1328,18 @@ amf_gnb_t *amf_gnb_find_by_gnb_id(uint32_t gnb_id)
     return (amf_gnb_t *)ogs_hash_get(self.gnb_id_hash, &gnb_id, sizeof(gnb_id));
 }
 
-int amf_gnb_set_gnb_id(amf_gnb_t *gnb, uint32_t gnb_id)
+int amf_gnb_set_gnb_id(amf_gnb_t *gnb, uint32_t gnb_id, uint8_t bits)
 {
     ogs_assert(gnb);
+
+    if (bits < 22 || bits > 32 || (uint64_t)gnb_id >= (1ULL << bits))
+        return OGS_ERROR;
 
     if (gnb->gnb_id_presence == true)
         ogs_hash_set(self.gnb_id_hash, &gnb->gnb_id, sizeof(gnb->gnb_id), NULL);
 
     gnb->gnb_id = gnb_id;
+    gnb->gnb_id_bits = bits;
     ogs_hash_set(self.gnb_id_hash, &gnb->gnb_id, sizeof(gnb->gnb_id), gnb);
 
     gnb->gnb_id_presence = true;
@@ -2226,6 +2230,30 @@ OpenAPI_rat_type_e amf_ue_rat_type(amf_ue_t *amf_ue)
     }
 
     return gnb->rat_type;
+}
+
+void amf_ue_update_location(amf_ue_t *amf_ue, ran_ue_t *ran_ue)
+{
+    amf_gnb_t *gnb;
+
+    ogs_assert(amf_ue);
+    ogs_assert(ran_ue);
+    amf_ue->nr_tai = ran_ue->saved.nr_tai;
+    amf_ue->nr_cgi = ran_ue->saved.nr_cgi;
+    amf_ue->ue_location_timestamp = ogs_time_now();
+    memset(&amf_ue->location_gnb, 0, sizeof(amf_ue->location_gnb));
+    gnb = amf_gnb_find_by_id(ran_ue->gnb_id);
+    if (gnb && gnb->gnb_id_presence &&
+        gnb->gnb_id_bits >= 22 && gnb->gnb_id_bits <= 32) {
+        amf_ue->location_gnb.valid = true;
+        amf_ue->location_gnb.id = gnb->gnb_id;
+        amf_ue->location_gnb.bits = gnb->gnb_id_bits;
+        amf_ue->location_gnb.plmn_id = gnb->plmn_id;
+        if (gnb->sctp.addr)
+            ogs_cpystrn(amf_ue->location_gnb.peer,
+                    ogs_sockaddr_to_string_static(gnb->sctp.addr),
+                    sizeof(amf_ue->location_gnb.peer));
+    }
 }
 
 void amf_ue_associate_ran_ue(amf_ue_t *amf_ue, ran_ue_t *ran_ue)

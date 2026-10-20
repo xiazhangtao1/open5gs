@@ -22,6 +22,29 @@
 #include "sbi-path.h"
 #include "nas-path.h"
 
+bool amf_gnb_decode_global_id(NGAP_GlobalGNB_ID_t *global,
+        uint32_t *id, uint8_t *bits)
+{
+    BIT_STRING_t *value;
+    int length;
+
+    if (!global || !id || !bits || !global->pLMNIdentity.buf ||
+        global->pLMNIdentity.size != OGS_PLMN_ID_LEN ||
+        global->gNB_ID.present != NGAP_GNB_ID_PR_gNB_ID)
+        return false;
+    value = &global->gNB_ID.choice.gNB_ID;
+    if (!value->buf || value->size < 3 || value->size > 4 ||
+        value->bits_unused < 0 || value->bits_unused > 7)
+        return false;
+    length = value->size * 8 - value->bits_unused;
+    if (length < 22 || length > 32 ||
+        (value->buf[value->size - 1] & ((1U << value->bits_unused) - 1)))
+        return false;
+    ogs_ngap_GNB_ID_to_uint32(&global->gNB_ID, id);
+    *bits = length;
+    return true;
+}
+
 static bool maximum_number_of_gnbs_is_reached(void)
 {
     amf_gnb_t *gnb = NULL, *next_gnb = NULL;
@@ -133,6 +156,7 @@ void ngap_handle_ng_setup_request(amf_gnb_t *gnb, ogs_ngap_message_t *message)
     long cause = 0;
 
     uint32_t gnb_id;
+    uint8_t gnb_id_bits;
 
     ogs_assert(gnb);
     ogs_assert(gnb->sctp.sock);
@@ -172,7 +196,9 @@ void ngap_handle_ng_setup_request(amf_gnb_t *gnb, ogs_ngap_message_t *message)
         return;
     }
 
-    globalGNB_ID = GlobalRANNodeID->choice.globalGNB_ID;
+    globalGNB_ID = GlobalRANNodeID->present ==
+        NGAP_GlobalRANNodeID_PR_globalGNB_ID ?
+        GlobalRANNodeID->choice.globalGNB_ID : NULL;
     if (!globalGNB_ID) {
         ogs_error("No globalGNB_ID");
         group = NGAP_Cause_PR_protocol;
@@ -183,10 +209,8 @@ void ngap_handle_ng_setup_request(amf_gnb_t *gnb, ogs_ngap_message_t *message)
         return;
     }
 
-    if (globalGNB_ID->pLMNIdentity.size != sizeof(gnb->plmn_id)) {
-        ogs_error("Invalid PLMNIdentity size = %d (expected %d)",
-                (int)globalGNB_ID->pLMNIdentity.size,
-                (int)sizeof(gnb->plmn_id));
+    if (!amf_gnb_decode_global_id(globalGNB_ID, &gnb_id, &gnb_id_bits)) {
+        ogs_error("Invalid GlobalGNB-ID");
         group = NGAP_Cause_PR_protocol;
         cause = NGAP_CauseProtocol_semantic_error;
         r = ngap_send_ng_setup_failure(gnb, group, cause);
@@ -205,7 +229,6 @@ void ngap_handle_ng_setup_request(amf_gnb_t *gnb, ogs_ngap_message_t *message)
         return;
     }
 
-    ogs_ngap_GNB_ID_to_uint32(&globalGNB_ID->gNB_ID, &gnb_id);
     ogs_debug("    IP[%s] GNB_ID[0x%x]", OGS_ADDR(gnb->sctp.addr, buf), gnb_id);
 
     memcpy(&gnb->plmn_id,
@@ -423,7 +446,7 @@ void ngap_handle_ng_setup_request(amf_gnb_t *gnb, ogs_ngap_message_t *message)
         return;
     }
 
-    amf_gnb_set_gnb_id(gnb, gnb_id);
+    amf_gnb_set_gnb_id(gnb, gnb_id, gnb_id_bits);
 
     gnb->state.ng_setup_success = true;
     r = ngap_send_ng_setup_response(gnb);
@@ -795,8 +818,7 @@ void ngap_handle_uplink_nas_transport(
         ran_ue->saved.nr_tai.tac.v, (long long)ran_ue->saved.nr_cgi.cell_id);
 
     /* Copy NR-TAI/NR-CGI from ran_ue */
-    memcpy(&amf_ue->nr_tai, &ran_ue->saved.nr_tai, sizeof(ogs_5gs_tai_t));
-    memcpy(&amf_ue->nr_cgi, &ran_ue->saved.nr_cgi, sizeof(ogs_nr_cgi_t));
+    amf_ue_update_location(amf_ue, ran_ue);
 
     ogs_expect(OGS_OK == ngap_send_to_nas(
                 ran_ue, NGAP_ProcedureCode_id_UplinkNASTransport, NAS_PDU));
@@ -2930,8 +2952,7 @@ void ngap_handle_path_switch_request(
 
     /* Copy Stream-No/TAI/ECGI from ran_ue */
     amf_ue->gnb_ostream_id = ran_ue->gnb_ostream_id;
-    memcpy(&amf_ue->nr_tai, &ran_ue->saved.nr_tai, sizeof(ogs_5gs_tai_t));
-    memcpy(&amf_ue->nr_cgi, &ran_ue->saved.nr_cgi, sizeof(ogs_nr_cgi_t));
+    amf_ue_update_location(amf_ue, ran_ue);
 
     ogs_info("    [NEW] TAC[%d] CellID[0x%llx]",
         amf_ue->nr_tai.tac.v, (long long)amf_ue->nr_cgi.cell_id);
@@ -4276,8 +4297,7 @@ void ngap_handle_handover_notification(
 
     /* Copy Stream-No/TAI/ECGI from ran_ue */
     amf_ue->gnb_ostream_id = target_ue->gnb_ostream_id;
-    memcpy(&amf_ue->nr_tai, &target_ue->saved.nr_tai, sizeof(ogs_5gs_tai_t));
-    memcpy(&amf_ue->nr_cgi, &target_ue->saved.nr_cgi, sizeof(ogs_nr_cgi_t));
+    amf_ue_update_location(amf_ue, target_ue);
 
     r = ngap_send_ran_ue_context_release_command(source_ue,
             NGAP_Cause_PR_radioNetwork,
@@ -4341,6 +4361,7 @@ void ngap_handle_ran_configuration_update(
     long cause = 0;
 
     uint32_t gnb_id;
+    uint8_t gnb_id_bits;
 
     ogs_assert(gnb);
     ogs_assert(gnb->sctp.sock);
@@ -4371,9 +4392,11 @@ void ngap_handle_ran_configuration_update(
     }
 
     if (GlobalRANNodeID) {
-        globalGNB_ID = GlobalRANNodeID->choice.globalGNB_ID;
-        if (!globalGNB_ID) {
-            ogs_error("No globalGNB_ID");
+        globalGNB_ID = GlobalRANNodeID->present ==
+            NGAP_GlobalRANNodeID_PR_globalGNB_ID ?
+            GlobalRANNodeID->choice.globalGNB_ID : NULL;
+        if (!amf_gnb_decode_global_id(globalGNB_ID, &gnb_id, &gnb_id_bits)) {
+            ogs_error("Invalid GlobalGNB-ID");
             group = NGAP_Cause_PR_protocol;
             cause = NGAP_CauseProtocol_semantic_error;
             r = ngap_send_ran_configuration_update_failure(gnb, group, cause);
@@ -4382,11 +4405,12 @@ void ngap_handle_ran_configuration_update(
             return;
         }
 
-        ogs_ngap_GNB_ID_to_uint32(&globalGNB_ID->gNB_ID, &gnb_id);
         ogs_debug("    IP[%s] GNB_ID[0x%x]",
                 OGS_ADDR(gnb->sctp.addr, buf), gnb_id);
 
-        amf_gnb_set_gnb_id(gnb, gnb_id);
+        memcpy(&gnb->plmn_id, globalGNB_ID->pLMNIdentity.buf,
+                sizeof(gnb->plmn_id));
+        amf_gnb_set_gnb_id(gnb, gnb_id, gnb_id_bits);
     }
 
     if (SupportedTAList) {

@@ -211,45 +211,52 @@ static int add_basic_identity(cJSON *o, const amf_ue_t *ue)
     return 0;
 }
 
+static int add_gnb_identity(cJSON *obj, uint32_t id, uint8_t bits,
+        const ogs_plmn_id_t *plmn, const char *peer)
+{
+    char plmn_str[OGS_PLMNIDSTRLEN] = {0};
+
+    ogs_plmn_id_to_string(plmn, plmn_str);
+    return cJSON_AddNumberToObject(obj, "gnb_id", id) &&
+        cJSON_AddNumberToObject(obj, "gnb_id_bits", bits) &&
+        cJSON_AddStringToObject(obj, "plmn", plmn_str) &&
+        cJSON_AddStringToObject(obj, "peer", peer ? peer : "") ? 0 : -1;
+}
+
 static int add_gnb(cJSON *parent, const amf_ue_t *ue)
 {
-    cJSON *gnb = cJSON_CreateObject();
-    if (!gnb) return -1;
-
-    cJSON *osid = cJSON_CreateNumber((double)ue->gnb_ostream_id);
-    if (!osid) { cJSON_Delete(gnb); return -1; }
-    cJSON_AddItemToObjectCS(gnb, "ostream_id", osid);
-
+    cJSON *obj = cJSON_CreateObject();
     ran_ue_t *ran = ran_ue_find_by_id(ue->ran_ue_id);
-    if (ran) {
-        uint64_t nci = ue->nr_cgi.cell_id & 0xFFFFFFFFFULL; /* 36-bit */
-        uint32_t gnb_id  = (uint32_t)((nci >> 14) & 0x3FFFFF);
-        uint32_t cell_id = (uint32_t)(nci & 0x3FFF);
+    amf_gnb_t *gnb = ran ? amf_gnb_find_by_id(ran->gnb_id) : NULL;
 
-        cJSON *a = cJSON_CreateNumber((double)ran->amf_ue_ngap_id);
-        cJSON *r = cJSON_CreateNumber((double)ran->ran_ue_ngap_id);
-        cJSON *g = cJSON_CreateNumber((double)gnb_id);
-        cJSON *c = cJSON_CreateNumber((double)cell_id);
-        if (!a || !r || !g || !c) {
-            if (a) cJSON_Delete(a);
-            if (r) cJSON_Delete(r);
-            if (g) cJSON_Delete(g);
-            if (c) cJSON_Delete(c);
-            cJSON_Delete(gnb);
-            return -1;
-        }
-        cJSON_AddItemToObjectCS(gnb, "amf_ue_ngap_id", a);
-        cJSON_AddItemToObjectCS(gnb, "ran_ue_ngap_id", r);
-        cJSON_AddItemToObjectCS(gnb, "gnb_id", g);
-        cJSON_AddItemToObjectCS(gnb, "cell_id", c);
-    } else {
-        cJSON *st = cJSON_CreateString("not-connected");
-        if (!st) { cJSON_Delete(gnb); return -1; }
-        cJSON_AddItemToObjectCS(gnb, "status", st);
-    }
-
-    cJSON_AddItemToObjectCS(parent, "gnb", gnb);
+    if (!obj) return -1;
+    if (!cJSON_AddNumberToObject(obj, "ostream_id", ue->gnb_ostream_id))
+        goto fail;
+    if (ran && gnb && gnb->gnb_id_presence) {
+        bool cell_known = ue->location_gnb.valid && ue->ue_location_timestamp &&
+            gnb->gnb_id_bits >= 22 && gnb->gnb_id_bits <= 32 &&
+            ue->location_gnb.id == gnb->gnb_id &&
+            ue->location_gnb.bits == gnb->gnb_id_bits &&
+            !memcmp(&ue->location_gnb.plmn_id, &gnb->plmn_id, OGS_PLMN_ID_LEN) &&
+            ue->nr_cgi.cell_id <= 0xFFFFFFFFFULL &&
+            (ue->nr_cgi.cell_id >> (36 - gnb->gnb_id_bits)) == gnb->gnb_id;
+        if (add_gnb_identity(obj, gnb->gnb_id, gnb->gnb_id_bits,
+                    &gnb->plmn_id, gnb->sctp.addr ?
+                    ogs_sockaddr_to_string_static(gnb->sctp.addr) : NULL) < 0 ||
+            !cJSON_AddNumberToObject(obj, "amf_ue_ngap_id", ran->amf_ue_ngap_id) ||
+            !cJSON_AddNumberToObject(obj, "ran_ue_ngap_id", ran->ran_ue_ngap_id) ||
+            !(cell_known ? cJSON_AddNumberToObject(obj, "cell_id",
+                ue->nr_cgi.cell_id & ((1ULL << (36 - gnb->gnb_id_bits)) - 1)) :
+                cJSON_AddNullToObject(obj, "cell_id")) ||
+            !cJSON_AddStringToObject(obj, "status", "associated"))
+            goto fail;
+    } else if (!cJSON_AddStringToObject(obj, "status", "not-connected"))
+        goto fail;
+    cJSON_AddItemToObjectCS(parent, "gnb", obj);
     return 0;
+fail:
+    cJSON_Delete(obj);
+    return -1;
 }
 
 static int add_location(cJSON *parent, const amf_ue_t *ue)
@@ -260,6 +267,25 @@ static int add_location(cJSON *parent, const amf_ue_t *ue)
     cJSON *ts = cJSON_CreateNumber((double)ue->ue_location_timestamp);
     if (!ts) { cJSON_Delete(loc); return -1; }
     cJSON_AddItemToObjectCS(loc, "timestamp", ts);
+    if (!cJSON_AddStringToObject(loc, "status", !ue->ue_location_timestamp ?
+                "unknown" : CM_CONNECTED(ue) ? "reported" : "last-known")) {
+        cJSON_Delete(loc);
+        return -1;
+    }
+    if (ue->location_gnb.valid) {
+        cJSON *gnb = cJSON_CreateObject();
+        if (!gnb || add_gnb_identity(gnb, ue->location_gnb.id,
+                    ue->location_gnb.bits, &ue->location_gnb.plmn_id,
+                    ue->location_gnb.peer) < 0) {
+            cJSON_Delete(gnb);
+            cJSON_Delete(loc);
+            return -1;
+        }
+        cJSON_AddItemToObjectCS(loc, "gnb", gnb);
+    } else if (!cJSON_AddNullToObject(loc, "gnb")) {
+        cJSON_Delete(loc);
+        return -1;
+    }
 
     /* nr_tai */
     {
@@ -294,17 +320,29 @@ static int add_location(cJSON *parent, const amf_ue_t *ue)
         if (!p) { cJSON_Delete(cgi); cJSON_Delete(loc); return -1; }
         cJSON_AddItemToObjectCS(cgi, "plmn", p);
 
-        uint64_t nci     = ue->nr_cgi.cell_id & 0xFFFFFFFFFULL; /* 36-bit */
-        uint32_t gnb_id  = (uint32_t)((nci >> 14) & 0x3FFFFF);
-        uint32_t cell_id = (uint32_t)(nci & 0x3FFF);
+        uint64_t nci = ue->nr_cgi.cell_id;
+        uint8_t bits = ue->location_gnb.bits;
+        bool known = ue->location_gnb.valid && bits >= 22 && bits <= 32;
+        bool matches = known && nci <= 0xFFFFFFFFFULL &&
+            (nci >> (36 - bits)) == ue->location_gnb.id;
+        char hex[12];
+        ogs_snprintf(hex, sizeof(hex), "0x%09llx", (unsigned long long)nci);
 
-        cJSON *n = cJSON_CreateNumber((double)nci);
-        cJSON *g = cJSON_CreateNumber((double)gnb_id);
-        cJSON *c = cJSON_CreateNumber((double)cell_id);
-        if (!n || !g || !c) { if (n) cJSON_Delete(n); if (g) cJSON_Delete(g); if (c) cJSON_Delete(c); cJSON_Delete(cgi); cJSON_Delete(loc); return -1; }
-        cJSON_AddItemToObjectCS(cgi, "nci", n);
-        cJSON_AddItemToObjectCS(cgi, "gnb_id", g);
-        cJSON_AddItemToObjectCS(cgi, "cell_id", c);
+        if (!cJSON_AddNumberToObject(cgi, "nci", (double)nci) ||
+            !cJSON_AddStringToObject(cgi, "nci_hex", hex) ||
+            !(known ? cJSON_AddNumberToObject(cgi, "gnb_id_bits", bits) :
+                cJSON_AddNullToObject(cgi, "gnb_id_bits")) ||
+            !(known ? cJSON_AddBoolToObject(cgi, "identity_consistent", matches) :
+                cJSON_AddNullToObject(cgi, "identity_consistent")) ||
+            !(matches ? cJSON_AddNumberToObject(cgi, "gnb_id", ue->location_gnb.id) :
+                cJSON_AddNullToObject(cgi, "gnb_id")) ||
+            !(matches ? cJSON_AddNumberToObject(cgi, "cell_id",
+                nci & ((1ULL << (36 - bits)) - 1)) :
+                cJSON_AddNullToObject(cgi, "cell_id"))) {
+            cJSON_Delete(cgi);
+            cJSON_Delete(loc);
+            return -1;
+        }
 
         cJSON_AddItemToObjectCS(loc, "nr_cgi", cgi);
     }

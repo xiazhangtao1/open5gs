@@ -141,6 +141,7 @@ typedef struct amf_gnb_s {
 
     bool            gnb_id_presence;
     uint32_t        gnb_id;     /* gNB_ID received from gNB */
+    uint8_t         gnb_id_bits;
     ogs_plmn_id_t   plmn_id;    /* gNB PLMN-ID received from gNB */
     ogs_sctp_sock_t sctp;       /* SCTP socket */
 
@@ -363,6 +364,14 @@ struct amf_ue_s {
     ogs_5gs_tai_t   nr_tai;
     ogs_nr_cgi_t    nr_cgi;
     ogs_time_t      ue_location_timestamp;
+    /* Owned location snapshot: survives release of the RAN/gNB contexts. */
+    struct {
+        bool valid;
+        uint32_t id;
+        uint8_t bits;
+        ogs_plmn_id_t plmn_id;
+        char peer[OGS_ADDRSTRLEN + 16];
+    } location_gnb;
     ogs_plmn_id_t   last_visited_plmn_id;
     ogs_nas_ue_usage_setting_t ue_usage_setting;
 
@@ -963,7 +972,9 @@ void amf_gnb_remove(amf_gnb_t *gnb);
 void amf_gnb_remove_all(void);
 amf_gnb_t *amf_gnb_find_by_addr(ogs_sockaddr_t *addr);
 amf_gnb_t *amf_gnb_find_by_gnb_id(uint32_t gnb_id);
-int amf_gnb_set_gnb_id(amf_gnb_t *gnb, uint32_t gnb_id);
+int amf_gnb_set_gnb_id(amf_gnb_t *gnb, uint32_t gnb_id, uint8_t bits);
+bool amf_gnb_decode_global_id(NGAP_GlobalGNB_ID_t *global,
+        uint32_t *id, uint8_t *bits);
 int amf_gnb_sock_type(ogs_sock_t *sock);
 amf_gnb_t *amf_gnb_find_by_id(ogs_pool_id_t id);
 
@@ -1047,6 +1058,7 @@ OpenAPI_rat_type_e amf_ue_rat_type(amf_ue_t *amf_ue);
  *   - Delete Indirect Data Forwarding Tunnel Request/Response
  */
 void amf_ue_associate_ran_ue(amf_ue_t *amf_ue, ran_ue_t *ran_ue);
+void amf_ue_update_location(amf_ue_t *amf_ue, ran_ue_t *ran_ue);
 void amf_ue_deassociate_ran_ue(amf_ue_t *amf_ue, ran_ue_t *ran_ue);
 void source_ue_associate_target_ue(ran_ue_t *source_ue, ran_ue_t *target_ue);
 void source_ue_deassociate_target_ue(ran_ue_t *ran_ue);

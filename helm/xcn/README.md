@@ -77,6 +77,80 @@ helm install xcn helm/xcn -n xcn --create-namespace \
   --set networking.upf.n3.address=192.168.9.60
 ```
 
+## UE and gNB diagnostics
+
+Use `xcnctl show ue` for UE access information and `show gnb` for the AMF's
+current gNB connections. These queries use AMF HTTP endpoints directly and do
+not require a UPF statistics socket or an established PFCP Session.
+
+```bash
+kubectl -n xcn exec deploy/xcn-5gc -c upf -- xcnctl show ue
+kubectl -n xcn exec deploy/xcn-5gc -c upf -- \
+  xcnctl show ue --supi imsi-460110000000100 --detail
+kubectl -n xcn exec deploy/xcn-5gc -c upf -- \
+  xcnctl show ue --gnb-id 3584 --plmn 46011 --json
+kubectl -n xcn exec deploy/xcn-5gc -c upf -- xcnctl show gnb --detail
+kubectl -n xcn exec deploy/xcn-5gc -c upf -- \
+  xcnctl show rate --level session --with-location
+```
+
+The UE table displays SUPI, CM state, serving PLMN, associated gNB ID, the
+36-bit NCI in hexadecimal, TAC, and location status. `--detail` adds the full
+NR CGI (`PLMN + NCI`), gNB ID length, cell local ID, SCTP peer, NGAP UE IDs,
+UTC location update time and age, security algorithms, and PDU Session
+summaries. UE IP addresses and PDU state are resolved from SMF `/pdu-info`
+using an unambiguous SUPI + PSI match; conflicting DNN/slice data is not merged.
+If SMF is unavailable, a warning is printed and AMF information remains usable.
+AMF query failures or incomplete/malformed pages cause a nonzero exit.
+
+`reported` means the most recently reported location of a connected UE;
+`last-known` means the UE is idle, and `unknown` means no usable report exists.
+None of these implies continuous cell tracking. The AMF records a location
+timestamp on registration, Service Request, uplink NAS, Path Switch, and
+Handover Notify. A value snapshot of the reporting gNB survives release of
+the RAN connection. JSON retains `location.timestamp` in Unix microseconds,
+adds `location.status` and `location.gnb`, and exposes the current association
+separately under `gnb`.
+
+gNB ID length is taken from NGAP, including leading zero bits, and is exported
+as `gnb_id_bits` (22 through 32). Local cell IDs are derived only when the NCI
+prefix matches the reporting gNB ID at that length. Otherwise the table shows
+`identity-mismatch`; details and JSON preserve the real gNB ID and raw CGI,
+set derived identifiers to unknown, and report
+`location.nr_cgi.identity_consistent=false`. Unknown values use `-` in text
+and `null` in JSON. With an older AMF that lacks identity length/snapshot
+fields, the CLI retains raw CGI and suppresses the old fixed-22-bit derived
+gNB/cell IDs. Upgrade AMF with the CLI to obtain the new fields.
+
+The gNB table shows identity PLMN, gNB ID/length, SCTP peer, NG Setup state,
+RAN UE context count and supported TA count. Details include supported
+TA/PLMN/slice lists. UE counts reflect RAN contexts, which may temporarily
+include both sides of a handover. `--gnb-id` accepts decimal or `0x` hexadecimal;
+use `--plmn` as well when numeric IDs are reused across PLMNs. The UE PLMN
+filter selects the serving cell's PLMN; the gNB PLMN filter selects the node's
+identity PLMN. An idle UE's gNB filter uses its saved location snapshot.
+
+Both commands support `--json`, `--watch` and `--interval SEC` (default 1).
+JSON always includes full information in an `items` array, independent of
+`--detail`; JSON watch emits one complete document per refresh. Pages are
+collected up to 1024 pages/16 MiB, with a 4 MiB per-page limit; exceeding a
+limit is an error rather than a silently incomplete result.
+
+Defaults are AMF `http://127.0.0.1:9091/ue-info` and `/gnb-info`, and SMF
+`http://127.0.0.1:9092/pdu-info`. Override them with `--amf-ue-info`,
+`--amf-gnb-info`, `--smf-pdu-info`, or `OPEN5GS_AMF_UE_INFO_URL`,
+`OPEN5GS_AMF_GNB_INFO_URL`, `OPEN5GS_SMF_PDU_INFO_URL`, respectively. Supply
+endpoint URLs without pagination parameters. `--with-location` works at all
+four rate levels, adding gNB ID, NCI and location status in text, and a
+`location` object in JSON. Optional location failures retain rate output with
+unknown location; existing `--active-only` failures remain strict.
+
+Run the focused tests after building:
+
+```bash
+meson test -C build --print-errorlogs amf-location xcnctl-inspect
+```
+
 ## UPF real-time rate CLI
 
 Rate statistics are enabled by default and sampled once per second. The data

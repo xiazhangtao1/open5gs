@@ -325,9 +325,7 @@ ogs_nas_5gmm_cause_t gmm_handle_registration_request(amf_ue_t *amf_ue,
 
     /* Copy Stream-No/NR-TAI/NR-CGI from ran_ue */
     amf_ue->gnb_ostream_id = ran_ue->gnb_ostream_id;
-    memcpy(&amf_ue->nr_tai, &ran_ue->saved.nr_tai, sizeof(ogs_5gs_tai_t));
-    memcpy(&amf_ue->nr_cgi, &ran_ue->saved.nr_cgi, sizeof(ogs_nr_cgi_t));
-    amf_ue->ue_location_timestamp = ogs_time_now();
+    amf_ue_update_location(amf_ue, ran_ue);
 
     /* Check TAI */
     served_tai_index = amf_find_served_tai(&amf_ue->nr_tai);
@@ -738,9 +736,7 @@ ogs_nas_5gmm_cause_t gmm_handle_service_request(amf_ue_t *amf_ue,
 
     /* Copy Stream-No/NR-TAI/NR-CGI from ran_ue */
     amf_ue->gnb_ostream_id = ran_ue->gnb_ostream_id;
-    memcpy(&amf_ue->nr_tai, &ran_ue->saved.nr_tai, sizeof(ogs_5gs_tai_t));
-    memcpy(&amf_ue->nr_cgi, &ran_ue->saved.nr_cgi, sizeof(ogs_nr_cgi_t));
-    amf_ue->ue_location_timestamp = ogs_time_now();
+    amf_ue_update_location(amf_ue, ran_ue);
 
     /* Check TAI */
     served_tai_index = amf_find_served_tai(&amf_ue->nr_tai);

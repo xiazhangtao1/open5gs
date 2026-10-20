@@ -7,25 +7,30 @@
 #include <errno.h>
 #include <curl/curl.h>
 #include <getopt.h>
+#include <ctype.h>
+#include <math.h>
 #include <stdbool.h>
 #include <stdarg.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <time.h>
 #include <unistd.h>
 
 #include "sbi/openapi/external/cJSON.h"
+#include "inspect.h"
 
 #define DEFAULT_SOCKET "/run/open5gs/upf-stats.sock"
 #define REQUEST_SIZE 512
 #define RESPONSE_SIZE (4 * 1024 * 1024)
-#define MAX_COLUMNS 18
+#define MAX_COLUMNS 24
 #define DEFAULT_SMF_PDU_INFO_URL "http://127.0.0.1:9092/pdu-info"
 #define DEFAULT_AMF_UE_INFO_URL "http://127.0.0.1:9091/ue-info"
+#define DEFAULT_AMF_GNB_INFO_URL "http://127.0.0.1:9091/gnb-info"
 #define PSI_MAP_MAX 4096
 #define QFI_MAX 63
 #define CM_STATE_MAP_MAX 4096
@@ -61,19 +66,20 @@ typedef struct {
     size_t count;
     active_session_map_entry_t active_sessions[ACTIVE_SESSION_MAP_MAX];
     size_t active_session_count;
+    cJSON *ue_info;
 } cm_state_map_t;
-
-typedef struct {
-    char *data;
-    size_t length;
-} http_response_t;
 
 static size_t split_columns(char *line, char **columns, size_t capacity);
 
 static void usage(FILE *stream)
 {
     fprintf(stream,
-        "Usage: xcnctl show rate [options]\n"
+        "Usage: xcnctl show rate|ue|gnb [options]\n"
+        "  --detail          UE/gNB details, including UE session summaries\n"
+        "  --gnb-id ID       UE/gNB filter (decimal or 0x hexadecimal)\n"
+        "  --plmn MCCMNC     UE serving PLMN or gNB identity PLMN filter\n"
+        "  --with-location   Add location to rate output\n"
+        "  --amf-gnb-info URL AMF /gnb-info endpoint\n"
         "  --level user|session|bearer|rule\n"
         "  --supi SUPI       Filter by SUPI (for example imsi-001010000000001)\n"
         "  --ue-ip ADDRESS   Filter by UE IP address\n"
@@ -85,24 +91,6 @@ static void usage(FILE *stream)
         "  --watch           Refresh continuously\n"
         "  --interval SEC    Watch interval (default 1)\n"
         "  --socket PATH     Control socket path\n");
-}
-
-static size_t http_write(void *data, size_t size, size_t count, void *opaque)
-{
-    http_response_t *response = opaque;
-    size_t bytes = size * count;
-    char *expanded;
-
-    if (bytes > RESPONSE_SIZE - response->length)
-        return 0;
-    expanded = realloc(response->data, response->length + bytes + 1);
-    if (!expanded)
-        return 0;
-    response->data = expanded;
-    memcpy(response->data + response->length, data, bytes);
-    response->length += bytes;
-    response->data[response->length] = '\0';
-    return bytes;
 }
 
 static bool parse_u64(const char *value, uint64_t *result)
@@ -153,94 +141,39 @@ static int psi_map_add(psi_map_t *map, const char *supi,
     return 0;
 }
 
-static void psi_map_parse_page(psi_map_t *map, const char *json,
-        bool *has_next)
-{
-    cJSON *root = cJSON_Parse(json);
-    cJSON *items;
-    cJSON *ue;
-    cJSON *pager;
-
-    *has_next = false;
-    if (!root)
-        return;
-    items = cJSON_GetObjectItemCaseSensitive(root, "items");
-    cJSON_ArrayForEach(ue, items) {
-        cJSON *supi = cJSON_GetObjectItemCaseSensitive(ue, "supi");
-        cJSON *pdus = cJSON_GetObjectItemCaseSensitive(ue, "pdu");
-        cJSON *pdu;
-
-        if (!cJSON_IsString(supi) || !cJSON_IsArray(pdus))
-            continue;
-        cJSON_ArrayForEach(pdu, pdus) {
-            cJSON *psi = cJSON_GetObjectItemCaseSensitive(pdu, "psi");
-            cJSON *ipv4 = cJSON_GetObjectItemCaseSensitive(pdu, "ipv4");
-            cJSON *ipv6 = cJSON_GetObjectItemCaseSensitive(pdu, "ipv6");
-            cJSON *upf_seid =
-                cJSON_GetObjectItemCaseSensitive(pdu, "upf_seid");
-            cJSON *qos_flows =
-                cJSON_GetObjectItemCaseSensitive(pdu, "qos_flows");
-            uint64_t seid = 0;
-            bool seid_present = cJSON_IsString(upf_seid) &&
-                parse_u64(upf_seid->valuestring, &seid);
-
-            if (!cJSON_IsNumber(psi) || psi->valuedouble < 1 ||
-                psi->valuedouble > 255)
-                continue;
-            if (cJSON_IsString(ipv4))
-                (void)psi_map_add(map, supi->valuestring,
-                        ipv4->valuestring, (unsigned int)psi->valuedouble,
-                        seid_present, seid, qos_flows);
-            if (cJSON_IsString(ipv6))
-                (void)psi_map_add(map, supi->valuestring,
-                        ipv6->valuestring, (unsigned int)psi->valuedouble,
-                        seid_present, seid, qos_flows);
-        }
-    }
-    pager = cJSON_GetObjectItemCaseSensitive(root, "pager");
-    if (cJSON_IsObject(pager))
-        *has_next = cJSON_IsString(
-                cJSON_GetObjectItemCaseSensitive(pager, "next"));
-    cJSON_Delete(root);
-}
-
 static bool load_psi_map(const char *base_url, psi_map_t *map)
 {
-    unsigned int page;
+    cJSON *root = xcnctl_load_info(base_url);
+    const cJSON *ue;
+    bool ok = root != NULL;
 
     memset(map, 0, sizeof(*map));
-    for (page = 0; page < 1024 && map->count < PSI_MAP_MAX; page++) {
-        CURL *curl = curl_easy_init();
-        http_response_t response = { 0 };
-        char url[1024];
-        bool has_next = false;
-        CURLcode result;
-        long status = 0;
-
-        if (!curl)
-            return false;
-        snprintf(url, sizeof(url), "%s%cpage=%u&page_size=100", base_url,
-                strchr(base_url, '?') ? '&' : '?', page);
-        curl_easy_setopt(curl, CURLOPT_URL, url);
-        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, http_write);
-        curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
-        curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT_MS, 200L);
-        curl_easy_setopt(curl, CURLOPT_TIMEOUT_MS, 500L);
-        curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1L);
-        result = curl_easy_perform(curl);
-        if (result == CURLE_OK)
-            curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &status);
-        curl_easy_cleanup(curl);
-        if (result != CURLE_OK || status != 200 || !response.data) {
-            free(response.data);
-            return false;
+    cJSON_ArrayForEach(ue, cJSON_GetObjectItemCaseSensitive(root, "items")) {
+        const cJSON *supi = cJSON_GetObjectItemCaseSensitive(ue, "supi");
+        const cJSON *pdus = cJSON_GetObjectItemCaseSensitive(ue, "pdu");
+        const cJSON *pdu;
+        if (!cJSON_IsString(supi) || !cJSON_IsArray(pdus)) continue;
+        cJSON_ArrayForEach(pdu, pdus) {
+            const cJSON *psi = cJSON_GetObjectItemCaseSensitive(pdu, "psi");
+            const cJSON *seid = cJSON_GetObjectItemCaseSensitive(pdu, "upf_seid");
+            const cJSON *flows = cJSON_GetObjectItemCaseSensitive(pdu, "qos_flows");
+            uint64_t id = 0;
+            bool present = cJSON_IsString(seid) && parse_u64(seid->valuestring, &id);
+            if (!cJSON_IsNumber(psi) || psi->valuedouble < 1 ||
+                psi->valuedouble > 255 || psi->valuedouble > psi->valueint) continue;
+            const char *keys[] = {"ipv4", "ipv6"};
+            size_t i;
+            for (i = 0; i < 2; i++) {
+                const cJSON *ip = cJSON_GetObjectItemCaseSensitive(pdu, keys[i]);
+                if (cJSON_IsString(ip) && ip->valuestring[0] &&
+                    psi_map_add(map, supi->valuestring, ip->valuestring,
+                        psi->valueint, present, id, flows) != 0) ok = false;
+            }
         }
-        psi_map_parse_page(map, response.data, &has_next);
-        free(response.data);
-        if (!has_next)
-            return true;
     }
-    return false;
+    cJSON_Delete(root);
+    if (!ok) memset(map, 0, sizeof(*map));
+    return ok;
 }
 
 static bool psi_map_find(
@@ -366,86 +299,40 @@ static int active_session_map_add(
     return 0;
 }
 
-static void cm_state_map_parse_page(
-        cm_state_map_t *map, const char *json, bool *has_next)
-{
-    cJSON *root = cJSON_Parse(json);
-    cJSON *items;
-    cJSON *ue;
-    cJSON *pager;
-
-    *has_next = false;
-    if (!root)
-        return;
-    items = cJSON_GetObjectItemCaseSensitive(root, "items");
-    cJSON_ArrayForEach(ue, items) {
-        cJSON *supi = cJSON_GetObjectItemCaseSensitive(ue, "supi");
-        cJSON *state = cJSON_GetObjectItemCaseSensitive(ue, "cm_state");
-        cJSON *sessions =
-            cJSON_GetObjectItemCaseSensitive(ue, "pdu_sessions");
-        cJSON *session;
-
-        if (!cJSON_IsString(supi))
-            continue;
-        if (cJSON_IsString(state))
-            (void)cm_state_map_add(
-                    map, supi->valuestring, state->valuestring);
-        if (!cJSON_IsArray(sessions))
-            continue;
-        cJSON_ArrayForEach(session, sessions) {
-            cJSON *psi =
-                cJSON_GetObjectItemCaseSensitive(session, "psi");
-
-            if (cJSON_IsNumber(psi) && psi->valuedouble >= 1 &&
-                psi->valuedouble <= 255)
-                (void)active_session_map_add(map, supi->valuestring,
-                        (unsigned int)psi->valuedouble);
-        }
-    }
-    pager = cJSON_GetObjectItemCaseSensitive(root, "pager");
-    if (cJSON_IsObject(pager))
-        *has_next = cJSON_IsString(
-                cJSON_GetObjectItemCaseSensitive(pager, "next"));
-    cJSON_Delete(root);
-}
-
 static bool load_cm_state_map(const char *base_url, cm_state_map_t *map)
 {
-    unsigned int page;
-
+    const cJSON *ue;
+    bool ok;
     memset(map, 0, sizeof(*map));
-    for (page = 0; page < 1024 && map->count < CM_STATE_MAP_MAX; page++) {
-        CURL *curl = curl_easy_init();
-        http_response_t response = { 0 };
-        char url[1024];
-        bool has_next = false;
-        CURLcode result;
-        long status = 0;
-
-        if (!curl)
-            return false;
-        snprintf(url, sizeof(url), "%s%cpage=%u&page_size=100", base_url,
-                strchr(base_url, '?') ? '&' : '?', page);
-        curl_easy_setopt(curl, CURLOPT_URL, url);
-        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, http_write);
-        curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
-        curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT_MS, 200L);
-        curl_easy_setopt(curl, CURLOPT_TIMEOUT_MS, 500L);
-        curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1L);
-        result = curl_easy_perform(curl);
-        if (result == CURLE_OK)
-            curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &status);
-        curl_easy_cleanup(curl);
-        if (result != CURLE_OK || status != 200 || !response.data) {
-            free(response.data);
-            return false;
+    map->ue_info = xcnctl_load_info(base_url);
+    ok = map->ue_info != NULL;
+    cJSON_ArrayForEach(ue, cJSON_GetObjectItemCaseSensitive(map->ue_info, "items")) {
+        const cJSON *supi = cJSON_GetObjectItemCaseSensitive(ue, "supi");
+        const cJSON *state = cJSON_GetObjectItemCaseSensitive(ue, "cm_state");
+        const cJSON *sessions = cJSON_GetObjectItemCaseSensitive(ue, "pdu_sessions");
+        const cJSON *session;
+        if (!cJSON_IsString(supi)) continue;
+        if (cJSON_IsString(state) && cm_state_map_add(map,
+                    supi->valuestring, state->valuestring) != 0) ok = false;
+        cJSON_ArrayForEach(session, sessions) {
+            const cJSON *psi = cJSON_GetObjectItemCaseSensitive(session, "psi");
+            if (cJSON_IsNumber(psi) && psi->valuedouble >= 1 &&
+                psi->valuedouble <= 255 && psi->valuedouble <= psi->valueint &&
+                active_session_map_add(map, supi->valuestring, psi->valueint) != 0)
+                ok = false;
         }
-        cm_state_map_parse_page(map, response.data, &has_next);
-        free(response.data);
-        if (!has_next)
-            return true;
     }
-    return false;
+    if (!ok) {
+        cJSON_Delete(map->ue_info);
+        memset(map, 0, sizeof(*map));
+    }
+    return ok;
+}
+
+static void cm_state_map_free(cm_state_map_t *map)
+{
+    if (map) cJSON_Delete(map->ue_info);
+    free(map);
 }
 
 static const char *cm_state_map_find(
@@ -893,7 +780,7 @@ static int print_table(char *response)
 
 static int query(const char *socket_path, const char *request,
         const char *smf_pdu_info_url, const char *amf_ue_info_url,
-        bool include_psi, bool active_only, bool json_output)
+        bool include_psi, bool active_only, bool json_output, bool with_location)
 {
     struct sockaddr_un address;
     cm_state_map_t *amf_map;
@@ -970,7 +857,7 @@ static int query(const char *socket_path, const char *request,
     if (!load_cm_state_map(amf_ue_info_url, amf_map) && active_only) {
         fprintf(stderr,
                 "cannot load AMF UE info required by --active-only\n");
-        free(amf_map);
+        cm_state_map_free(amf_map);
         free(response);
         return 1;
     }
@@ -980,7 +867,7 @@ static int query(const char *socket_path, const char *request,
 
         if (!map) {
             perror("malloc");
-            free(amf_map);
+            cm_state_map_free(amf_map);
             free(response);
             return 1;
         }
@@ -988,7 +875,7 @@ static int query(const char *socket_path, const char *request,
             fprintf(stderr,
                     "cannot load SMF PDU info required by --active-only\n");
             free(map);
-            free(amf_map);
+            cm_state_map_free(amf_map);
             free(response);
             return 1;
         }
@@ -1001,7 +888,7 @@ static int query(const char *socket_path, const char *request,
         free(map);
         if (!enriched) {
             fprintf(stderr, "cannot enrich UPF response with PSI\n");
-            free(amf_map);
+            cm_state_map_free(amf_map);
             free(response);
             return 1;
         }
@@ -1017,14 +904,27 @@ static int query(const char *socket_path, const char *request,
             enriched = add_cm_state_column(response, amf_map);
         if (!enriched) {
             fprintf(stderr, "cannot enrich UPF response with CM state\n");
-            free(amf_map);
+            cm_state_map_free(amf_map);
             free(response);
             return 1;
         }
         free(response);
         response = enriched;
     }
-    free(amf_map);
+    if (with_location) {
+        char *enriched = xcnctl_add_location(response, amf_map->ue_info, json_output);
+        if (!amf_map->ue_info)
+            fputs("warning: AMF location unavailable\n", stderr);
+        if (!enriched) {
+            cm_state_map_free(amf_map);
+            free(response);
+            fputs("cannot build rate location output\n", stderr);
+            return 1;
+        }
+        free(response);
+        response = enriched;
+    }
+    cm_state_map_free(amf_map);
     if (print_table(response)) {
         free(response);
         return 1;
@@ -1048,16 +948,26 @@ int main(int argc, char *argv[])
         { "watch", no_argument, NULL, 'w' },
         { "interval", required_argument, NULL, 'n' },
         { "socket", required_argument, NULL, 'S' },
+        { "detail", no_argument, NULL, 'd' },
+        { "gnb-id", required_argument, NULL, 'g' },
+        { "plmn", required_argument, NULL, 'm' },
+        { "amf-gnb-info", required_argument, NULL, 'G' },
+        { "with-location", no_argument, NULL, 'L' },
         { "help", no_argument, NULL, 'h' },
         { NULL, 0, NULL, 0 }
     };
     const char *socket_path = DEFAULT_SOCKET;
     const char *smf_pdu_info_url = getenv("OPEN5GS_SMF_PDU_INFO_URL");
     const char *amf_ue_info_url = getenv("OPEN5GS_AMF_UE_INFO_URL");
+    const char *amf_gnb_info_url = getenv("OPEN5GS_AMF_GNB_INFO_URL");
+    xcnctl_inspect_options_t inspect = {0};
+    bool is_rate;
+    bool rate_options = false;
+    bool with_location = false;
     char request[REQUEST_SIZE] = "show=rate";
     bool watch = false;
     bool json_output = false;
-    bool include_psi = true;
+    bool include_psi = false;
     bool active_only = false;
     const char *level = "user";
     double interval = 1.0;
@@ -1068,14 +978,19 @@ int main(int argc, char *argv[])
     if (!amf_ue_info_url || !*amf_ue_info_url)
         amf_ue_info_url = DEFAULT_AMF_UE_INFO_URL;
 
-    if (argc < 3 || strcmp(argv[1], "show") || strcmp(argv[2], "rate")) {
+    if (!amf_gnb_info_url || !*amf_gnb_info_url)
+        amf_gnb_info_url = DEFAULT_AMF_GNB_INFO_URL;
+    if (argc < 3 || strcmp(argv[1], "show") ||
+        (strcmp(argv[2], "rate") && strcmp(argv[2], "ue") && strcmp(argv[2], "gnb"))) {
         usage(stderr);
         return 2;
     }
+    is_rate = !strcmp(argv[2], "rate");
     optind = 3;
     while ((option = getopt_long(argc, argv, "", options, NULL)) != -1) {
         switch (option) {
         case 'l':
+            rate_options = true;
             if (strcmp(optarg, "user") && strcmp(optarg, "session") &&
                 strcmp(optarg, "bearer") && strcmp(optarg, "rule")) {
                 fprintf(stderr, "invalid level: %s\n", optarg);
@@ -1087,16 +1002,19 @@ int main(int argc, char *argv[])
             include_psi = strcmp(optarg, "user") != 0;
             break;
         case 'u':
+            inspect.supi = optarg;
             if (append_option(request, sizeof(request), "supi", optarg))
                 return 2;
             break;
         case 'i':
+            rate_options = true;
             if (append_option(request, sizeof(request), "ue_ip", optarg))
                 return 2;
             break;
         case 's':
         {
             char *end = NULL;
+            rate_options = true;
 
             errno = 0;
             (void)strtoull(optarg, &end, 0);
@@ -1127,6 +1045,7 @@ int main(int argc, char *argv[])
             }
             break;
         case 'A':
+            rate_options = true;
             active_only = true;
             break;
         case 'j':
@@ -1141,14 +1060,52 @@ int main(int argc, char *argv[])
             char *end = NULL;
 
             interval = strtod(optarg, &end);
-            if (!end || *end || interval < 0.1 || interval > 3600.0) {
+            if (end == optarg || *end || !isfinite(interval) ||
+                interval < 0.1 || interval > 3600.0) {
                 fprintf(stderr, "invalid interval: %s\n", optarg);
                 return 2;
             }
             break;
         }
         case 'S':
+            rate_options = true;
             socket_path = optarg;
+            break;
+        case 'd':
+            inspect.detail = true;
+            break;
+        case 'g': {
+            char *end = NULL;
+            errno = 0;
+            unsigned long long id = strtoull(optarg, &end,
+                    !strncasecmp(optarg, "0x", 2) ? 16 : 10);
+            if (errno || !*optarg || *optarg == '-' || *optarg == '+' ||
+                end == optarg || *end || id > UINT32_MAX) {
+                fputs("invalid gNB ID\n", stderr);
+                return 2;
+            }
+            inspect.gnb_id = id;
+            inspect.has_gnb_id = true;
+            break;
+        }
+        case 'm':
+            if ((strlen(optarg) != 5 && strlen(optarg) != 6) ||
+                strspn(optarg, "0123456789") != strlen(optarg)) {
+                fputs("invalid PLMN (expected MCCMNC)\n", stderr);
+                return 2;
+            }
+            inspect.plmn = optarg;
+            break;
+        case 'G':
+            if (strncmp(optarg, "http://", 7) && strncmp(optarg, "https://", 8)) {
+                fputs("invalid AMF gNB info URL\n", stderr);
+                return 2;
+            }
+            amf_gnb_info_url = optarg;
+            break;
+        case 'L':
+            with_location = true;
+            rate_options = true;
             break;
         case 'h':
             usage(stdout);
@@ -1162,6 +1119,16 @@ int main(int argc, char *argv[])
         usage(stderr);
         return 2;
     }
+    if ((!is_rate && rate_options) ||
+        (is_rate && (inspect.detail || inspect.has_gnb_id || inspect.plmn)) ||
+        (!strcmp(argv[2], "gnb") && inspect.supi)) {
+        fputs("option does not apply to this command\n", stderr);
+        return 2;
+    }
+    inspect.ue_url = amf_ue_info_url;
+    inspect.gnb_url = amf_gnb_info_url;
+    inspect.smf_url = smf_pdu_info_url;
+    inspect.json = json_output;
     if (active_only && !strcmp(level, "user")) {
         fprintf(stderr,
                 "--active-only requires --level session, bearer, or rule\n");
@@ -1174,8 +1141,9 @@ int main(int argc, char *argv[])
 
         if (watch && !json_output)
             fputs("\033[H\033[J", stdout);
-        rv = query(socket_path, request, smf_pdu_info_url, amf_ue_info_url,
-                include_psi, active_only, json_output);
+        rv = is_rate ? query(socket_path, request, smf_pdu_info_url, amf_ue_info_url,
+                include_psi, active_only, json_output, with_location) :
+            xcnctl_inspect(argv[2], &inspect);
         if (!watch)
             return rv;
         delay.tv_sec = (time_t)interval;
