@@ -351,6 +351,62 @@ static void print_ue_detail(const cJSON *ue)
     puts("");
 }
 
+static void print_gnb_detail(const cJSON *gnb)
+{
+    const cJSON *ng = field(gnb, "ng");
+    const cJSON *sctp = field(ng, "sctp");
+    const cJSON *setup = field(ng, "setup_success");
+    const cJSON *tas = field(gnb, "supported_ta_list");
+    const cJSON *ta;
+    const char *state = cJSON_IsTrue(setup) ? "ready" :
+        cJSON_IsFalse(setup) ? "pending" : "unknown";
+    char value[24];
+
+    printf("gNB %s\n", decimal(gnb, "gnb_id", value, sizeof(value)));
+    printf("  %-18s: %s\n", "PLMN", string(gnb, "plmn"));
+    printf("  %-18s: %s\n", "GNB-LEN (bits)",
+            decimal(gnb, "gnb_id_bits", value, sizeof(value)));
+    printf("  %-18s: %s\n", "NG-STATE", state);
+    printf("  %-18s: %s\n", "UE-COUNT",
+            decimal(gnb, "num_connected_ues", value, sizeof(value)));
+    if (cJSON_IsArray(tas))
+        snprintf(value, sizeof(value), "%d", cJSON_GetArraySize(tas));
+    else
+        snprintf(value, sizeof(value), "-");
+    printf("  %-18s: %s\n", "TA-COUNT", value);
+    puts("  NG/SCTP");
+    printf("    %-16s: %s\n", "PEER", string(sctp, "peer"));
+    printf("    %-16s: %s\n", "MAX-OUT-STREAMS",
+            decimal(sctp, "max_out_streams", value, sizeof(value)));
+    printf("    %-16s: %s\n", "NEXT-STREAM-ID",
+            decimal(sctp, "next_ostream_id", value, sizeof(value)));
+    puts("  Supported TA/PLMN/slices");
+    if (!cJSON_IsArray(tas) || !cJSON_GetArraySize(tas)) {
+        printf("    %s\n\n", cJSON_IsArray(tas) ? "(none)" : "-");
+        return;
+    }
+    cJSON_ArrayForEach(ta, tas) {
+        const cJSON *plmns = field(ta, "bplmns"), *plmn;
+        printf("    TAC %s\n", string(ta, "tac"));
+        if (!cJSON_IsArray(plmns) || !cJSON_GetArraySize(plmns)) {
+            printf("      PLMNs: %s\n", cJSON_IsArray(plmns) ? "(none)" : "-");
+            continue;
+        }
+        cJSON_ArrayForEach(plmn, plmns) {
+            const cJSON *slices = field(plmn, "snssai"), *slice;
+            printf("      PLMN %s\n", string(plmn, "plmn"));
+            if (!cJSON_IsArray(slices) || !cJSON_GetArraySize(slices)) {
+                printf("        Slices: %s\n", cJSON_IsArray(slices) ? "(none)" : "-");
+                continue;
+            }
+            cJSON_ArrayForEach(slice, slices)
+                printf("        SST %-3s SD %s\n",
+                        decimal(slice, "sst", value, sizeof(value)), string(slice, "sd"));
+        }
+    }
+    puts("");
+}
+
 int xcnctl_inspect(const char *kind, const xcnctl_inspect_options_t *o)
 {
     bool is_ue = !strcmp(kind, "ue");
@@ -392,7 +448,7 @@ int xcnctl_inspect(const char *kind, const xcnctl_inspect_options_t *o)
         puts(json);
         cJSON_free(json);
     } else {
-        if (!o->detail || !is_ue) puts(is_ue ?
+        if (!o->detail) puts(is_ue ?
                 "SUPI                     CM-STATE   PLMN   GNB-ID     GNB-LEN CELL-ID TAC      LOCATION" :
                 "PLMN   GNB-ID     BITS PEER                         NG-STATE UE-COUNT TA-COUNT");
         cJSON_ArrayForEach(item, items) {
@@ -408,6 +464,8 @@ int xcnctl_inspect(const char *kind, const xcnctl_inspect_options_t *o)
                         decimal(field(loc, "nr_cgi"), "cell_id", cell, sizeof(cell)),
                         decimal(field(loc, "nr_tai"), "tac", tac, sizeof(tac)),
                         location_label(loc));
+            } else if (o->detail) {
+                print_gnb_detail(item);
             } else {
                 const cJSON *ng = field(item, "ng");
                 const cJSON *tas = field(item, "supported_ta_list");
@@ -423,11 +481,6 @@ int xcnctl_inspect(const char *kind, const xcnctl_inspect_options_t *o)
                         decimal(item, "gnb_id_bits", bits, sizeof(bits)),
                         string(field(ng, "sctp"), "peer"), state,
                         decimal(item, "num_connected_ues", count, sizeof(count)), ta_count);
-                if (o->detail) {
-                    detail_json("NG/SCTP", ng);
-                    detail_json("Supported TA/PLMN/slices", field(item, "supported_ta_list"));
-                    puts("");
-                }
             }
         }
     }

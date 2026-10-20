@@ -135,7 +135,11 @@ split. Upgrade AMF with the CLI to obtain the complete fields.
 
 The gNB table shows identity PLMN, gNB ID/length, SCTP peer, NG Setup state,
 RAN UE context count and supported TA count. Details include supported
-TA/PLMN/slice lists. UE counts reflect RAN contexts, which may temporarily
+TA/PLMN/slice lists. `show gnb --detail` prints a separate text block for each
+gNB, with aligned fields for identity and NG/SCTP, followed by indented
+TAC, PLMN and SST/SD entries. Empty lists use `(none)` and unavailable values
+use `-`; use `--json` for structured output.
+UE counts reflect RAN contexts, which may temporarily
 include both sides of a handover. `--gnb-id` accepts decimal or `0x` hexadecimal;
 use `--plmn` as well when numeric IDs are reused across PLMNs. The UE PLMN
 filter selects the serving cell's PLMN; the gNB PLMN filter selects the node's
