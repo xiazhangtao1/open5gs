@@ -10,7 +10,6 @@ import sys
 import tempfile
 import threading
 import time
-import unicodedata
 import unittest
 import urllib.parse
 
@@ -158,7 +157,7 @@ class InspectionTest(unittest.TestCase):
         self.http.data["/ue-info"][0]["pdu_sessions"] = []
         result = self.run_cli()
         self.assertIn(SUPI, result.stdout)
-        self.assertIn("小区ID(NCI)", result.stdout)
+        self.assertIn("cellID(NCI)", result.stdout)
         self.assertIn("0x000006403", result.stdout)
         self.assertNotIn(("/pdu-info", 0), self.http.requests)
 
@@ -321,10 +320,9 @@ class InspectionTest(unittest.TestCase):
                 self.assertIn("-+-", separator)
                 self.assertEqual(len(header.split("|")), len(row.split("|")))
                 self.assertIn("GNB-ID", header)
-                self.assertIn("小区ID(NCI)", header)
+                self.assertIn("cellID(NCI)", header)
                 self.assertIn("0x000006403", row)
-                widths = lambda line: [sum(2 if unicodedata.east_asian_width(c) in "WF" else 1
-                                          for c in column) for column in line.split("|")]
+                widths = lambda line: [len(c) for c in line.split("|")]
                 self.assertEqual(widths(header), widths(row))
                 self.assertEqual(widths(header), [len(c) for c in separator.split("+")])
 
