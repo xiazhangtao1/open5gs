@@ -238,8 +238,7 @@ static int add_gnb(cJSON *parent, const amf_ue_t *ue)
             ue->location_gnb.id == gnb->gnb_id &&
             ue->location_gnb.bits == gnb->gnb_id_bits &&
             !memcmp(&ue->location_gnb.plmn_id, &gnb->plmn_id, OGS_PLMN_ID_LEN) &&
-            ue->nr_cgi.cell_id <= 0xFFFFFFFFFULL &&
-            (ue->nr_cgi.cell_id >> (36 - gnb->gnb_id_bits)) == gnb->gnb_id;
+            ue->nr_cgi.cell_id <= 0xFFFFFFFFFULL;
         if (add_gnb_identity(obj, gnb->gnb_id, gnb->gnb_id_bits,
                     &gnb->plmn_id, gnb->sctp.addr ?
                     ogs_sockaddr_to_string_static(gnb->sctp.addr) : NULL) < 0 ||
@@ -323,20 +322,25 @@ static int add_location(cJSON *parent, const amf_ue_t *ue)
         uint64_t nci = ue->nr_cgi.cell_id;
         uint8_t bits = ue->location_gnb.bits;
         bool known = ue->location_gnb.valid && bits >= 22 && bits <= 32;
-        bool matches = known && nci <= 0xFFFFFFFFFULL &&
+        bool valid_nci = ue->ue_location_timestamp && nci <= 0xFFFFFFFFFULL;
+        bool decoded = known && valid_nci;
+        bool matches = decoded &&
             (nci >> (36 - bits)) == ue->location_gnb.id;
         char hex[12];
-        ogs_snprintf(hex, sizeof(hex), "0x%09llx", (unsigned long long)nci);
+        if (valid_nci)
+            ogs_snprintf(hex, sizeof(hex), "0x%09llx", (unsigned long long)nci);
 
-        if (!cJSON_AddNumberToObject(cgi, "nci", (double)nci) ||
-            !cJSON_AddStringToObject(cgi, "nci_hex", hex) ||
+        if (!(valid_nci ? cJSON_AddNumberToObject(cgi, "nci", (double)nci) :
+                cJSON_AddNullToObject(cgi, "nci")) ||
+            !(valid_nci ? cJSON_AddStringToObject(cgi, "nci_hex", hex) :
+                cJSON_AddNullToObject(cgi, "nci_hex")) ||
             !(known ? cJSON_AddNumberToObject(cgi, "gnb_id_bits", bits) :
                 cJSON_AddNullToObject(cgi, "gnb_id_bits")) ||
-            !(known ? cJSON_AddBoolToObject(cgi, "identity_consistent", matches) :
+            !(decoded ? cJSON_AddBoolToObject(cgi, "identity_consistent", matches) :
                 cJSON_AddNullToObject(cgi, "identity_consistent")) ||
-            !(matches ? cJSON_AddNumberToObject(cgi, "gnb_id", ue->location_gnb.id) :
+            !(decoded ? cJSON_AddNumberToObject(cgi, "gnb_id", nci >> (36 - bits)) :
                 cJSON_AddNullToObject(cgi, "gnb_id")) ||
-            !(matches ? cJSON_AddNumberToObject(cgi, "cell_id",
+            !(decoded ? cJSON_AddNumberToObject(cgi, "cell_id",
                 nci & ((1ULL << (36 - bits)) - 1)) :
                 cJSON_AddNullToObject(cgi, "cell_id"))) {
             cJSON_Delete(cgi);

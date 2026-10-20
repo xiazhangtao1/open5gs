@@ -96,10 +96,11 @@ kubectl -n xcn exec deploy/xcn-5gc -c upf -- \
 
 The UE table displays SUPI, CM state, serving PLMN, gNB ID (`GNB-ID`),
 gNB ID length in bits (`GNB-LEN`), cell local ID (`CELL-ID`), TAC, and location
-status. IDs are decimal. The 36-bit NCI can be reconstructed as
-`(GNB-ID << (36 - GNB-LEN)) | CELL-ID`; `CELL-ID` is the local cell number
+status. IDs are decimal. For consistent identities, the 36-bit NCI can be
+reconstructed as `(GNB-ID << (36 - GNB-LEN)) | CELL-ID`; `CELL-ID` is the local cell number
 within a gNB, distinct from the physical cell ID (PCI).
-`--detail` adds the full NR CGI (`PLMN + NCI`, with NCI in hexadecimal),
+`--detail` adds the full NR CGI (`PLMN + NCI`), NCI in decimal and hexadecimal,
+the reported gNB ID and the gNB ID decoded from NCI separately,
 SCTP peer, NGAP UE IDs, UTC location update time and age, security algorithms, and PDU Session
 summaries. UE IP addresses and PDU state are resolved from SMF `/pdu-info`
 using an unambiguous SUPI + PSI match; conflicting DNN/slice data is not merged.
@@ -116,14 +117,21 @@ adds `location.status` and `location.gnb`, and exposes the current association
 separately under `gnb`.
 
 gNB ID length is taken from NGAP, including leading zero bits, and is exported
-as `gnb_id_bits` (22 through 32). Local cell IDs are derived only when the NCI
-prefix matches the reporting gNB ID at that length. Otherwise the table shows
-`identity-mismatch`; details and JSON preserve the real gNB ID and raw CGI,
-set derived identifiers to unknown, and report
-`location.nr_cgi.identity_consistent=false`. Unknown values use `-` in text
-and `null` in JSON. With an older AMF that lacks identity length/snapshot
-fields, the CLI retains raw CGI and suppresses the old fixed-22-bit derived
-gNB/cell IDs. Upgrade AMF with the CLI to obtain the new fields.
+as `gnb_id_bits` (22 through 32). A valid 36-bit NCI and valid gNB ID length
+are sufficient to decode the cell local ID, even when the NCI prefix differs
+from the reporting gNB ID. In that case `CELL-ID` retains the decoded value,
+the table shows `identity-mismatch`, and JSON reports
+`location.nr_cgi.identity_consistent=false`. For example, reported gNB ID
+3584 with 28 bits and NCI `0x0000e014e` yields decoded gNB ID 3585 and
+`CELL-ID=78`. The reported ID remains under `location.gnb.gnb_id`; the decoded
+ID is under `location.nr_cgi.gnb_id`. These IDs must not be substituted for
+each other when investigating a mismatch.
+
+Derived values use `-` in text and `null` in JSON only when NCI or the gNB ID
+length is missing or invalid. Without a valid reported gNB identity, decoding
+can still succeed but `identity_consistent` is unknown. An older AMF without
+an explicit length retains raw CGI; the CLI does not assume a fixed 22-bit
+split. Upgrade AMF with the CLI to obtain the complete fields.
 
 The gNB table shows identity PLMN, gNB ID/length, SCTP peer, NG Setup state,
 RAN UE context count and supported TA count. Details include supported

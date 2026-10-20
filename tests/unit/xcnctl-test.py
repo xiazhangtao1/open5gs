@@ -166,7 +166,9 @@ class InspectionTest(unittest.TestCase):
 
     def test_detail_and_session_join(self):
         result = self.run_cli("ue", "--supi", SUPI, "--detail")
-        for text in ("100 (28 bits)", "00101-0x000006403", "10.45.0.3",
+        for text in ("gNB ID (reported): 100", "gNB ID (from NCI): 100",
+                     "gNB ID length: 28 bits", "NCI: 25603 (0x000006403)",
+                     "00101-0x000006403", "10.45.0.3",
                      "2001:db8:45::3", "internet", "Location updated:",
                      "2001:db8::1", "active"):
             self.assertIn(text, result.stdout)
@@ -187,6 +189,11 @@ class InspectionTest(unittest.TestCase):
                 columns = dict(zip(header.split(), row.split()))
                 self.assertEqual(columns["GNB-LEN"], str(width))
                 self.assertEqual(columns["CELL-ID"], str(cgi["cell_id"]))
+                value["location"]["nr_cgi"]["nci"] ^= 1 << (36 - width)
+                cgi = self.item()["location"]["nr_cgi"]
+                self.assertFalse(cgi["identity_consistent"])
+                self.assertEqual(cgi["gnb_id"], ident ^ 1)
+                self.assertEqual(cgi["cell_id"], (1 << (36 - width)) - 1)
 
     def test_zero_identity_is_valid(self):
         self.http.data["/ue-info"] = [ue(22, 0)]
@@ -195,21 +202,61 @@ class InspectionTest(unittest.TestCase):
         self.assertIn(SUPI, result.stdout)
 
     def test_identity_mismatch(self):
-        self.http.data["/ue-info"][0]["location"]["nr_cgi"]["nci"] = 101 << 8
+        self.http.data["/ue-info"] = [ue(28, 3584)]
+        self.http.data["/ue-info"][0]["location"]["nr_cgi"]["nci"] = 0xe014e
         item = self.item()
-        self.assertEqual(item["gnb"]["gnb_id"], 100)
-        self.assertEqual(item["location"]["nr_cgi"]["nci"], 101 << 8)
+        self.assertEqual(item["gnb"]["gnb_id"], 3584)
+        self.assertEqual(item["location"]["gnb"]["gnb_id"], 3584)
+        self.assertEqual(item["location"]["nr_cgi"]["nci"], 0xe014e)
+        self.assertEqual(item["location"]["nr_cgi"]["gnb_id"], 3585)
         self.assertFalse(item["location"]["nr_cgi"]["identity_consistent"])
-        self.assertIsNone(item["location"]["nr_cgi"]["cell_id"])
+        self.assertEqual(item["location"]["nr_cgi"]["cell_id"], 78)
         header, row = self.run_cli().stdout.splitlines()
         columns = dict(zip(header.split(), row.split()))
-        self.assertEqual(columns["GNB-ID"], "100")
+        self.assertEqual(columns["GNB-ID"], "3584")
         self.assertEqual(columns["GNB-LEN"], "28")
-        self.assertEqual(columns["CELL-ID"], "-")
+        self.assertEqual(columns["CELL-ID"], "78")
         self.assertEqual(columns["LOCATION"], "identity-mismatch")
-        row = self.run_cli("rate", "--with-location").stdout.splitlines()[-1]
-        self.assertEqual([c.strip() for c in row.split("|")][-5:],
-                         ["100", "28", "-", "[2001:db8::1]:38412", "identity-mismatch"])
+        for level in RATE_TABLES:
+            row = self.run_cli("rate", "--level", level, "--with-location").stdout.splitlines()[-1]
+            self.assertEqual([c.strip() for c in row.split("|")][-5:],
+                             ["3584", "28", "78", "[2001:db8::1]:38412", "identity-mismatch"])
+        detail = self.run_cli("ue", "--detail").stdout
+        for text in ("gNB ID (reported): 3584", "gNB ID (from NCI): 3585",
+                     "NCI: 917838 (0x0000e014e)", "Cell local ID: 78",
+                     "identity-mismatch"):
+            self.assertIn(text, detail)
+
+    def test_cell_id_only_needs_valid_nci_and_length(self):
+        for missing in ("gnb_id", "snapshot"):
+            with self.subTest(missing=missing):
+                value = ue()
+                if missing == "gnb_id":
+                    value["location"]["gnb"].pop("gnb_id")
+                else:
+                    value["location"].pop("gnb")
+                    value["location"]["nr_cgi"]["gnb_id_bits"] = 28
+                self.http.data["/ue-info"] = [value]
+                cgi = self.item()["location"]["nr_cgi"]
+                self.assertEqual(cgi["cell_id"], 3)
+                self.assertEqual(cgi["gnb_id"], 100)
+                self.assertIsNone(cgi["identity_consistent"])
+
+    def test_invalid_nci_or_length_hides_derived_values(self):
+        for key, invalid in (("nci", (None, -1, 1.5, 1 << 36, "25603")),
+                             ("gnb_id_bits", (None, 0, 21, 33, -1, 28.5, "28"))):
+            for value in invalid:
+                with self.subTest(key=key, value=value):
+                    data = ue()
+                    target = data["location"]["nr_cgi" if key == "nci" else "gnb"]
+                    target[key] = value
+                    self.http.data["/ue-info"] = [data]
+                    cgi = self.item()["location"]["nr_cgi"]
+                    self.assertIsNone(cgi["cell_id"])
+                    self.assertIsNone(cgi["gnb_id"])
+                    self.assertIsNone(cgi["identity_consistent"])
+                    header, row = self.run_cli().stdout.splitlines()
+                    self.assertEqual(dict(zip(header.split(), row.split()))["CELL-ID"], "-")
 
     def test_last_known_after_gnb_removal(self):
         item = self.http.data["/ue-info"][0]

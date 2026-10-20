@@ -157,7 +157,7 @@ static cJSON *location(const cJSON *ue)
         cJSON_Duplicate(source, true) : cJSON_CreateObject();
     cJSON *cgi;
     uint64_t timestamp = 0, nci = 0, id = 0, bits = 0;
-    bool known, valid_nci, matches;
+    bool known, valid_bits, valid_nci, decoded, matches;
     char hex[12];
 
     if (!loc) return NULL;
@@ -174,22 +174,27 @@ static cJSON *location(const cJSON *ue)
                 !strcmp(string(ue, "cm_state"), "connected") ? "reported" :
                 !strcmp(string(ue, "cm_state"), "idle") ? "last-known" :
                 "unknown"))) goto fail;
-    known = gnb_identity(field(loc, "gnb"), &id, &bits);
-    if (!known && !set(loc, "gnb", cJSON_CreateNull())) goto fail;
     cgi = cJSON_GetObjectItemCaseSensitive(loc, "nr_cgi");
+    const cJSON *length = field(field(loc, "gnb"), "gnb_id_bits");
+    if (!length) length = field(cgi, "gnb_id_bits");
+    valid_bits = number(length, 32, &bits) && bits >= 22;
+    uint64_t reported_bits = 0;
+    known = gnb_identity(field(loc, "gnb"), &id, &reported_bits);
+    if (!known && !set(loc, "gnb", cJSON_CreateNull())) goto fail;
     if (!cJSON_IsObject(cgi)) return loc;
     valid_nci = number(field(cgi, "nci"), 0xFFFFFFFFFULL, &nci);
-    matches = known && valid_nci && (nci >> (36 - bits)) == id;
+    decoded = valid_bits && valid_nci;
+    matches = decoded && known && (nci >> (36 - bits)) == id;
     if (valid_nci) {
         snprintf(hex, sizeof(hex), "0x%09" PRIx64, nci);
         if (!set(cgi, "nci_hex", cJSON_CreateString(hex))) goto fail;
     } else if (!set(cgi, "nci", cJSON_CreateNull()) ||
                !set(cgi, "nci_hex", cJSON_CreateNull())) goto fail;
-    if (!set(cgi, "gnb_id_bits", known ? cJSON_CreateNumber(bits) : cJSON_CreateNull()) ||
-        !set(cgi, "identity_consistent", known && valid_nci ?
+    if (!set(cgi, "gnb_id_bits", valid_bits ? cJSON_CreateNumber(bits) : cJSON_CreateNull()) ||
+        !set(cgi, "identity_consistent", known && decoded ?
             cJSON_CreateBool(matches) : cJSON_CreateNull()) ||
-        !set(cgi, "gnb_id", matches ? cJSON_CreateNumber(id) : cJSON_CreateNull()) ||
-        !set(cgi, "cell_id", matches ?
+        !set(cgi, "gnb_id", decoded ? cJSON_CreateNumber(nci >> (36 - bits)) : cJSON_CreateNull()) ||
+        !set(cgi, "cell_id", decoded ?
             cJSON_CreateNumber(nci & ((1ULL << (36 - bits)) - 1)) : cJSON_CreateNull()))
         goto fail;
     return loc;
@@ -308,21 +313,25 @@ static void print_ue_detail(const cJSON *ue)
 {
     const cJSON *loc = field(ue, "location");
     const cJSON *cgi = field(loc, "nr_cgi");
-    const cJSON *gnb = ue_gnb(ue);
+    const cJSON *gnb = field(loc, "gnb");
     const cJSON *session;
-    char id[24], bits[24], cell[24];
+    char id[24], derived_id[24], bits[24], cell[24], nci[24];
     uint64_t timestamp;
 
     printf("UE %s\n  CM-STATE: %s\n  NR CGI: %s-%s\n"
-            "  gNB ID: %s (%s bits)\n  Cell local ID: %s\n"
+            "  NCI: %s (%s)\n"
+            "  gNB ID (reported): %s\n  gNB ID (from NCI): %s\n"
+            "  gNB ID length: %s bits\n  Cell local ID: %s\n"
             "  gNB PLMN: %s\n  gNB peer: %s\n  Location: %s\n",
             string(ue, "supi"), string(ue, "cm_state"), string(cgi, "plmn"),
+            string(cgi, "nci_hex"), decimal(cgi, "nci", nci, sizeof(nci)),
             string(cgi, "nci_hex"), decimal(gnb, "gnb_id", id, sizeof(id)),
-            decimal(gnb, "gnb_id_bits", bits, sizeof(bits)),
+            decimal(cgi, "gnb_id", derived_id, sizeof(derived_id)),
+            decimal(cgi, "gnb_id_bits", bits, sizeof(bits)),
             decimal(cgi, "cell_id", cell, sizeof(cell)), string(gnb, "plmn"),
             string(gnb, "peer"), string(loc, "status"));
     if (cJSON_IsFalse(field(cgi, "identity_consistent")))
-        puts("  Identity: NCI prefix does not match the reported gNB ID");
+        puts("  Identity: identity-mismatch (NCI prefix does not match the reported gNB ID)");
     if (number(field(loc, "timestamp"), 9007199254740991ULL, &timestamp) && timestamp) {
         time_t seconds = timestamp / 1000000;
         time_t now = time(NULL);
@@ -395,7 +404,7 @@ int xcnctl_inspect(const char *kind, const xcnctl_inspect_options_t *o)
                         string(item, "supi"), string(item, "cm_state"),
                         string(field(loc, "nr_cgi"), "plmn"),
                         decimal(ue_gnb(item), "gnb_id", id, sizeof(id)),
-                        decimal(ue_gnb(item), "gnb_id_bits", bits, sizeof(bits)),
+                        decimal(field(loc, "nr_cgi"), "gnb_id_bits", bits, sizeof(bits)),
                         decimal(field(loc, "nr_cgi"), "cell_id", cell, sizeof(cell)),
                         decimal(field(loc, "nr_tai"), "tac", tac, sizeof(tac)),
                         location_label(loc));
@@ -494,7 +503,7 @@ char *xcnctl_add_location(const char *response, const cJSON *ues, bool json)
         if (!loc) goto fail;
         bool ok = append(out, &used, "%s %s %s %s %s %s\n", line,
                 decimal(field(loc, "gnb"), "gnb_id", id, sizeof(id)),
-                decimal(field(loc, "gnb"), "gnb_id_bits", bits, sizeof(bits)),
+                decimal(field(loc, "nr_cgi"), "gnb_id_bits", bits, sizeof(bits)),
                 decimal(field(loc, "nr_cgi"), "cell_id", cell, sizeof(cell)),
                 string(field(loc, "gnb"), "peer"),
                 location_label(loc));

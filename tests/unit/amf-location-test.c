@@ -130,9 +130,36 @@ static void test_width(ogs_sock_t *sock, unsigned bits)
     out = export_ue();
     cgi = get(get(out, "location"), "nr_cgi");
     ogs_assert(cJSON_IsFalse(get(cgi, "identity_consistent")));
-    ogs_assert(cJSON_IsNull(get(cgi, "cell_id")));
+    ogs_assert(get(cgi, "gnb_id")->valueint == 102);
+    ogs_assert(get(cgi, "cell_id")->valueint == 3);
     ogs_assert(get(get(out, "gnb"), "gnb_id")->valueint == 101);
+    ogs_assert(get(get(out, "gnb"), "cell_id")->valueint == 3);
     cJSON_Delete(out);
+
+    ue.nr_cgi.cell_id = 1ULL << 36;
+    out = export_ue();
+    cgi = get(get(out, "location"), "nr_cgi");
+    ogs_assert(cJSON_IsNull(get(cgi, "nci")));
+    ogs_assert(cJSON_IsNull(get(cgi, "nci_hex")));
+    ogs_assert(cJSON_IsNull(get(cgi, "gnb_id")));
+    ogs_assert(cJSON_IsNull(get(cgi, "cell_id")));
+    ogs_assert(cJSON_IsNull(get(cgi, "identity_consistent")));
+    ogs_assert(cJSON_IsNull(get(get(out, "gnb"), "cell_id")));
+    cJSON_Delete(out);
+    ue.nr_cgi.cell_id = (102ULL << 12) | 3;
+
+    ue.location_gnb.bits = 21;
+    out = export_ue();
+    cgi = get(get(out, "location"), "nr_cgi");
+    ogs_assert(cJSON_IsNull(get(cgi, "gnb_id_bits")));
+    ogs_assert(cJSON_IsNull(get(cgi, "cell_id")));
+    ogs_assert(cJSON_IsNull(get(cgi, "identity_consistent")));
+    cJSON_Delete(out);
+    ue.location_gnb.bits = 33;
+    out = export_ue();
+    ogs_assert(cJSON_IsNull(get(get(get(out, "location"), "nr_cgi"), "cell_id")));
+    cJSON_Delete(out);
+    ue.location_gnb.bits = 24;
 
     amf_ue_deassociate_ran_ue(&ue, ran);
     ran_ue_remove(ran);
@@ -143,10 +170,15 @@ static void test_width(ogs_sock_t *sock, unsigned bits)
     ogs_assert(!strcmp(get(loc, "status")->valuestring, "last-known"));
     ogs_assert(get(get(loc, "gnb"), "gnb_id")->valueint == 101);
     ogs_assert(strstr(get(get(loc, "gnb"), "peer")->valuestring, "127.0.0.1"));
+    cgi = get(loc, "nr_cgi");
+    ogs_assert(get(cgi, "gnb_id")->valueint == 102);
+    ogs_assert(get(cgi, "cell_id")->valueint == 3);
+    ogs_assert(cJSON_IsFalse(get(cgi, "identity_consistent")));
     cJSON_Delete(out);
     ue.ue_location_timestamp = 0;
     out = export_ue();
     ogs_assert(!strcmp(get(get(out, "location"), "status")->valuestring, "unknown"));
+    ogs_assert(cJSON_IsNull(get(get(get(out, "location"), "nr_cgi"), "cell_id")));
     cJSON_Delete(out);
     ogs_list_remove(&amf_self()->amf_ue_list, &ue);
 }
