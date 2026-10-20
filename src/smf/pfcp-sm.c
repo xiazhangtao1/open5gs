@@ -17,6 +17,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+#include "ue-events.h"
 #include "sbi-path.h"
 #include "pfcp-path.h"
 #include "local-path.h"
@@ -227,6 +228,25 @@ void smf_pfcp_state_associated(ogs_fsm_t *s, smf_event_t *e)
         if (sess)
             e->sess_id = sess->id;
 
+        uint8_t event_cause = 0;
+        switch (message->h.type) {
+        case OGS_PFCP_SESSION_ESTABLISHMENT_RESPONSE_TYPE:
+            if (message->pfcp_session_establishment_response.cause.presence)
+                event_cause = message->pfcp_session_establishment_response.cause.u8;
+            break;
+        case OGS_PFCP_SESSION_MODIFICATION_RESPONSE_TYPE:
+            if (message->pfcp_session_modification_response.cause.presence)
+                event_cause = message->pfcp_session_modification_response.cause.u8;
+            break;
+        case OGS_PFCP_SESSION_DELETION_RESPONSE_TYPE:
+            if (message->pfcp_session_deletion_response.cause.presence)
+                event_cause = message->pfcp_session_deletion_response.cause.u8;
+            break;
+        default: break;
+        }
+        smf_ue_event_pfcp(sess, message->h.type,
+                event_cause == OGS_PFCP_CAUSE_REQUEST_ACCEPTED ? "accepted" :
+                event_cause ? "rejected" : "received", event_cause);
         switch (message->h.type) {
         case OGS_PFCP_HEARTBEAT_REQUEST_TYPE:
             ogs_expect(true ==

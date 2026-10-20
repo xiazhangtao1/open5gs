@@ -17,6 +17,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+#include "ue-events.h"
 #include "context.h"
 #include "user-intent.h"
 #include "gtp-path.h"
@@ -1523,6 +1524,8 @@ smf_sess_t *smf_sess_add_by_psi(smf_ue_t *smf_ue, uint8_t psi)
         return NULL;
     }
 
+    sess->event_trace_id = ogs_ue_events_new_trace();
+
     /* SBI Features */
     OGS_SBI_FEATURES_SET(sess->smpolicycontrol_features,
             OGS_SBI_NPCF_SMPOLICYCONTROL_DN_AUTHORIZATION);
@@ -1577,6 +1580,7 @@ smf_sess_t *smf_sess_add_by_psi(smf_ue_t *smf_ue, uint8_t psi)
 
     smf_metrics_inst_global_inc(SMF_METR_GLOB_GAUGE_PFCP_SESSIONS_ACTIVE);
     stats_add_smf_session();
+    smf_ue_event(sess, "ACTION", "SMF", "SessionContext", "created", NULL, NULL, true);
 
     return sess;
 }
@@ -1847,6 +1851,7 @@ void smf_sess_remove(smf_sess_t *sess)
     char buf2[OGS_ADDRSTRLEN];
 
     ogs_assert(sess);
+    smf_ue_event(sess, "ACTION", "SMF", "SessionContext", "removed", NULL, "Local context removal; see release and PFCP outcomes", true);
     smf_user_intent_clear(sess);
     smf_ue = smf_ue_find_by_id(sess->smf_ue_id);
     ogs_assert(smf_ue);

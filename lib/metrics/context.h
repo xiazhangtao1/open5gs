@@ -116,6 +116,10 @@ static inline void ogs_metrics_inst_dec(ogs_metrics_inst_t *inst)
 }
 
 
+#include "proto/ue-events.h"
+
+typedef char *(*ogs_metrics_query_ep_hdlr_t)(
+        ogs_query_arg_t arg, void *request, int *status);
 typedef size_t (*ogs_metrics_custom_ep_hdlr_t)(
     char *buf, size_t buflen, size_t page, size_t page_size);
 
@@ -124,10 +128,13 @@ typedef struct ogs_metrics_custom_ep_s {
 
     char *endpoint;
     ogs_metrics_custom_ep_hdlr_t handler;
+    ogs_metrics_query_ep_hdlr_t query_handler;
 } ogs_metrics_custom_ep_t;
 
 
 void ogs_metrics_register_custom_ep(ogs_metrics_custom_ep_hdlr_t handler,
+        const char *endpoint);
+void ogs_metrics_register_query_ep(ogs_metrics_query_ep_hdlr_t handler,
         const char *endpoint);
 
 #ifdef __cplusplus

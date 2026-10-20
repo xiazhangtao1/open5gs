@@ -17,6 +17,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+#include "ue-events.h"
 #include "ngap-handler.h"
 #include "ngap-path.h"
 #include "sbi-path.h"
@@ -653,6 +654,8 @@ void ngap_handle_initial_ue_message(amf_gnb_t *gnb, ogs_ngap_message_t *message)
         }
     }
 
+    amf_ue_event_ngap(gnb, message, "gNB->AMF", "received");
+    amf_ue_event(ran_ue, NULL, "ACTION", "gNB->AMF", "RANAccess", "started", NULL, NULL, true);
     ogs_expect(OGS_OK == ngap_send_to_nas(
                 ran_ue, NGAP_ProcedureCode_id_InitialUEMessage, NAS_PDU));
 }
@@ -1017,6 +1020,7 @@ void ngap_handle_initial_context_setup_response(
             (long long)ran_ue->amf_ue_ngap_id);
 
     ran_ue->initial_context_setup_response_received = true;
+    amf_ue_event(ran_ue, amf_ue, "ACTION", "gNB->AMF", "RANConnection", "established", NULL, NULL, true);
 
     amf_ue = amf_ue_find_by_id(ran_ue->amf_ue_id);
     if (!amf_ue) {
@@ -1800,6 +1804,7 @@ void ngap_handle_ue_context_release_action(ran_ue_t *ran_ue)
         ran_ue_remove(ran_ue);
         break;
     case NGAP_UE_CTX_REL_NG_REMOVE_AND_UNLINK:
+        amf_ue_event(ran_ue, amf_ue, "ACTION", "AMF", "ConnectionIdle", "completed", NULL, "NG connection released; registration and PDU Sessions may remain", true);
         ogs_debug("    Action: NG normal release");
 
         /*
@@ -1860,6 +1865,7 @@ void ngap_handle_ue_context_release_action(ran_ue_t *ran_ue)
         }
         break;
     case NGAP_UE_CTX_REL_NG_HANDOVER_CANCEL:
+        amf_ue_event(ran_ue, amf_ue, "ACTION", "AMF", "Handover", "cancelled", NULL, NULL, true);
         ogs_warn("    Action: NG handover cancel");
 
         source_ue_deassociate_target_ue(ran_ue);
@@ -1881,6 +1887,7 @@ void ngap_handle_ue_context_release_action(ran_ue_t *ran_ue)
         ogs_assert(r != OGS_ERROR);
         break;
     case NGAP_UE_CTX_REL_NG_HANDOVER_FAILURE:
+        amf_ue_event(ran_ue, amf_ue, "ACTION", "AMF", "Handover", "failed", NULL, NULL, true);
         ogs_warn("    Action: NG handover failure");
 
         source_ue_deassociate_target_ue(ran_ue);
@@ -2953,6 +2960,8 @@ void ngap_handle_path_switch_request(
     /* Copy Stream-No/TAI/ECGI from ran_ue */
     amf_ue->gnb_ostream_id = ran_ue->gnb_ostream_id;
     amf_ue_update_location(amf_ue, ran_ue);
+    amf_ue->event_flow_id = ogs_ue_events_new_trace();
+    amf_ue_event(ran_ue, amf_ue, "ACTION", "gNB->AMF", "PathSwitch", "started", NULL, NULL, true);
 
     ogs_info("    [NEW] TAC[%d] CellID[0x%llx]",
         amf_ue->nr_tai.tac.v, (long long)amf_ue->nr_cgi.cell_id);
@@ -3417,6 +3426,8 @@ void ngap_handle_handover_required(
         (long long)target_ue->amf_ue_ngap_id);
 
     /* Store HandoverType */
+    amf_ue->event_flow_id = ogs_ue_events_new_trace();
+    amf_ue_event(source_ue, amf_ue, "ACTION", "gNB->AMF", "Handover", "started", NULL, NULL, true);
     amf_ue->handover.type = *HandoverType;
 
     /* Store Cause */
@@ -4298,6 +4309,10 @@ void ngap_handle_handover_notification(
     /* Copy Stream-No/TAI/ECGI from ran_ue */
     amf_ue->gnb_ostream_id = target_ue->gnb_ostream_id;
     amf_ue_update_location(amf_ue, target_ue);
+    char event_info[256];
+    snprintf(event_info, sizeof(event_info), "source NCI=0x%09llx target NCI=0x%09llx",
+            (unsigned long long)source_ue->saved.nr_cgi.cell_id, (unsigned long long)target_ue->saved.nr_cgi.cell_id);
+    amf_ue_event(target_ue, amf_ue, "ACTION", "gNB->AMF", "Handover", "completed", NULL, event_info, true);
 
     r = ngap_send_ran_ue_context_release_command(source_ue,
             NGAP_Cause_PR_radioNetwork,
@@ -4687,6 +4702,9 @@ void ngap_handle_ng_reset(
     case NGAP_ResetType_PR_nG_Interface:
         ogs_warn("    NGAP_ResetType_PR_nG_Interface");
 
+        ran_ue_t *event_ran;
+        ogs_list_for_each(&gnb->ran_ue_list, event_ran)
+            amf_ue_event(event_ran, NULL, "ACTION", "gNB->AMF", "NGReset", "received", "NG interface reset", NULL, true);
         amf_sbi_send_deactivate_all_ue_in_gnb(
                 gnb, AMF_REMOVE_S1_CONTEXT_BY_RESET_ALL);
 
@@ -4789,6 +4807,7 @@ void ngap_handle_ng_reset(
             ogs_assert(ran_ue);
 
             /* RAN_UE Context where PartOfNG_interface was requested */
+            amf_ue_event(ran_ue, NULL, "ACTION", "gNB->AMF", "NGReset", "received", "Partial NG interface reset", NULL, true);
             ran_ue->part_of_ng_reset_requested = true;
 
             amf_ue = amf_ue_find_by_id(ran_ue->amf_ue_id);

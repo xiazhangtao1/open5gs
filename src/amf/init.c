@@ -59,7 +59,9 @@ int amf_initialize(void)
     rv = amf_context_nf_info();
     if (rv != OGS_OK) return rv;
 
+    ogs_ue_events_open("AMF");
     ogs_metrics_context_open(ogs_metrics_self());
+    ogs_metrics_register_query_ep(ogs_ue_events_query, "/ue-events");
 
     /* dumpers /gnb-info /ue-info */
     ogs_metrics_register_custom_ep(amf_dump_gnb_info, "/gnb-info");
@@ -118,6 +120,7 @@ void amf_terminate(void)
     ogs_metrics_context_close(ogs_metrics_self());
 
     amf_context_final();
+    ogs_ue_events_final();
     ogs_sbi_context_final();
 
     amf_metrics_final();

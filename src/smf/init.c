@@ -76,7 +76,9 @@ int smf_initialize(void)
     rv = ogs_pfcp_ue_pool_generate();
     if (rv != OGS_OK) return rv;
 
+    ogs_ue_events_open("SMF");
     ogs_metrics_context_open(ogs_metrics_self());
+    ogs_metrics_register_query_ep(ogs_ue_events_query, "/ue-events");
 
     rv = smf_fd_init();
     if (rv != 0) return OGS_ERROR;
@@ -90,11 +92,11 @@ int smf_initialize(void)
     rv = smf_sbi_open();
     if (rv != 0) return OGS_ERROR;
 
-    thread = ogs_thread_create(smf_main, NULL);
-    if (!thread) return OGS_ERROR;
-
     /* dumper /pdu-info */
     ogs_metrics_register_custom_ep(smf_dump_pdu_info, "/pdu-info");
+
+    thread = ogs_thread_create(smf_main, NULL);
+    if (!thread) return OGS_ERROR;
 
     initialized = 1;
 
@@ -143,6 +145,7 @@ void smf_terminate(void)
     smf_fd_final();
 
     smf_context_final();
+    ogs_ue_events_final();
 
     ogs_pfcp_context_final();
     ogs_sbi_context_final();

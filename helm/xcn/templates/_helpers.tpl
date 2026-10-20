@@ -272,3 +272,16 @@ violate Open5GS' worker-to-TX-qid ownership requirement.
 {{- printf "%d" $queueCount -}}
 {{- end -}}
 {{- end -}}
+{{/* Bounded in-memory control-plane history, configured identically in AMF/SMF. */}}
+{{- define "xcn.ueEventEnv" -}}
+{{- $events := .Values.diagnostics.ueEvents -}}
+{{- if and $events.enabled (or (lt (int $events.capacity) 1) (gt (int $events.capacity) 262144) (lt (int $events.perUe) 1) (gt (int $events.perUe) (int $events.capacity))) -}}
+{{- fail "diagnostics.ueEvents requires 1 <= perUe <= capacity <= 262144" -}}
+{{- end -}}
+- name: OPEN5GS_UE_EVENTS_ENABLED
+  value: {{ $events.enabled | quote }}
+- name: OPEN5GS_UE_EVENTS_CAPACITY
+  value: {{ $events.capacity | quote }}
+- name: OPEN5GS_UE_EVENTS_PER_UE
+  value: {{ $events.perUe | quote }}
+{{- end -}}

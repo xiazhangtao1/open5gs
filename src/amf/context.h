@@ -173,6 +173,7 @@ typedef struct amf_gnb_s {
 
 struct ran_ue_s {
     ogs_lnode_t     lnode;
+    uint64_t event_trace_id, event_ngap_seq;
     uint32_t        index;
     ogs_pool_id_t   id;
 
@@ -302,6 +303,7 @@ typedef struct amf_ue_memento_s {
 struct amf_ue_s {
     ogs_sbi_object_t sbi;
     ogs_pool_id_t id;
+    uint64_t event_trace_id, event_flow_id;
 
     ogs_fsm_t sm;
 

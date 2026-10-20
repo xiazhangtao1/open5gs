@@ -17,6 +17,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+#include "ue-events.h"
 #include "binding.h"
 #include "user-intent.h"
 #include "sbi-path.h"
@@ -914,6 +915,7 @@ void smf_gsm_state_operational(ogs_fsm_t *s, smf_event_t *e)
 
     switch (e->h.id) {
     case OGS_FSM_ENTRY_SIG:
+        smf_ue_event(sess, "ACTION", "SMF", "SessionEstablishment", "accepted", NULL, "SMF state transition", true);
         break;
 
     case OGS_FSM_EXIT_SIG:
@@ -1460,6 +1462,7 @@ void smf_gsm_state_operational(ogs_fsm_t *s, smf_event_t *e)
      * 17. V: ogs_sbi_send_http_status_no_content(stream)
      * 18. V: case OpenAPI_n2_sm_info_type_PDU_RES_REL_RSP:
               case OGS_NAS_5GS_PDU_SESSION_RELEASE_COMPLETE:
+                  smf_ue_event(sess, "ACTION", "UE->SMF", "SessionRelease", "completed", NULL, NULL, true);
      * 19. V: ogs_sbi_send_http_status_no_content(vsmf_to_hsmf_release_stream)
      * 20. V: OGS_FSM_TRAN(s, smf_gsm_state_5gc_session_will_deregister);
      * 21. H: case OGS_EVENT_SBI_CLIENT:
@@ -1864,6 +1867,8 @@ void smf_gsm_state_operational(ogs_fsm_t *s, smf_event_t *e)
             break;
 
         case OGS_NAS_5GS_PDU_SESSION_MODIFICATION_COMPLETE:
+
+            smf_ue_event(sess, "ACTION", "UE->SMF", "SessionModification", "completed", NULL, NULL, true);
             smf_user_intent_complete(sess, nas_message->gsm.h.procedure_transaction_identity);
             ogs_assert(true == ogs_sbi_send_http_status_no_content(stream));
             if (HOME_ROUTED_ROAMING_IN_VSMF(sess)) {
@@ -2309,6 +2314,7 @@ void smf_gsm_state_wait_pfcp_deletion(ogs_fsm_t *s, smf_event_t *e)
      * 17. V: ogs_sbi_send_http_status_no_content(stream)
      * 18. V: case OpenAPI_n2_sm_info_type_PDU_RES_REL_RSP:
               case OGS_NAS_5GS_PDU_SESSION_RELEASE_COMPLETE:
+                  smf_ue_event(sess, "ACTION", "UE->SMF", "SessionRelease", "completed", NULL, NULL, true);
      * 19. V: ogs_sbi_send_http_status_no_content(vsmf_to_hsmf_release_stream)
      * 20. V: OGS_FSM_TRAN(s, smf_gsm_state_5gc_session_will_deregister);
      * 21. H: case OGS_EVENT_SBI_CLIENT:
@@ -2363,6 +2369,7 @@ void smf_gsm_state_wait_pfcp_deletion(ogs_fsm_t *s, smf_event_t *e)
      * 17. V: ogs_sbi_send_http_status_no_content(stream)
      * 18. V: case OpenAPI_n2_sm_info_type_PDU_RES_REL_RSP:
               case OGS_NAS_5GS_PDU_SESSION_RELEASE_COMPLETE:
+                  smf_ue_event(sess, "ACTION", "UE->SMF", "SessionRelease", "completed", NULL, NULL, true);
      * 19. V: ogs_sbi_send_http_status_no_content(vsmf_to_hsmf_release_stream)
      * 20. V: OGS_FSM_TRAN(s, smf_gsm_state_5gc_session_will_deregister);
      * 21. H: case OGS_EVENT_SBI_CLIENT:
@@ -3490,6 +3497,7 @@ void smf_gsm_state_wait_5gc_n1_n2_release(ogs_fsm_t *s, smf_event_t *e)
 
         switch (nas_message->gsm.h.message_type) {
         case OGS_NAS_5GS_PDU_SESSION_RELEASE_COMPLETE:
+            smf_ue_event(sess, "ACTION", "UE->SMF", "SessionRelease", "completed", NULL, NULL, true);
             ogs_assert(true == ogs_sbi_send_http_status_no_content(stream));
 
     /*
@@ -3960,6 +3968,7 @@ void smf_gsm_state_exception(ogs_fsm_t *s, smf_event_t *e)
 
     switch (e->h.id) {
     case OGS_FSM_ENTRY_SIG:
+        smf_ue_event(sess, "ACTION", "SMF", "SessionProcedure", "failed", NULL, "SMF state transition", true);
         ogs_error("[%s:%d] State machine exception", smf_ue->supi, sess->psi);
         SMF_SESS_CLEAR(sess);
         break;

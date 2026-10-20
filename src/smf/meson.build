@@ -115,6 +115,8 @@ libsmf_sources = files('''
     local-path.c
     metrics.c
     pdu-info.c
+    ue-events.c
+    ../../lib/proto/ue-events.c
     ../../lib/metrics/prometheus/json_pager.c
 '''.split())
 

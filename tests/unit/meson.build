@@ -55,3 +55,13 @@ test('amf-location', amf_location_test, suite: 'unit')
 test('xcnctl-inspect', find_program('python3'),
     args : [meson.current_source_dir() / 'xcnctl-test.py', xcnctl_exe],
     timeout : 60, suite: 'unit')
+
+ue_events_test = executable('ue-events-test',
+    sources : files('ue-events-test.c', '../../lib/proto/ue-events.c'),
+    c_args : ['-std=gnu11'],
+    dependencies : [libcore_dep, libsbi_dep])
+test('ue-events', ue_events_test, suite: 'unit')
+
+test('xcnctl-events', find_program('python3'),
+    args : [meson.current_source_dir() / 'xcnctl-events-test.py', xcnctl_exe],
+    timeout : 60, suite: 'unit')

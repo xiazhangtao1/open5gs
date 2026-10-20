@@ -368,6 +368,7 @@ typedef struct smf_sess_s {
     } while(0)
     OGS_POOL(qfi_pool, uint8_t);
 
+    uint64_t event_trace_id, event_flow_id;
     uint8_t         psi; /* PDU session identity */
     uint8_t         pti; /* 5GS-NAS : Procedure transaction identity */
     uint8_t         request_type;   /* Request type */

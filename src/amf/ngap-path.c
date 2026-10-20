@@ -17,6 +17,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+#include "ue-events.h"
 #include "ogs-sctp.h"
 
 #include "context.h"
@@ -67,12 +68,21 @@ int ngap_send_to_gnb(amf_gnb_t *gnb, ogs_pkbuf_t *pkbuf, uint16_t stream_no)
     ogs_sctp_ppid_in_pkbuf(pkbuf) = OGS_SCTP_NGAP_PPID;
     ogs_sctp_stream_no_in_pkbuf(pkbuf) = stream_no;
 
+    /* The send consumes pkbuf; ASN.1 metadata must be decoded beforehand. */
+    ogs_ngap_message_t event_message = {0};
+    bool tracing = ogs_ue_events_enabled();
+    bool decoded = tracing && ogs_ngap_decode(&event_message, pkbuf) == OGS_OK;
+    int result;
     if (gnb->sctp.type == SOCK_STREAM) {
         ogs_sctp_write_to_buffer(&gnb->sctp, pkbuf);
-        return OGS_OK;
+        result = OGS_OK;
     } else {
-        return ogs_sctp_senddata(gnb->sctp.sock, pkbuf, gnb->sctp.addr);
+        result = ogs_sctp_senddata(gnb->sctp.sock, pkbuf, gnb->sctp.addr);
     }
+    if (decoded) amf_ue_event_ngap(gnb, &event_message, "AMF->gNB",
+            result == OGS_OK ? "queued" : "send-failed");
+    if (tracing) ogs_ngap_free(&event_message);
+    return result;
 }
 
 int ngap_send_to_ran_ue(ran_ue_t *ran_ue, ogs_pkbuf_t *pkbuf)
@@ -220,6 +230,7 @@ int ngap_send_to_nas(ran_ue_t *ran_ue,
     if (amf_ue) {
         if (nas_5gs_security_decode(amf_ue,
                 security_header_type, nasbuf) != OGS_OK) {
+            amf_ue_event(ran_ue, amf_ue, "ACTION", "UE->AMF", "NASSecurity", "failed", "NAS integrity/decryption failed", NULL, true);
             ogs_error("nas_eps_security_decode failed()");
             ran_ue_remove(ran_ue);
             return OGS_ERROR;
@@ -495,6 +506,9 @@ int ngap_send_paging(amf_ue_t *amf_ue)
                     amf_metrics_inst_global_inc(AMF_METR_GLOB_CTR_MM_PAGING_5G_REQ);
 
                     rv = ngap_send_to_gnb(gnb, ngapbuf, NGAP_NON_UE_SIGNALLING);
+                    amf_ue_event(NULL, amf_ue, "ACTION", "AMF->gNB", "Paging",
+                            rv == OGS_OK ? "queued" : "send-failed", NULL,
+                            ogs_sockaddr_to_string_static(gnb->sctp.addr), true);
                     if (rv != OGS_OK) {
                         ogs_error("ngap_send_to_gnb() failed");
                         return rv;

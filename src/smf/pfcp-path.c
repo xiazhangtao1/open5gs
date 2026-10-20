@@ -17,6 +17,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+#include "ue-events.h"
 #include "sbi-path.h"
 #include "pfcp-path.h"
 #include "npcf-handler.h"
@@ -293,6 +294,7 @@ static void sess_5gc_timeout(ogs_pfcp_xact_t *xact, void *data)
     if ((xact->modify_flags & OGS_PFCP_MODIFY_INDIRECT) &&
         xact->handover_generation != sess->handover.generation)
         return;
+    smf_ue_event(sess, "ACTION", "SMF->UPF", "N4SessionTransaction", "timeout", "PFCP transaction timeout", NULL, true);
     smf_ue = smf_ue_find_by_id(sess->smf_ue_id);
     ogs_assert(smf_ue);
 
@@ -538,10 +540,12 @@ int smf_pfcp_send_modify_list(
 
     if (duration) {
         ogs_pfcp_xact_delayed_commit(xact, duration);
+        smf_ue_event_pfcp(sess, h.type, "scheduled", 0);
 
         return OGS_OK;
     } else {
         rv = ogs_pfcp_xact_commit(xact);
+        smf_ue_event_pfcp(sess, h.type, rv == OGS_OK ? "queued" : "send-failed", 0);
         ogs_expect(rv == OGS_OK);
 
         return rv;
@@ -621,6 +625,7 @@ int smf_5gc_pfcp_send_session_establishment_request(
     }
 
     rv = ogs_pfcp_xact_commit(xact);
+        smf_ue_event_pfcp(sess, h.type, rv == OGS_OK ? "queued" : "send-failed", 0);
     ogs_expect(rv == OGS_OK);
 
     return rv;
@@ -812,6 +817,7 @@ int smf_5gc_pfcp_send_session_deletion_request(
     }
 
     rv = ogs_pfcp_xact_commit(xact);
+        smf_ue_event_pfcp(sess, h.type, rv == OGS_OK ? "queued" : "send-failed", 0);
     ogs_expect(rv == OGS_OK);
 
     return rv;

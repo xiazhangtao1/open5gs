@@ -1,4 +1,5 @@
 /* SPDX-License-Identifier: AGPL-3.0-or-later */
+#include "ue-events.h"
 #include "user-intent.h"
 #include "binding.h"
 #include "gsm-build.h"
@@ -698,6 +699,8 @@ static void start_next(smf_sess_t *sess)
     ogs_uuid_get(&uuid);
     ogs_uuid_format(st->transaction, &uuid);
     sess->pti = st->request->pti;
+    sess->event_flow_id = ogs_ue_events_new_trace();
+    smf_ue_event(sess, "ACTION", "UE->SMF", "QoSModification", "started", NULL, NULL, true);
     /* Bound the asynchronous preparation wait separately from T3591 and
      * the notification client deadline. */
     ogs_timer_start(st->timer, ogs_time_from_sec(30));
@@ -815,6 +818,10 @@ static void settle(smf_sess_t *sess)
             ogs_free(st->rule_id); st->rule_id = NULL;
         }
     }
+    char event_info[128];
+    snprintf(event_info, sizeof(event_info), "operation=%d QFI=%u 5QI=%u transaction=%s",
+            st->plan.operation, st->qfi, st->five_qi, st->transaction);
+    smf_ue_event_qos(sess, st->success ? "completed" : st->uncertain ? "uncertain" : "failed", st->qfi, st->five_qi, event_info);
     notify(sess);
     ogs_timer_stop(st->timer);
     free_request(st->request); st->request = NULL;

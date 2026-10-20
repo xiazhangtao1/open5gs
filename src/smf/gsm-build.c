@@ -17,6 +17,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+#include "ue-events.h"
 #include "gsm-build.h"
 
 #undef OGS_LOG_DOMAIN
@@ -272,6 +273,7 @@ ogs_pkbuf_t *gsm_build_pdu_session_establishment_accept(smf_sess_t *sess)
     ogs_cpystrn(dnn->value, sess->session.name,
             ogs_min(dnn->length, OGS_MAX_DNN_LEN) + 1);
 
+    smf_ue_event_nas(sess, &message, false);
     pkbuf = ogs_nas_5gs_plain_encode(&message);
     ogs_assert(pkbuf);
 
@@ -310,6 +312,7 @@ ogs_pkbuf_t *gsm_build_pdu_session_establishment_reject(
 
     pdu_session_establishment_reject->gsm_cause = gsm_cause;
 
+    smf_ue_event_nas(sess, &message, false);
     return ogs_nas_5gs_plain_encode(&message);
 }
 
@@ -542,6 +545,7 @@ ogs_pkbuf_t *gsm_build_pdu_session_modification_command(
             OGS_NAS_5GS_PDU_SESSION_MODIFICATION_COMMAND_AUTHORIZED_QOS_FLOW_DESCRIPTIONS_PRESENT;
     }
 
+    smf_ue_event_nas(sess, &message, false);
     pkbuf = ogs_nas_5gs_plain_encode(&message);
     ogs_assert(pkbuf);
 
@@ -574,6 +578,7 @@ ogs_pkbuf_t *gsm_build_pdu_session_modification_reject(
 
     pdu_session_modification_reject->gsm_cause = gsm_cause;
 
+    smf_ue_event_nas(sess, &message, false);
     return ogs_nas_5gs_plain_encode(&message);
 }
 
@@ -596,6 +601,7 @@ ogs_pkbuf_t *gsm_build_pdu_session_release_command(
 
     pdu_session_release_command->gsm_cause = gsm_cause;
 
+    smf_ue_event_nas(sess, &message, false);
     return ogs_nas_5gs_plain_encode(&message);
 }
 
@@ -618,6 +624,7 @@ ogs_pkbuf_t *gsm_build_pdu_session_release_reject(
 
     pdu_session_release_reject->gsm_cause = gsm_cause;
 
+    smf_ue_event_nas(sess, &message, false);
     return ogs_nas_5gs_plain_encode(&message);
 }
 

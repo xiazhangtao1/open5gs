@@ -17,6 +17,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+#include "ue-events.h"
 #include "ngap-path.h"
 #include "ngap-build.h"
 #include "gmm-build.h"
@@ -530,6 +531,8 @@ int nas_5gs_send_authentication_reject(amf_ue_t *amf_ue)
 
     ogs_warn("[%s] Authentication reject", amf_ue->suci);
 
+    amf_ue_event(NULL, amf_ue, "NAS-5GMM", "AMF->UE", "AuthenticationReject", "prepared", NULL, NULL, false);
+    amf_ue_event(NULL, amf_ue, "ACTION", "AMF->UE", "Authentication", "rejected", NULL, NULL, true);
     gmmbuf = gmm_build_authentication_reject();
     if (!gmmbuf) {
         ogs_error("gmm_build_authentication_reject() failed");

@@ -17,6 +17,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+#include "ue-events.h"
 #include "context.h"
 #include "gtp-path.h"
 #include "fd-path.h"
@@ -598,6 +599,7 @@ void smf_state_operational(ogs_fsm_t *s, smf_event_t *e)
 
                     e->sess_id = sess->id;
                     e->h.sbi.message = &sbi_message;
+                    smf_ue_event_sbi(sess, &sbi_message, true);
                     ogs_fsm_dispatch(&sess->sm, e);
                 }
                 break;
@@ -667,6 +669,7 @@ void smf_state_operational(ogs_fsm_t *s, smf_event_t *e)
 
                     e->sess_id = sess->id;
                     e->h.sbi.message = &sbi_message;
+                    smf_ue_event_sbi(sess, &sbi_message, true);
                     ogs_fsm_dispatch(&sess->sm, e);
                 }
                 break;
@@ -716,6 +719,7 @@ void smf_state_operational(ogs_fsm_t *s, smf_event_t *e)
 
                     e->sess_id = sess->id;
                     e->h.sbi.message = &sbi_message;
+                    smf_ue_event_sbi(sess, &sbi_message, true);
                     ogs_fsm_dispatch(&sess->sm, e);
                 }
                 break;
@@ -1013,6 +1017,7 @@ void smf_state_operational(ogs_fsm_t *s, smf_event_t *e)
             e->sess_id = sess->id;
             e->h.sbi.message = &sbi_message;
 
+            smf_ue_event_sbi(sess, &sbi_message, true);
             ogs_fsm_dispatch(&sess->sm, e);
             break;
 
@@ -1401,6 +1406,7 @@ void smf_state_operational(ogs_fsm_t *s, smf_event_t *e)
 
         if (ogs_nas_5gsm_decode(&nas_message, pkbuf) != OGS_OK) {
             ogs_error("ogs_nas_5gsm_decode() failed");
+            smf_ue_event(smf_sess_find_by_id(e->sess_id), "ACTION", "UE->SMF", "NASDecode", "failed", "Malformed 5GSM message", NULL, true);
             ogs_pkbuf_free(pkbuf);
             return;
         }
@@ -1412,6 +1418,7 @@ void smf_state_operational(ogs_fsm_t *s, smf_event_t *e)
             break;
         }
 
+        smf_ue_event_nas(sess, &nas_message, true);
         e->nas.message = &nas_message;
         ogs_fsm_dispatch(&sess->sm, e);
 
@@ -1430,6 +1437,9 @@ void smf_state_operational(ogs_fsm_t *s, smf_event_t *e)
             break;
         }
 
+        char event_info[96];
+        snprintf(event_info, sizeof(event_info), "N2-SM type=%s", OpenAPI_n2_sm_info_type_ToString(e->ngap.type));
+        smf_ue_event(sess, "N2-SM", "AMF->SMF", "N2SMTransfer", "received", NULL, event_info, false);
         ogs_fsm_dispatch(&sess->sm, e);
 
         ogs_pkbuf_free(pkbuf);

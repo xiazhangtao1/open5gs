@@ -17,6 +17,12 @@ images:
     tag: latest
     pullPolicy: IfNotPresent
 
+diagnostics:
+  ueEvents:
+    enabled: true
+    capacity: 65536
+    perUe: 512
+
 mongodb:
   persistence:
     enabled: true

@@ -17,6 +17,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+#include "ue-events.h"
 #include "sbi-path.h"
 #include "ngap-path.h"
 #include "nas-path.h"
@@ -1011,6 +1012,9 @@ void amf_state_operational(ogs_fsm_t *s, amf_event_t *e)
         gnb = amf_gnb_find_by_addr(addr);
         if (gnb) {
             ogs_info("gNB-N2[%s] connection refused!!!", OGS_ADDR(addr, buf));
+            ran_ue_t *event_ran;
+            ogs_list_for_each(&gnb->ran_ue_list, event_ran)
+                amf_ue_event(event_ran, NULL, "ACTION", "gNB->AMF", "NGConnection", "lost", "SCTP connection lost", NULL, true);
             amf_sbi_send_deactivate_all_ue_in_gnb(
                     gnb, AMF_REMOVE_S1_CONTEXT_BY_LO_CONNREFUSED);
             amf_gnb_remove(gnb);
@@ -1039,9 +1043,13 @@ void amf_state_operational(ogs_fsm_t *s, amf_event_t *e)
         if (rc == OGS_OK) {
             e->gnb_id = gnb->id;
             e->ngap.message = &ngap_message;
+            if (!(ngap_message.present == NGAP_NGAP_PDU_PR_initiatingMessage &&
+                    ngap_message.choice.initiatingMessage->procedureCode == NGAP_ProcedureCode_id_InitialUEMessage))
+                amf_ue_event_ngap(gnb, &ngap_message, "gNB->AMF", "received");
             ogs_fsm_dispatch(&gnb->sm, e);
         } else {
             ogs_error("Cannot decode NGAP message");
+            amf_ue_event(NULL, NULL, "ACTION", "gNB->AMF", "NGAPDecode", "failed", "Malformed NGAP; UE identity unavailable", NULL, true);
             r = ngap_send_error_indication(
                     gnb, NULL, NULL, NGAP_Cause_PR_protocol, 
                     NGAP_CauseProtocol_abstract_syntax_error_falsely_constructed_message);
@@ -1096,6 +1104,7 @@ void amf_state_operational(ogs_fsm_t *s, amf_event_t *e)
 
         if (ogs_nas_5gmm_decode(&nas_message, pkbuf) != OGS_OK) {
             ogs_error("ogs_nas_5gmm_decode() failed");
+            amf_ue_event(ran_ue, NULL, "ACTION", "UE->AMF", "NASDecode", "failed", "Malformed 5GMM message", NULL, true);
             ogs_pkbuf_free(pkbuf);
             break;
         }
@@ -1131,6 +1140,7 @@ void amf_state_operational(ogs_fsm_t *s, amf_event_t *e)
                      * So, we disabled 'ciphered' not to decrypt NAS message */
                     h.ciphered = 0;
                     if (nas_5gs_security_decode(amf_ue, h, pkbuf) != OGS_OK) {
+                        amf_ue_event(ran_ue, amf_ue, "ACTION", "UE->AMF", "NASSecurity", "failed", "NAS integrity check failed", NULL, true);
                         ogs_error("[%s] nas_security_decode() failed",
                                 amf_ue->suci);
                         ogs_pkbuf_free(pkbuf);
@@ -1196,6 +1206,7 @@ void amf_state_operational(ogs_fsm_t *s, amf_event_t *e)
         ogs_assert(OGS_FSM_STATE(&amf_ue->sm));
 
         e->amf_ue_id = amf_ue->id;
+        amf_ue_event_nas(ran_ue, amf_ue, &nas_message, true);
         e->nas.message = &nas_message;
 
         ogs_fsm_dispatch(&amf_ue->sm, e);
@@ -1212,6 +1223,9 @@ void amf_state_operational(ogs_fsm_t *s, amf_event_t *e)
 
         ogs_assert(OGS_FSM_STATE(&amf_ue->sm));
 
+        char event_info[96];
+        snprintf(event_info, sizeof(event_info), "timer=%s", amf_timer_get_name(e->h.timer_id));
+        amf_ue_event(NULL, amf_ue, "TIMER", "AMF", "TimerExpired", "expired", NULL, event_info, false);
         ogs_fsm_dispatch(&amf_ue->sm, e);
         break;
 

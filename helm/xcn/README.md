@@ -203,6 +203,78 @@ Run the focused tests after building:
 meson test -C build --print-errorlogs amf-location xcnctl-inspect
 ```
 
+## UE control-plane event history
+
+AMF and SMF record bounded, in-memory UE history independently of live UE and
+Session objects. History starts when each NF starts; releasing a UE or Session
+does not erase its retained records. Restarting that NF clears its history.
+These commands do not require a UPF statistics socket or an active PDU Session:
+
+```bash
+kubectl -n xcn exec deploy/xcn-5gc -c upf -- \
+  xcnctl show ue-events --supi imsi-460110000000100
+kubectl -n xcn exec deploy/xcn-5gc -c upf -- \
+  xcnctl show ue-events --supi imsi-460110000000100 --detail --watch
+kubectl -n xcn exec deploy/xcn-5gc -c upf -- \
+  xcnctl show ue-events --supi imsi-460110000000100 --since 30m --limit 200 --json
+```
+
+The default view shows actions and outcomes: RAN access, registration,
+Service Request, connection release/idle, paging, deregistration, Session
+context creation/removal, Session establishment/modification/release, N4 and
+QoS outcomes, handover, Path Switch, NG reset and SCTP loss. `--detail` adds
+NGAP UE messages, decoded 5GMM/5GSM message types, related SM Context/N2-SM
+transactions and PFCP request/response steps. `received`, `prepared`, `queued`,
+`scheduled`, `accepted`, `completed`, `rejected`, `failed`, `uncertain` and
+`timeout` describe different stages. In particular, locally queuing an NGAP
+message does not prove peer delivery or completion of the whole UE procedure.
+Connection idle, deregistration and PDU Session release are separate events.
+
+Times are UTC with milliseconds. Details include direction, trace/flow IDs,
+parent NGAP sequence when available, PSI/PTI, gNB identity/peer, reported CGI,
+CELL-ID, identity consistency, NGAP UE IDs, DNN, QFI/5QI and UPF SEID when known.
+Unknown numeric fields use `null` in JSON and `-` in text. NGAP messages carrying
+multiple Sessions retain a `psis` list. Session/UE context lifetimes have unique
+trace IDs; pool IDs, PSI and NGAP ID reuse do not join different lifetimes.
+Pre-SUPI steps are bound when identity becomes known, including backfill during
+watch. Unresolved identities remain queryable in the unfiltered view:
+
+```bash
+xcnctl show ue-events --detail
+xcnctl show ue-events --trace-id AMF/BOOT-UUID/TRACE-NUMBER --detail
+```
+
+`--watch` appends incremental events without clearing the screen. It tracks
+separate NF boot IDs and cursors, deduplicates backfilled events and reports
+restart/coverage gaps. `--limit` controls initial history (default 100, maximum
+1000); `--since` accepts an integer followed by `s`, `m`, `h`, `d`, or a UTC
+timestamp such as `2026-10-21T00:00:00Z`. `--interval` defaults to one second
+(range 0.1..3600). A query with no retained match is explicitly empty. One
+unavailable NF leaves the other NF usable with a warning and JSON `partial`;
+both unavailable produce a nonzero exit for a single query.
+
+AMF and SMF expose read-only `/ue-events` at their existing metrics listeners.
+Query arguments are `supi` or `trace_id` (mutually exclusive), `trace_boot_id`,
+`since_us`, `limit`, `detail=0|1`, `after` and `boot_id`. Responses include
+`items`, `nf`, `boot_id`, recording start time, configured capacities,
+`oldest_seq`, `latest_seq`, `next_seq`, `has_more`, `reset`, `gap` and
+`overwritten_total`. IDs/cursors/SEIDs use decimal strings to preserve 64 bits.
+The CLI preserves NF-local sequence ordering using monotonic clock based
+ordering timestamps; wall timestamps remain the actual observed times.
+Cross-NF ordering is a time-based view, not proof of distributed causality.
+Override endpoints using `--amf-ue-events`, `--smf-ue-events`, or
+`OPEN5GS_AMF_UE_EVENTS_URL` / `OPEN5GS_SMF_UE_EVENTS_URL`.
+
+Helm defaults are `diagnostics.ueEvents.enabled=true`, `capacity=65536` and
+`perUe=512`, per NF. The equivalent process environment variables are
+`OPEN5GS_UE_EVENTS_ENABLED`, `OPEN5GS_UE_EVENTS_CAPACITY` and
+`OPEN5GS_UE_EVENTS_PER_UE`. Require `1 <= perUe <= capacity <= 262144` when
+enabled. Fixed-size records and bounded indexes cap memory; oldest records are
+overwritten at either limit. This is a recent-event window, not a promised
+retention duration. Recording stores metadata, not packet payloads or keys.
+Xn preparation, RRC and gNB-internal mobility require RAN-side observation;
+the core history records only the steps visible to AMF/SMF.
+
 ## UPF real-time rate CLI
 
 Rate statistics are enabled by default and sampled once per second. The data

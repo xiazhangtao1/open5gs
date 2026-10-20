@@ -138,7 +138,7 @@ executable('open5gs-upfd',
     install : true)
 
 xcnctl_exe = executable('xcnctl',
-    sources : files('upfctl.c', 'inspect.c'),
-    c_args : '-fno-fast-math',
+    sources : files('upfctl.c', 'inspect.c', 'ue-events-cli.c'),
+    c_args : ['-fno-fast-math', '-std=gnu11'],
     dependencies : [libsbi_openapi_dep, libcurl_dep],
     install : true)

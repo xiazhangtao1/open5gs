@@ -18,6 +18,7 @@
  */
 
 #include "nsmf-handler.h"
+#include "ue-events.h"
 #include "nas-path.h"
 #include "ngap-path.h"
 #include "sbi-path.h"
@@ -31,6 +32,7 @@ int amf_nsmf_pdusession_handle_create_sm_context(
     int rv, r;
 
     ogs_assert(recvmsg);
+    amf_ue_event_session(amf_ue, ran_ue, sess, recvmsg, "CreateSMContextResponse");
 
     if (!sess) {
         ogs_error("Session has already been removed");
@@ -248,6 +250,7 @@ int amf_nsmf_pdusession_handle_update_sm_context(
     int r;
 
     ogs_assert(recvmsg);
+    amf_ue_event_session(amf_ue, ran_ue, sess, recvmsg, "UpdateSMContextResponse");
 
     if (!sess) {
         ogs_error("Session has already been removed");

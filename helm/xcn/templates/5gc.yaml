@@ -558,6 +558,7 @@ spec:
           image: {{ printf "%s:%s" .Values.images.runtime.repository .Values.images.runtime.tag }}
           imagePullPolicy: {{ .Values.images.runtime.pullPolicy }}
           env:
+{{ include "xcn.ueEventEnv" . | indent 12 }}
             - name: WAIT_TIMEOUT
               value: {{ .Values.fivegc.wait.timeout | quote }}
             - name: WAIT_INTERVAL
@@ -605,6 +606,7 @@ spec:
           image: {{ printf "%s:%s" .Values.images.runtime.repository .Values.images.runtime.tag }}
           imagePullPolicy: {{ .Values.images.runtime.pullPolicy }}
           env:
+{{ include "xcn.ueEventEnv" . | indent 12 }}
             - name: WAIT_TIMEOUT
               value: {{ .Values.fivegc.wait.timeout | quote }}
             - name: WAIT_INTERVAL

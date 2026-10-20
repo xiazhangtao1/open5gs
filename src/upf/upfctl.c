@@ -23,6 +23,7 @@
 
 #include "sbi/openapi/external/cJSON.h"
 #include "inspect.h"
+#include "ue-events-cli.h"
 
 #define DEFAULT_SOCKET "/run/open5gs/upf-stats.sock"
 #define REQUEST_SIZE 512
@@ -74,7 +75,8 @@ static size_t split_columns(char *line, char **columns, size_t capacity);
 static void usage(FILE *stream)
 {
     fprintf(stream,
-        "Usage: xcnctl show rate|ue|gnb [options]\n"
+        "Usage: xcnctl show rate|ue|gnb|ue-events [options]\n"
+        "  ue-events        UE control-plane history (use show ue-events --help)\n"
         "  --detail          UE/gNB details, including UE session summaries\n"
         "  --gnb-id ID       UE/gNB filter (decimal or 0x hexadecimal)\n"
         "  --plmn MCCMNC     UE serving PLMN or gNB identity PLMN filter\n"
@@ -937,6 +939,8 @@ static int query(const char *socket_path, const char *request,
 
 int main(int argc, char *argv[])
 {
+    if (argc >= 3 && !strcmp(argv[1], "show") && !strcmp(argv[2], "ue-events"))
+        return xcnctl_ue_events_main(argc, argv);
     static const struct option options[] = {
         { "level", required_argument, NULL, 'l' },
         { "supi", required_argument, NULL, 'u' },

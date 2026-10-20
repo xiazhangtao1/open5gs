@@ -17,6 +17,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+#include "ue-events.h"
 #include "nas-security.h"
 #include "gmm-build.h"
 #include "amf-sm.h"
@@ -198,6 +199,7 @@ ogs_pkbuf_t *gmm_build_registration_reject(
             OGS_NAS_5GS_REGISTRATION_REJECT_REJECTED_NSSAI_PRESENT;
     }
 
+    amf_ue_event_nas(NULL, amf_ue, &message, false);
     return ogs_nas_5gs_plain_encode(&message);
 }
 
@@ -275,6 +277,7 @@ ogs_pkbuf_t *gmm_build_service_reject(
                 amf_ue->supi, pdu_session_status->psi);
     }
 
+    amf_ue_event_nas(NULL, amf_ue, &message, false);
     return ogs_nas_5gs_plain_encode(&message);
 }
 
@@ -348,6 +351,7 @@ ogs_pkbuf_t *gmm_build_identity_request(amf_ue_t *amf_ue)
     ogs_debug("    Identity Type 2 : SUCI");
     identity_request->identity_type.value = OGS_NAS_5GS_MOBILE_IDENTITY_SUCI;
 
+    amf_ue_event_nas(NULL, amf_ue, &message, false);
     return ogs_nas_5gs_plain_encode(&message);
 }
 
@@ -381,6 +385,7 @@ ogs_pkbuf_t *gmm_build_authentication_request(amf_ue_t *amf_ue)
     authentication_request->authentication_parameter_autn.length =
             OGS_AUTN_LEN;
 
+    amf_ue_event_nas(NULL, amf_ue, &message, false);
     return ogs_nas_5gs_plain_encode(&message);
 }
 

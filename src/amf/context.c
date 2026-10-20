@@ -17,6 +17,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+#include "ue-events.h"
 #include "ngap-path.h"
 
 static amf_context_t self;
@@ -1398,6 +1399,7 @@ ran_ue_t *ran_ue_add(amf_gnb_t *gnb, uint64_t ran_ue_ngap_id)
     ran_ue->index = ogs_pool_index(&ran_ue_pool, ran_ue);
     ogs_assert(ran_ue->index > 0 && ran_ue->index <= ogs_global_conf()->max.ue);
 
+    ran_ue->event_trace_id = ogs_ue_events_new_trace();
     ran_ue->ran_ue_ngap_id = ran_ue_ngap_id;
     ran_ue->amf_ue_ngap_id = ran_ue->index;
 
@@ -1594,6 +1596,8 @@ amf_ue_t *amf_ue_add(ran_ue_t *ran_ue)
         return NULL;
     }
 
+    amf_ue->event_trace_id = ogs_ue_events_new_trace();
+
     /* Add All Timers */
     amf_ue->t3513.timer = ogs_timer_add(
             ogs_app()->timer_mgr, amf_timer_t3513_expire,
@@ -1700,6 +1704,7 @@ void amf_ue_remove(amf_ue_t *amf_ue)
     int i;
 
     ogs_assert(amf_ue);
+    amf_ue_event(NULL, amf_ue, "ACTION", "AMF", "UEContext", "removed", NULL, "Local AMF context removed", true);
 
     ogs_list_remove(&self.amf_ue_list, amf_ue);
 
@@ -2210,6 +2215,9 @@ void amf_ue_set_supi(amf_ue_t *amf_ue, char *supi)
     amf_ue->supi = ogs_strdup(supi);
     ogs_assert(amf_ue->supi);
     ogs_hash_set(self.supi_hash, amf_ue->supi, strlen(amf_ue->supi), amf_ue);
+    ogs_ue_events_bind(amf_ue->event_trace_id, amf_ue->supi);
+    ran_ue_t *event_ran = ran_ue_find_by_id(amf_ue->ran_ue_id);
+    if (event_ran) ogs_ue_events_bind(event_ran->event_trace_id, amf_ue->supi);
 }
 
 OpenAPI_rat_type_e amf_ue_rat_type(amf_ue_t *amf_ue)
@@ -2263,6 +2271,7 @@ void amf_ue_associate_ran_ue(amf_ue_t *amf_ue, ran_ue_t *ran_ue)
 
     amf_ue->ran_ue_id = ran_ue->id;
     ran_ue->amf_ue_id = amf_ue->id;
+    if (amf_ue->supi) ogs_ue_events_bind(ran_ue->event_trace_id, amf_ue->supi);
 }
 
 void amf_ue_deassociate_ran_ue(amf_ue_t *amf_ue, ran_ue_t *ran_ue)

@@ -259,6 +259,11 @@ static _MHD_Result serve_json_from_dumper(struct MHD_Connection *connection,
     return (_MHD_Result)ret;
 }
 
+static const char *query_argument(void *request, const char *name)
+{
+    return MHD_lookup_connection_value(request, MHD_GET_ARGUMENT_KIND, name);
+}
+
 static _MHD_Result
 mhd_server_access_handler(void *cls, struct MHD_Connection *connection,
         const char *url, const char *method, const char *version,
@@ -305,6 +310,18 @@ mhd_server_access_handler(void *cls, struct MHD_Connection *connection,
     ogs_metrics_custom_ep_t *node = NULL;
     ogs_list_for_each(&ogs_metrics_self()->custom_eps, node) {
         if (!strcmp(node->endpoint, url)) {
+            if (node->query_handler) {
+                int status = MHD_HTTP_OK;
+                char *json = node->query_handler(query_argument, connection, &status);
+                if (!json) return (_MHD_Result)MHD_NO;
+                struct MHD_Response *response = MHD_create_response_from_buffer(
+                        strlen(json), json, MHD_RESPMEM_MUST_FREE);
+                if (!response) { free(json); return (_MHD_Result)MHD_NO; }
+                MHD_add_response_header(response, "Content-Type", "application/json");
+                int result = MHD_queue_response(connection, status, response);
+                MHD_destroy_response(response);
+                return (_MHD_Result)result;
+            }
             return serve_json_from_dumper(connection,
                     node->handler,
                     page, page_size);

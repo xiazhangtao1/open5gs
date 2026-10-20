@@ -17,6 +17,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+#include "ue-events.h"
 #include "ngap-handler.h"
 #include "gmm-handler.h"
 #include "gmm-build.h"
@@ -104,6 +105,9 @@ void gmm_state_de_registered(ogs_fsm_t *s, amf_event_t *e)
 
     switch (e->h.id) {
     case OGS_FSM_ENTRY_SIG:
+        if (amf_ue->nas.message_type == OGS_NAS_5GS_DEREGISTRATION_REQUEST_FROM_UE ||
+                amf_ue->nas.message_type == OGS_NAS_5GS_DEREGISTRATION_ACCEPT_FROM_UE)
+            amf_ue_event(NULL, amf_ue, "ACTION", "AMF", "Deregistration", "completed", NULL, "Entered deregistered state", true);
         AMF_UE_CLEAR_PAGING_INFO(amf_ue);
         AMF_UE_CLEAR_N2_TRANSFER(amf_ue, pdu_session_resource_setup_request);
         AMF_UE_CLEAR_5GSM_MESSAGE(amf_ue);
@@ -1967,6 +1971,7 @@ static void common_register_state(ogs_fsm_t *s, amf_event_t *e,
 
         case OGS_NAS_5GS_DEREGISTRATION_REQUEST_FROM_UE:
             ogs_info("[%s] Deregistration request", amf_ue->supi);
+            amf_ue_event(ran_ue, amf_ue, "ACTION", "UE->AMF", "Deregistration", "started", NULL, NULL, true);
 
             if (!h.integrity_protected || !SECURITY_CONTEXT_IS_VALID(amf_ue)) {
                 ogs_error("No Security Context");
@@ -3144,6 +3149,7 @@ void gmm_state_initial_context_setup(ogs_fsm_t *s, amf_event_t *e)
         switch (nas_message->gmm.h.message_type) {
         case OGS_NAS_5GS_REGISTRATION_COMPLETE:
             ogs_info("[%s] Registration complete", amf_ue->supi);
+            amf_ue_event(ran_ue, amf_ue, "ACTION", "UE->AMF", "Registration", "completed", NULL, NULL, true);
 
             CLEAR_AMF_UE_TIMER(amf_ue->t3550);
 
@@ -3377,6 +3383,9 @@ void gmm_state_exception(ogs_fsm_t *s, amf_event_t *e)
 
     switch (e->h.id) {
     case OGS_FSM_ENTRY_SIG:
+        bool event_timeout = e->h.timer_id >= AMF_TIMER_T3513 && e->h.timer_id <= AMF_TIMER_IMPLICIT_DEREGISTRATION;
+        amf_ue_event(NULL, amf_ue, "ACTION", "AMF", "UEProcedure", event_timeout ? "timeout" : "failed",
+                event_timeout ? amf_timer_get_name(e->h.timer_id) : "AMF state machine exception", NULL, true);
         AMF_UE_CLEAR_PAGING_INFO(amf_ue);
         AMF_UE_CLEAR_N2_TRANSFER(amf_ue, pdu_session_resource_setup_request);
         AMF_UE_CLEAR_5GSM_MESSAGE(amf_ue);

@@ -2,6 +2,14 @@
 #include "../../src/amf/context.h"
 #include "../../src/amf/ue-info.h"
 #include "../../src/amf/gnb-info.h"
+#include "../../src/amf/ue-events.h"
+
+static const char *event_arg(void *request, const char *key)
+{
+    return !strcmp(key, "detail") ? "1" : NULL;
+}
+
+static void test_event_metadata(ogs_sock_t *sock);
 
 static const cJSON *get(const cJSON *obj, const char *key)
 {
@@ -183,14 +191,97 @@ static void test_width(ogs_sock_t *sock, unsigned bits)
     ogs_list_remove(&amf_self()->amf_ue_list, &ue);
 }
 
+
+static void test_event_metadata(ogs_sock_t *sock)
+{
+    amf_gnb_t *source = make_gnb(sock, 1), *target = make_gnb(sock, 2);
+    ogs_assert(ogs_ue_events_init("AMF", 64, 32));
+    ogs_assert(amf_gnb_set_gnb_id(source, 100, 28) == OGS_OK);
+    ogs_assert(amf_gnb_set_gnb_id(target, 200, 28) == OGS_OK);
+    ran_ue_t *ran = ran_ue_add(source, 7);
+    ogs_assert(ran);
+    ogs_ngap_message_t pdu = {0};
+    pdu.present = NGAP_NGAP_PDU_PR_initiatingMessage;
+    pdu.choice.initiatingMessage = ogs_calloc(1, sizeof(*pdu.choice.initiatingMessage));
+    pdu.choice.initiatingMessage->procedureCode = NGAP_ProcedureCode_id_PathSwitchRequest;
+    pdu.choice.initiatingMessage->value.present = NGAP_InitiatingMessage__value_PR_PathSwitchRequest;
+    NGAP_PathSwitchRequest_t *notify = &pdu.choice.initiatingMessage->value.choice.PathSwitchRequest;
+    NGAP_PathSwitchRequestIEs_t *amf = ogs_calloc(1, sizeof(*amf));
+    amf->id = NGAP_ProtocolIE_ID_id_SourceAMF_UE_NGAP_ID;
+    amf->value.present = NGAP_PathSwitchRequestIEs__value_PR_AMF_UE_NGAP_ID;
+    asn_uint642INTEGER(&amf->value.choice.AMF_UE_NGAP_ID, ran->amf_ue_ngap_id);
+    ASN_SEQUENCE_ADD(&notify->protocolIEs.list, amf);
+    NGAP_PathSwitchRequestIEs_t *remote = ogs_calloc(1, sizeof(*remote));
+    remote->id = NGAP_ProtocolIE_ID_id_RAN_UE_NGAP_ID;
+    remote->value.present = NGAP_PathSwitchRequestIEs__value_PR_RAN_UE_NGAP_ID;
+    remote->value.choice.RAN_UE_NGAP_ID = 99;
+    ASN_SEQUENCE_ADD(&notify->protocolIEs.list, remote);
+    NGAP_PathSwitchRequestIEs_t *location = ogs_calloc(1, sizeof(*location));
+    location->id = NGAP_ProtocolIE_ID_id_UserLocationInformation;
+    location->value.present = NGAP_PathSwitchRequestIEs__value_PR_UserLocationInformation;
+    NGAP_UserLocationInformation_t *uli = &location->value.choice.UserLocationInformation;
+    uli->present = NGAP_UserLocationInformation_PR_userLocationInformationNR;
+    uli->choice.userLocationInformationNR = ogs_calloc(1, sizeof(*uli->choice.userLocationInformationNR));
+    ogs_nr_cgi_t cgi = {.cell_id = (200ULL << 8) | 78};
+    ogs_5gs_tai_t tai = {0}; tai.tac.v = 1;
+    ogs_plmn_id_build(&cgi.plmn_id, 1, 2, 2); tai.plmn_id = cgi.plmn_id;
+    ogs_ngap_nr_cgi_to_ASN(&cgi, &uli->choice.userLocationInformationNR->nR_CGI);
+    ogs_ngap_5gs_tai_to_ASN(&tai, &uli->choice.userLocationInformationNR->tAI);
+    ASN_SEQUENCE_ADD(&notify->protocolIEs.list, location);
+    amf_ue_event_ngap(target, &pdu, "gNB->AMF", "received");
+    ogs_ue_events_bind(ran->event_trace_id, "imsi-001010000000001");
+    int status = 0;
+    char *text = ogs_ue_events_query(event_arg, NULL, &status);
+    ogs_assert(status == 200 && text);
+    cJSON *root = cJSON_Parse(text); free(text);
+    const cJSON *event = cJSON_GetArrayItem(get(root, "items"), 0);
+    ogs_assert(get(event, "gnb_id")->valueint == 200);
+    ogs_assert(!strcmp(get(event, "ran_ngap_id")->valuestring, "99"));
+    ogs_assert(get(event, "cell_id")->valueint == 78);
+    ogs_assert(!strcmp(get(event, "cell_plmn")->valuestring, "00102"));
+    cJSON_Delete(root);
+    /* A 40-bit wire ID must not wrap onto a 32-bit pool slot. */
+    asn_uint642INTEGER(&amf->value.choice.AMF_UE_NGAP_ID, (1ULL << 32) | ran->amf_ue_ngap_id);
+    amf_ue_event_ngap(target, &pdu, "gNB->AMF", "received");
+    text = ogs_ue_events_query(event_arg, NULL, &status);
+    root = cJSON_Parse(text); free(text);
+    event = cJSON_GetArrayItem(get(root, "items"), cJSON_GetArraySize(get(root, "items"))-1);
+    ogs_assert(!get(event, "supi")->valuestring[0]);
+    cJSON_Delete(root);
+    asn_uint642INTEGER(&amf->value.choice.AMF_UE_NGAP_ID, ran->amf_ue_ngap_id);
+    /* Trace extraction runs before protocol validation: malformed IEs must not assert. */
+    uli->choice.userLocationInformationNR->nR_CGI.nRCellIdentity.size = 2;
+    amf_ue_event_ngap(target, &pdu, "gNB->AMF", "received");
+    text = ogs_ue_events_query(event_arg, NULL, &status);
+    root = cJSON_Parse(text); free(text);
+    event = cJSON_GetArrayItem(get(root, "items"), cJSON_GetArraySize(get(root, "items"))-1);
+    ogs_assert(cJSON_IsNull(get(event, "nci")));
+    ogs_assert(!strcmp(get(event, "supi")->valuestring, "imsi-001010000000001"));
+    cJSON_Delete(root);
+    /* Metadata decoded before a consuming send owns its ASN.1 buffers. */
+    uli->choice.userLocationInformationNR->nR_CGI.nRCellIdentity.size = 5;
+    ogs_pkbuf_t *encoded = ogs_ngap_encode(&pdu);
+    ogs_assert(encoded);
+    ogs_ngap_message_t decoded = {0};
+    ogs_assert(ogs_ngap_decode(&decoded, encoded) == OGS_OK);
+    ogs_pkbuf_free(encoded);
+    amf_ue_event_ngap(target, &decoded, "AMF->gNB", "queued");
+    ogs_ngap_free(&decoded);
+    ran_ue_remove(ran); amf_gnb_remove(source); amf_gnb_remove(target);
+    ogs_ue_events_final();
+}
+
 int main(void)
 {
     unsigned i;
     const unsigned widths[] = {22, 23, 24, 28, 32};
     ogs_sock_t sock;
     ogs_socknode_t node;
+    ogs_pkbuf_config_t packet_config;
 
     ogs_core_initialize();
+    ogs_pkbuf_default_init(&packet_config);
+    ogs_pkbuf_default_create(&packet_config);
     ogs_app_context_init();
     ogs_app_config_init();
     ogs_global_conf()->max.peer = 8;
@@ -205,11 +296,13 @@ int main(void)
     node.sock = &sock;
     ogs_list_add(&amf_self()->ngap_list, &node);
     for (i = 0; i < OGS_ARRAY_SIZE(widths); i++) test_width(&sock, widths[i]);
+    test_event_metadata(&sock);
     ogs_list_remove(&amf_self()->ngap_list, &node);
     amf_context_final();
     amf_metrics_final();
     ogs_app_config_final();
     ogs_app_context_final();
+    ogs_pkbuf_default_destroy();
     ogs_core_terminate();
     /* Core teardown frees its pool; release talloc's process-wide debug root. */
     talloc_disable_null_tracking();

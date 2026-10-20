@@ -17,6 +17,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+#include "ue-events.h"
 #include "nas-security.h"
 
 #define NAS_SECURITY_MAC_SIZE 4
@@ -32,6 +33,8 @@ ogs_pkbuf_t *nas_5gs_security_encode(
 
     ogs_assert(amf_ue);
     ogs_assert(message);
+
+    amf_ue_event_nas(NULL, amf_ue, message, false);
 
     switch (message->h.security_header_type) {
     case OGS_NAS_SECURITY_HEADER_PLAIN_NAS_MESSAGE:
