@@ -245,15 +245,15 @@ class InspectionTest(unittest.TestCase):
         self.assertEqual(columns["GNB-ID"], "3584")
         self.assertEqual(columns["GNB-LEN"], "28")
         self.assertEqual(columns["CELL-ID"], "78")
-        self.assertEqual(columns["LOCATION"], "identity-mismatch")
+        self.assertEqual(columns["LOCATION"], "mismatch")
         for level in RATE_TABLES:
             row = self.run_cli("rate", "--level", level, "--with-location").stdout.splitlines()[-1]
-            self.assertEqual([c.strip() for c in row.split("|")][-5:],
-                             ["3584", "28", "78", "[2001:db8::1]:38412", "identity-mismatch"])
+            self.assertEqual([c.strip() for c in row.split("|")][2:7],
+                             ["[2001:db8::1]:38412", "3584", "28", "78", "mismatch"])
         detail = self.run_cli("ue", "--detail").stdout
         self.assert_detail_fields(detail, {"gNB ID (reported)": "3584", "gNB ID (from NCI)": "3585",
                                  "NCI": "917838 (0x0000e014e)", "Cell local ID": "78",
-                                 "Identity": "identity-mismatch"})
+                                 "Identity": "mismatch"})
 
     def test_cell_id_only_needs_valid_nci_and_length(self):
         for missing in ("gnb_id", "snapshot"):
@@ -485,9 +485,20 @@ class InspectionTest(unittest.TestCase):
                 row = json.loads(result.stdout)["rows"][0]
                 self.assertNotIn("location", row)
                 self.assertEqual(row["cm_state"], "connected")
+                self.assertEqual(row["gnb_peer"], "[2001:db8::1]:38412")
+                self.http.requests.clear()
+                result = self.run_cli("rate", "--level", level)
+                self.assertEqual(self.http.requests.count(("/ue-info", 0)), 1)
+                header, separator, row = result.stdout.strip().splitlines()
+                columns = [c.strip() for c in header.split("|")]
+                self.assertEqual(columns[:3], ["SUPI", "CM-STATE", "GNB-PEER"])
+                self.assertEqual([c.strip() for c in row.split("|")][2], "[2001:db8::1]:38412")
+                self.assertFalse(set(columns) & {"GNB-ID", "GNB-LEN", "CELL-ID", "LOCATION"})
+                self.assertEqual(columns[3], "UPTIME" if level == "user" else "UE-IP")
                 result = self.run_cli("rate", "--level", level, "--with-location", "--json")
                 row = json.loads(result.stdout)["rows"][0]
                 self.assertEqual(row["ul_bps"], 1234)
+                self.assertEqual(row["gnb_peer"], "[2001:db8::1]:38412")
                 self.assertEqual(row["location"]["gnb"]["gnb_id"], 100)
                 self.assertEqual(row["location"]["gnb"]["gnb_id_bits"], 28)
                 self.assertEqual(row["location"]["gnb"]["peer"], "[2001:db8::1]:38412")
@@ -499,23 +510,88 @@ class InspectionTest(unittest.TestCase):
                 header, separator, row = result.stdout.strip().splitlines()
                 self.assertIn("-+-", separator)
                 self.assertEqual(len(header.split("|")), len(row.split("|")))
-                self.assertEqual([c.strip() for c in header.split("|")][-5:],
-                                 ["GNB-ID", "GNB-LEN", "CELL-ID", "GNB-PEER", "LOCATION"])
-                self.assertEqual([c.strip() for c in row.split("|")][-5:],
-                                 ["100", "28", "3", "[2001:db8::1]:38412", "reported"])
+                self.assertEqual([c.strip() for c in header.split("|")][:7],
+                                 ["SUPI", "CM-STATE", "GNB-PEER", "GNB-ID", "GNB-LEN", "CELL-ID", "LOCATION"])
+                self.assertEqual([c.strip() for c in row.split("|")][2:7],
+                                 ["[2001:db8::1]:38412", "100", "28", "3", "reported"])
+                self.assertEqual([c.strip() for c in header.split("|")][7],
+                                 "UPTIME" if level == "user" else "UE-IP")
                 widths = lambda line: [len(c) for c in line.split("|")]
                 self.assertEqual(widths(header), widths(row))
                 self.assertEqual(widths(header), [len(c) for c in separator.split("+")])
 
     def test_rate_optional_location_failure_and_active_only(self):
         self.http.data["/ue-info"] = (503, b"unavailable")
+        result = self.run_cli("rate", "--json")
+        row = json.loads(result.stdout)["rows"][0]
+        self.assertIsNone(row["gnb_peer"])
+        self.assertNotIn("location", row)
+        self.assertIn("warning", result.stderr)
+        row = self.run_cli("rate").stdout.splitlines()[-1]
+        self.assertEqual([c.strip() for c in row.split("|")][2], "-")
         result = self.run_cli("rate", "--with-location", "--json")
         self.assertIn("warning", result.stderr)
         self.assertEqual(json.loads(result.stdout)["rows"][0]["location"]["status"], "unknown")
         row = self.run_cli("rate", "--with-location").stdout.splitlines()[-1]
-        self.assertEqual([c.strip() for c in row.split("|")][-5:],
+        self.assertEqual([c.strip() for c in row.split("|")][2:7],
                          ["-", "-", "-", "-", "unknown"])
         self.run_cli("rate", "--level", "session", "--active-only", expected=1)
+
+    def test_rate_peer_uses_current_association_or_last_location(self):
+        value = self.http.data["/ue-info"][0]
+        value["gnb"]["peer"] = "[192.0.2.10]:34910"
+        value["gnb"].pop("gnb_id_bits")
+        for options in ((), ("--with-location",)):
+            with self.subTest(options=options):
+                result = self.run_cli("rate", *options, "--json")
+                self.assertEqual(json.loads(result.stdout)["rows"][0]["gnb_peer"], "[192.0.2.10]:34910")
+                row = self.run_cli("rate", *options).stdout.splitlines()[-1]
+                self.assertEqual([c.strip() for c in row.split("|")][2], "[192.0.2.10]:34910")
+        value["cm_state"] = "idle"
+        value["gnb"] = None
+        result = self.run_cli("rate", "--with-location", "--json")
+        row = json.loads(result.stdout)["rows"][0]
+        self.assertEqual(row["gnb_peer"], "[2001:db8::1]:38412")
+        self.assertEqual(row["location"]["status"], "last-known")
+        value.pop("location")
+        result = self.run_cli("rate", "--json")
+        self.assertIsNone(json.loads(result.stdout)["rows"][0]["gnb_peer"])
+
+    def test_rate_peer_does_not_join_ambiguous_ues(self):
+        self.http.data["/ue-info"].append(ue())
+        result = self.run_cli("rate", "--json")
+        self.assertIsNone(json.loads(result.stdout)["rows"][0]["gnb_peer"])
+        row = self.run_cli("rate", "--with-location").stdout.splitlines()[-1]
+        self.assertEqual([c.strip() for c in row.split("|")][2:7],
+                         ["-", "-", "-", "-", "unknown"])
+
+    def test_rate_watch_preserves_access_columns(self):
+        for options in ((), ("--with-location",)):
+            with self.subTest(options=options):
+                self.http.requests.clear()
+                process = subprocess.Popen(self.argv("rate", "--level", "bearer", "--active-only",
+                                           *options, "--watch", "--interval", "0.1"),
+                                           stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                try:
+                    deadline = time.monotonic() + 3
+                    while self.http.requests.count(("/ue-info", 0)) < 2:
+                        self.assertLess(time.monotonic(), deadline)
+                        time.sleep(0.02)
+                    time.sleep(0.05)
+                finally:
+                    process.terminate()
+                    stdout, _ = process.communicate(timeout=3)
+                stdout = re.sub(r"\x1b\[[0-9;]*[A-Za-z]", "", stdout)
+                headers = [line for line in stdout.splitlines() if line.startswith("SUPI")]
+                self.assertGreaterEqual(len(headers), 2)
+                for header in headers:
+                    columns = [c.strip() for c in header.split("|")]
+                    self.assertEqual(columns[:3], ["SUPI", "CM-STATE", "GNB-PEER"])
+                    if options:
+                        self.assertEqual(columns[3:8], ["GNB-ID", "GNB-LEN", "CELL-ID", "LOCATION", "UE-IP"])
+                    else:
+                        self.assertEqual(columns[3], "UE-IP")
+                        self.assertNotIn("LOCATION", columns)
 
     def test_watch_emits_multiple_json_documents(self):
         process = subprocess.Popen(self.argv("ue", "--json", "--watch", "--interval", "0.1"),

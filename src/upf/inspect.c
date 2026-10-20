@@ -400,7 +400,7 @@ static const char *decimal(const cJSON *obj, const char *key, char *buf, size_t 
 static const char *location_label(const cJSON *loc)
 {
     return cJSON_IsFalse(field(field(loc, "nr_cgi"), "identity_consistent")) ?
-        "identity-mismatch" : string(loc, "status");
+        "mismatch" : string(loc, "status");
 }
 
 static void detail_field(int indent, const char *label, const char *value)
@@ -468,7 +468,7 @@ static void detail_location(int indent, const cJSON *loc)
             string(tai, "plmn"), decimal(tai, "tac", value, sizeof(value)), string(tai, "tac_hex"));
     detail_field(indent, "Location", string(loc, "status"));
     detail_field(indent, "Identity", cJSON_IsTrue(consistent) ? "consistent" :
-            cJSON_IsFalse(consistent) ? "identity-mismatch" : "unknown");
+            cJSON_IsFalse(consistent) ? "mismatch" : "unknown");
     if (number(field(loc, "timestamp"), 9007199254740991ULL, &timestamp) && timestamp) {
         time_t seconds = timestamp / 1000000;
         struct tm utc;
@@ -752,7 +752,16 @@ static bool append(char *out, size_t *used, const char *format, ...)
     return true;
 }
 
-char *xcnctl_add_location(const char *response, const cJSON *ues, bool json)
+static const char *rate_peer(const cJSON *ue)
+{
+    const char *peer = !strcmp(string(ue, "cm_state"), "connected") ?
+        string(field(ue, "gnb"), "peer") : "-";
+    return strcmp(peer, "-") ? peer :
+        string(field(field(ue, "location"), "gnb"), "peer");
+}
+
+char *xcnctl_add_rate_access(const char *response, const cJSON *ues,
+        bool json, bool with_location)
 {
     if (json) {
         cJSON *root = cJSON_Parse(response), *row;
@@ -763,7 +772,10 @@ char *xcnctl_add_location(const char *response, const cJSON *ues, bool json)
         }
         cJSON_ArrayForEach(row, cJSON_GetObjectItemCaseSensitive(root, "rows")) {
             const cJSON *ue = find_ue(ues, string(row, "supi"));
-            if (!set(row, "location", location(ue))) {
+            const char *peer = rate_peer(ue);
+            if (!set(row, "gnb_peer", strcmp(peer, "-") ?
+                        cJSON_CreateString(peer) : cJSON_CreateNull()) ||
+                (with_location && !set(row, "location", location(ue)))) {
                 cJSON_Delete(root);
                 return NULL;
             }
@@ -782,31 +794,34 @@ char *xcnctl_add_location(const char *response, const cJSON *ues, bool json)
     if (!copy || !out) goto fail;
     out[0] = '\0';
     for (line = strtok_r(copy, "\n", &save); line; line = strtok_r(NULL, "\n", &save)) {
-        cJSON *loc;
-        char *end;
-        char id[24], bits[24], cell[24];
-        const cJSON *ue;
-        if (header) {
-            if (!append(out, &used, "%s GNB-ID GNB-LEN CELL-ID GNB-PEER LOCATION\n", line)) goto fail;
-            header = false;
-            continue;
+        char *tail = NULL;
+        char *supi = strtok_r(line, " \t\r", &tail);
+        char *state = strtok_r(NULL, " \t\r", &tail);
+        const cJSON *ue = find_ue(ues, supi);
+
+        if (!supi || !state ||
+            (header && (strcmp(supi, "SUPI") || strcmp(state, "CM-STATE")))) goto fail;
+        while (isspace((unsigned char)*tail)) tail++;
+        if (!append(out, &used, "%s %s %s", supi, state,
+                    header ? "GNB-PEER" : rate_peer(ue))) goto fail;
+        if (with_location) {
+            if (header) {
+                if (!append(out, &used, " GNB-ID GNB-LEN CELL-ID LOCATION")) goto fail;
+            } else {
+                char id[24], bits[24], cell[24];
+                cJSON *loc = location(ue);
+                if (!loc) goto fail;
+                bool ok = append(out, &used, " %s %s %s %s",
+                        decimal(field(loc, "gnb"), "gnb_id", id, sizeof(id)),
+                        decimal(field(loc, "nr_cgi"), "gnb_id_bits", bits, sizeof(bits)),
+                        decimal(field(loc, "nr_cgi"), "cell_id", cell, sizeof(cell)),
+                        location_label(loc));
+                cJSON_Delete(loc);
+                if (!ok) goto fail;
+            }
         }
-        end = line;
-        while (*end && !isspace((unsigned char)*end)) end++;
-        char delimiter = *end;
-        *end = '\0';
-        ue = find_ue(ues, line);
-        *end = delimiter;
-        loc = location(ue);
-        if (!loc) goto fail;
-        bool ok = append(out, &used, "%s %s %s %s %s %s\n", line,
-                decimal(field(loc, "gnb"), "gnb_id", id, sizeof(id)),
-                decimal(field(loc, "nr_cgi"), "gnb_id_bits", bits, sizeof(bits)),
-                decimal(field(loc, "nr_cgi"), "cell_id", cell, sizeof(cell)),
-                string(field(loc, "gnb"), "peer"),
-                location_label(loc));
-        cJSON_Delete(loc);
-        if (!ok) goto fail;
+        if (!append(out, &used, " %s\n", tail)) goto fail;
+        header = false;
     }
     free(copy);
     return out;

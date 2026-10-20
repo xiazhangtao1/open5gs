@@ -21,6 +21,7 @@ typedef struct {
 /* Complete, owned {items: []} result, or NULL on any invalid/partial page. */
 cJSON *xcnctl_load_info(const char *url);
 int xcnctl_inspect(const char *kind, const xcnctl_inspect_options_t *options);
-char *xcnctl_add_location(const char *response, const cJSON *ues, bool json);
+char *xcnctl_add_rate_access(const char *response, const cJSON *ues,
+        bool json, bool with_location);
 
 #endif

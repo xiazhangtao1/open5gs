@@ -132,7 +132,7 @@ gNB ID length is taken from NGAP, including leading zero bits, and is exported
 as `gnb_id_bits` (22 through 32). A valid 36-bit NCI and valid gNB ID length
 are sufficient to decode the cell local ID, even when the NCI prefix differs
 from the reporting gNB ID. In that case `CELL-ID` retains the decoded value,
-the table shows `identity-mismatch`, and JSON reports
+the table shows `mismatch`, and JSON reports
 `location.nr_cgi.identity_consistent=false`. For example, reported gNB ID
 3584 with 28 bits and NCI `0x0000e014e` yields decoded gNB ID 3585 and
 `CELL-ID=78`. The reported ID remains under `location.gnb.gnb_id`; the decoded
@@ -183,13 +183,17 @@ Defaults are AMF `http://127.0.0.1:9091/ue-info` and `/gnb-info`, and SMF
 `http://127.0.0.1:9092/pdu-info`. Override them with `--amf-ue-info`,
 `--amf-gnb-info`, `--smf-pdu-info`, or `OPEN5GS_AMF_UE_INFO_URL`,
 `OPEN5GS_AMF_GNB_INFO_URL`, `OPEN5GS_SMF_PDU_INFO_URL`, respectively. Supply
-endpoint URLs without pagination parameters. `--with-location` works at all
-four rate levels, adding `GNB-ID`, `GNB-LEN`, `CELL-ID`, `GNB-PEER` and
-`LOCATION` in text, and a `location` object in JSON. `GNB-PEER` is the reporting
-gNB's NGAP/SCTP peer IP and port, for example `[10.2.0.119]:34910`; an idle
-UE retains the address from its last location report. Optional location failures
-retain rate output with unknown location; existing `--active-only` failures
-remain strict. JSON retains
+endpoint URLs without pagination parameters. All four rate levels show
+`GNB-PEER` after `CM-STATE` by default, before `UE-IP` when present. This is the
+current gNB's NGAP/SCTP peer IP and port, for example `[10.2.0.119]:34910`;
+an idle UE retains the address from its last location report. JSON always adds
+`gnb_peer` (or `null` when unknown). `--with-location` inserts `GNB-ID`,
+`GNB-LEN`, `CELL-ID` and `LOCATION` between `GNB-PEER` and `UE-IP` (or before
+`UPTIME` at user level), and adds a `location` object in JSON. Identity
+inconsistency is displayed as `mismatch`. AMF information is fetched once per
+refresh and shared with CM state enrichment. Optional AMF failures retain rate
+output with unknown access fields; existing `--active-only` failures remain
+strict. JSON retains
 the full `location.nr_cgi.nci` and `nci_hex`, the derived `cell_id`, and the
 reporting gNB identity, `gnb_id_bits` and `peer` under `location.gnb`.
 

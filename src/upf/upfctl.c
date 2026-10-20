@@ -78,7 +78,7 @@ static void usage(FILE *stream)
         "  --detail          UE/gNB details, including UE session summaries\n"
         "  --gnb-id ID       UE/gNB filter (decimal or 0x hexadecimal)\n"
         "  --plmn MCCMNC     UE serving PLMN or gNB identity PLMN filter\n"
-        "  --with-location   Add location to rate output\n"
+        "  --with-location   Add GNB-ID/GNB-LEN/CELL-ID/LOCATION to rate output\n"
         "  --amf-gnb-info URL AMF /gnb-info endpoint\n"
         "  --level user|session|bearer|rule\n"
         "  --supi SUPI       Filter by SUPI (for example imsi-001010000000001)\n"
@@ -911,14 +911,15 @@ static int query(const char *socket_path, const char *request,
         free(response);
         response = enriched;
     }
-    if (with_location) {
-        char *enriched = xcnctl_add_location(response, amf_map->ue_info, json_output);
+    {
+        char *enriched = xcnctl_add_rate_access(response, amf_map->ue_info,
+                json_output, with_location);
         if (!amf_map->ue_info)
-            fputs("warning: AMF location unavailable\n", stderr);
+            fputs("warning: AMF access information unavailable\n", stderr);
         if (!enriched) {
             cm_state_map_free(amf_map);
             free(response);
-            fputs("cannot build rate location output\n", stderr);
+            fputs("cannot build rate access output\n", stderr);
             return 1;
         }
         free(response);
