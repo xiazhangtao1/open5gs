@@ -95,7 +95,9 @@ kubectl -n xcn exec deploy/xcn-5gc -c upf -- \
 ```
 
 The UE table displays SUPI, CM state, serving PLMN, associated gNB ID, the
-36-bit NCI in hexadecimal, TAC, and location status. `--detail` adds the full
+36-bit cell ID in hexadecimal under `小区ID(NCI)`, TAC, and location status.
+This is the complete NCI, distinct from the cell local ID within a gNB;
+JSON retains the `nci` and `nci_hex` field names. `--detail` adds the full
 NR CGI (`PLMN + NCI`), gNB ID length, cell local ID, SCTP peer, NGAP UE IDs,
 UTC location update time and age, security algorithms, and PDU Session
 summaries. UE IP addresses and PDU state are resolved from SMF `/pdu-info`
@@ -141,7 +143,7 @@ Defaults are AMF `http://127.0.0.1:9091/ue-info` and `/gnb-info`, and SMF
 `--amf-gnb-info`, `--smf-pdu-info`, or `OPEN5GS_AMF_UE_INFO_URL`,
 `OPEN5GS_AMF_GNB_INFO_URL`, `OPEN5GS_SMF_PDU_INFO_URL`, respectively. Supply
 endpoint URLs without pagination parameters. `--with-location` works at all
-four rate levels, adding gNB ID, NCI and location status in text, and a
+four rate levels, adding gNB ID, `小区ID(NCI)` and location status in text, and a
 `location` object in JSON. Optional location failures retain rate output with
 unknown location; existing `--active-only` failures remain strict.
 

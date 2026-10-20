@@ -3,11 +3,14 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
+#define _XOPEN_SOURCE 700
+
 #include <arpa/inet.h>
 #include <errno.h>
 #include <curl/curl.h>
 #include <getopt.h>
 #include <ctype.h>
+#include <locale.h>
 #include <math.h>
 #include <stdbool.h>
 #include <stdarg.h>
@@ -20,6 +23,7 @@
 #include <sys/un.h>
 #include <time.h>
 #include <unistd.h>
+#include <wchar.h>
 
 #include "sbi/openapi/external/cJSON.h"
 #include "inspect.h"
@@ -696,6 +700,29 @@ static bool is_number(const char *value)
     return !errno && end != value && *end == '\0';
 }
 
+static size_t display_width(const char *value)
+{
+    mbstate_t state = {0};
+    size_t remaining = strlen(value), width = 0;
+
+    while (remaining) {
+        wchar_t character;
+        size_t bytes = mbrtowc(&character, value, remaining, &state);
+
+        if (bytes == (size_t)-1 || bytes == (size_t)-2) {
+            memset(&state, 0, sizeof(state));
+            bytes = 1;
+            width++;
+        } else {
+            int cells = wcwidth(character);
+            width += cells < 0 ? 1 : cells;
+        }
+        value += bytes;
+        remaining -= bytes;
+    }
+    return width;
+}
+
 static int print_table(char *response)
 {
     size_t width[MAX_COLUMNS] = { 0 };
@@ -732,7 +759,7 @@ static int print_table(char *response)
         if (count > max_columns)
             max_columns = count;
         for (i = 0; i < count; i++) {
-            size_t length = strlen(columns[i]);
+            size_t length = display_width(columns[i]);
 
             if (length > width[i])
                 width[i] = length;
@@ -754,12 +781,15 @@ static int print_table(char *response)
         size_t count = split_columns(line, columns, MAX_COLUMNS);
 
         for (i = 0; i < count; i++) {
+            int padded_bytes = (int)(strlen(columns[i]) + width[i] -
+                    display_width(columns[i]));
+
             if (i)
                 fputs(" | ", stdout);
             if (has_data[i] && numeric[i])
-                fprintf(stdout, "%*s", (int)width[i], columns[i]);
+                fprintf(stdout, "%*s", padded_bytes, columns[i]);
             else
-                fprintf(stdout, "%-*s", (int)width[i], columns[i]);
+                fprintf(stdout, "%-*s", padded_bytes, columns[i]);
         }
         fputc('\n', stdout);
         if (!row) {
@@ -972,6 +1002,9 @@ int main(int argc, char *argv[])
     const char *level = "user";
     double interval = 1.0;
     int option;
+
+    /* Headers are UTF-8 even when kubectl exec inherits the C locale. */
+    setlocale(LC_CTYPE, "C.UTF-8");
 
     if (!smf_pdu_info_url || !*smf_pdu_info_url)
         smf_pdu_info_url = DEFAULT_SMF_PDU_INFO_URL;

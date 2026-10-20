@@ -384,7 +384,7 @@ int xcnctl_inspect(const char *kind, const xcnctl_inspect_options_t *o)
         cJSON_free(json);
     } else {
         if (!o->detail || !is_ue) puts(is_ue ?
-                "SUPI                     CM-STATE   PLMN   GNB-ID     NCI           TAC      LOCATION" :
+                "SUPI                     CM-STATE   PLMN   GNB-ID     小区ID(NCI)   TAC      LOCATION" :
                 "PLMN   GNB-ID     BITS PEER                         NG-STATE UE-COUNT TA-COUNT");
         cJSON_ArrayForEach(item, items) {
             char id[24], bits[24], count[24], tac[24];
@@ -479,7 +479,7 @@ char *xcnctl_add_location(const char *response, const cJSON *ues, bool json)
         char id[24];
         const cJSON *ue;
         if (header) {
-            if (!append(out, &used, "%s GNB-ID NCI LOCATION\n", line)) goto fail;
+            if (!append(out, &used, "%s GNB-ID 小区ID(NCI) LOCATION\n", line)) goto fail;
             header = false;
             continue;
         }
