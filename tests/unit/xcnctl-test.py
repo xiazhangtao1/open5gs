@@ -157,8 +157,11 @@ class InspectionTest(unittest.TestCase):
         self.http.data["/ue-info"][0]["pdu_sessions"] = []
         result = self.run_cli()
         self.assertIn(SUPI, result.stdout)
-        self.assertIn("cellID(NCI)", result.stdout)
-        self.assertIn("0x000006403", result.stdout)
+        header, row = result.stdout.splitlines()
+        columns = dict(zip(header.split(), row.split()))
+        self.assertEqual(columns["GNB-ID"], "100")
+        self.assertEqual(columns["GNB-LEN"], "28")
+        self.assertEqual(columns["CELL-ID"], "3")
         self.assertNotIn(("/pdu-info", 0), self.http.requests)
 
     def test_detail_and_session_join(self):
@@ -180,6 +183,10 @@ class InspectionTest(unittest.TestCase):
                 self.assertTrue(cgi["identity_consistent"])
                 self.assertEqual(cgi["cell_id"], (1 << (36 - width)) - 1)
                 self.assertEqual(cgi["gnb_id"], ident)
+                header, row = self.run_cli().stdout.splitlines()
+                columns = dict(zip(header.split(), row.split()))
+                self.assertEqual(columns["GNB-LEN"], str(width))
+                self.assertEqual(columns["CELL-ID"], str(cgi["cell_id"]))
 
     def test_zero_identity_is_valid(self):
         self.http.data["/ue-info"] = [ue(22, 0)]
@@ -194,7 +201,15 @@ class InspectionTest(unittest.TestCase):
         self.assertEqual(item["location"]["nr_cgi"]["nci"], 101 << 8)
         self.assertFalse(item["location"]["nr_cgi"]["identity_consistent"])
         self.assertIsNone(item["location"]["nr_cgi"]["cell_id"])
-        self.assertIn("identity-mismatch", self.run_cli().stdout)
+        header, row = self.run_cli().stdout.splitlines()
+        columns = dict(zip(header.split(), row.split()))
+        self.assertEqual(columns["GNB-ID"], "100")
+        self.assertEqual(columns["GNB-LEN"], "28")
+        self.assertEqual(columns["CELL-ID"], "-")
+        self.assertEqual(columns["LOCATION"], "identity-mismatch")
+        row = self.run_cli("rate", "--with-location").stdout.splitlines()[-1]
+        self.assertEqual([c.strip() for c in row.split("|")][-4:],
+                         ["100", "28", "-", "identity-mismatch"])
 
     def test_last_known_after_gnb_removal(self):
         item = self.http.data["/ue-info"][0]
@@ -313,15 +328,19 @@ class InspectionTest(unittest.TestCase):
                 row = json.loads(result.stdout)["rows"][0]
                 self.assertEqual(row["ul_bps"], 1234)
                 self.assertEqual(row["location"]["gnb"]["gnb_id"], 100)
+                self.assertEqual(row["location"]["gnb"]["gnb_id_bits"], 28)
+                self.assertEqual(row["location"]["nr_cgi"]["nci"], 25603)
+                self.assertEqual(row["location"]["nr_cgi"]["cell_id"], 3)
                 if level != "user":
                     self.assertEqual(row["psi"], 2)
                 result = self.run_cli("rate", "--level", level, "--with-location")
                 header, separator, row = result.stdout.strip().splitlines()
                 self.assertIn("-+-", separator)
                 self.assertEqual(len(header.split("|")), len(row.split("|")))
-                self.assertIn("GNB-ID", header)
-                self.assertIn("cellID(NCI)", header)
-                self.assertIn("0x000006403", row)
+                self.assertEqual([c.strip() for c in header.split("|")][-4:],
+                                 ["GNB-ID", "GNB-LEN", "CELL-ID", "LOCATION"])
+                self.assertEqual([c.strip() for c in row.split("|")][-4:],
+                                 ["100", "28", "3", "reported"])
                 widths = lambda line: [len(c) for c in line.split("|")]
                 self.assertEqual(widths(header), widths(row))
                 self.assertEqual(widths(header), [len(c) for c in separator.split("+")])
@@ -331,6 +350,9 @@ class InspectionTest(unittest.TestCase):
         result = self.run_cli("rate", "--with-location", "--json")
         self.assertIn("warning", result.stderr)
         self.assertEqual(json.loads(result.stdout)["rows"][0]["location"]["status"], "unknown")
+        row = self.run_cli("rate", "--with-location").stdout.splitlines()[-1]
+        self.assertEqual([c.strip() for c in row.split("|")][-4:],
+                         ["-", "-", "-", "unknown"])
         self.run_cli("rate", "--level", "session", "--active-only", expected=1)
 
     def test_watch_emits_multiple_json_documents(self):

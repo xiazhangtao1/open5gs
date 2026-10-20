@@ -384,18 +384,19 @@ int xcnctl_inspect(const char *kind, const xcnctl_inspect_options_t *o)
         cJSON_free(json);
     } else {
         if (!o->detail || !is_ue) puts(is_ue ?
-                "SUPI                     CM-STATE   PLMN   GNB-ID     cellID(NCI)   TAC      LOCATION" :
+                "SUPI                     CM-STATE   PLMN   GNB-ID     GNB-LEN CELL-ID TAC      LOCATION" :
                 "PLMN   GNB-ID     BITS PEER                         NG-STATE UE-COUNT TA-COUNT");
         cJSON_ArrayForEach(item, items) {
-            char id[24], bits[24], count[24], tac[24];
+            char id[24], bits[24], cell[24], count[24], tac[24];
             if (is_ue) {
                 const cJSON *loc = field(item, "location");
                 if (o->detail) print_ue_detail(item);
-                else printf("%-24s %-10s %-6s %-10s %-13s %-8s %s\n",
+                else printf("%-24s %-10s %-6s %-10s %-7s %-7s %-8s %s\n",
                         string(item, "supi"), string(item, "cm_state"),
                         string(field(loc, "nr_cgi"), "plmn"),
                         decimal(ue_gnb(item), "gnb_id", id, sizeof(id)),
-                        string(field(loc, "nr_cgi"), "nci_hex"),
+                        decimal(ue_gnb(item), "gnb_id_bits", bits, sizeof(bits)),
+                        decimal(field(loc, "nr_cgi"), "cell_id", cell, sizeof(cell)),
                         decimal(field(loc, "nr_tai"), "tac", tac, sizeof(tac)),
                         location_label(loc));
             } else {
@@ -476,10 +477,10 @@ char *xcnctl_add_location(const char *response, const cJSON *ues, bool json)
     for (line = strtok_r(copy, "\n", &save); line; line = strtok_r(NULL, "\n", &save)) {
         cJSON *loc;
         char *end;
-        char id[24];
+        char id[24], bits[24], cell[24];
         const cJSON *ue;
         if (header) {
-            if (!append(out, &used, "%s GNB-ID cellID(NCI) LOCATION\n", line)) goto fail;
+            if (!append(out, &used, "%s GNB-ID GNB-LEN CELL-ID LOCATION\n", line)) goto fail;
             header = false;
             continue;
         }
@@ -491,9 +492,11 @@ char *xcnctl_add_location(const char *response, const cJSON *ues, bool json)
         *end = delimiter;
         loc = location(ue);
         if (!loc) goto fail;
-        bool ok = append(out, &used, "%s %s %s %s\n", line,
+        bool ok = append(out, &used, "%s %s %s %s %s\n", line,
                 decimal(field(loc, "gnb"), "gnb_id", id, sizeof(id)),
-                string(field(loc, "nr_cgi"), "nci_hex"), location_label(loc));
+                decimal(field(loc, "gnb"), "gnb_id_bits", bits, sizeof(bits)),
+                decimal(field(loc, "nr_cgi"), "cell_id", cell, sizeof(cell)),
+                location_label(loc));
         cJSON_Delete(loc);
         if (!ok) goto fail;
     }

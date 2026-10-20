@@ -94,12 +94,13 @@ kubectl -n xcn exec deploy/xcn-5gc -c upf -- \
   xcnctl show rate --level session --with-location
 ```
 
-The UE table displays SUPI, CM state, serving PLMN, associated gNB ID, the
-36-bit cell ID in hexadecimal under `cellID(NCI)`, TAC, and location status.
-This is the complete NCI, distinct from the cell local ID within a gNB;
-JSON retains the `nci` and `nci_hex` field names. `--detail` adds the full
-NR CGI (`PLMN + NCI`), gNB ID length, cell local ID, SCTP peer, NGAP UE IDs,
-UTC location update time and age, security algorithms, and PDU Session
+The UE table displays SUPI, CM state, serving PLMN, gNB ID (`GNB-ID`),
+gNB ID length in bits (`GNB-LEN`), cell local ID (`CELL-ID`), TAC, and location
+status. IDs are decimal. The 36-bit NCI can be reconstructed as
+`(GNB-ID << (36 - GNB-LEN)) | CELL-ID`; `CELL-ID` is the local cell number
+within a gNB, distinct from the physical cell ID (PCI).
+`--detail` adds the full NR CGI (`PLMN + NCI`, with NCI in hexadecimal),
+SCTP peer, NGAP UE IDs, UTC location update time and age, security algorithms, and PDU Session
 summaries. UE IP addresses and PDU state are resolved from SMF `/pdu-info`
 using an unambiguous SUPI + PSI match; conflicting DNN/slice data is not merged.
 If SMF is unavailable, a warning is printed and AMF information remains usable.
@@ -143,9 +144,11 @@ Defaults are AMF `http://127.0.0.1:9091/ue-info` and `/gnb-info`, and SMF
 `--amf-gnb-info`, `--smf-pdu-info`, or `OPEN5GS_AMF_UE_INFO_URL`,
 `OPEN5GS_AMF_GNB_INFO_URL`, `OPEN5GS_SMF_PDU_INFO_URL`, respectively. Supply
 endpoint URLs without pagination parameters. `--with-location` works at all
-four rate levels, adding gNB ID, `cellID(NCI)` and location status in text, and a
-`location` object in JSON. Optional location failures retain rate output with
-unknown location; existing `--active-only` failures remain strict.
+four rate levels, adding `GNB-ID`, `GNB-LEN`, `CELL-ID` and `LOCATION` in text,
+and a `location` object in JSON. Optional location failures retain rate output with
+unknown location; existing `--active-only` failures remain strict. JSON retains
+the full `location.nr_cgi.nci` and `nci_hex`, the derived `cell_id`, and the
+reporting gNB identity and `gnb_id_bits` under `location.gnb`.
 
 Run the focused tests after building:
 
