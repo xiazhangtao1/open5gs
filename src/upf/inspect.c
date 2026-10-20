@@ -234,6 +234,7 @@ static const cJSON *ue_gnb(const cJSON *ue)
 static const cJSON *find_ue(const cJSON *root, const char *supi)
 {
     const cJSON *ue, *found = NULL;
+    if (!supi || !*supi || !strcmp(supi, "-")) return NULL;
     cJSON_ArrayForEach(ue, field(root, "items")) {
         if (!strcmp(string(ue, "supi"), supi)) {
             if (found) return NULL;
@@ -268,7 +269,8 @@ static bool enrich_sessions(cJSON *ue, const cJSON *smf)
         const cJSON *pdu, *found = NULL;
         uint64_t psi, candidate;
         bool ambiguous = false;
-        if (number(field(session, "psi"), 255, &psi) && psi) {
+        if (number(field(session, "psi"), 255, &psi) && psi &&
+            cJSON_IsArray(field(smf_ue, "pdu"))) {
             cJSON_ArrayForEach(pdu, field(smf_ue, "pdu")) {
                 if (number(field(pdu, "psi"), 255, &candidate) && candidate == psi) {
                     if (found) { ambiguous = true; break; }
@@ -277,13 +279,112 @@ static bool enrich_sessions(cJSON *ue, const cJSON *smf)
             }
         }
         if (ambiguous || (found && !session_compatible(session, found))) found = NULL;
-        const char *keys[] = {"ipv4", "ipv6", "pdu_state"};
+        const char *keys[] = {"ipv4", "ipv6", "pdu_state", "upf_seid"};
         size_t i;
         for (i = 0; i < sizeof(keys) / sizeof(keys[0]); i++) {
             const cJSON *v = field(found, keys[i]);
             if (!set(session, keys[i], cJSON_IsString(v) ?
                         cJSON_Duplicate(v, true) : cJSON_CreateNull())) return false;
         }
+        const cJSON *qos = field(found, "qos_flows"), *n3 = field(found, "n3");
+        if (!set(session, "qos_flows", cJSON_IsArray(qos) ?
+                    cJSON_Duplicate(qos, true) : cJSON_CreateNull()) ||
+            !set(session, "n3", cJSON_IsObject(n3) ?
+                    cJSON_Duplicate(n3, true) : cJSON_CreateNull()) ||
+            !set(session, "smf_info_status", cJSON_CreateString(
+                    !smf ? "unavailable" : found ? "available" : "not-matched")))
+            return false;
+    }
+    return true;
+}
+
+static bool same_gnb(const cJSON *a, const cJSON *b)
+{
+    uint64_t aid, abits, bid, bbits;
+    return gnb_identity(a, &aid, &abits) && gnb_identity(b, &bid, &bbits) &&
+        aid == bid && abits == bbits && strcmp(string(a, "plmn"), "-") &&
+        !strcmp(string(a, "plmn"), string(b, "plmn"));
+}
+
+static bool observe_cell(cJSON *cells, const cJSON *ue)
+{
+    const cJSON *loc = field(ue, "location"), *cgi = field(loc, "nr_cgi");
+    cJSON *cell;
+    uint64_t nci, candidate, latest = 0, timestamp = 0, count = 0;
+    const char *keys[] = {"gnb", "nr_cgi", "nr_tai", "timestamp", "status"};
+    const char *state = string(ue, "cm_state");
+    const char *counter = !strcmp(state, "connected") ? "connected_ue_count" :
+        !strcmp(state, "idle") ? "idle_ue_count" : "unknown_ue_count";
+    size_t i;
+
+    if (!number(field(cgi, "nci"), 0xFFFFFFFFFULL, &nci) ||
+        !number(field(loc, "timestamp"), 9007199254740991ULL, &timestamp) ||
+        !timestamp || !strcmp(string(cgi, "plmn"), "-")) return true;
+    cJSON_ArrayForEach(cell, cells) {
+        const cJSON *other = field(cell, "nr_cgi");
+        if (number(field(other, "nci"), 0xFFFFFFFFFULL, &candidate) && candidate == nci &&
+            !strcmp(string(other, "plmn"), string(cgi, "plmn"))) break;
+    }
+    if (!cell) {
+        cell = cJSON_CreateObject();
+        if (!cell) return false;
+        if (!cJSON_AddItemToArray(cells, cell)) { cJSON_Delete(cell); return false; }
+        if (!set(cell, "ue_count", cJSON_CreateNumber(0)) ||
+            !set(cell, "connected_ue_count", cJSON_CreateNumber(0)) ||
+            !set(cell, "idle_ue_count", cJSON_CreateNumber(0)) ||
+            !set(cell, "unknown_ue_count", cJSON_CreateNumber(0))) return false;
+    }
+    (void)number(field(cell, "timestamp"), 9007199254740991ULL, &latest);
+    if (timestamp >= latest) {
+        for (i = 0; i < sizeof(keys) / sizeof(keys[0]); i++) {
+            const cJSON *v = field(loc, keys[i]);
+            if (!set(cell, keys[i], v ? cJSON_Duplicate(v, true) : cJSON_CreateNull()))
+                return false;
+        }
+    }
+    (void)number(field(cell, "ue_count"), UINT32_MAX, &count);
+    if (!set(cell, "ue_count", cJSON_CreateNumber(count + 1))) return false;
+    count = 0;
+    (void)number(field(cell, counter), UINT32_MAX, &count);
+    return set(cell, counter, cJSON_CreateNumber(count + 1));
+}
+
+static bool enrich_gnb(cJSON *gnb, const cJSON *ues)
+{
+    cJSON *associated, *cells;
+    const cJSON *ue;
+    const char *peer = string(field(field(gnb, "ng"), "sctp"), "peer");
+
+    if (!set(gnb, "ue_info_available", cJSON_CreateBool(ues != NULL)) ||
+        !set(gnb, "associated_ues", ues ? cJSON_CreateArray() : cJSON_CreateNull()) ||
+        !set(gnb, "observed_cells", ues ? cJSON_CreateArray() : cJSON_CreateNull()) ||
+        !set(gnb, "observed_cells_source", cJSON_CreateString("ue-location-reports")))
+        return false;
+    associated = cJSON_GetObjectItemCaseSensitive(gnb, "associated_ues");
+    cells = cJSON_GetObjectItemCaseSensitive(gnb, "observed_cells");
+    cJSON_ArrayForEach(ue, field(ues, "items")) {
+        const cJSON *current = field(ue, "gnb");
+        const char *current_peer = string(current, "peer");
+        if (!strcmp(string(ue, "cm_state"), "connected") && same_gnb(gnb, current) &&
+            (!strcmp(peer, "-") || !strcmp(current_peer, "-") || !strcmp(peer, current_peer)) &&
+            (!field(current, "status") || !strcmp(string(current, "status"), "associated"))) {
+            cJSON *summary = cJSON_CreateObject();
+            const char *keys[] = {"supi", "cm_state", "gnb"};
+            const cJSON *sessions = field(ue, "pdu_sessions");
+            size_t i;
+            if (!summary) return false;
+            if (!cJSON_AddItemToArray(associated, summary)) { cJSON_Delete(summary); return false; }
+            for (i = 0; i < sizeof(keys) / sizeof(keys[0]); i++) {
+                const cJSON *v = field(ue, keys[i]);
+                if (!set(summary, keys[i], v ? cJSON_Duplicate(v, true) : cJSON_CreateNull()))
+                    return false;
+            }
+            if (!set(summary, "pdu_sessions_count", cJSON_IsArray(sessions) ?
+                        cJSON_CreateNumber(cJSON_GetArraySize(sessions)) : cJSON_CreateNull()))
+                return false;
+        }
+        if (same_gnb(gnb, field(field(ue, "location"), "gnb")) && !observe_cell(cells, ue))
+            return false;
     }
     return true;
 }
@@ -302,52 +403,161 @@ static const char *location_label(const cJSON *loc)
         "identity-mismatch" : string(loc, "status");
 }
 
-static void detail_json(const char *label, const cJSON *value)
+static void detail_field(int indent, const char *label, const char *value)
 {
-    char *json = value ? cJSON_Print(value) : NULL;
-    printf("  %s: %s\n", label, json ? json : "-");
-    cJSON_free(json);
+    printf("%*s%-24s: %s\n", indent, "", label, value);
+}
+
+static void detail_number(int indent, const char *label, const cJSON *obj, const char *key)
+{
+    char value[24];
+    detail_field(indent, label, decimal(obj, key, value, sizeof(value)));
+}
+
+static const char *yes_no(const cJSON *value)
+{
+    uint64_t n;
+    if (cJSON_IsBool(value)) return cJSON_IsTrue(value) ? "yes" : "no";
+    return number(value, 1, &n) ? (n ? "yes" : "no") : "-";
+}
+
+static void detail_strings(int indent, const char *label, const cJSON *values)
+{
+    const cJSON *value;
+    bool first = true;
+    printf("%*s%-24s: ", indent, "", label);
+    if (!cJSON_IsArray(values)) { puts("-"); return; }
+    cJSON_ArrayForEach(value, values) {
+        if (!first) fputs(", ", stdout);
+        fputs(cJSON_IsString(value) ? value->valuestring : "-", stdout);
+        first = false;
+    }
+    puts(first ? "(none)" : "");
+}
+
+static void detail_slices(int indent, const cJSON *slices)
+{
+    const cJSON *slice;
+    char value[24];
+    if (!cJSON_IsArray(slices) || !cJSON_GetArraySize(slices)) {
+        printf("%*s%s\n", indent, "", cJSON_IsArray(slices) ? "(none)" : "-");
+        return;
+    }
+    cJSON_ArrayForEach(slice, slices)
+        printf("%*sSST %-3s SD %s\n", indent, "",
+                decimal(slice, "sst", value, sizeof(value)), string(slice, "sd"));
+}
+
+static void detail_location(int indent, const cJSON *loc)
+{
+    const cJSON *cgi = field(loc, "nr_cgi"), *gnb = field(loc, "gnb");
+    const cJSON *tai = field(loc, "nr_tai"), *consistent = field(cgi, "identity_consistent");
+    uint64_t timestamp;
+    char value[24];
+
+    printf("%*s%-24s: %s-%s\n", indent, "", "NR CGI", string(cgi, "plmn"), string(cgi, "nci_hex"));
+    printf("%*s%-24s: %s (%s)\n", indent, "", "NCI",
+            decimal(cgi, "nci", value, sizeof(value)), string(cgi, "nci_hex"));
+    detail_number(indent, "gNB ID (reported)", gnb, "gnb_id");
+    detail_number(indent, "gNB ID (from NCI)", cgi, "gnb_id");
+    detail_number(indent, "gNB ID length (bits)", cgi, "gnb_id_bits");
+    detail_number(indent, "Cell local ID", cgi, "cell_id");
+    detail_field(indent, "gNB PLMN", string(gnb, "plmn"));
+    detail_field(indent, "gNB peer", string(gnb, "peer"));
+    printf("%*s%-24s: PLMN %s  TAC %s (0x%s)\n", indent, "", "TAI",
+            string(tai, "plmn"), decimal(tai, "tac", value, sizeof(value)), string(tai, "tac_hex"));
+    detail_field(indent, "Location", string(loc, "status"));
+    detail_field(indent, "Identity", cJSON_IsTrue(consistent) ? "consistent" :
+            cJSON_IsFalse(consistent) ? "identity-mismatch" : "unknown");
+    if (number(field(loc, "timestamp"), 9007199254740991ULL, &timestamp) && timestamp) {
+        time_t seconds = timestamp / 1000000;
+        struct tm utc;
+        char date[32];
+        if (gmtime_r(&seconds, &utc) && strftime(date, sizeof(date), "%Y-%m-%dT%H:%M:%SZ", &utc)) {
+            double age = difftime(time(NULL), seconds);
+            printf("%*s%-24s: %s (age %.0f s)\n", indent, "", "Location updated", date, age > 0 ? age : 0);
+            return;
+        }
+    }
+    detail_field(indent, "Location updated", "-");
+}
+
+static void detail_endpoint(int indent, const char *label, const cJSON *endpoint)
+{
+    uint64_t teid;
+    printf("%*s%s\n", indent, "", label);
+    detail_field(indent + 2, "Address", string(endpoint, "addr"));
+    if (number(field(endpoint, "teid"), UINT32_MAX, &teid))
+        printf("%*s%-24s: %" PRIu64 " (0x%08" PRIx64 ")\n", indent + 2, "", "TEID", teid, teid);
+    else detail_field(indent + 2, "TEID", "-");
+    if (field(endpoint, "pdr_id")) detail_number(indent + 2, "PDR-ID", endpoint, "pdr_id");
 }
 
 static void print_ue_detail(const cJSON *ue)
 {
-    const cJSON *loc = field(ue, "location");
-    const cJSON *cgi = field(loc, "nr_cgi");
-    const cJSON *gnb = field(loc, "gnb");
-    const cJSON *session;
-    char id[24], derived_id[24], bits[24], cell[24], nci[24];
-    uint64_t timestamp;
+    const cJSON *ran = field(ue, "gnb"), *security = field(ue, "security"), *sessions = field(ue, "pdu_sessions");
+    const cJSON *session, *ambr = field(ue, "ambr");
+    uint64_t rate;
+    char value[24];
 
-    printf("UE %s\n  CM-STATE: %s\n  NR CGI: %s-%s\n"
-            "  NCI: %s (%s)\n"
-            "  gNB ID (reported): %s\n  gNB ID (from NCI): %s\n"
-            "  gNB ID length: %s bits\n  Cell local ID: %s\n"
-            "  gNB PLMN: %s\n  gNB peer: %s\n  Location: %s\n",
-            string(ue, "supi"), string(ue, "cm_state"), string(cgi, "plmn"),
-            string(cgi, "nci_hex"), decimal(cgi, "nci", nci, sizeof(nci)),
-            string(cgi, "nci_hex"), decimal(gnb, "gnb_id", id, sizeof(id)),
-            decimal(cgi, "gnb_id", derived_id, sizeof(derived_id)),
-            decimal(cgi, "gnb_id_bits", bits, sizeof(bits)),
-            decimal(cgi, "cell_id", cell, sizeof(cell)), string(gnb, "plmn"),
-            string(gnb, "peer"), string(loc, "status"));
-    if (cJSON_IsFalse(field(cgi, "identity_consistent")))
-        puts("  Identity: identity-mismatch (NCI prefix does not match the reported gNB ID)");
-    if (number(field(loc, "timestamp"), 9007199254740991ULL, &timestamp) && timestamp) {
-        time_t seconds = timestamp / 1000000;
-        time_t now = time(NULL);
-        struct tm utc;
-        char date[32];
-        if (gmtime_r(&seconds, &utc) &&
-            strftime(date, sizeof(date), "%Y-%m-%dT%H:%M:%SZ", &utc))
-            printf("  Location updated: %s (age %.0f s)\n", date,
-                    difftime(now, seconds) > 0 ? difftime(now, seconds) : 0);
-    } else puts("  Location updated: -");
-    detail_json("Current RAN association", field(ue, "gnb"));
-    detail_json("Location gNB snapshot", field(loc, "gnb"));
-    detail_json("TAI", field(loc, "nr_tai"));
-    detail_json("Security algorithms", field(ue, "security"));
-    cJSON_ArrayForEach(session, field(ue, "pdu_sessions"))
-        detail_json("PDU Session", session);
+    printf("UE %s\n  Identity\n", string(ue, "supi"));
+    detail_field(4, "CM-STATE", string(ue, "cm_state"));
+    detail_field(4, "SUCI", string(ue, "suci"));
+    detail_field(4, "PEI", string(ue, "pei"));
+    detail_field(4, "GUTI", string(ue, "guti"));
+    detail_strings(4, "MSISDN", field(ue, "msisdn"));
+    puts("  Current RAN association");
+    detail_field(4, "Status", string(ran, "status"));
+    detail_number(4, "GNB-ID", ran, "gnb_id");
+    detail_number(4, "GNB-LEN (bits)", ran, "gnb_id_bits");
+    detail_field(4, "PLMN", string(ran, "plmn"));
+    detail_field(4, "SCTP peer", string(ran, "peer"));
+    detail_number(4, "AMF-UE-NGAP-ID", ran, "amf_ue_ngap_id");
+    detail_number(4, "RAN-UE-NGAP-ID", ran, "ran_ue_ngap_id");
+    detail_number(4, "SCTP stream ID", ran, "ostream_id");
+    puts("  Location (last NGAP report)");
+    detail_location(4, field(ue, "location"));
+    puts("  Security and subscription");
+    detail_field(4, "Security context valid", yes_no(field(security, "valid")));
+    detail_field(4, "NAS encryption", string(security, "enc"));
+    detail_field(4, "NAS integrity", string(security, "int"));
+    if (number(field(ambr, "uplink"), 9007199254740991ULL, &rate))
+        printf("    %-24s: %.3f Mbps (%" PRIu64 " bps)\n", "UE-AMBR UL", (double)rate / 1000000.0, rate);
+    else detail_field(4, "UE-AMBR UL", "-");
+    if (number(field(ambr, "downlink"), 9007199254740991ULL, &rate))
+        printf("    %-24s: %.3f Mbps (%" PRIu64 " bps)\n", "UE-AMBR DL", (double)rate / 1000000.0, rate);
+    else detail_field(4, "UE-AMBR DL", "-");
+    detail_strings(4, "AM policy features", field(field(ue, "am_policy_features_info"), "labels"));
+    puts("    Requested slices");
+    detail_slices(6, field(ue, "requested_slices"));
+    puts("    Allowed slices");
+    detail_slices(6, field(ue, "allowed_slices"));
+    puts("  PDU Sessions");
+    if (!cJSON_IsArray(sessions) || !cJSON_GetArraySize(sessions))
+        printf("    %s\n", cJSON_IsArray(sessions) ? "(none)" : "-");
+    cJSON_ArrayForEach(session, sessions) {
+        const cJSON *slice = field(session, "snssai"), *qos = field(session, "qos_flows"), *flow;
+        printf("    PSI %s\n", decimal(session, "psi", value, sizeof(value)));
+        detail_field(6, "DNN", string(session, "dnn"));
+        printf("      %-24s: SST %s  SD %s\n", "Slice", decimal(slice, "sst", value, sizeof(value)), string(slice, "sd"));
+        detail_field(6, "PDU-STATE", string(session, "pdu_state"));
+        detail_field(6, "SMF data", string(session, "smf_info_status"));
+        detail_field(6, "IPv4", string(session, "ipv4"));
+        detail_field(6, "IPv6", string(session, "ipv6"));
+        detail_field(6, "UPF-SEID", string(session, "upf_seid"));
+        detail_field(6, "N1 released", yes_no(field(session, "n1_released")));
+        detail_field(6, "N2 released", yes_no(field(session, "n2_released")));
+        puts("      QoS flows");
+        if (!cJSON_IsArray(qos) || !cJSON_GetArraySize(qos))
+            printf("        %s\n", cJSON_IsArray(qos) ? "(none)" : "-");
+        cJSON_ArrayForEach(flow, qos) {
+            char fiveqi[24];
+            printf("        QFI %-3s 5QI %s\n", decimal(flow, "qfi", value, sizeof(value)),
+                    decimal(flow, "5qi", fiveqi, sizeof(fiveqi)));
+        }
+        detail_endpoint(6, "N3 UL / UPF", field(field(session, "n3"), "upf"));
+        detail_endpoint(6, "N3 DL / gNB", field(field(session, "n3"), "gnb"));
+    }
     puts("");
 }
 
@@ -357,7 +567,8 @@ static void print_gnb_detail(const cJSON *gnb)
     const cJSON *sctp = field(ng, "sctp");
     const cJSON *setup = field(ng, "setup_success");
     const cJSON *tas = field(gnb, "supported_ta_list");
-    const cJSON *ta;
+    const cJSON *ta, *ue, *cell;
+    const cJSON *associated = field(gnb, "associated_ues"), *cells = field(gnb, "observed_cells");
     const char *state = cJSON_IsTrue(setup) ? "ready" :
         cJSON_IsFalse(setup) ? "pending" : "unknown";
     char value[24];
@@ -375,17 +586,18 @@ static void print_gnb_detail(const cJSON *gnb)
         snprintf(value, sizeof(value), "-");
     printf("  %-18s: %s\n", "TA-COUNT", value);
     puts("  NG/SCTP");
+    printf("    %-16s: %s\n", "AMF-NAME", string(field(gnb, "network"), "amf_name"));
+    printf("    %-16s: %s\n", "AMF-NGAP-PORT",
+            decimal(field(gnb, "network"), "ngap_port", value, sizeof(value)));
     printf("    %-16s: %s\n", "PEER", string(sctp, "peer"));
     printf("    %-16s: %s\n", "MAX-OUT-STREAMS",
             decimal(sctp, "max_out_streams", value, sizeof(value)));
     printf("    %-16s: %s\n", "NEXT-STREAM-ID",
             decimal(sctp, "next_ostream_id", value, sizeof(value)));
     puts("  Supported TA/PLMN/slices");
-    if (!cJSON_IsArray(tas) || !cJSON_GetArraySize(tas)) {
-        printf("    %s\n\n", cJSON_IsArray(tas) ? "(none)" : "-");
-        return;
-    }
-    cJSON_ArrayForEach(ta, tas) {
+    if (!cJSON_IsArray(tas) || !cJSON_GetArraySize(tas))
+        printf("    %s\n", cJSON_IsArray(tas) ? "(none)" : "-");
+    if (cJSON_IsArray(tas)) cJSON_ArrayForEach(ta, tas) {
         const cJSON *plmns = field(ta, "bplmns"), *plmn;
         printf("    TAC %s\n", string(ta, "tac"));
         if (!cJSON_IsArray(plmns) || !cJSON_GetArraySize(plmns)) {
@@ -404,6 +616,28 @@ static void print_gnb_detail(const cJSON *gnb)
                         decimal(slice, "sst", value, sizeof(value)), string(slice, "sd"));
         }
     }
+    puts("  Associated UEs (current AMF contexts)");
+    if (!cJSON_IsArray(associated) || !cJSON_GetArraySize(associated))
+        printf("    %s\n", cJSON_IsArray(associated) ? "(none)" : "- (UE info unavailable)");
+    cJSON_ArrayForEach(ue, associated) {
+        printf("    UE %s  CM-STATE %s\n", string(ue, "supi"), string(ue, "cm_state"));
+        detail_number(6, "AMF-UE-NGAP-ID", field(ue, "gnb"), "amf_ue_ngap_id");
+        detail_number(6, "RAN-UE-NGAP-ID", field(ue, "gnb"), "ran_ue_ngap_id");
+        detail_number(6, "PDU sessions (AMF)", ue, "pdu_sessions_count");
+    }
+    puts("  Observed cells (UE location reports; not a full cell inventory)");
+    if (!cJSON_IsArray(cells) || !cJSON_GetArraySize(cells))
+        printf("    %s\n", cJSON_IsArray(cells) ? "(none)" : "- (UE info unavailable)");
+    cJSON_ArrayForEach(cell, cells) {
+        char total[24], connected[24], idle[24], unknown[24];
+        detail_location(4, cell);
+        printf("    UE reports: total %s, connected %s, idle %s, unknown %s\n",
+                decimal(cell, "ue_count", total, sizeof(total)),
+                decimal(cell, "connected_ue_count", connected, sizeof(connected)),
+                decimal(cell, "idle_ue_count", idle, sizeof(idle)),
+                decimal(cell, "unknown_ue_count", unknown, sizeof(unknown)));
+        puts("");
+    }
     puts("");
 }
 
@@ -411,7 +645,7 @@ int xcnctl_inspect(const char *kind, const xcnctl_inspect_options_t *o)
 {
     bool is_ue = !strcmp(kind, "ue");
     cJSON *root = xcnctl_load_info(is_ue ? o->ue_url : o->gnb_url);
-    cJSON *smf = NULL;
+    cJSON *smf = NULL, *ues = NULL;
     cJSON *items, *item;
     int index = 0;
 
@@ -421,7 +655,15 @@ int xcnctl_inspect(const char *kind, const xcnctl_inspect_options_t *o)
     }
     if (is_ue && (o->detail || o->json)) {
         smf = xcnctl_load_info(o->smf_url);
-        if (!smf) fputs("warning: SMF info unavailable; UE IP and session state are unknown\n", stderr);
+        if (!smf) fputs("warning: SMF info unavailable; UE IP, session state, QoS and N3 are unknown\n", stderr);
+    }
+    if (!is_ue && (o->detail || o->json)) {
+        cJSON *ue;
+        ues = xcnctl_load_info(o->ue_url);
+        cJSON_ArrayForEach(ue, field(ues, "items")) {
+            if (!prepare_ue(ue)) { cJSON_Delete(ues); ues = NULL; break; }
+        }
+        if (!ues) fputs("warning: UE info unavailable; gNB UE and observed-cell summaries are unknown\n", stderr);
     }
     items = cJSON_GetObjectItemCaseSensitive(root, "items");
     while ((item = cJSON_GetArrayItem(items, index))) {
@@ -440,6 +682,7 @@ int xcnctl_inspect(const char *kind, const xcnctl_inspect_options_t *o)
             cJSON_DeleteItemFromArray(items, index);
             continue;
         }
+        if (!is_ue && (o->detail || o->json) && !enrich_gnb(item, ues)) goto fail;
         index++;
     }
     if (o->json) {
@@ -485,12 +728,14 @@ int xcnctl_inspect(const char *kind, const xcnctl_inspect_options_t *o)
         }
     }
     cJSON_Delete(smf);
+    cJSON_Delete(ues);
     cJSON_Delete(root);
     fflush(stdout);
     return 0;
 fail:
     fputs("cannot build inspection output\n", stderr);
     cJSON_Delete(smf);
+    cJSON_Delete(ues);
     cJSON_Delete(root);
     return 1;
 }

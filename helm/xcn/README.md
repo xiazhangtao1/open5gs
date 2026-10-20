@@ -104,7 +104,19 @@ the reported gNB ID and the gNB ID decoded from NCI separately,
 SCTP peer, NGAP UE IDs, UTC location update time and age, security algorithms, and PDU Session
 summaries. UE IP addresses and PDU state are resolved from SMF `/pdu-info`
 using an unambiguous SUPI + PSI match; conflicting DNN/slice data is not merged.
-If SMF is unavailable, a warning is printed and AMF information remains usable.
+UE details are grouped into identity (SUCI/PEI/GUTI/MSISDN), current RAN
+association, last reported location, security/subscription, and PDU Sessions.
+The subscription section includes UE-AMBR in Mbps and bps, requested/allowed
+slices and AM policy feature names. Each Session adds UPF N4 SEID (kept as a
+64-bit decimal string), QFI/5QI, N3 UL/UPF and DL/gNB addresses, TEIDs in
+decimal and hexadecimal, and the UPF PDR ID when available. N1/N2 release
+flags are shown separately from CM and PDU state. Security output contains
+context validity and selected algorithms.
+
+SMF-derived fields have `smf_info_status`: `available`, `unavailable`, or
+`not-matched` (including missing, ambiguous or conflicting records). Unknown
+IP, QoS and N3 values remain unknown instead of being copied from another
+Session. If SMF is unavailable, a warning is printed and AMF information remains usable.
 AMF query failures or incomplete/malformed pages cause a nonzero exit.
 
 `reported` means the most recently reported location of a connected UE;
@@ -139,6 +151,22 @@ TA/PLMN/slice lists. `show gnb --detail` prints a separate text block for each
 gNB, with aligned fields for identity and NG/SCTP, followed by indented
 TAC, PLMN and SST/SD entries. Empty lists use `(none)` and unavailable values
 use `-`; use `--json` for structured output.
+Details also show the serving AMF name/NGAP port, current associated AMF UE
+contexts (SUPI, CM state, NGAP IDs and AMF Session count), and observed cells.
+UE correlations match PLMN, reported gNB ID and ID length; the gNB ID decoded
+from NCI never changes the association. Current UE associations also compare
+SCTP peers when both are known. Cells are grouped by CGI using the
+latest location report and include connected/idle/unknown UE report counts,
+TAI, CELL-ID, identity consistency and update time. Idle UE snapshots remain
+visible as last-known reports. This is an observation list from UE reports,
+not a complete configured cell inventory.
+
+`show gnb --detail` and `--json` optionally load AMF `/ue-info` once. If it is
+unavailable or invalid, the gNB's own information remains usable and the
+correlations are unknown, with a warning. JSON adds `ue_info_available`,
+`associated_ues`, `observed_cells`, and `observed_cells_source`; a successful
+query with no matching entries uses empty arrays, while unavailable data uses
+`null`. The normal gNB table does not query UE or SMF information.
 UE counts reflect RAN contexts, which may temporarily
 include both sides of a handover. `--gnb-id` accepts decimal or `0x` hexadecimal;
 use `--plmn` as well when numeric IDs are reused across PLMNs. The UE PLMN
