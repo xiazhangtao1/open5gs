@@ -288,6 +288,48 @@ static void test_event_metadata(ogs_sock_t *sock)
         else ogs_assert(cJSON_IsNull(get(event, "psi")));
         cJSON_Delete(root);
     }
+    /* RX metadata uses the response reference without changing Session state. */
+    struct {
+        const char *location, *cached, *expected, *name;
+        int status;
+    } responses[] = {
+        {"http://127.0.0.4:7777/nsmf-pdusession/v1/sm-contexts/42", NULL, "42", "CreateSMContextResponse", 201},
+        {"http://127.0.0.4:7777/nsmf-pdusession/v1/sm-contexts/ctx-%37?ignored=1", "old", "ctx-7", "CreateSMContextResponse", 201},
+        {NULL, "old", "missing-location", "CreateSMContextResponse", 201},
+        {"", "old", "missing-location", "CreateSMContextResponse", 201},
+        {"http://127.0.0.4:7777", "old", "invalid-location", "CreateSMContextResponse", 201},
+        {"http://127.0.0.4:7777/nsmf-pdusession", "old", "invalid-location", "CreateSMContextResponse", 201},
+        {"http://127.0.0.4:7777/nsmf-pdusession/v1/sm-contexts", "old", "invalid-location", "CreateSMContextResponse", 201},
+        {"not-a-uri", "old", "invalid-location", "CreateSMContextResponse", 201},
+        {NULL, "current", "current", "UpdateSMContextResponse", 204},
+        {NULL, NULL, "-", "CreateSMContextResponse", 500}
+    };
+    char supi[] = "imsi-001010000000001", dnn[] = "internet";
+    amf_ue_t ue = {.supi = supi};
+    amf_sess_t sess = {.psi = 2, .dnn = dnn};
+    for (unsigned i = 0; i < OGS_ARRAY_SIZE(responses); i++) {
+        ogs_sbi_message_t response = {0};
+        char location[256] = "";
+        if (responses[i].location) {
+            snprintf(location, sizeof(location), "%s", responses[i].location);
+            response.http.location = location;
+        }
+        response.res_status = responses[i].status;
+        sess.sm_context_ref = (char *)responses[i].cached;
+        amf_ue_event_session(&ue, ran, &sess, &response, responses[i].name);
+        ogs_assert(sess.sm_context_ref == responses[i].cached);
+        ogs_assert(!sess.sm_context_resource_uri);
+        if (responses[i].location) ogs_assert(!strcmp(location, responses[i].location));
+        memset(location, 'x', sizeof(location));
+        text = ogs_ue_events_query(event_arg, NULL, &status);
+        ogs_assert(text && status == 200);
+        root = cJSON_Parse(text); free(text);
+        event = cJSON_GetArrayItem(get(root, "items"), cJSON_GetArraySize(get(root, "items"))-1);
+        const char *context = strstr(get(event, "info")->valuestring, "SM-context=");
+        ogs_assert(context && !strcmp(context + strlen("SM-context="), responses[i].expected));
+        ogs_assert(!strcmp(get(event, "result")->valuestring, responses[i].status >= 400 ? "failed" : "received"));
+        cJSON_Delete(root);
+    }
     ran_ue_remove(ran); amf_gnb_remove(source); amf_gnb_remove(target);
     ogs_ue_events_final();
 }
@@ -301,6 +343,7 @@ int main(void)
     ogs_pkbuf_config_t packet_config;
 
     ogs_core_initialize();
+    ogs_log_install_domain(&__ogs_sbi_domain, "sbi", OGS_LOG_ERROR);
     ogs_pkbuf_default_init(&packet_config);
     ogs_pkbuf_default_create(&packet_config);
     ogs_app_context_init();

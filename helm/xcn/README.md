@@ -231,6 +231,12 @@ transactions and PFCP request/response steps. `received`, `prepared`, `queued`,
 `timeout` describe different stages. In particular, locally queuing an NGAP
 message does not prove peer delivery or completion of the whole UE procedure.
 Connection idle, deregistration and PDU Session release are separate events.
+`IdentityResolved` is local bookkeeping and uses direction `LOCAL` when binding
+pre-SUPI records. `CreateSMContextResponse` obtains its `SM-context` reference
+from the response `Location`, before the AMF handler stores it locally. A 201
+response with a missing or unparseable reference explicitly shows
+`missing-location` or `invalid-location`; it cannot inherit an old reference.
+Update responses continue to show the locally stored reference.
 
 Text output always uses one row per event. Columns
 are sized to their contents, PSI is right-aligned, and nonempty cause/info are

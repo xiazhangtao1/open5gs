@@ -43,6 +43,10 @@ static void test_binding_and_release(void)
     const cJSON *first = cJSON_GetArrayItem(field(root, "items"), 0);
     ogs_assert(!strcmp(field(first, "name")->valuestring, "InitialUEMessage"));
     ogs_assert(!strcmp(field(first, "seq")->valuestring, "1"));
+    const cJSON *binding = cJSON_GetArrayItem(field(root, "items"), 2);
+    ogs_assert(!strcmp(field(binding, "name")->valuestring, "IdentityResolved"));
+    ogs_assert(!strcmp(field(binding, "direction")->valuestring, "LOCAL"));
+    ogs_assert(cJSON_IsNull(field(binding, "psi")));
     cJSON_Delete(root);
     /* Duplicate binding must not emit repeated IdentityResolved events. */
     ogs_ue_events_bind(trace, "imsi-001010000000001");

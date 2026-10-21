@@ -107,12 +107,31 @@ uint64_t amf_ue_event(ran_ue_t *ran, amf_ue_t *ue, const char *protocol,
 void amf_ue_event_session(amf_ue_t *ue, ran_ue_t *ran, amf_sess_t *sess,
         ogs_sbi_message_t *message, const char *name)
 {
-    if (!ue || !sess || !message) return;
+    if (!ogs_ue_events_enabled() || !ue || !sess || !message) return;
     ngap_meta_t wire = {.psi_count = 1, .psis = {sess->psi}};
+    const char *context = sess->sm_context_ref ? sess->sm_context_ref : "-";
+    char *path = NULL;
+    ogs_sbi_message_t parsed = {0};
+    ogs_sbi_header_t header = {0};
+    /* RX is recorded before the handler stores the new context reference. */
+    if (!strcmp(name, "CreateSMContextResponse") &&
+            message->res_status == OGS_SBI_HTTP_STATUS_CREATED) {
+        context = "missing-location";
+        if (message->http.location && message->http.location[0]) {
+            header.uri = message->http.location;
+            context = "invalid-location";
+            if ((header.uri[0] == '/' || ogs_sbi_getpath_from_uri(&path, header.uri)) &&
+                    ogs_sbi_parse_header(&parsed, &header) == OGS_OK &&
+                    parsed.h.resource.component[1] && parsed.h.resource.component[1][0])
+                context = parsed.h.resource.component[1];
+        }
+    }
     char info[256];
     snprintf(info, sizeof(info), "PSI=%u DNN=%s HTTP=%d SM-context=%s", sess->psi,
-            sess->dnn ? sess->dnn : "-", message->res_status,
-            sess->sm_context_ref ? sess->sm_context_ref : "-");
+            sess->dnn ? sess->dnn : "-", message->res_status, context);
+    /* Header owns parsed components, but not the response's Location string. */
+    ogs_sbi_header_free(&header);
+    ogs_free(path);
     record_event(ran, ue, "SBI", "SMF->AMF", name,
             message->res_status >= 400 ? "failed" : "received", NULL, info, false, NULL, &wire);
 }

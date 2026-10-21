@@ -259,6 +259,7 @@ done:
         ogs_ue_event_t e = {.trace_id = trace_id};
         snprintf(e.supi, sizeof(e.supi), "%s", supi);
         snprintf(e.protocol, sizeof(e.protocol), "IDENTITY");
+        snprintf(e.direction, sizeof(e.direction), "LOCAL");
         snprintf(e.name, sizeof(e.name), "IdentityResolved");
         snprintf(e.result, sizeof(e.result), "bound");
         ogs_ue_events_record(&e);
