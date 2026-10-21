@@ -19,9 +19,55 @@
 
 #include "test-common.h"
 
-#define NUM_OF_TEST_UE 3
+#define MAX_STRESS_UE 1024
 
-static void test1_func(abts_case *tc, void *data)
+static void test_pool_overload(abts_case *tc, ogs_socknode_t *ngap,
+        test_ue_t *test_ue)
+{
+    ogs_nas_5gs_guti_t saved_guti = test_ue->nas_5gs_guti;
+    ogs_ngap_message_t message;
+    NGAP_UEContextReleaseCommand_t *command;
+    NGAP_Cause_t *cause = NULL;
+    ogs_pkbuf_t *nas, *packet;
+    int i;
+
+    /* A fresh, unknown GUTI needs a new AMF context. At capacity, the
+     * AMF must release this connection and continue serving known UEs. */
+    memset(&test_ue->nas_5gs_guti, 0, sizeof(test_ue->nas_5gs_guti));
+    nas = testgmm_build_registration_request(test_ue, NULL, false, false);
+    ABTS_PTR_NOTNULL(tc, nas);
+    packet = testngap_build_initial_ue_message(test_ue, nas,
+            NGAP_RRCEstablishmentCause_mo_Signalling, false, true);
+    ABTS_PTR_NOTNULL(tc, packet);
+    ABTS_INT_EQUAL(tc, OGS_OK, testgnb_ngap_send(ngap, packet));
+
+    packet = testgnb_ngap_read(ngap);
+    ABTS_PTR_NOTNULL(tc, packet);
+    ABTS_INT_EQUAL(tc, OGS_OK, ogs_ngap_decode(&message, packet));
+    ogs_assert(message.present == NGAP_NGAP_PDU_PR_initiatingMessage);
+    ogs_assert(message.choice.initiatingMessage->procedureCode ==
+            NGAP_ProcedureCode_id_UEContextRelease);
+    command = &message.choice.initiatingMessage->value.choice.UEContextReleaseCommand;
+    for (i = 0; i < command->protocolIEs.list.count; i++) {
+        NGAP_UEContextReleaseCommand_IEs_t *ie = command->protocolIEs.list.array[i];
+        if (ie->id == NGAP_ProtocolIE_ID_id_Cause)
+            cause = &ie->value.choice.Cause;
+    }
+    ogs_assert(cause);
+    ABTS_INT_EQUAL(tc, NGAP_Cause_PR_misc, cause->present);
+    ABTS_INT_EQUAL(tc, NGAP_CauseMisc_control_processing_overload, cause->choice.misc);
+    ogs_ngap_free(&message);
+    testngap_recv(test_ue, packet);
+
+    packet = testngap_build_ue_context_release_complete(test_ue);
+    ABTS_PTR_NOTNULL(tc, packet);
+    ABTS_INT_EQUAL(tc, OGS_OK, testgnb_ngap_send(ngap, packet));
+    test_ue->nas_5gs_guti = saved_guti;
+    ogs_msleep(100);
+}
+
+static void test_cycle(abts_case *tc, int ue_count,
+        ogs_nas_5gs_guti_t *previous_guti, int cycle, bool observe)
 {
     int rv;
     ogs_socknode_t *ngap;
@@ -31,15 +77,15 @@ static void test1_func(abts_case *tc, void *data)
     ogs_pkbuf_t *nasbuf;
     ogs_pkbuf_t *sendbuf;
     ogs_pkbuf_t *recvbuf;
-    ogs_ngap_message_t message;
     int i;
 
     ogs_nas_5gs_mobile_identity_suci_t mobile_identity_suci;
-    test_ue_t *test_ue[NUM_OF_TEST_UE];
+    test_ue_t **test_ue = ogs_calloc(ue_count, sizeof(*test_ue));
     test_sess_t *sess = NULL;
     test_bearer_t *qos_flow = NULL;
 
     bson_t *doc = NULL;
+    ogs_assert(test_ue);
 
     /* gNB connects to AMF */
     ngap = testngap_client(1, AF_INET);
@@ -60,14 +106,9 @@ static void test1_func(abts_case *tc, void *data)
     ABTS_PTR_NOTNULL(tc, recvbuf);
     ogs_pkbuf_free(recvbuf);
 
-    for (i = 0; i < NUM_OF_TEST_UE; i++) {
-        const char *scheme_output[] = {
-            "0000000001",
-            "0000000002",
-            "0000000003",
-            "0000000004",
-            "0000000005",
-        };
+    for (i = 0; i < ue_count; i++) {
+        char scheme_output[16];
+        snprintf(scheme_output, sizeof(scheme_output), "%010u", (unsigned)i + 1);
 
         /* Setup Test UE & Session Context */
         memset(&mobile_identity_suci, 0, sizeof(mobile_identity_suci));
@@ -82,8 +123,9 @@ static void test1_func(abts_case *tc, void *data)
         mobile_identity_suci.home_network_pki_value = 0;
 
         test_ue[i] = test_ue_add_by_suci(
-                &mobile_identity_suci, scheme_output[i]);
+                &mobile_identity_suci, scheme_output);
         ogs_assert(test_ue[i]);
+        test_ue[i]->nas_5gs_guti = previous_guti[i];
 
         test_ue[i]->nr_cgi.cell_id = 0x40001;
 
@@ -96,7 +138,7 @@ static void test1_func(abts_case *tc, void *data)
         test_ue[i]->opc_string = "e8ed289deba952e4283b54e88e6183ca";
     }
 
-    for (i = 0; i < NUM_OF_TEST_UE; i++) {
+    for (i = 0; i < ue_count; i++) {
         if (i > 0)
             test_ue[i]->ran_ue_ngap_id = test_ue[i-1]->ran_ue_ngap_id;
         else
@@ -130,18 +172,19 @@ static void test1_func(abts_case *tc, void *data)
         rv = testgnb_ngap_send(ngap, sendbuf);
         ABTS_INT_EQUAL(tc, OGS_OK, rv);
 
-        /* Receive Identity request */
-        recvbuf = testgnb_ngap_read(ngap);
-        ABTS_PTR_NOTNULL(tc, recvbuf);
-        testngap_recv(test_ue[i], recvbuf);
+        if (!previous_guti[i].m_tmsi) {
+            /* An unknown GUTI requires identity resolution. */
+            recvbuf = testgnb_ngap_read(ngap);
+            ABTS_PTR_NOTNULL(tc, recvbuf);
+            testngap_recv(test_ue[i], recvbuf);
 
-        /* Send Identity response */
-        gmmbuf = testgmm_build_identity_response(test_ue[i]);
-        ABTS_PTR_NOTNULL(tc, gmmbuf);
-        sendbuf = testngap_build_uplink_nas_transport(test_ue[i], gmmbuf);
-        ABTS_PTR_NOTNULL(tc, sendbuf);
-        rv = testgnb_ngap_send(ngap, sendbuf);
-        ABTS_INT_EQUAL(tc, OGS_OK, rv);
+            gmmbuf = testgmm_build_identity_response(test_ue[i]);
+            ABTS_PTR_NOTNULL(tc, gmmbuf);
+            sendbuf = testngap_build_uplink_nas_transport(test_ue[i], gmmbuf);
+            ABTS_PTR_NOTNULL(tc, sendbuf);
+            rv = testgnb_ngap_send(ngap, sendbuf);
+            ABTS_INT_EQUAL(tc, OGS_OK, rv);
+        }
 
         /* Receive Authentication request */
         recvbuf = testgnb_ngap_read(ngap);
@@ -238,8 +281,13 @@ static void test1_func(abts_case *tc, void *data)
         ABTS_INT_EQUAL(tc, OGS_OK, rv);
     }
 
-    for (i = 0; i < NUM_OF_TEST_UE; i++) {
-        int target = (i + 1) % NUM_OF_TEST_UE;
+    if (observe) {
+        fprintf(stderr, "XCN_SOAK_ACTIVE cycle=%d ue=%d\n", cycle, ue_count);
+        ogs_msleep(3000);
+    }
+
+    for (i = 0; i < ue_count; i++) {
+        int target = (i + 1) % ue_count;
         char dst_ip[OGS_ADDRSTRLEN];
         test_sess_t *dst_sess = NULL;
 
@@ -261,7 +309,7 @@ static void test1_func(abts_case *tc, void *data)
         ogs_pkbuf_free(recvbuf);
     }
 
-    for (i = 0; i < NUM_OF_TEST_UE; i++) {
+    for (i = 0; i < ue_count; i++) {
         /* Send PDU session establishment request */
         sess = test_sess_find_by_psi(test_ue[i], 5);
         ogs_assert(sess);
@@ -321,7 +369,7 @@ static void test1_func(abts_case *tc, void *data)
         ABTS_INT_EQUAL(tc, OGS_OK, rv);
     }
 
-    for (i = 0; i < NUM_OF_TEST_UE; i++) {
+    for (i = 0; i < ue_count; i++) {
         /* Send De-registration request */
         gmmbuf = testgmm_build_de_registration_request(test_ue[i], 1, true, true);
         ABTS_PTR_NOTNULL(tc, gmmbuf);
@@ -347,9 +395,14 @@ static void test1_func(abts_case *tc, void *data)
 
     ogs_msleep(300);
 
-    for (i = 0; i < NUM_OF_TEST_UE; i++) {
+    for (i = 0; i < ue_count; i++) {
         /********** Remove Subscriber in Database */
         ABTS_INT_EQUAL(tc, OGS_OK, test_db_remove_ue(test_ue[i]));
+    }
+
+    if (observe && ue_count == ogs_global_conf()->max.ue) {
+        test_pool_overload(tc, ngap, test_ue[0]);
+        fprintf(stderr, "XCN_SOAK_OVERLOAD_RELEASED cycle=%d ue=%d\n", cycle, ue_count);
     }
 
     /* gNB disonncect from UPF */
@@ -359,7 +412,68 @@ static void test1_func(abts_case *tc, void *data)
     testgnb_ngap_close(ngap);
 
     /* Clear Test UE Context */
+    for (i = 0; i < ue_count; i++)
+        previous_guti[i] = test_ue[i]->nas_5gs_guti;
     test_ue_remove_all();
+    ogs_free(test_ue);
+
+    if (observe) {
+        fprintf(stderr, "XCN_SOAK_CLEANUP cycle=%d ue=%d\n", cycle, ue_count);
+        ogs_msleep(2000);
+    }
+}
+
+static unsigned stress_parameter(const char *name, unsigned fallback,
+        unsigned minimum, unsigned maximum)
+{
+    const char *text = getenv(name);
+    char *end = NULL;
+    unsigned long value;
+
+    if (!text) return fallback;
+    errno = 0;
+    value = strtoul(text, &end, 10);
+    if (text[0] == '-' || end == text || *end || errno == ERANGE ||
+            value < minimum || value > maximum) {
+        ogs_fatal("%s must be between %u and %u", name, minimum, maximum);
+        ogs_assert_if_reached();
+    }
+    return value;
+}
+
+static void test1_func(abts_case *tc, void *data)
+{
+    static const int stages[] = {16, 64, 128, 256, 512, 1024};
+    unsigned capacity = ogs_min(ogs_global_conf()->max.ue, MAX_STRESS_UE);
+    unsigned duration = stress_parameter("XCN_STRESS_SECONDS", 0, 0, 86400);
+    unsigned fixed = stress_parameter("XCN_STRESS_UE_COUNT", 0, 1, capacity);
+    bool observe = duration > 0 || fixed > 0;
+    ogs_nas_5gs_guti_t *previous_guti =
+        ogs_calloc(capacity, sizeof(*previous_guti));
+    ogs_time_t started = ogs_get_monotonic_time();
+    unsigned cycle = 0;
+    ogs_assert(previous_guti);
+
+    do {
+        unsigned stage = ogs_min(cycle, OGS_ARRAY_SIZE(stages) - 1);
+        unsigned ue_count = fixed ? fixed :
+            (duration ? ogs_min(stages[stage], capacity) : 3);
+        ogs_assert(ue_count > 0 && ue_count <= capacity);
+        if (observe)
+            fprintf(stderr, "XCN_SOAK_START cycle=%u ue=%u elapsed_s=%lld\n",
+                    cycle + 1, ue_count,
+                    (long long)((ogs_get_monotonic_time() - started) / OGS_USEC_PER_SEC));
+
+        test_cycle(tc, ue_count, previous_guti, ++cycle, observe);
+
+        if (observe)
+            fprintf(stderr, "XCN_SOAK_DONE cycle=%u ue=%u elapsed_s=%lld\n",
+                    cycle, ue_count,
+                    (long long)((ogs_get_monotonic_time() - started) / OGS_USEC_PER_SEC));
+    } while (duration && ogs_get_monotonic_time() - started <
+            ogs_time_from_sec(duration));
+
+    ogs_free(previous_guti);
 }
 
 abts_suite *test_multi_ue(abts_suite *suite)

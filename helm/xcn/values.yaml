@@ -56,10 +56,11 @@ resources:
     smf:
       requests:
         cpu: 1
-        memory: 256Mi
+        memory: 1Gi
       limits:
         cpu: 1
-        memory: 512Mi
+        # Fixed PFCP/SBI pools are gradually touched under repeated UE churn.
+        memory: 4Gi
     amf:
       requests:
         cpu: 500m
