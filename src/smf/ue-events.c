@@ -124,11 +124,13 @@ void smf_ue_event_sbi(smf_sess_t *sess, ogs_sbi_message_t *message, bool receive
 {
     if (!message) return;
     char info[256];
-    snprintf(info, sizeof(info), "%s %s/%s/%s HTTP=%d", message->h.method ? message->h.method : "",
+    char status[24] = "";
+    if (message->res_status) snprintf(status, sizeof(status), " HTTP=%d", message->res_status);
+    snprintf(info, sizeof(info), "%s %s/%s/%s%s", message->h.method ? message->h.method : "",
             message->h.service.name ? message->h.service.name : "",
             message->h.resource.component[0] ? message->h.resource.component[0] : "",
             message->h.resource.component[2] ? message->h.resource.component[2] : "",
-            message->res_status);
+            status);
     smf_ue_event(sess, "SBI", received ? "peer->SMF" : "SMF->peer", "SMContextTransaction",
             message->res_status >= 400 ? "failed" : "received", NULL, info, false);
 }

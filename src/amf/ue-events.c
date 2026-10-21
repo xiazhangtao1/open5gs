@@ -169,6 +169,7 @@ void amf_ue_event_nas(ran_ue_t *ran, amf_ue_t *ue,
 {
     if (!ogs_ue_events_enabled() || !message) return;
     const char *name = "Unknown5GMM", *action = NULL, *result = NULL;
+    ngap_meta_t wire = {0};
     char cause[96] = "";
     switch (message->gmm.h.message_type) {
 #define MSG(k, n) case OGS_NAS_5GS_##k: name = n; break
@@ -190,8 +191,16 @@ void amf_ue_event_nas(ran_ue_t *ran, amf_ue_t *ue,
     MSG(DEREGISTRATION_ACCEPT_TO_UE, "DeregistrationAcceptToUE");
     MSG(CONFIGURATION_UPDATE_COMMAND, "ConfigurationUpdateCommand");
     MSG(CONFIGURATION_UPDATE_COMPLETE, "ConfigurationUpdateComplete");
-    MSG(UL_NAS_TRANSPORT, "ULNASTransport");
-    MSG(DL_NAS_TRANSPORT, "DLNASTransport");
+    case OGS_NAS_5GS_UL_NAS_TRANSPORT:
+        name = "ULNASTransport";
+        if (message->gmm.ul_nas_transport.presencemask & OGS_NAS_5GS_UL_NAS_TRANSPORT_PDU_SESSION_ID_PRESENT)
+            ngap_psi(&wire, message->gmm.ul_nas_transport.pdu_session_id);
+        break;
+    case OGS_NAS_5GS_DL_NAS_TRANSPORT:
+        name = "DLNASTransport";
+        if (message->gmm.dl_nas_transport.presencemask & OGS_NAS_5GS_DL_NAS_TRANSPORT_PDU_SESSION_ID_PRESENT)
+            ngap_psi(&wire, message->gmm.dl_nas_transport.pdu_session_id);
+        break;
     case OGS_NAS_5GS_REGISTRATION_REJECT:
         name = "RegistrationReject"; action = "Registration"; result = "rejected";
         snprintf(cause, sizeof(cause), "5GMM cause=%u", message->gmm.registration_reject.gmm_cause); break;
@@ -212,8 +221,8 @@ void amf_ue_event_nas(ran_ue_t *ran, amf_ue_t *ue,
     if (received && ue && (message->gmm.h.message_type == OGS_NAS_5GS_REGISTRATION_REQUEST ||
                 message->gmm.h.message_type == OGS_NAS_5GS_SERVICE_REQUEST))
         ue->event_flow_id = ogs_ue_events_new_trace();
-    amf_ue_event(ran, ue, "NAS-5GMM", received ? "UE->AMF" : "AMF->UE", name,
-            received ? "received" : "prepared", cause, NULL, false);
+    record_event(ran, ue, "NAS-5GMM", received ? "UE->AMF" : "AMF->UE", name,
+            received ? "received" : "prepared", cause, NULL, false, NULL, &wire);
     if (received && message->gmm.h.message_type == OGS_NAS_5GS_REGISTRATION_REQUEST)
         amf_ue_event(ran, ue, "ACTION", "UE->AMF", "Registration", "started", NULL, NULL, true);
     if (received && message->gmm.h.message_type == OGS_NAS_5GS_SERVICE_REQUEST)

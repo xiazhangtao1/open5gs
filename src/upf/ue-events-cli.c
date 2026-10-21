@@ -29,7 +29,7 @@ typedef struct {
     char trace_boot[64];
     uint64_t since;
     size_t limit;
-    bool detail, json, watch;
+    bool json, watch;
     double interval;
 } options_t;
 
@@ -84,9 +84,9 @@ static cJSON *fetch(source_t *source, const options_t *o, const char *trace, boo
     if (source->initialized && !backfill)
         snprintf(cursor, sizeof(cursor), "&after=%" PRIu64 "&boot_id=%s", source->cursor, source->boot);
     const char *epoch = o->trace_nf ? o->trace_boot : source->boot;
-    int n = snprintf(url, sizeof(url), "%s%climit=%zu&detail=%d&since_us=%" PRIu64 "%s%s%s%s%s%s%s",
+    int n = snprintf(url, sizeof(url), "%s%climit=%zu&detail=1&since_us=%" PRIu64 "%s%s%s%s%s%s%s",
             source->url, strchr(source->url, '?') ? '&' : '?',
-            backfill || source->initialized ? 1000 : o->limit, o->detail, o->since, cursor,
+            backfill || source->initialized ? 1000 : o->limit, o->since, cursor,
             supi ? "&supi=" : "", supi ? supi : "",
             trace_id ? "&trace_id=" : "", trace_id ? trace_id : "",
             trace_id ? "&trace_boot_id=" : "", trace_id ? epoch : "");
@@ -150,13 +150,12 @@ static bool add_events(cJSON *output, const cJSON *doc, source_t *source, bool i
                 cJSON_Delete(history);
                 if (!ok) return false;
             }
-            if (!o->detail || o->supi) {
+            if (o->supi) {
                 source->seen[source->seen_next++ % SEEN_SIZE] = seq;
                 continue;
             }
         }
         source->seen[source->seen_next++ % SEEN_SIZE] = seq;
-        if (!o->detail && !cJSON_IsTrue(get(item, "action"))) continue;
         cJSON *copy = cJSON_Duplicate(item, true);
         if (!copy) return false;
         if (!cJSON_AddStringToObject(copy, "nf", source->nf) || !cJSON_AddStringToObject(copy, "boot_id", source->boot) ||
@@ -191,6 +190,24 @@ static const char *numeric(const cJSON *item, const char *key, char *buf, size_t
     return buf;
 }
 
+static const char *psi_text(const cJSON *item, char *buf, size_t size)
+{
+    const cJSON *psis = get(item, "psis"), *value;
+    size_t used = 0;
+    unsigned seen = 0;
+    if (cJSON_IsArray(psis)) cJSON_ArrayForEach(value, psis) {
+        if (!cJSON_IsNumber(value) || !isfinite(value->valuedouble) ||
+                value->valuedouble < 1 || value->valuedouble > 15 ||
+                value->valuedouble > (unsigned)value->valuedouble) continue;
+        unsigned psi = value->valuedouble;
+        if (seen & (1U << psi)) continue;
+        int n = snprintf(buf + used, size - used, "%s%u", used ? "," : "", psi);
+        if (n < 0 || (size_t)n >= size - used) return "-";
+        used += n; seen |= 1U << psi;
+    }
+    return used ? buf : numeric(item, "psi", buf, size);
+}
+
 static void column(const char *value, size_t width, bool right)
 {
     size_t length = strlen(value);
@@ -215,7 +232,7 @@ static void event_columns(const cJSON *item, const char **values,
     if (gmtime_r(&seconds, &utc)) strftime(date, sizeof(date), "%Y-%m-%dT%H:%M:%S", &utc);
     snprintf(timestamp, size, "%s.%03uZ", date, (unsigned)((stamp / 1000) % 1000));
     values[0] = timestamp; values[1] = str(item, "nf"); values[2] = str(item, "supi");
-    values[3] = numeric(item, "psi", number, number_size); values[4] = str(item, "protocol");
+    values[3] = psi_text(item, number, number_size); values[4] = str(item, "protocol");
     values[5] = str(item, "direction"); values[6] = str(item, "name"); values[7] = str(item, "result");
 }
 
@@ -223,7 +240,7 @@ static void print_events(const cJSON *items, size_t *widths, bool initial)
 {
     const cJSON *item;
     const char *values[EVENT_COLUMNS];
-    char timestamp[48], number[32];
+    char timestamp[48], number[64]; /* All 15 PSI values fit in 35 characters. */
     bool widened = false;
     for (size_t i = 0; i < EVENT_COLUMNS; i++)
         if (!widths[i]) widths[i] = strlen(event_headers[i]);
@@ -252,7 +269,6 @@ static void print_events(const cJSON *items, size_t *widths, bool initial)
         if (has_cause) safe_text(cause);
         if (has_cause && has_info) fputs("; ", stdout);
         if (has_info) safe_text(info);
-        if (!has_cause && !has_info) putchar('-');
         putchar('\n');
     }
 }
@@ -348,7 +364,7 @@ int xcnctl_ue_events_main(int argc, char **argv)
 {
     static const struct option flags[] = {
         {"supi", required_argument, NULL, 's'}, {"trace-id", required_argument, NULL, 't'},
-        {"detail", no_argument, NULL, 'd'}, {"watch", no_argument, NULL, 'w'},
+        {"watch", no_argument, NULL, 'w'},
         {"json", no_argument, NULL, 'j'}, {"since", required_argument, NULL, 'S'},
         {"limit", required_argument, NULL, 'l'}, {"interval", required_argument, NULL, 'i'},
         {"amf-ue-events", required_argument, NULL, 'a'}, {"smf-ue-events", required_argument, NULL, 'm'},
@@ -380,7 +396,6 @@ int xcnctl_ue_events_main(int argc, char **argv)
             o.trace_nf = trace; o.trace_id = second;
             snprintf(o.trace_boot, sizeof(o.trace_boot), "%s", first); break;
         }
-        case 'd': o.detail = true; break;
         case 'w': o.watch = true; break;
         case 'j': o.json = true; break;
         case 'S': if (!parse_since(optarg, &o.since)) goto done; break;
@@ -393,8 +408,9 @@ int xcnctl_ue_events_main(int argc, char **argv)
         case 'a': sources[0].url = optarg; break;
         case 'm': sources[1].url = optarg; break;
         case 'h':
-            puts("Usage: xcnctl show ue-events [--supi SUPI | --trace-id NF/BOOT/ID] [--detail] [--watch] [--json]\n"
-                 "  --detail             Include NGAP/NAS/PFCP steps; one text line per event\n"
+            puts("Usage: xcnctl show ue-event [--supi SUPI | --trace-id NF/BOOT/ID] [--watch] [--json]\n"
+                 "Includes actions and NGAP/NAS/SBI/PFCP steps; one text line per event.\n"
+                 "PSI lists sessions involved in this event; '-' means no session ID was recorded.\n"
                  "  --since 30m|UTC-TIME  Filter event time (for example 2026-10-20T12:00:00Z)\n"
                  "  --limit N            Initial history limit, 1..1000 (default 100)\n"
                  "  --interval SEC       Watch interval, 0.1..3600 (default 1)\n"
@@ -413,6 +429,6 @@ int xcnctl_ue_events_main(int argc, char **argv)
         while (nanosleep(&delay, &delay) && errno == EINTR) {}
     } while (true);
 done:
-    if (result == 2) fputs("invalid ue-events options; use --help\n", stderr);
+    if (result == 2) fputs("invalid ue-event options; use --help\n", stderr);
     free(trace); free(sources); return result;
 }

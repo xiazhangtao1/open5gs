@@ -267,6 +267,27 @@ static void test_event_metadata(ogs_sock_t *sock)
     ogs_pkbuf_free(encoded);
     amf_ue_event_ngap(target, &decoded, "AMF->gNB", "queued");
     ogs_ngap_free(&decoded);
+    /* NAS transport carries one Session ID; UE-wide messages must stay unassigned. */
+    for (unsigned i = 0; i < 4; i++) {
+        ogs_nas_5gs_message_t nas = {0};
+        if (i == 1) {
+            nas.gmm.h.message_type = OGS_NAS_5GS_DL_NAS_TRANSPORT;
+            nas.gmm.dl_nas_transport.presencemask = OGS_NAS_5GS_DL_NAS_TRANSPORT_PDU_SESSION_ID_PRESENT;
+            nas.gmm.dl_nas_transport.pdu_session_id = 7;
+        } else {
+            nas.gmm.h.message_type = OGS_NAS_5GS_UL_NAS_TRANSPORT;
+            if (i != 2) nas.gmm.ul_nas_transport.presencemask = OGS_NAS_5GS_UL_NAS_TRANSPORT_PDU_SESSION_ID_PRESENT;
+            nas.gmm.ul_nas_transport.pdu_session_id = i == 3 ? 16 : 5;
+        }
+        amf_ue_event_nas(ran, NULL, &nas, i != 1);
+        text = ogs_ue_events_query(event_arg, NULL, &status);
+        ogs_assert(text && status == 200);
+        root = cJSON_Parse(text); free(text);
+        event = cJSON_GetArrayItem(get(root, "items"), cJSON_GetArraySize(get(root, "items"))-1);
+        if (i < 2) ogs_assert(get(event, "psi")->valueint == (i ? 7 : 5));
+        else ogs_assert(cJSON_IsNull(get(event, "psi")));
+        cJSON_Delete(root);
+    }
     ran_ue_remove(ran); amf_gnb_remove(source); amf_gnb_remove(target);
     ogs_ue_events_final();
 }

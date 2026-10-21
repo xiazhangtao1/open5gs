@@ -212,17 +212,19 @@ These commands do not require a UPF statistics socket or an active PDU Session:
 
 ```bash
 kubectl -n xcn exec deploy/xcn-5gc -c upf -- \
-  xcnctl show ue-events --supi imsi-460110000000100
+  xcnctl show ue-event --supi imsi-460110000000100
 kubectl -n xcn exec deploy/xcn-5gc -c upf -- \
-  xcnctl show ue-events --supi imsi-460110000000100 --detail --watch
+  xcnctl show ue-event --supi imsi-460110000000100 --watch
 kubectl -n xcn exec deploy/xcn-5gc -c upf -- \
-  xcnctl show ue-events --supi imsi-460110000000100 --since 30m --limit 200 --json
+  xcnctl show ue-event --supi imsi-460110000000100 --since 30m --limit 200 --json
 ```
 
-The default view shows actions and outcomes: RAN access, registration,
+`show ue-event` is the only event command and always includes all recorded
+protocol steps; there is no separate summary mode or `--detail` option.
+It shows actions and outcomes: RAN access, registration,
 Service Request, connection release/idle, paging, deregistration, Session
 context creation/removal, Session establishment/modification/release, N4 and
-QoS outcomes, handover, Path Switch, NG reset and SCTP loss. `--detail` adds
+QoS outcomes, handover, Path Switch, NG reset and SCTP loss, together with
 NGAP UE messages, decoded 5GMM/5GSM message types, related SM Context/N2-SM
 transactions and PFCP request/response steps. `received`, `prepared`, `queued`,
 `scheduled`, `accepted`, `completed`, `rejected`, `failed`, `uncertain` and
@@ -230,22 +232,30 @@ transactions and PFCP request/response steps. `received`, `prepared`, `queued`,
 message does not prove peer delivery or completion of the whole UE procedure.
 Connection idle, deregistration and PDU Session release are separate events.
 
-Text output always uses one row per event, including with `--detail`. Columns
+Text output always uses one row per event. Columns
 are sized to their contents, PSI is right-aligned, and nonempty cause/info are
-combined in the final `DETAILS` column. Watch preserves widths and repeats the
+combined in the final `DETAILS` column, which is blank when no extra information
+is recorded. Watch preserves widths and repeats the
 header if a later event requires a wider column. Times are UTC with milliseconds.
 `--json` retains trace/flow IDs, parent NGAP sequence when available, PSI/PTI,
 gNB identity/peer, reported CGI, CELL-ID, identity consistency, NGAP UE IDs, DNN,
 QFI/5QI and UPF SEID when known. Unknown numeric fields use `null` in JSON and
-`-` in text. NGAP messages carrying
-multiple Sessions retain a `psis` list. Session/UE context lifetimes have unique
+`-` in text. PSI belongs to the event, not to the whole UE: Session-specific
+events show their own PSI; NGAP messages involving multiple Sessions show all
+carried IDs as a comma-separated list (for example `2,5`), retained as `psis` in
+JSON. A SUPI query merges retained events from all of that UE's Sessions in time
+order. Registration/authentication and other UE-wide events normally show `-`
+because they have no Session ID; a missing/unrecorded ID also uses `-`, never
+the UE's current Session list as a substitute. NAS UL/DL transport includes its
+optional Session ID when present. The initial limit and memory window still
+apply across Sessions. Session/UE context lifetimes have unique
 trace IDs; pool IDs, PSI and NGAP ID reuse do not join different lifetimes.
 Pre-SUPI steps are bound when identity becomes known, including backfill during
 watch. Unresolved identities remain queryable in the unfiltered view:
 
 ```bash
-xcnctl show ue-events --detail --json
-xcnctl show ue-events --trace-id AMF/BOOT-UUID/TRACE-NUMBER --detail
+xcnctl show ue-event --json
+xcnctl show ue-event --trace-id AMF/BOOT-UUID/TRACE-NUMBER
 ```
 
 `--watch` appends incremental events without clearing the screen. It tracks

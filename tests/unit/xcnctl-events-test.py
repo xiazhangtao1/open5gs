@@ -86,7 +86,7 @@ class EventsTest(unittest.TestCase):
 
     def argv(self, *options):
         url = f'http://127.0.0.1:{self.http.server_port}'
-        return [BINARY, 'show', 'ue-events', '--amf-ue-events', url + '/amf/ue-events',
+        return [BINARY, 'show', 'ue-event', '--amf-ue-events', url + '/amf/ue-events',
                 '--smf-ue-events', url + '/smf/ue-events', *options]
 
     def run_cli(self, *options, expected=0):
@@ -95,16 +95,14 @@ class EventsTest(unittest.TestCase):
         self.assertEqual(r.returncode, expected, r.stdout + r.stderr)
         return r
 
-    def test_summary_and_detail(self):
-        summary = self.run_cli('--supi', SUPI, '--json')
-        rows = json.loads(summary.stdout)['items']
-        self.assertEqual([row['nf'] for row in rows], ['AMF', 'SMF'])
-        self.assertEqual(rows[-1]['upf_seid'], '18446744073709551615')
-        detail = self.run_cli('--supi', SUPI, '--detail', '--json')
-        rows = json.loads(detail.stdout)['items']
+    def test_all_steps_and_single_line_output(self):
+        result = self.run_cli('--supi', SUPI, '--json')
+        rows = json.loads(result.stdout)['items']
         self.assertEqual([row['nf'] for row in rows], ['AMF', 'SMF', 'AMF'])
+        self.assertEqual(rows[-1]['upf_seid'], '18446744073709551615')
+        self.assertTrue(all(q['detail'] == '1' for _, q in self.http.requests))
         self.http.sources['AMF']['items'][0].update(cause='NAS cause=7', info='reason\ncontinued')
-        text = self.run_cli('--detail').stdout
+        text = self.run_cli().stdout
         self.assertIn('TIME(UTC)', text)
         self.assertIn('InitialUEMessage', text)
         self.assertIn('NAS cause=7; reason?continued', text)
@@ -118,13 +116,43 @@ class EventsTest(unittest.TestCase):
         separators = lambda line: [i for i in range(len(line)) if line.startswith(' | ', i)]
         for line in lines[2:]:
             self.assertEqual(separators(line), separators(lines[0]))
+        self.assertEqual(lines[-1].split(' | ')[-1], '')
+
+    def test_multiple_sessions_and_ue_events(self):
+        registration = event('AMF', 1, False, protocol='NAS-5GMM')
+        registration.update(name='RegistrationRequest', psi=None)
+        setup = event('AMF', 3, False, protocol='NGAP')
+        setup.update(name='PDUSessionResourceSetupRequest', psi=None, psis=[2, 5])
+        first = event('SMF', 2, trace=20)
+        first.update(name='SessionEstablishment', psi=2)
+        second = event('SMF', 4, trace=50)
+        second.update(name='SessionModification', psi=5)
+        self.http.sources['AMF']['items'] = [registration, setup]
+        self.http.sources['SMF']['items'] = [first, second, event('SMF', 5, supi='imsi-other')]
+        result = self.run_cli('--supi', SUPI, '--json')
+        rows = json.loads(result.stdout)['items']
+        self.assertEqual([row['psi'] for row in rows], [None, 2, None, 5])
+        self.assertEqual(rows[2]['psis'], [2, 5])
+        self.assertTrue(all(row['supi'] == SUPI for row in rows))
+        lines = self.run_cli('--supi', SUPI).stdout.splitlines()[2:]
+        self.assertEqual([line.split(' | ')[3].strip() for line in lines], ['-', '2', '2,5', '5'])
+        setup['psis'] = list(range(1, 16))
+        lines = self.run_cli('--supi', SUPI).stdout.splitlines()[2:]
+        self.assertEqual(lines[2].split(' | ')[3].strip(), ','.join(map(str, range(1, 16))))
+
+    def test_single_command_and_help(self):
+        help_text = self.run_cli('--help').stdout
+        self.assertIn('Usage: xcnctl show ue-event ', help_text)
+        self.assertNotIn('--detail', help_text)
+        legacy = subprocess.run([BINARY, 'show', 'ue-events'], capture_output=True, text=True, timeout=10)
+        self.assertEqual(legacy.returncode, 2)
 
     def test_limits_since_and_trace(self):
-        rows = json.loads(self.run_cli('--json', '--detail', '--limit', '1').stdout)['items']
+        rows = json.loads(self.run_cli('--json', '--limit', '1').stdout)['items']
         self.assertEqual([row['seq'] for row in rows], ['3'])
         rows = json.loads(self.run_cli('--json', '--since', '2026-10-20T13:00:01Z').stdout)['items']
         self.assertEqual(rows, [])
-        rows = json.loads(self.run_cli('--json', '--detail', '--trace-id', f'AMF/{BOOT}/1').stdout)['items']
+        rows = json.loads(self.run_cli('--json', '--trace-id', f'AMF/{BOOT}/1').stdout)['items']
         self.assertEqual([row['nf'] for row in rows], ['AMF', 'AMF'])
         self.run_cli('--json', '--since', '30m')
         self.assertTrue(any('since_us' in q for _, q in self.http.requests))
@@ -150,11 +178,11 @@ class EventsTest(unittest.TestCase):
         self.http.sources['AMF']['items'][0]['supi'] = ''
         text = self.run_cli().stdout
         self.assertNotIn('TRACE ', text)
-        self.assertEqual(len(text.splitlines()), 4)
+        self.assertEqual(len(text.splitlines()), 5)
         rows = json.loads(self.run_cli('--json').stdout)['items']
         unresolved = next(row for row in rows if row['supi'] == '')
         self.assertEqual((unresolved['nf'], unresolved['boot_id'], unresolved['trace_id']), ('AMF', BOOT, '1'))
-        self.assertEqual(len(json.loads(self.run_cli('--supi', SUPI, '--json').stdout)['items']), 1)
+        self.assertEqual(len(json.loads(self.run_cli('--supi', SUPI, '--json').stdout)['items']), 2)
 
     def test_no_history_is_explicit(self):
         self.http.sources['AMF']['items'] = []
@@ -166,12 +194,12 @@ class EventsTest(unittest.TestCase):
                         ('--since', '2026-02-30T00:00:00Z'), ('--since', 'bad'),
                         ('--since', '999999999999999999999d'), ('--interval', 'nan'),
                         ('--interval', 'inf'), ('--interval', '0'), ('--trace-id', '1'),
-                        ('--supi', SUPI, '--trace-id', f'AMF/{BOOT}/1'), ('--with-location',)]:
+                        ('--supi', SUPI, '--trace-id', f'AMF/{BOOT}/1'), ('--with-location',), ('--detail',)]:
             with self.subTest(options=options):
                 self.run_cli(*options, expected=2)
 
     def watch(self, change):
-        process = subprocess.Popen(self.argv('--supi', SUPI, '--detail', '--json', '--watch', '--interval', '0.1'),
+        process = subprocess.Popen(self.argv('--supi', SUPI, '--json', '--watch', '--interval', '0.1'),
                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         try:
             deadline = time.monotonic() + 4
