@@ -230,17 +230,21 @@ transactions and PFCP request/response steps. `received`, `prepared`, `queued`,
 message does not prove peer delivery or completion of the whole UE procedure.
 Connection idle, deregistration and PDU Session release are separate events.
 
-Times are UTC with milliseconds. Details include direction, trace/flow IDs,
-parent NGAP sequence when available, PSI/PTI, gNB identity/peer, reported CGI,
-CELL-ID, identity consistency, NGAP UE IDs, DNN, QFI/5QI and UPF SEID when known.
-Unknown numeric fields use `null` in JSON and `-` in text. NGAP messages carrying
+Text output always uses one row per event, including with `--detail`. Columns
+are sized to their contents, PSI is right-aligned, and nonempty cause/info are
+combined in the final `DETAILS` column. Watch preserves widths and repeats the
+header if a later event requires a wider column. Times are UTC with milliseconds.
+`--json` retains trace/flow IDs, parent NGAP sequence when available, PSI/PTI,
+gNB identity/peer, reported CGI, CELL-ID, identity consistency, NGAP UE IDs, DNN,
+QFI/5QI and UPF SEID when known. Unknown numeric fields use `null` in JSON and
+`-` in text. NGAP messages carrying
 multiple Sessions retain a `psis` list. Session/UE context lifetimes have unique
 trace IDs; pool IDs, PSI and NGAP ID reuse do not join different lifetimes.
 Pre-SUPI steps are bound when identity becomes known, including backfill during
 watch. Unresolved identities remain queryable in the unfiltered view:
 
 ```bash
-xcnctl show ue-events --detail
+xcnctl show ue-events --detail --json
 xcnctl show ue-events --trace-id AMF/BOOT-UUID/TRACE-NUMBER --detail
 ```
 

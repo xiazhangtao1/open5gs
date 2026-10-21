@@ -103,11 +103,21 @@ class EventsTest(unittest.TestCase):
         detail = self.run_cli('--supi', SUPI, '--detail', '--json')
         rows = json.loads(detail.stdout)['items']
         self.assertEqual([row['nf'] for row in rows], ['AMF', 'SMF', 'AMF'])
+        self.http.sources['AMF']['items'][0].update(cause='NAS cause=7', info='reason\ncontinued')
         text = self.run_cli('--detail').stdout
         self.assertIn('TIME(UTC)', text)
         self.assertIn('InitialUEMessage', text)
-        self.assertIn('TRACE AMF/' + BOOT + '/1', text)
-        self.assertIn('UPF-SEID 18446744073709551615', text)
+        self.assertIn('NAS cause=7; reason?continued', text)
+        self.assertNotIn('TRACE ', text)
+        self.assertNotIn('GNB-ID ', text)
+        self.assertNotIn('UPF-SEID ', text)
+        lines = text.splitlines()
+        self.assertEqual(len(lines), 5)  # Header, separator, three single-line events.
+        self.assertEqual([cell.strip() for cell in lines[0].split(' | ')],
+                         ['TIME(UTC)', 'NF', 'SUPI', 'PSI', 'PROTOCOL', 'DIRECTION', 'EVENT', 'RESULT', 'DETAILS'])
+        separators = lambda line: [i for i in range(len(line)) if line.startswith(' | ', i)]
+        for line in lines[2:]:
+            self.assertEqual(separators(line), separators(lines[0]))
 
     def test_limits_since_and_trace(self):
         rows = json.loads(self.run_cli('--json', '--detail', '--limit', '1').stdout)['items']
@@ -139,7 +149,11 @@ class EventsTest(unittest.TestCase):
     def test_missing_identity_can_be_followed_by_trace(self):
         self.http.sources['AMF']['items'][0]['supi'] = ''
         text = self.run_cli().stdout
-        self.assertIn('TRACE AMF/' + BOOT + '/1', text)
+        self.assertNotIn('TRACE ', text)
+        self.assertEqual(len(text.splitlines()), 4)
+        rows = json.loads(self.run_cli('--json').stdout)['items']
+        unresolved = next(row for row in rows if row['supi'] == '')
+        self.assertEqual((unresolved['nf'], unresolved['boot_id'], unresolved['trace_id']), ('AMF', BOOT, '1'))
         self.assertEqual(len(json.loads(self.run_cli('--supi', SUPI, '--json').stdout)['items']), 1)
 
     def test_no_history_is_explicit(self):

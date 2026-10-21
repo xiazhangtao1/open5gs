@@ -191,57 +191,73 @@ static const char *numeric(const cJSON *item, const char *key, char *buf, size_t
     return buf;
 }
 
-static void column(const char *value, size_t width)
+static void column(const char *value, size_t width, bool right)
 {
+    size_t length = strlen(value);
+    if (right) for (size_t n = length; n < width; n++) putchar(' ');
     safe_text(value);
-    for (size_t n = strlen(value); n < width; n++) putchar(' ');
+    if (!right) for (size_t n = length; n < width; n++) putchar(' ');
     fputs(" | ", stdout);
 }
 
-static void print_event(const cJSON *item, bool detail)
+#define EVENT_COLUMNS 8
+static const char *event_headers[EVENT_COLUMNS] = {
+    "TIME(UTC)", "NF", "SUPI", "PSI", "PROTOCOL", "DIRECTION", "EVENT", "RESULT"
+};
+
+static void event_columns(const cJSON *item, const char **values,
+        char *timestamp, size_t size, char *number, size_t number_size)
 {
     uint64_t stamp = get(item, "timestamp_us")->valuedouble;
     time_t seconds = stamp / 1000000;
     struct tm utc;
     char date[32] = "-";
     if (gmtime_r(&seconds, &utc)) strftime(date, sizeof(date), "%Y-%m-%dT%H:%M:%S", &utc);
-    printf("%s.%03uZ | ", date, (unsigned)((stamp / 1000) % 1000));
-    column(str(item, "nf"), 3);
-    char number[32];
-    column(str(item, "supi"), 21); column(numeric(item, "psi", number, sizeof(number)), 3);
-    column(str(item, "protocol"), 9); column(str(item, "direction"), 12);
-    column(str(item, "name"), 40); column(str(item, "result"), 16);
-    safe_text(str(item, "cause")); fputs(" | ", stdout); safe_text(str(item, "info")); putchar('\n');
-    if (detail) {
-        printf("  TRACE %s/%s/%s  SEQ %s  FLOW %s  PARENT %s\n", str(item, "nf"), str(item, "boot_id"),
-                str(item, "trace_id"), str(item, "seq"), str(item, "flow_id"), str(item, "parent_seq"));
-        char id[32], bits[32];
-        printf("  GNB-ID %s  GNB-LEN %s  NCI %s  AMF-UE-ID %s  RAN-UE-ID %s\n",
-                numeric(item, "gnb_id", id, sizeof(id)), numeric(item, "gnb_bits", bits, sizeof(bits)),
-                str(item, "nci"), str(item, "amf_ngap_id"), str(item, "ran_ngap_id"));
-        printf("  CELL-ID %s  GNB-ID(from NCI) %s  IDENTITY %s\n",
-                numeric(item, "cell_id", number, sizeof(number)), numeric(item, "gnb_id_from_nci", id, sizeof(id)),
-                cJSON_IsTrue(get(item, "identity_consistent")) ? "consistent" :
-                cJSON_IsFalse(get(item, "identity_consistent")) ? "mismatch" : "unknown");
-        uint64_t nci;
-        if (u64(str(item, "nci"), &nci)) {
-            fputs("  NR CGI ", stdout); safe_text(str(item, "cell_plmn"));
-            printf("-0x%09" PRIx64 "  TAC %s\n", nci, numeric(item, "tac", number, sizeof(number)));
-        }
-        const cJSON *psis = get(item, "psis"), *psi;
-        if (cJSON_IsArray(psis) && cJSON_GetArraySize(psis) > 1) {
-            fputs("  PSIs:", stdout);
-            cJSON_ArrayForEach(psi, psis) if (cJSON_IsNumber(psi)) printf(" %.0f", psi->valuedouble);
-            putchar('\n');
-        }
-        fputs("  PEER ", stdout); safe_text(str(item, "peer")); fputs("  DNN ", stdout); safe_text(str(item, "dnn"));
-        printf("  UPF-SEID %s  QFI %s  5QI %s\n", str(item, "upf_seid"),
-                numeric(item, "qfi", id, sizeof(id)), numeric(item, "fiveqi", bits, sizeof(bits)));
-    } else if (!strcmp(str(item, "supi"), "-"))
-        printf("  TRACE %s/%s/%s\n", str(item, "nf"), str(item, "boot_id"), str(item, "trace_id"));
+    snprintf(timestamp, size, "%s.%03uZ", date, (unsigned)((stamp / 1000) % 1000));
+    values[0] = timestamp; values[1] = str(item, "nf"); values[2] = str(item, "supi");
+    values[3] = numeric(item, "psi", number, number_size); values[4] = str(item, "protocol");
+    values[5] = str(item, "direction"); values[6] = str(item, "name"); values[7] = str(item, "result");
 }
 
-static int query_events(source_t *sources, const options_t *o)
+static void print_events(const cJSON *items, size_t *widths, bool initial)
+{
+    const cJSON *item;
+    const char *values[EVENT_COLUMNS];
+    char timestamp[48], number[32];
+    bool widened = false;
+    for (size_t i = 0; i < EVENT_COLUMNS; i++)
+        if (!widths[i]) widths[i] = strlen(event_headers[i]);
+    cJSON_ArrayForEach(item, items) {
+        event_columns(item, values, timestamp, sizeof(timestamp), number, sizeof(number));
+        for (size_t i = 0; i < EVENT_COLUMNS; i++) {
+            size_t length = strlen(values[i]);
+            if (length > widths[i]) { widths[i] = length; widened = true; }
+        }
+    }
+    /* Keep watch columns stable; emit a new header only when a column grows. */
+    if (initial || widened) {
+        for (size_t i = 0; i < EVENT_COLUMNS; i++) column(event_headers[i], widths[i], i == 3);
+        puts("DETAILS");
+        for (size_t i = 0; i < EVENT_COLUMNS; i++) {
+            for (size_t n = 0; n < widths[i]; n++) putchar('-');
+            fputs("-+-", stdout);
+        }
+        puts("-------");
+    }
+    cJSON_ArrayForEach(item, items) {
+        event_columns(item, values, timestamp, sizeof(timestamp), number, sizeof(number));
+        for (size_t i = 0; i < EVENT_COLUMNS; i++) column(values[i], widths[i], i == 3);
+        const char *cause = str(item, "cause"), *info = str(item, "info");
+        bool has_cause = strcmp(cause, "-") != 0, has_info = strcmp(info, "-") != 0;
+        if (has_cause) safe_text(cause);
+        if (has_cause && has_info) fputs("; ", stdout);
+        if (has_info) safe_text(info);
+        if (!has_cause && !has_info) putchar('-');
+        putchar('\n');
+    }
+}
+
+static int query_events(source_t *sources, const options_t *o, size_t *widths)
 {
     cJSON *root = cJSON_CreateObject();
     cJSON *all = root ? cJSON_AddArrayToObject(root, "items") : NULL;
@@ -297,9 +313,7 @@ static int query_events(source_t *sources, const options_t *o)
         if (!json) { cJSON_Delete(root); return 1; }
         puts(json); cJSON_free(json);
     } else {
-        if (initial) printf("%-24s | %-3s | %-21s | %-3s | %-9s | %-12s | %-40s | %-16s | CAUSE | INFO\n",
-                "TIME(UTC)", "NF", "SUPI", "PSI", "PROTOCOL", "DIRECTION", "EVENT", "RESULT");
-        cJSON_ArrayForEach(item, all) print_event(item, o->detail);
+        print_events(all, widths, initial);
         if (initial && !cJSON_GetArraySize(all) && available)
             puts("(no retained events; history starts when recording is enabled and resets on NF restart)");
     }
@@ -341,6 +355,7 @@ int xcnctl_ue_events_main(int argc, char **argv)
         {"help", no_argument, NULL, 'h'}, {NULL, 0, NULL, 0}
     };
     options_t o = {.limit = 100, .interval = 1};
+    size_t widths[EVENT_COLUMNS] = {0};
     source_t *sources = calloc(2, sizeof(*sources));
     char *trace = NULL;
     int result = 2, option;
@@ -379,6 +394,7 @@ int xcnctl_ue_events_main(int argc, char **argv)
         case 'm': sources[1].url = optarg; break;
         case 'h':
             puts("Usage: xcnctl show ue-events [--supi SUPI | --trace-id NF/BOOT/ID] [--detail] [--watch] [--json]\n"
+                 "  --detail             Include NGAP/NAS/PFCP steps; one text line per event\n"
                  "  --since 30m|UTC-TIME  Filter event time (for example 2026-10-20T12:00:00Z)\n"
                  "  --limit N            Initial history limit, 1..1000 (default 100)\n"
                  "  --interval SEC       Watch interval, 0.1..3600 (default 1)\n"
@@ -391,7 +407,7 @@ int xcnctl_ue_events_main(int argc, char **argv)
     }
     if (optind != argc || (o.supi && o.trace_id)) goto done;
     do {
-        result = query_events(sources, &o);
+        result = query_events(sources, &o, widths);
         if (!o.watch) break;
         struct timespec delay = {(time_t)o.interval, (long)((o.interval - (time_t)o.interval)*1000000000)};
         while (nanosleep(&delay, &delay) && errno == EINTR) {}
