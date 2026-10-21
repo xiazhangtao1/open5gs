@@ -20,6 +20,7 @@
 #include "context.h"
 #include "ngap-path.h"
 #include "sbi-path.h"
+#include "ue-events.h"
 
 int smf_sbi_open(void)
 {
@@ -90,7 +91,28 @@ bool smf_sbi_send_request(
 {
     ogs_assert(nf_instance);
     ogs_assert(xact);
-    return ogs_sbi_send_request_to_nf_instance(nf_instance, xact);
+    ogs_pool_id_t sess_id = xact->sbi_object_id;
+    bool sent = ogs_sbi_send_request_to_nf_instance(nf_instance, xact);
+    if (!sent)
+        smf_ue_event(smf_sess_find_by_id(sess_id), "SBI", "LOCAL", "SBIRequest",
+                "send-failed", NULL, "Cannot send request after NF discovery", false);
+    return sent;
+}
+
+int smf_sbi_discover_and_send_xact(ogs_sbi_xact_t *xact)
+{
+    ogs_pool_id_t xact_id = xact->id, sess_id = xact->sbi_object_id;
+    smf_sess_t *sess = smf_sess_find_by_id(sess_id);
+    smf_ue_event_sbi_request(sess, xact->request, "queued");
+    int r = ogs_sbi_discover_and_send(xact);
+    if (r != OGS_OK) {
+        /* Dispatch may have freed the transaction; look it up again. */
+        xact = ogs_sbi_xact_find_by_id(xact_id);
+        if (xact) smf_ue_event_sbi_request(sess, xact->request, "send-failed");
+        else smf_ue_event(sess, "SBI", "LOCAL", "SBIRequest", "send-failed",
+                NULL, "Cannot dispatch SBI request", false);
+    }
+    return r;
 }
 
 int smf_sbi_discover_and_send(
@@ -220,7 +242,7 @@ int smf_sbi_discover_and_send(
                 xact->assoc_stream_id <= OGS_MAX_POOL_ID);
     }
 
-    r = ogs_sbi_discover_and_send(xact);
+    r = smf_sbi_discover_and_send_xact(xact);
     if (r != OGS_OK) {
         ogs_error("smf_sbi_discover_and_send() failed");
         ogs_sbi_xact_remove(xact);
@@ -296,7 +318,7 @@ void smf_namf_comm_send_n1_n2_message_transfer(
         return;
     }
 
-    r = ogs_sbi_discover_and_send(xact);
+    r = smf_sbi_discover_and_send_xact(xact);
     if (r != OGS_OK) {
         ogs_error("smf_namf_comm_send_n1_n2_message_transfer() failed");
         ogs_sbi_xact_remove(xact);

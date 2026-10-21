@@ -9,4 +9,8 @@ void smf_ue_event_qos(smf_sess_t *sess, const char *result, unsigned qfi, unsign
 void smf_ue_event_nas(smf_sess_t *sess, ogs_nas_5gs_message_t *message, bool received);
 void smf_ue_event_pfcp(smf_sess_t *sess, uint8_t type, const char *result, uint8_t cause);
 void smf_ue_event_sbi(smf_sess_t *sess, ogs_sbi_message_t *message, bool received);
+void smf_ue_event_sbi_request(smf_sess_t *sess, ogs_sbi_request_t *request, const char *result);
+void smf_ue_event_establishment_end(smf_sess_t *sess, const char *result, const char *info);
+void smf_ue_event_establishment_n4(smf_sess_t *sess, ogs_pool_id_t xact_id,
+        const char *result, const char *info);
 #endif

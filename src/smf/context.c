@@ -1580,7 +1580,7 @@ smf_sess_t *smf_sess_add_by_psi(smf_ue_t *smf_ue, uint8_t psi)
 
     smf_metrics_inst_global_inc(SMF_METR_GLOB_GAUGE_PFCP_SESSIONS_ACTIVE);
     stats_add_smf_session();
-    smf_ue_event(sess, "ACTION", "SMF", "SessionContext", "created", NULL, NULL, true);
+    smf_ue_event(sess, "ACTION", "LOCAL", "SessionContext", "created", NULL, NULL, true);
 
     return sess;
 }
@@ -1851,7 +1851,8 @@ void smf_sess_remove(smf_sess_t *sess)
     char buf2[OGS_ADDRSTRLEN];
 
     ogs_assert(sess);
-    smf_ue_event(sess, "ACTION", "SMF", "SessionContext", "removed", NULL, "Local context removal; see release and PFCP outcomes", true);
+    smf_ue_event_establishment_end(sess, "cancelled", "Local context removed before initial N2/N4 setup completed");
+    smf_ue_event(sess, "ACTION", "LOCAL", "SessionContext", "removed", NULL, "Local context removal; see release and PFCP outcomes", true);
     smf_user_intent_clear(sess);
     smf_ue = smf_ue_find_by_id(sess->smf_ue_id);
     ogs_assert(smf_ue);

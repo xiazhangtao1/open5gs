@@ -266,7 +266,33 @@ static void test_event_metadata(ogs_sock_t *sock)
     ogs_assert(ogs_ngap_decode(&decoded, encoded) == OGS_OK);
     ogs_pkbuf_free(encoded);
     amf_ue_event_ngap(target, &decoded, "AMF->gNB", "queued");
+    NGAP_PathSwitchRequestIEs_t *zero_id = decoded.choice.initiatingMessage->value.choice.PathSwitchRequest.protocolIEs.list.array[0];
+    asn_uint642INTEGER(&zero_id->value.choice.AMF_UE_NGAP_ID, 0);
+    amf_ue_event_ngap(target, &decoded, "gNB->AMF", "received");
+    text = ogs_ue_events_query(event_arg, NULL, &status);
+    root = cJSON_Parse(text); free(text);
+    event = cJSON_GetArrayItem(get(root, "items"), cJSON_GetArraySize(get(root, "items"))-1);
+    ogs_assert(strstr(get(event, "info")->valuestring, "AMF-UE-ID=0 "));
+    cJSON_Delete(root);
     ogs_ngap_free(&decoded);
+    /* InitialUEMessage has no AMF UE ID; a present wire ID of zero is valid. */
+    ogs_ngap_message_t initial = {0};
+    initial.present = NGAP_NGAP_PDU_PR_initiatingMessage;
+    initial.choice.initiatingMessage = ogs_calloc(1, sizeof(*initial.choice.initiatingMessage));
+    initial.choice.initiatingMessage->value.present = NGAP_InitiatingMessage__value_PR_InitialUEMessage;
+    NGAP_InitialUEMessage_IEs_t *initial_ran = ogs_calloc(1, sizeof(*initial_ran));
+    initial_ran->value.present = NGAP_InitialUEMessage_IEs__value_PR_RAN_UE_NGAP_ID;
+    initial_ran->value.choice.RAN_UE_NGAP_ID = 7;
+    ASN_SEQUENCE_ADD(&initial.choice.initiatingMessage->value.choice.InitialUEMessage.protocolIEs.list, initial_ran);
+    amf_ue_event_ngap(source, &initial, "gNB->AMF", "received");
+    text = ogs_ue_events_query(event_arg, NULL, &status);
+    root = cJSON_Parse(text); free(text);
+    event = cJSON_GetArrayItem(get(root, "items"), cJSON_GetArraySize(get(root, "items"))-1);
+    ogs_assert(!strcmp(get(event, "name")->valuestring, "InitialUEMessage"));
+    ogs_assert(!strstr(get(event, "info")->valuestring, "AMF-UE-ID="));
+    ogs_assert(strstr(get(event, "info")->valuestring, "RAN-UE-ID=7"));
+    cJSON_Delete(root);
+    ogs_ngap_free(&initial);
     /* NAS transport carries one Session ID; UE-wide messages must stay unassigned. */
     for (unsigned i = 0; i < 4; i++) {
         ogs_nas_5gs_message_t nas = {0};

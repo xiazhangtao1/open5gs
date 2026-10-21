@@ -52,6 +52,12 @@ amf_location_test = executable('amf-location-test',
     dependencies : libamf_dep)
 test('amf-location', amf_location_test, suite: 'unit')
 
+smf_events_test = executable('smf-events-test',
+    sources : files('smf-events-test.c'),
+    include_directories : include_directories('../../src/smf'),
+    dependencies : libsmf_dep)
+test('smf-events', smf_events_test, suite: 'unit')
+
 test('xcnctl-inspect', find_program('python3'),
     args : [meson.current_source_dir() / 'xcnctl-test.py', xcnctl_exe],
     timeout : 60, suite: 'unit')

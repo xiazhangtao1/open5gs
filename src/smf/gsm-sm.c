@@ -915,7 +915,8 @@ void smf_gsm_state_operational(ogs_fsm_t *s, smf_event_t *e)
 
     switch (e->h.id) {
     case OGS_FSM_ENTRY_SIG:
-        smf_ue_event(sess, "ACTION", "SMF", "SessionEstablishment", "accepted", NULL, "SMF state transition", true);
+        smf_ue_event(sess, "ACTION", "LOCAL", "SessionEstablishment", "accepted", NULL,
+                "SMF accepted; waiting for N2/N4 setup", true);
         break;
 
     case OGS_FSM_EXIT_SIG:
@@ -3968,7 +3969,8 @@ void smf_gsm_state_exception(ogs_fsm_t *s, smf_event_t *e)
 
     switch (e->h.id) {
     case OGS_FSM_ENTRY_SIG:
-        smf_ue_event(sess, "ACTION", "SMF", "SessionProcedure", "failed", NULL, "SMF state transition", true);
+        smf_ue_event_establishment_end(sess, "failed", "SMF state machine exception");
+        smf_ue_event(sess, "ACTION", "LOCAL", "SessionProcedure", "failed", NULL, "SMF state transition", true);
         ogs_error("[%s:%d] State machine exception", smf_ue->supi, sess->psi);
         SMF_SESS_CLEAR(sess);
         break;

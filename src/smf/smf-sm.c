@@ -1056,6 +1056,7 @@ void smf_state_operational(ogs_fsm_t *s, smf_event_t *e)
             smf_ue = smf_ue_find_by_id(sess->smf_ue_id);
             ogs_assert(smf_ue);
 
+            smf_ue_event_sbi(sess, &sbi_message, true);
             if (state == SMF_UECM_STATE_REGISTERED ||
                 state == SMF_UECM_STATE_REGISTERED_HR) {
                 /* SMF Registration */
@@ -1367,6 +1368,10 @@ void smf_state_operational(ogs_fsm_t *s, smf_event_t *e)
             /* Here, we should not use ogs_assert(stream)
              * since 'namf-comm' service has no an associated stream. */
 
+            smf_ue_event_sbi_request(smf_sess_find_by_id(sbi_xact->sbi_object_id),
+                    sbi_xact->request, "timeout");
+            smf_ue_event_establishment_end(smf_sess_find_by_id(sbi_xact->sbi_object_id),
+                    "timeout", "SBI request timed out before initial N2/N4 setup completed");
             sbi_object = sbi_xact->sbi_object;
             ogs_assert(sbi_object);
 

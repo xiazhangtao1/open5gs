@@ -171,8 +171,12 @@ void amf_ue_event_ngap(amf_gnb_t *gnb, ogs_ngap_message_t *message,
         snprintf(cause, sizeof(cause), "NGAP group=%d value=%ld", m.cause->present, value);
     }
     char info[256];
-    snprintf(info, sizeof(info), "gNB=%u/%u peer=%s AMF-UE-ID=%" PRIu64 " RAN-UE-ID=%" PRIu64,
-            gnb->gnb_id, gnb->gnb_id_bits, ogs_sockaddr_to_string_static(gnb->sctp.addr), m.amf_id, m.ran_id);
+    char *p = ogs_slprintf(info, info + sizeof(info), "gNB=%u/%u peer=%s",
+            gnb->gnb_id, gnb->gnb_id_bits, ogs_sockaddr_to_string_static(gnb->sctp.addr));
+    if (m.has_amf)
+        p = ogs_slprintf(p, info + sizeof(info), " AMF-UE-ID=%" PRIu64, m.amf_id);
+    if (m.has_ran)
+        ogs_slprintf(p, info + sizeof(info), " RAN-UE-ID=%" PRIu64, m.ran_id);
     uint64_t seq = record_event(ran, NULL, "NGAP", direction, m.name, result, cause, info, false, gnb, &m);
     if (ran && !strcmp(direction, "gNB->AMF")) ran->event_ngap_seq = seq;
     if (ran && strstr(m.name, "Handover") && strstr(m.name, "Failure"))

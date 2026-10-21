@@ -21,6 +21,7 @@
 #include "sbi-path.h"
 #include "pfcp-path.h"
 #include "ngap-path.h"
+#include "ue-events.h"
 
 int ngap_handle_pdu_session_resource_setup_response_transfer(
         smf_sess_t *sess, ogs_sbi_stream_t *stream, ogs_pkbuf_t *pkbuf)
@@ -170,6 +171,11 @@ int ngap_handle_pdu_session_resource_setup_response_transfer(
         }
     }
 
+    if (sess->event_establishment.pending &&
+            !HOME_ROUTED_ROAMING_IN_VSMF(sess) && !HOME_ROUTED_ROAMING_IN_HSMF(sess) &&
+            !sess->event_establishment.stream_id)
+        sess->event_establishment.stream_id = ogs_sbi_id_from_stream(stream);
+
     if (far_update) {
         uint64_t pfcp_flags = OGS_PFCP_MODIFY_DL_ONLY|OGS_PFCP_MODIFY_ACTIVATE;
     /*
@@ -250,6 +256,8 @@ int ngap_handle_pdu_session_resource_setup_response_transfer(
 #endif
     }
 
+    if (!far_update && sess->event_establishment.stream_id == ogs_sbi_id_from_stream(stream))
+        smf_ue_event_establishment_end(sess, "completed", "N2 setup validated; N4 forwarding already active");
     rv = OGS_OK;
 cleanup:
     ogs_asn_free(
@@ -290,6 +298,7 @@ int ngap_handle_pdu_session_resource_setup_unsuccessful_transfer(
     rv = OGS_ERROR;
 
     Cause = &message.cause;
+    smf_ue_event_establishment_end(sess, "failed", "Initial N2 resource setup failed");
 
     if (Cause->present == NGAP_Cause_PR_radioNetwork &&
         Cause->choice.radioNetwork ==

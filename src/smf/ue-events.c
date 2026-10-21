@@ -40,6 +40,7 @@ static void record_event(smf_sess_t *sess, const char *protocol, const char *dir
     if ((!info || !*info) && flows) snprintf(e.info, sizeof(e.info), "%s", snapshot);
     if (wire) {
         e.psi = wire->psi; e.pti = wire->pti;
+        if (wire->flow_id) e.flow_id = wire->flow_id;
         if (wire->qfi) { e.qfi = wire->qfi; e.fiveqi = wire->fiveqi; }
     }
     ogs_ue_events_record(&e);
@@ -54,11 +55,30 @@ void smf_ue_event(smf_sess_t *sess, const char *protocol, const char *direction,
 void smf_ue_event_qos(smf_sess_t *sess, const char *result, unsigned qfi, unsigned fiveqi, const char *info)
 {
     ogs_ue_event_t wire = {.psi = sess->psi, .pti = sess->pti, .qfi = qfi, .fiveqi = fiveqi};
-    record_event(sess, "ACTION", "SMF", "QoSModification", result, NULL, info, true, &wire);
+    record_event(sess, "ACTION", "LOCAL", "QoSModification", result, NULL, info, true, &wire);
+}
+
+void smf_ue_event_establishment_end(smf_sess_t *sess, const char *result, const char *info)
+{
+    if (!sess || !sess->event_establishment.pending) return;
+    ogs_ue_event_t wire = {.psi = sess->psi, .pti = sess->pti,
+        .flow_id = sess->event_establishment.flow_id};
+    memset(&sess->event_establishment, 0, sizeof(sess->event_establishment));
+    record_event(sess, "ACTION", "LOCAL", "SessionEstablishment", result,
+            NULL, info, true, &wire);
+}
+
+void smf_ue_event_establishment_n4(smf_sess_t *sess, ogs_pool_id_t xact_id,
+        const char *result, const char *info)
+{
+    if (sess && xact_id != OGS_INVALID_POOL_ID &&
+            sess->event_establishment.xact_id == xact_id)
+        smf_ue_event_establishment_end(sess, result, info);
 }
 
 void smf_ue_event_nas(smf_sess_t *sess, ogs_nas_5gs_message_t *message, bool received)
 {
+    if (!ogs_ue_events_enabled() || !sess || !message) return;
     const char *name = "Unknown5GSM", *action = NULL, *result = NULL;
     char cause[96] = "";
     switch (message->gsm.h.message_type) {
@@ -90,6 +110,15 @@ void smf_ue_event_nas(smf_sess_t *sess, ogs_nas_5gs_message_t *message, bool rec
     default: break;
     }
     if (received && action && !strcmp(result, "started")) sess->event_flow_id = ogs_ue_events_new_trace();
+    if (received && message->gsm.h.message_type == OGS_NAS_5GS_PDU_SESSION_ESTABLISHMENT_REQUEST) {
+        memset(&sess->event_establishment, 0, sizeof(sess->event_establishment));
+        sess->event_establishment.pending = true;
+        sess->event_establishment.flow_id = sess->event_flow_id;
+    } else if (received && message->gsm.h.message_type == OGS_NAS_5GS_PDU_SESSION_RELEASE_REQUEST) {
+        smf_ue_event_establishment_end(sess, "cancelled", "Session released before initial N2/N4 setup completed");
+    } else if (message->gsm.h.message_type == OGS_NAS_5GS_PDU_SESSION_ESTABLISHMENT_REJECT) {
+        memset(&sess->event_establishment, 0, sizeof(sess->event_establishment));
+    }
     ogs_ue_event_t wire = {.psi = message->gsm.h.pdu_session_identity, .pti = message->gsm.h.procedure_transaction_identity};
     record_event(sess, "NAS-5GSM", received ? "UE->SMF" : "SMF->UE", name,
             received ? "received" : "prepared", cause, NULL, false, &wire);
@@ -110,7 +139,8 @@ void smf_ue_event_pfcp(smf_sess_t *sess, uint8_t type, const char *result, uint8
     default: return;
     }
     char text[96] = "";
-    if (cause) snprintf(text, sizeof(text), "PFCP cause=%u %s", cause, ogs_pfcp_cause_get_name(cause));
+    if (cause) snprintf(text, sizeof(text), "PFCP cause=%u %s", cause,
+            cause == OGS_PFCP_CAUSE_REQUEST_ACCEPTED ? "Request accepted" : ogs_pfcp_cause_get_name(cause));
     smf_ue_event(sess, "PFCP", type % 2 ? "UPF->SMF" : "SMF->UPF", name, result, text, NULL, false);
     if (cause) {
         const char *action = type == OGS_PFCP_SESSION_ESTABLISHMENT_RESPONSE_TYPE ? "N4SessionEstablishment" :
@@ -120,17 +150,94 @@ void smf_ue_event_pfcp(smf_sess_t *sess, uint8_t type, const char *result, uint8
     }
 }
 
+static bool equal(const char *a, const char *b)
+{
+    return a && !strcmp(a, b);
+}
+
+static void record_sbi(smf_sess_t *sess, const ogs_sbi_header_t *h,
+        int status, bool received, const char *result)
+{
+    const char *peer = "peer", *operation = "SBI";
+    const char *resource = h->resource.component[0];
+    const char *subresource = h->resource.component[1];
+    const char *action = h->resource.component[2];
+    bool response = status != 0;
+    char name[64], direction[24], info[256];
+
+    if (equal(h->service.name, OGS_SBI_SERVICE_NAME_NSMF_PDUSESSION)) {
+        peer = equal(resource, OGS_SBI_RESOURCE_NAME_SM_CONTEXTS) ? "AMF" : "SMF";
+        if (equal(resource, OGS_SBI_RESOURCE_NAME_SM_CONTEXTS)) {
+            if (equal(action, OGS_SBI_RESOURCE_NAME_MODIFY)) operation = "UpdateSMContext";
+            else if (equal(action, OGS_SBI_RESOURCE_NAME_RELEASE)) operation = "ReleaseSMContext";
+            else if (equal(h->method, OGS_SBI_HTTP_METHOD_POST) && !subresource) operation = "CreateSMContext";
+            else if (equal(h->method, OGS_SBI_HTTP_METHOD_GET)) operation = "RetrieveSMContext";
+        } else if (equal(resource, OGS_SBI_RESOURCE_NAME_PDU_SESSIONS)) {
+            if (equal(action, OGS_SBI_RESOURCE_NAME_MODIFY)) operation = "UpdatePDUSession";
+            else if (equal(action, OGS_SBI_RESOURCE_NAME_RELEASE)) operation = "ReleasePDUSession";
+            else if (!subresource) operation = "CreatePDUSession";
+        }
+    } else if (equal(h->service.name, OGS_SBI_SERVICE_NAME_NUDM_SDM)) {
+        peer = "UDM";
+        if (equal(subresource, OGS_SBI_RESOURCE_NAME_SM_DATA)) operation = "GetSMData";
+        else if (equal(subresource, OGS_SBI_RESOURCE_NAME_SDM_SUBSCRIPTIONS))
+            operation = equal(h->method, OGS_SBI_HTTP_METHOD_DELETE) ? "DeleteSDMSubscription" : "CreateSDMSubscription";
+    } else if (equal(h->service.name, OGS_SBI_SERVICE_NAME_NUDM_UECM)) {
+        peer = "UDM";
+        operation = equal(h->method, OGS_SBI_HTTP_METHOD_DELETE) ? "DeregisterSMF" : "RegisterSMF";
+    } else if (equal(h->service.name, OGS_SBI_SERVICE_NAME_NPCF_SMPOLICYCONTROL)) {
+        peer = "PCF";
+        if (equal(resource, OGS_SBI_RESOURCE_NAME_SM_POLICIES)) {
+            if (equal(action, OGS_SBI_RESOURCE_NAME_DELETE)) operation = "DeleteSMPolicy";
+            else if (equal(action, OGS_SBI_RESOURCE_NAME_UPDATE)) operation = "UpdateSMPolicy";
+            else if (!subresource) operation = "CreateSMPolicy";
+        }
+    } else if (equal(h->service.name, OGS_SBI_SERVICE_NAME_NAMF_COMM)) {
+        peer = "AMF";
+        if (equal(resource, OGS_SBI_RESOURCE_NAME_UE_CONTEXTS) &&
+                equal(action, OGS_SBI_RESOURCE_NAME_N1_N2_MESSAGES))
+            operation = "N1N2MessageTransfer";
+    }
+    snprintf(name, sizeof(name), "%s%s", operation, response ? "Response" : "Request");
+    /* nsmf-pdusession responses received here come from another SMF. */
+    if (equal(h->service.name, OGS_SBI_SERVICE_NAME_NSMF_PDUSESSION) &&
+            response == received) peer = "SMF";
+    snprintf(direction, sizeof(direction), "%s->%s", received ? peer : "SMF", received ? "SMF" : peer);
+    snprintf(info, sizeof(info), "%s /%s", h->method ? h->method : "", h->service.name ? h->service.name : "");
+    if (h->api.version)
+        snprintf(info + strlen(info), sizeof(info) - strlen(info), "/%s", h->api.version);
+    for (size_t i = 0; i < OGS_SBI_MAX_NUM_OF_RESOURCE_COMPONENT; i++) {
+        if (!h->resource.component[i]) break;
+        snprintf(info + strlen(info), sizeof(info) - strlen(info), "/%s", h->resource.component[i]);
+    }
+    if (status) snprintf(info + strlen(info), sizeof(info) - strlen(info), " HTTP=%d", status);
+    smf_ue_event(sess, "SBI", direction, name, result, NULL, info, false);
+}
+
 void smf_ue_event_sbi(smf_sess_t *sess, ogs_sbi_message_t *message, bool received)
 {
-    if (!message) return;
-    char info[256];
-    char status[24] = "";
-    if (message->res_status) snprintf(status, sizeof(status), " HTTP=%d", message->res_status);
-    snprintf(info, sizeof(info), "%s %s/%s/%s%s", message->h.method ? message->h.method : "",
-            message->h.service.name ? message->h.service.name : "",
-            message->h.resource.component[0] ? message->h.resource.component[0] : "",
-            message->h.resource.component[2] ? message->h.resource.component[2] : "",
-            status);
-    smf_ue_event(sess, "SBI", received ? "peer->SMF" : "SMF->peer", "SMContextTransaction",
-            message->res_status >= 400 ? "failed" : "received", NULL, info, false);
+    if (!ogs_ue_events_enabled() || !sess || !message) return;
+    record_sbi(sess, &message->h, message->res_status, received,
+            message->res_status >= 400 ? "failed" : received ? "received" : "queued");
+}
+
+void smf_ue_event_sbi_request(smf_sess_t *sess, ogs_sbi_request_t *request, const char *result)
+{
+    if (!ogs_ue_events_enabled() || !sess || !request) return;
+    if (request->h.service.name) {
+        record_sbi(sess, &request->h, 0, false, result);
+    } else if (request->h.uri) {
+        /* Parse a private header; the request and URI remain owned by SBI. */
+        ogs_sbi_message_t message = {0};
+        ogs_sbi_header_t header = {.uri = request->h.uri};
+        char *path = NULL;
+        if ((header.uri[0] == '/' || ogs_sbi_getpath_from_uri(&path, header.uri)) &&
+                ogs_sbi_parse_header(&message, &header) == OGS_OK) {
+            message.h.method = request->h.method;
+            record_sbi(sess, &message.h, 0, false, result);
+        } else
+            smf_ue_event(sess, "SBI", "SMF->peer", "SBIRequest", result, NULL, "Invalid SBI request URI", false);
+        ogs_sbi_header_free(&header);
+        ogs_free(path);
+    }
 }

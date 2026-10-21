@@ -36,6 +36,7 @@ void smf_sbi_close(void);
 
 bool smf_sbi_send_request(
         ogs_sbi_nf_instance_t *nf_instance, ogs_sbi_xact_t *xact);
+int smf_sbi_discover_and_send_xact(ogs_sbi_xact_t *xact);
 
 /*
  * PFCP delete triggers are defined in lib/pfcp/xact.h (values 1–7).

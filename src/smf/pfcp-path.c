@@ -295,6 +295,10 @@ static void sess_5gc_timeout(ogs_pfcp_xact_t *xact, void *data)
         xact->handover_generation != sess->handover.generation)
         return;
     smf_ue_event(sess, "ACTION", "SMF->UPF", "N4SessionTransaction", "timeout", "PFCP transaction timeout", NULL, true);
+    if (type == OGS_PFCP_SESSION_ESTABLISHMENT_REQUEST_TYPE)
+        smf_ue_event_establishment_end(sess, "timeout", "Initial N4 session establishment timed out");
+    else
+        smf_ue_event_establishment_n4(sess, xact->id, "timeout", "Initial N4 activation timed out");
     smf_ue = smf_ue_find_by_id(sess->smf_ue_id);
     ogs_assert(smf_ue);
 
@@ -516,10 +520,12 @@ int smf_pfcp_send_modify_list(
     int rv;
     ogs_pkbuf_t *n4buf = NULL;
     ogs_pfcp_header_t h;
+    ogs_pool_id_t event_xact_id;
 
     ogs_assert(sess);
     ogs_assert(xact);
 
+    event_xact_id = xact->id;
     xact->local_seid = sess->smf_n4_seid;
 
     memset(&h, 0, sizeof(ogs_pfcp_header_t));
@@ -529,12 +535,14 @@ int smf_pfcp_send_modify_list(
     n4buf = (*modify_list)(h.type, sess, xact);
     if (!n4buf) {
         ogs_error("modify_list() failed");
+        smf_ue_event_establishment_n4(sess, event_xact_id, "failed", "Cannot build initial N4 activation");
         return OGS_ERROR;
     }
 
     rv = ogs_pfcp_xact_update_tx(xact, &h, n4buf);
     if (rv != OGS_OK) {
         ogs_error("ogs_pfcp_xact_update_tx() failed");
+        smf_ue_event_establishment_n4(sess, event_xact_id, "failed", "Cannot queue initial N4 activation");
         return OGS_ERROR;
     }
 
@@ -546,6 +554,8 @@ int smf_pfcp_send_modify_list(
     } else {
         rv = ogs_pfcp_xact_commit(xact);
         smf_ue_event_pfcp(sess, h.type, rv == OGS_OK ? "queued" : "send-failed", 0);
+        if (rv != OGS_OK)
+            smf_ue_event_establishment_n4(sess, event_xact_id, "failed", "Cannot send initial N4 activation");
         ogs_expect(rv == OGS_OK);
 
         return rv;
@@ -658,6 +668,11 @@ int smf_5gc_pfcp_send_all_pdr_modification_request(
 
     xact->local_seid = sess->smf_n4_seid;
     xact->modify_flags = flags | OGS_PFCP_MODIFY_SESSION;
+    if (sess->event_establishment.pending && sess->event_establishment.stream_id &&
+            !sess->event_establishment.xact_id &&
+            sess->event_establishment.stream_id == xact->assoc_stream_id &&
+            flags == (OGS_PFCP_MODIFY_DL_ONLY|OGS_PFCP_MODIFY_ACTIVATE))
+        sess->event_establishment.xact_id = xact->id;
     if (flags & OGS_PFCP_MODIFY_USER_INTENT)
         xact->intent_generation = smf_user_intent_generation(sess);
     xact->delete_trigger = trigger;

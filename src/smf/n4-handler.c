@@ -28,6 +28,7 @@
 #include "ngap-path.h"
 #include "fd-path.h"
 #include "npcf-handler.h"
+#include "ue-events.h"
 
 uint8_t gtp_cause_from_pfcp(uint8_t pfcp_cause, uint8_t gtp_version)
 {
@@ -270,12 +271,14 @@ void smf_5gc_n4_handle_session_modification_response(
     uint32_t generation;
     unsigned int next_offset;
     bool more;
+    ogs_pool_id_t event_xact_id;
 
     ogs_debug("Session Modification Response [5gc]");
 
     ogs_assert(xact);
     ogs_assert(rsp);
 
+    event_xact_id = xact->id;
     generation = xact->handover_generation;
     next_offset = xact->handover_next_offset;
     more = xact->handover_more;
@@ -439,6 +442,7 @@ void smf_5gc_n4_handle_session_modification_response(
     }
 
     if (status != OGS_SBI_HTTP_STATUS_OK) {
+        smf_ue_event_establishment_n4(sess, event_xact_id, "failed", "Initial N4 activation rejected or invalid");
         char *strerror = ogs_msprintf(
                 "PFCP Cause [%d] : Not Accepted", rsp->cause.u8);
         if (stream)
@@ -479,6 +483,7 @@ void smf_5gc_n4_handle_session_modification_response(
         sess->handover.batch_offset = 0;
 
     if (sess->local_ul_addr == NULL && sess->local_ul_addr6 == NULL) {
+        smf_ue_event_establishment_n4(sess, event_xact_id, "failed", "Initial N4 activation has no UP F-TEID");
         if (stream)
             smf_sbi_send_sm_context_update_error_log(
                 stream, status, "No UP F_TEID", NULL);
@@ -623,7 +628,7 @@ void smf_5gc_n4_handle_session_modification_response(
                 smf_namf_comm_send_n1_n2_message_transfer(sess, NULL, &param);
 
                 if (sess->pending_modification_xact) {
-                    if (ogs_sbi_discover_and_send(
+                    if (smf_sbi_discover_and_send_xact(
                                 sess->pending_modification_xact) != OGS_OK) {
                         ogs_error("ogs_sbi_discover_and_send() failed");
                         ogs_sbi_xact_remove(sess->pending_modification_xact);
@@ -904,6 +909,7 @@ void smf_5gc_n4_handle_session_modification_response(
             }
         }
 
+        smf_ue_event_establishment_n4(sess, event_xact_id, "completed", "Initial N2 setup and N4 activation completed");
     } else if (flags & OGS_PFCP_MODIFY_DEACTIVATE) {
         if (flags & OGS_PFCP_MODIFY_ERROR_INDICATION) {
             smf_n1_n2_message_transfer_param_t param;
