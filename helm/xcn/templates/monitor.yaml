@@ -104,8 +104,8 @@ spec:
               topologyKey: kubernetes.io/hostname
       containers:
         - name: monitor
-          image: {{ printf "%s:%s" .Values.monitor.image.repository .Values.monitor.image.tag }}
-          imagePullPolicy: {{ .Values.monitor.image.pullPolicy }}
+          image: {{ printf "%s:%s" (default .Values.monitor.image.repository .Values.monitor.collectorImage.repository) (default .Values.monitor.image.tag .Values.monitor.collectorImage.tag) }}
+          imagePullPolicy: {{ default .Values.monitor.image.pullPolicy .Values.monitor.collectorImage.pullPolicy }}
           env:
             - name: MONITOR_MEMORY_LIMIT_BYTES
               valueFrom:

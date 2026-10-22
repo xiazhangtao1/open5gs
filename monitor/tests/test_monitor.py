@@ -336,6 +336,27 @@ class AsyncTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(collector.cache.source("amf_events")["gap_count"], 2)
         self.assertEqual(collector.cursors["amf"]["boot_id"], "new-boot")
 
+    async def test_event_scientific_notation_timestamp(self):
+        collector = self.app["collector"]
+        # Actual cJSON wire format from AMF/SMF; uint64 IDs remain strings.
+        stamp = "1.79269235803839e+15"
+        async def events(*args, **kwargs):
+            return ('{"boot_id":"live","next_seq":"9007199254740993",'
+                    '"items":[{"seq":"9007199254740993","timestamp_us":'
+                    + stamp + ',"name":"RegistrationRequest"}]}').encode()
+        collector.request = events
+        await collector.events("amf", 2)
+        row = collector.cache.query("events", {})["items"][0]
+        self.assertEqual(row["timestamp_us"], "1792692358038390")
+        self.assertEqual(row["seq"], "9007199254740993")
+        self.assertEqual(collector.cursors["amf"]["after"], "9007199254740993")
+        for invalid in ("1.5", "NaN", "Infinity", "9007199254740992.0", "null", "true", "18446744073709551616"):
+            stamp = invalid
+            with self.subTest(stamp=invalid), self.assertRaises(ValueError):
+                await collector.events("amf", 2)
+            self.assertEqual(len(collector.cache.events), 1)
+            self.assertEqual(collector.cursors["amf"]["after"], "9007199254740993")
+
     @unittest.skipUnless(os.getenv("XCNCTL"), "set XCNCTL for real CLI equivalence")
     async def test_cli_ue_equivalence(self):
         source = web.Application()

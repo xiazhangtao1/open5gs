@@ -73,9 +73,16 @@ class Collector:
                     or not str(doc.get("next_seq", "")).isdigit()):
                 raise ValueError("invalid event page")
             for e in doc["items"]:
+                # cJSON can emit integral microsecond timestamps in scientific
+                # notation, which json.loads decodes as float. Only normalize
+                # exactly representable integers; keep sequence IDs strict.
+                stamp = e.get("timestamp_us") if isinstance(e, dict) else None
+                if (isinstance(stamp, float) and math.isfinite(stamp)
+                        and stamp.is_integer() and 0 <= stamp < 1 << 53):
+                    e["timestamp_us"] = str(int(stamp))
                 if (not isinstance(e, dict) or not str(e.get("seq", "")).isdigit()
                         or not str(e.get("timestamp_us", "")).isdigit()
-                        or int(e["seq"]) >= 1 << 64):
+                        or int(e["seq"]) >= 1 << 64 or int(e["timestamp_us"]) >= 1 << 64):
                     raise ValueError("invalid event record")
             self.cache.add_events(nf, doc)
             source = self.cache.source(name)

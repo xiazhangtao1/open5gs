@@ -2,7 +2,7 @@
 
 监控采用单实例定时采集、独立进程内存缓存和 WebUI 只读接口。浏览器不会调用 `xcnctl`，也不会直接查询 AMF、SMF 或 UPF。事件按容量保留，无 30 分钟过期规则；速率曲线使用固定点数的环形缓存。
 
-默认 `monitor.enabled: false`。当前实现与测试没有更新生产部署。第一次启用会给 5gc Pod 增加 sidecar 和共享 socket 卷，触发 Pod 重建，必须安排维护窗口，并先完成本文的用户面性能验收。
+Chart 默认 `monitor.enabled: false`。2026-10-23 应用户明确要求，现场 `xcn` 已升级并启用监控演示，接入真实 OAI UE 并保持限速双向流量，见本文末尾记录。第一次启用会给 5gc Pod 增加 sidecar 和共享 socket 卷，触发 Pod 重建，需安排维护窗口；正式性能验收要求见下文。
 
 ## 数据路径
 
@@ -65,6 +65,8 @@ UPF 监控默认关闭，仅设置 `XCN_UPF_MONITOR_SNAPSHOT=1` 才分配快照�
 
 `monitor.cpuSet` 必须指定预留 CPU，供采集器、agent 和 WebUI 使用。不得与 UPF/VPP 的工作核、控制核及其 SMT 兄弟重叠。采集器读取实际 `xnet.com/used-core` 注解再验证，未能验证时停止 NF 采集；后续 Pod 分配变化也会重新验证。该实现不替运维系统预留 CPU，请同时确保这些核不被其他繁忙任务使用。
 
+监控和 WebUI 默认 CPU 上限为 `900m`、内存上限为 `512Mi`。现场 xnet CPU webhook 会把整数核上限自动分配到独占 CPU，即使 request 是小数核，也会与手动指定的共享空闲核冲突；使用小数核上限后，再由 `monitor.cpuSet` 绑定已核验的空闲 CPU。不要将上限改为整数核而不重新核对实际分配。
+
 ```bash
 lscpu -e=CPU,CORE,SOCKET,ONLINE
 kubectl -n xcn get pods -o wide
@@ -113,13 +115,15 @@ helm template xcn ./helm/xcn -n xcn \
 
 性能验收通过后，在维护窗口执行同样参数的 `helm upgrade xcn ./helm/xcn -n xcn -f ...`。UPF 统计必须已开启，采样周期不大于 2,000 ms，socket 必须在独立目录（如 `/run/open5gs/upf-stats.sock`）中；Helm 会拒绝不安全的挂载目录。内部共享令牌自动生成并在升级时复用，也可通过 `monitor.existingSecret` 提供有 `token` 键的 Secret。UPF UDS 保持 root 0600，agent 使用 root UID、无 capabilities、只读根目录和只读 socket 卷。
 
+仅修复采集器时，可用 `monitor.collectorImage.repository/tag/pullPolicy` 覆盖其镜像；未填写的字段沿用 `monitor.image`。保留 agent 的 `monitor.image` 后，这类更新只重建独立采集器，不改变 5gc、core 或 WebUI 的 Pod 模板。变更前仍应比较实际渲染结果。
+
 紧急停止采集时，修改 `monitor.config.enabled=false`，不要先把 `monitor.enabled` 改成 false。前者仅修改挂载的 ConfigMap，不改变 Pod 模板，不重启核心网；等待 Kubernetes 投射更新后，采集器和 agent 停止，UPF 订阅随后到期。可调整配置周期同理。若只需立即关闭，可直接编辑监控 ConfigMap 的 `config.json`；后续 Helm 升级需同步保存该值。
 
 彻底卸载监控、回退 UPF 镜像或更改 `monitor.enabled` 会再次改变 5gc Pod，需维护窗口。使用保存的 revision 执行 `helm rollback xcn REVISION -n xcn --wait`，并核对实际 AMF/SMF/UPF/VPP 镜像、Pod 就绪、注册和数据转发恢复。不要只回退前端而遗留未知版本的用户面改动。
 
 ## 验证与上线门槛
 
-本次在隔离容器和本机测试端口验证，不占用生产 9999，不修改线上 release：
+开发阶段在隔离容器和本机测试端口完成以下验证；这部分测试不占用现场 9999，也不修改线上 release：
 
 - UPF 真实 Meson/Ninja 严格编译；快照所有权并发、忙时跳过、租约过期、转义及 uint64 边界测试，通过 ASan/UBSan 和泄漏检查。
 - 既有 32 项 `xcnctl` 单元测试通过。监控 16 项测试通过，含真实 CLI UE/gNB 字段比较、关联歧义、旧数据保留、事件启动/重启游标、无时间淘汰、容量上限、内存保护和 100 读者不增加 NF 请求。
@@ -150,4 +154,38 @@ helm lint helm/xcn
 
 `monitor/tests/lab.py` 仅提供测试来源，包含 100 UE、200 会话、800 QFI、1,600 条双向规则。压测应连接真实采集器、agent、WebUI 和隔离 MongoDB；禁止将实验 fixture 接入生产。`browsers.k6.js` 使用真实登录、每 4 分钟续令牌、50 VU 与 2 秒混合页面轮询，默认持续 30 分钟；`observe.py` 记录 NF 请求速率、RSS、FD、线程和 CPU。可用 `DURATION` / `VUS` 调整。凭据只供专用测试账户使用，勿提交到仓库。
 
-**用户面上线仍须完成**：原版本、修改后关闭、新版开启无浏览器、新版开启 50 浏览器四组，同样的 CPU/NIC/VPP 配置与 UE/会话规模，小包/大包、双向流量及会话增删，各至少 3 次。比较吞吐、丢包、P50/P95/P99 时延、UPF/VPP CPU、原读锁等待和持有时间。不得有超出噪声的可重复退化；吞吐下降超过 1% 或 P99 增加超过 5% 直接拒绝上线。当前没有完成该 VPP/物理链路性能验收，保持默认关闭。
+**正式用户面性能验收仍须完成**：原版本、修改后关闭、新版开启无浏览器、新版开启 50 浏览器四组，同样的 CPU/NIC/VPP 配置与 UE/会话规模，小包/大包、双向流量及会话增删，各至少 3 次。比较吞吐、丢包、P50/P95/P99 时延、UPF/VPP CPU、原读锁等待和持有时间。不得有超出噪声的可重复退化；吞吐下降超过 1% 或 P99 增加超过 5% 直接拒绝上线。当前没有完成该 VPP/物理链路性能验收；Chart 继续默认关闭，下面的现场演示仅验证真实接入、限速流量和网页功能。
+
+## 2026-10-23 现场演示
+
+用户要求升级当前核心网、接入用户并保持灌包。现场 Helm release 为 `xcn` / namespace `xcn`，最终 revision 为 `181`，网页入口为 `http://10.2.0.119:9999/`。保留原 VPP/memif、N3/N6 地址、路由、用户地址池及核心网资源配置；升级前的 revision 为 `178`，备份保存在本机 `/tmp/xcn-live-upgrade-eac6bb782/`，目录仅所有者可访问。
+
+| 组件 | 实际镜像 |
+| --- | --- |
+| 核心网 | `localhost:5000/xcn-runtime:monitor-eac6bb782-1023` |
+| WebUI | `localhost:5000/xcn-webui:monitor-eac6bb782-1023` |
+| UPF agent | `localhost:5000/xcn-monitor:monitor-eac6bb782-1023` |
+| 独立采集器 | `localhost:5000/xcn-monitor:monitor-event-ts-1023` |
+
+核心网由 `eac6bb782` 全量 Meson/Ninja 编译并安装，`upf_memif=true`，运行镜像启动及动态库检查通过。现场发现 cJSON 会把部分整数微秒时间戳输出成科学计数法，现已允许安全整数范围内的有限、无小数浮点时间戳，并归一化为十进制字符串；序号仍严格保留 uint64 字符串。回归测试覆盖真实线格式、非法浮点数、越界和失败时保留游标，全部 17 项测试含 CLI 等价检查通过；实际 Python 3.12 镜像通过 16 项、跳过依赖完整核心网动态库的 CLI 等价检查。
+
+重新接入 1 个 OAI gNB 和真实 UE `imsi-460110000000100`，UE IPv4 为 `10.45.0.3`、DNN 为 `cmnet`、PSI 为 `2`。验证时核心网 10/10 就绪，NRF/SCP 2/2 就绪，无新增容器重启；网页显示 1 个 connected UE、1 个 gNB、1 个 PDU 会话和 55 条真实控制面事件。浏览器检查覆盖概览、事件、详情与主题，速率与 `xcnctl show rate` 对照一致。
+
+演示使用 UE 到本机 `10.2.0.119:15201/15202` 的 UDP 流量，上下行各 `2 Mbps`、应用报文 `1200` 字节。灌包进程分别绑定 CPU `38/39`，接收服务绑定 CPU `40`；监控、agent 和 WebUI 使用 CPU `36-37`，采集器已通过现场 UPF/VPP 及 SMT 兄弟核校验。UPF 统计约为上下行各 `2.05 Mbps`，包含用户 IP/UDP 开销；已完成的分钟接收统计为零丢包。最终灌包改为每小时一轮并自动重连，日志按轮覆盖；保留运行供用户查看。
+
+| 现场短测 | 监控请求 | 失败 | P95 | P99 |
+| --- | --- | --- | --- | --- |
+| 50 浏览者 / 2 分钟，事件解析修复前 | 3,664 | 0 | 4.32 ms | 60.89 ms |
+| 50 浏览者 / 1 分钟，最终采集器 | 1,787 | 0 | 5.59 ms | 79.21 ms |
+
+最终短测包含真实登录、事件和速率页，监控请求全部成功。AMF/SMF 事件和 UPF 快照各约 `0.492` 次/秒，UE/PDU 详情各约 `0.095` 次/秒，没有随 50 个浏览者增加到逐浏览器查询；结束时采集器实际内存约 `42.94 MiB / 512 MiB`，事件源无错误。表中的延迟只指监控接口；集中登录另有秒级耗时，不能作为用户面时延数据。
+
+集群未提供 Metrics API，页面明确提示容器实时 CPU/内存用量不可用；采集器自身实际内存保护、网元指标、Pod 就绪状态、注册/会话、速率和事件可正常查看。现场 gNB 的广播 NCI 与 gNB ID 存在原有不一致，页面沿用网元报告，不隐藏此状态。
+
+演示流量的临时停止脚本只停止本次两个客户端和接收服务，不卸载 UE 或核心网：
+
+```bash
+bash /tmp/xcn-live-upgrade-eac6bb782/stop-traffic.sh
+```
+
+该脚本和验证日志位于当前主机的临时目录；需要长期保留时应另行归档。停止采集仍使用前述 ConfigMap 开关，避免为了关闭网页采集而重建 5gc Pod。
