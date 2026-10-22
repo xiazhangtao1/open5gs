@@ -67,6 +67,8 @@ class HeaderContainer extends Component {
     return (
       <div>
         <Header 
+          theme={this.props.theme}
+          onToggleTheme={this.props.onToggleTheme}
           onSidebarToggle={handleSidebarToggle}
           onLogoutRequest={logoutHandler.show}
         />

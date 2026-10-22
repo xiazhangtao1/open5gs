@@ -9,13 +9,13 @@ export default class MyDocument extends Document {
     const main = sheet.collectStyles(<Main />)
     const styleTags = sheet.getStyleElement()
     return (
-      <html>
+      <html lang="zh-CN">
         <Head>
           <title>Open5GS</title>
 
           <meta charSet="utf-8" />
           <meta httpEquiv="X-UA-Compatible" content="IE=edge,chrome=1" />
-          <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+          <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
           <meta name="author" content="Open5GS" />
           <meta name="description" content={description} />
@@ -24,6 +24,7 @@ export default class MyDocument extends Document {
           <link rel="stylesheet" type="text/css" href="/static/css/bootstrap.min.css" />
           <link rel="stylesheet" type="text/css" href="/static/css/nprogress.css" />
           <link rel="stylesheet" type="text/css" href="/static/css/index.css" />
+          <link rel="stylesheet" type="text/css" href="/static/css/monitor.css" />
           {styleTags}
         </Head>
         <body>

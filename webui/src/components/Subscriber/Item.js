@@ -30,7 +30,7 @@ const Card = styled.div`
   position: relative;
   display: flex;
 
-  background: white;
+  background: var(--surface, white);
   box-shadow: 0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.24);
 
   transition: all 0.3s cubic-bezier(.25,.8,.25,1);
@@ -68,14 +68,14 @@ const CircleButton = styled.div`
   justify-content: center;
   margin: 1px;
 
-  background: white;
-  color: ${oc.gray[6]};
+  background: var(--surface, white);
+  color: var(--muted, ${oc.gray[6]});
 
   border-radius: 1rem;
   font-size: 1.5rem;
 
   &:hover {
-    color: ${oc.indigo[6]};
+    color: var(--primary, ${oc.indigo[6]});
   }
 
   &.delete {
@@ -87,7 +87,7 @@ const CircleButton = styled.div`
 
 const Imsi = styled.div`
   padding-left: 1rem;
-  color: ${oc.gray[8]};
+  color: var(--ink, ${oc.gray[8]});
   font-size: 1.25rem;
   line-height : 3rem;
 `;

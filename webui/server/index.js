@@ -74,6 +74,9 @@ co(function* () {
   }
 
   const server = express();
+
+  // Must precede session, CSRF and passport.session: polling never touches MongoDB.
+  server.use('/api/monitor', require('./monitor')());
   
   server.use(bodyParser.json());
   server.use(bodyParser.urlencoded({ extended: true }));

@@ -5,6 +5,7 @@
 
 #include "rate-stats.h"
 #include "dataplane.h"
+#include "rate-snapshot.h"
 
 #include <arpa/inet.h>
 #include <errno.h>
@@ -42,6 +43,12 @@ typedef struct {
 } upf_rate_user_t;
 
 static ogs_thread_t *rate_thread;
+static ogs_thread_t *socket_thread;
+static upf_snapshot_t snapshot;
+static bool snapshot_enabled;
+/* Legacy CLI and sampler used to share one thread. Keep their rate fields
+ * serialized without involving packet workers or waiting in the sampler. */
+static pthread_mutex_t rate_values_lock = PTHREAD_MUTEX_INITIALIZER;
 static int listen_fd = -1;
 static int stopping;
 static __thread upf_rate_slot_t *dirty_slot[UPF_RATE_MAX_DIRTY];
@@ -194,15 +201,50 @@ static void sample_rates(ogs_time_t now, ogs_time_t *previous)
 {
     upf_sess_t *sess;
     uint64_t elapsed;
+    upf_snapshot_frame_t *frame;
+    ogs_time_t lock_start = 0, lock_acquired = 0;
 
     if (!*previous) {
         *previous = now;
         return;
     }
+    if (snapshot_enabled && pthread_mutex_trylock(&rate_values_lock) != 0)
+        return;
     elapsed = now > *previous ? now - *previous : 1;
+    frame = snapshot_enabled ? upf_snapshot_begin(&snapshot, now) : NULL;
+    if (frame) {
+        frame->timestamp_us = ogs_time_now();
+        frame->sample_us = elapsed;
+        lock_start = ogs_get_monotonic_time();
+    }
     upf_dataplane_read_lock();
+    if (frame) lock_acquired = ogs_get_monotonic_time();
     ogs_list_for_each(&upf_self()->sess_list, sess) {
         int i;
+        upf_snapshot_session_t *copy = NULL;
+
+        if (frame) {
+            if (frame->session_count < snapshot.max_sessions) {
+                copy = &frame->sessions[frame->session_count++];
+                memset(copy, 0, sizeof(*copy));
+                ogs_cpystrn(copy->supi, sess->supi, sizeof(copy->supi));
+                ogs_cpystrn(copy->dnn, sess->apn_dnn ? sess->apn_dnn : "",
+                        sizeof(copy->dnn));
+                copy->seid = sess->upf_n4_seid;
+                copy->worker = sess->owner_worker;
+                copy->uptime_seconds = now > sess->established_at ?
+                    (now - sess->established_at) / OGS_USEC_PER_SEC : 0;
+                if (sess->ipv4) {
+                    copy->has_ipv4 = true;
+                    memcpy(copy->ipv4, sess->ipv4->addr, sizeof(copy->ipv4));
+                }
+                if (sess->ipv6) {
+                    copy->has_ipv6 = true;
+                    memcpy(copy->ipv6, sess->ipv6->addr, sizeof(copy->ipv6));
+                }
+                copy->first_rule = frame->rule_count;
+            } else frame->truncated = true;
+        }
 
         for (i = 0; i < OGS_MAX_NUM_OF_PDR; i++) {
             upf_rate_slot_t *slot = &sess->rate_slot[i];
@@ -221,10 +263,31 @@ static void sample_rates(ogs_time_t now, ogs_time_t *previous)
                 OGS_USEC_PER_SEC / elapsed;
             slot->sampled_octets = octets;
             slot->sampled_packets = packets;
+            if (copy) {
+                if (frame->rule_count < snapshot.max_rules) {
+                    upf_snapshot_rule_t *r = &frame->rules[frame->rule_count++];
+                    r->pdr_id = slot->pdr_id;
+                    r->qer_id = slot->qer_id;
+                    r->generation = slot->generation;
+                    r->qfi = slot->qfi;
+                    r->direction = slot->direction;
+                    r->bps = slot->rate_bps;
+                    r->pps = slot->rate_pps;
+                    r->octets = octets;
+                    r->packets = packets;
+                    copy->rule_count++;
+                } else frame->truncated = true;
+            }
         }
     }
     upf_dataplane_read_unlock();
+    if (frame) {
+        frame->lock_wait_us = lock_acquired - lock_start;
+        frame->lock_hold_us = ogs_get_monotonic_time() - lock_acquired;
+        upf_snapshot_publish(&snapshot, frame);
+    }
     *previous = now;
+    if (snapshot_enabled) pthread_mutex_unlock(&rate_values_lock);
 }
 
 static void session_ip(const upf_sess_t *sess, char *buf, size_t size)
@@ -672,33 +735,61 @@ static void serve_client(int fd)
     upf_rate_query_t query;
     ssize_t length;
     size_t used;
+    size_t capacity;
+    ogs_time_t deadline = ogs_get_monotonic_time() + 2000000;
+    struct timeval io_timeout = { .tv_sec = 0, .tv_usec = 200000 };
+
+    /* A slow/abandoned CLI client must not block sampling or shutdown. */
+    setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &io_timeout, sizeof(io_timeout));
+    setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &io_timeout, sizeof(io_timeout));
 
     length = read(fd, request, sizeof(request) - 1);
     if (length <= 0)
         return;
     request[length] = '\0';
     parse_query(request, &query);
-    response = ogs_malloc(UPF_RATE_RESPONSE_MAX);
+    capacity = UPF_RATE_RESPONSE_MAX;
+    response = ogs_malloc(capacity);
     if (!response)
         return;
-    if (!strcmp(query.level, "user"))
-        used = render_user_rows(response, UPF_RATE_RESPONSE_MAX, &query);
-    else if (!strcmp(query.level, "bearer"))
-        used = render_bearer_rows(response, UPF_RATE_RESPONSE_MAX, &query);
-    else if (!strcmp(query.level, "rule"))
-        used = render_rule_rows(response, UPF_RATE_RESPONSE_MAX, &query);
-    else if (!strcmp(query.level, "session"))
-        used = render_session_rows(response, UPF_RATE_RESPONSE_MAX, &query);
-    else
-        used = appendf(response, 0, UPF_RATE_RESPONSE_MAX,
-                "ERROR invalid level; expected user, session, bearer or rule\n");
-    if (used > UPF_RATE_RESPONSE_MAX)
-        used = UPF_RATE_RESPONSE_MAX;
+    if (!strcmp(query.level, "snapshot")) {
+        upf_snapshot_frame_t *frame;
+        if (snapshot_enabled)
+            upf_snapshot_subscribe(&snapshot, ogs_get_monotonic_time());
+        frame = snapshot_enabled ? upf_snapshot_acquire(&snapshot) : NULL;
+        if (!snapshot_enabled)
+            used = appendf(response, 0, capacity,
+                    "{\"ready\":false,\"error\":\"UPF monitor snapshots disabled\"}\n");
+        else if (!frame || ogs_get_monotonic_time() - frame->monotonic_us > 3000000)
+            used = appendf(response, 0, capacity,
+                    "{\"ready\":false,\"retry_ms\":%u}\n",
+                    upf_self()->rate_stats.interval_ms + 100);
+        else used = upf_snapshot_json(frame, response, capacity);
+        if (frame) upf_snapshot_release(frame);
+    } else {
+        if (snapshot_enabled) pthread_mutex_lock(&rate_values_lock);
+        if (!strcmp(query.level, "user"))
+            used = render_user_rows(response, UPF_RATE_RESPONSE_MAX, &query);
+        else if (!strcmp(query.level, "bearer"))
+            used = render_bearer_rows(response, UPF_RATE_RESPONSE_MAX, &query);
+        else if (!strcmp(query.level, "rule"))
+            used = render_rule_rows(response, UPF_RATE_RESPONSE_MAX, &query);
+        else if (!strcmp(query.level, "session"))
+            used = render_session_rows(response, UPF_RATE_RESPONSE_MAX, &query);
+        else
+            used = appendf(response, 0, UPF_RATE_RESPONSE_MAX,
+                    "ERROR invalid level; expected user, session, bearer or rule\n");
+        if (snapshot_enabled) pthread_mutex_unlock(&rate_values_lock);
+    }
+    if (used > capacity)
+        used = capacity;
     {
         size_t offset = 0;
 
-        while (offset < used) {
-            ssize_t written = write(fd, response + offset, used - offset);
+        while (offset < used && !rate_is_stopping() &&
+                ogs_get_monotonic_time() < deadline) {
+            ssize_t written = send(fd, response + offset, used - offset,
+                    MSG_NOSIGNAL);
 
             if (written > 0) {
                 offset += written;
@@ -714,6 +805,21 @@ static void serve_client(int fd)
     ogs_free(response);
 }
 
+static void poll_cli(int timeout)
+{
+    struct pollfd pfd = { .fd = listen_fd, .events = POLLIN };
+    int rv = poll(&pfd, 1, timeout);
+    if (rv > 0 && (pfd.revents & POLLIN)) {
+        int client = accept(listen_fd, NULL, NULL);
+        if (client >= 0) {
+            serve_client(client);
+            close(client);
+        }
+    } else if (rv < 0 && errno != EINTR && !rate_is_stopping()) {
+        ogs_warn("UPF rate CLI poll failed: %s", strerror(errno));
+    }
+}
+
 static void rate_main(void *data)
 {
     ogs_time_t previous = 0;
@@ -722,10 +828,8 @@ static void rate_main(void *data)
     (void)data;
     upf_dataplane_pin_control_thread("rate/control");
     while (!rate_is_stopping()) {
-        struct pollfd pfd = { .fd = listen_fd, .events = POLLIN };
         ogs_time_t now = ogs_get_monotonic_time();
         int timeout = 100;
-        int rv;
 
         if (!next_sample || now >= next_sample) {
             sample_rates(now, &previous);
@@ -736,17 +840,16 @@ static void rate_main(void *data)
             if (remaining < (uint64_t)timeout)
                 timeout = remaining;
         }
-        rv = poll(&pfd, 1, timeout);
-        if (rv > 0 && (pfd.revents & POLLIN)) {
-            int client = accept(listen_fd, NULL, NULL);
-            if (client >= 0) {
-                serve_client(client);
-                close(client);
-            }
-        } else if (rv < 0 && errno != EINTR && !rate_is_stopping()) {
-            ogs_warn("UPF rate CLI poll failed: %s", strerror(errno));
-        }
+        if (snapshot_enabled) poll(NULL, 0, timeout);
+        else poll_cli(timeout);
     }
+}
+
+static void socket_main(void *data)
+{
+    (void)data;
+    upf_dataplane_pin_control_thread("rate/socket-control");
+    while (!rate_is_stopping()) poll_cli(500);
 }
 
 int upf_rate_stats_open(void)
@@ -754,6 +857,7 @@ int upf_rate_stats_open(void)
     struct sockaddr_un address;
     char directory[sizeof(address.sun_path)];
     char *slash;
+    const char *monitor = getenv("XCN_UPF_MONITOR_SNAPSHOT");
 
     if (!upf_self()->rate_stats.enabled)
         return OGS_OK;
@@ -790,15 +894,31 @@ int upf_rate_stats_open(void)
         return OGS_ERROR;
     }
     __atomic_store_n(&stopping, 0, __ATOMIC_RELEASE);
+    snapshot_enabled = monitor &&
+        (!strcmp(monitor, "1") || !strcmp(monitor, "true"));
+    /* Fixed upper bounds; never grow buffers on the sampling/packet paths. */
+    if (snapshot_enabled && upf_snapshot_init(&snapshot,
+                ogs_min(ogs_app()->pool.sess, 4096),
+                ogs_min((size_t)ogs_app()->pool.sess * OGS_MAX_NUM_OF_PDR,
+                    65536)) < 0) {
+        /* Optional monitoring cannot make the forwarding process fail to start. */
+        ogs_warn("UPF monitor snapshot allocation failed; using legacy statistics");
+        snapshot_enabled = false;
+    }
+    if (snapshot_enabled) socket_thread = ogs_thread_create(socket_main, NULL);
+    if (snapshot_enabled && !socket_thread) {
+        ogs_warn("UPF monitor socket thread unavailable; using legacy statistics");
+        snapshot_enabled = false;
+        upf_snapshot_final(&snapshot);
+    }
     rate_thread = ogs_thread_create(rate_main, NULL);
     if (!rate_thread) {
-        close(listen_fd);
-        listen_fd = -1;
-        unlink(address.sun_path);
+        upf_rate_stats_close();
         return OGS_ERROR;
     }
     ogs_info("UPF rate CLI listening on %s [interval:%ums]",
             address.sun_path, upf_self()->rate_stats.interval_ms);
+    ogs_info("UPF monitor snapshots %s", snapshot_enabled ? "enabled" : "disabled");
     return OGS_OK;
 }
 
@@ -811,6 +931,11 @@ void upf_rate_stats_close(void)
         ogs_thread_destroy(rate_thread);
         rate_thread = NULL;
     }
+    if (socket_thread) {
+        ogs_thread_destroy(socket_thread);
+        socket_thread = NULL;
+    }
+    upf_snapshot_final(&snapshot);
     if (listen_fd >= 0) {
         close(listen_fd);
         listen_fd = -1;

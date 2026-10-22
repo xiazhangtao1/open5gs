@@ -1,0 +1,164 @@
+{{- if .Values.monitor.enabled }}
+{{- $cpus := required "monitor.cpuSet must specify spare CPUs outside UPF/VPP and their SMT siblings" .Values.monitor.cpuSet }}
+{{- if not (regexMatch "^[0-9]+(-[0-9]+)?(,[0-9]+(-[0-9]+)?)*$" (toString $cpus)) }}
+{{- fail "monitor.cpuSet must be a CPU list such as 36-37 or 36,108" }}
+{{- end }}
+{{- if has (dir .Values.networking.upf.rateStats.socket) (list "/" "/run" "/var/run" "/tmp" "/etc" "/var") }}
+{{- fail "monitor UPF socket must use a dedicated directory, for example /run/open5gs/upf-stats.sock" }}
+{{- end }}
+{{- if not .Values.networking.upf.rateStats.enabled }}
+{{- fail "monitor.enabled requires networking.upf.rateStats.enabled=true" }}
+{{- end }}
+{{- if gt (int .Values.networking.upf.rateStats.intervalMs) 2000 }}
+{{- fail "monitor.enabled requires UPF rateStats.intervalMs <= 2000 for snapshot freshness" }}
+{{- end }}
+{{- $name := include "xcn.componentName" (dict "root" . "component" "monitor") }}
+{{- $secret := default $name .Values.monitor.existingSecret }}
+{{- if not .Values.monitor.existingSecret }}
+{{- $old := lookup "v1" "Secret" .Release.Namespace $secret }}
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ $secret }}
+type: Opaque
+data:
+  token: {{ if and $old $old.data }}{{ index $old.data "token" | quote }}{{ else }}{{ randAlphaNum 64 | b64enc | quote }}{{ end }}
+---
+{{- end }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $name }}
+data:
+  config.json: {{ toJson .Values.monitor.config | quote }}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ $name }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ $name }}
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list"]
+  - apiGroups: ["metrics.k8s.io"]
+    resources: ["pods"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ $name }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ $name }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ $name }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}
+spec:
+  selector:
+    app: {{ $name }}
+  ports:
+    - name: http
+      port: 9998
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $name }}
+spec:
+  replicas: 1
+  # Prevent two collectors from polling the NFs during an upgrade.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: {{ $name }}
+  template:
+    metadata:
+      labels:
+        app: {{ $name }}
+    spec:
+      serviceAccountName: {{ $name }}
+{{- with .Values.nodeSelector }}
+      nodeSelector:
+{{ toYaml . | indent 8 }}
+{{- end }}
+      affinity:
+        podAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchLabels:
+                  app: {{ include "xcn.componentName" (dict "root" . "component" "5gc") }}
+              topologyKey: kubernetes.io/hostname
+      containers:
+        - name: monitor
+          image: {{ printf "%s:%s" .Values.monitor.image.repository .Values.monitor.image.tag }}
+          imagePullPolicy: {{ .Values.monitor.image.pullPolicy }}
+          env:
+            - name: MONITOR_MEMORY_LIMIT_BYTES
+              valueFrom:
+                resourceFieldRef:
+                  resource: limits.memory
+                  divisor: "1"
+            - name: MONITOR_CPUSET
+              value: {{ $cpus | quote }}
+            - name: MONITOR_INTERNAL_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $secret }}
+                  key: token
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+{{- range $nf := list "amf" "smf" "upf" }}
+            - name: {{ upper $nf }}_METRICS_URL
+              value: {{ printf "http://%s:9090" (include "xcn.componentName" (dict "root" $ "component" $nf)) | quote }}
+{{- end }}
+          ports:
+            - name: http
+              containerPort: 9998
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 15
+          resources:
+{{ toYaml .Values.monitor.resources | indent 12 }}
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65532
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: monitor-config
+              mountPath: /etc/xcn-monitor
+              readOnly: true
+      volumes:
+        - name: monitor-config
+          configMap:
+            name: {{ $name }}
+{{- end }}

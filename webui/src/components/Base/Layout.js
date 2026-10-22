@@ -22,12 +22,12 @@ const defaultProps = {
   title: `Open5GS ${Package.version}`
 }
 
-const Layout = ({ title, children }) => (
-  <div>
+const Layout = ({ title, children, theme, onToggleTheme }) => (
+  <div className="xcn-app" data-theme={theme}>
     <Head>
       <title>{title}</title>
     </Head>
-    <Header/>
+    <Header theme={theme} onToggleTheme={onToggleTheme}/>
     <Body>
       <Sidebar/>
       {children}
@@ -40,7 +40,9 @@ Layout.defaultProps = defaultProps;
 
 const ContainerWrapper = styled.div`
   flex: 1;
-  overflow-y: scroll;
+  min-width: 0;
+  overflow: auto;
+  background: var(--canvas);
 `;
 
 Layout.Container = ({visible, children}) => visible ? (

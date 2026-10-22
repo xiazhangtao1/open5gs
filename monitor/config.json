@@ -1,0 +1,9 @@
+{
+  "enabled": true,
+  "events_interval": 2,
+  "rates_interval": 2,
+  "info_interval": 10,
+  "gnbs_interval": 15,
+  "metrics_interval": 15,
+  "pods_interval": 30
+}

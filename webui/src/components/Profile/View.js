@@ -25,7 +25,7 @@ const Wrapper = styled.div`
     width: calc(100vw - 4rem);
   `}
 
-  background: white;
+  background: var(--surface, white);
   box-shadow: 0 10px 20px rgba(0,0,0,0.19), 0 6px 6px rgba(0,0,0,0.23);
 `
 
@@ -33,11 +33,11 @@ const Header = styled.div`
   position: relative;
   display: flex;
 
-  background: ${oc.gray[1]};
+  background: var(--soft, ${oc.gray[1]});
 
   .title {
     padding: 1.5rem;
-    color: ${oc.gray[8]};
+    color: var(--ink, ${oc.gray[8]});
     font-size: 1.5rem;
   }
 
@@ -61,13 +61,13 @@ const CircleButton = styled.div`
   justify-content: center;
   margin: 1px;
 
-  color: ${oc.gray[6]};
+  color: var(--muted, ${oc.gray[6]});
 
   border-radius: 1rem;
   font-size: 1.5rem;
 
   &:hover {
-    color: ${oc.indigo[6]};
+    color: var(--primary, ${oc.indigo[6]});
   }
 
   &.delete {
@@ -115,7 +115,7 @@ const Profile = styled.div`
       width: 80px;
       text-align: center;
       font-size: 18px;
-      color: ${oc.gray[6]};
+      color: var(--muted, ${oc.gray[6]});
     }
 
     .right {

@@ -14,8 +14,8 @@ const Wrapper = styled.div`
   width: 700px;
   margin: 2rem auto 1rem auto;
 
-  background: white;
-  color: ${oc.gray[6]};
+  background: var(--surface, white);
+  color: var(--muted, ${oc.gray[6]});
   box-shadow: 0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.24);
   transition: all 0.3s cubic-bezier(.25,.8,.25,1);
       

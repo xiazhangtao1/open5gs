@@ -7,3 +7,10 @@ subprojects/prometheus-client-c
 subprojects/usrsctp
 
 webui/.next
+webui/node_modules/
+webui/.env
+webui/static/vendor/
+monitor/__pycache__/
+monitor/tests/__pycache__/
+tests/unit/__pycache__/
+output/playwright/

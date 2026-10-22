@@ -31,6 +31,15 @@ spec:
       labels:
         app: {{ include "xcn.componentName" (dict "root" . "component" "webui") }}
     spec:
+{{- if .Values.monitor.enabled }}
+      affinity:
+        podAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchLabels:
+                  app: {{ include "xcn.componentName" (dict "root" . "component" "5gc") }}
+              topologyKey: kubernetes.io/hostname
+{{- end }}
 {{- with .Values.nodeSelector }}
       nodeSelector:
 {{ toYaml . | indent 8 }}
@@ -64,7 +73,23 @@ spec:
         - name: webui
           image: {{ printf "%s:%s" .Values.images.webui.repository .Values.images.webui.tag }}
           imagePullPolicy: {{ .Values.images.webui.pullPolicy }}
+{{- if .Values.monitor.enabled }}
+          command: ["/bin/sh", "-ec"]
+          args:
+            - exec taskset -c "$MONITOR_CPUSET" npm run start
+{{- end }}
           env:
+{{- if .Values.monitor.enabled }}
+            - name: MONITOR_CPUSET
+              value: {{ required "monitor.cpuSet is required" .Values.monitor.cpuSet | quote }}
+            - name: MONITOR_URL
+              value: {{ printf "http://%s:9998" (include "xcn.componentName" (dict "root" . "component" "monitor")) | quote }}
+            - name: MONITOR_INTERNAL_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ default (include "xcn.componentName" (dict "root" . "component" "monitor")) .Values.monitor.existingSecret }}
+                  key: token
+{{- end }}
             - name: DB_URI
               value: {{ printf "mongodb://%s/open5gs" (include "xcn.componentName" (dict "root" . "component" "mongodb")) | quote }}
             - name: HOST_IP
@@ -96,7 +121,11 @@ spec:
               port: http
             periodSeconds: 10
           resources:
+{{- if .Values.monitor.enabled }}
+{{ toYaml .Values.monitor.webuiResources | indent 12 }}
+{{- else }}
 {{ toYaml .Values.resources.webui.webui | indent 12 }}
+{{- end }}
           volumeMounts:
             - name: webui-env
               mountPath: /usr/src/open5gs/webui/.env

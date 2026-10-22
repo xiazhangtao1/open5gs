@@ -27,7 +27,7 @@ export const selectView = createAction(SIDEBAR.SELECT_VIEW);
 
 const initialState = {
   isOpen: false,
-  view: "subscriber"
+  view: "overview"
 }
 
 export default handleActions({

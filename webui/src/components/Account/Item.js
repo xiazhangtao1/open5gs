@@ -33,7 +33,7 @@ const Card = styled.div`
   }
 
   &:hover {
-    background: ${oc.gray[1]};
+    background: var(--soft, ${oc.gray[1]});
 
     .actions {
       ${p => p.disabled ? 'opacity: 0;' : 'opacity: 1;'};
@@ -49,13 +49,13 @@ const CircleButton = styled.div`
   justify-content: center;
   margin: 1px;
 
-  color: ${oc.gray[6]};
+  color: var(--muted, ${oc.gray[6]});
 
   border-radius: 1rem;
   font-size: 1.5rem;
 
   &:hover {
-    color: ${oc.indigo[6]};
+    color: var(--primary, ${oc.indigo[6]});
   }
 
   &.delete {
@@ -74,12 +74,12 @@ const Account = styled.div`
 
   .username {
     font-size: 1.25rem;
-    color: ${oc.gray[8]};
+    color: var(--ink, ${oc.gray[8]});
     width: 320px;
   }
   .role {
     font-size: 1.1rem;
-    color: ${oc.gray[6]};
+    color: var(--muted, ${oc.gray[6]});
     width: 240px;
   }
 `;

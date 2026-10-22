@@ -78,3 +78,8 @@ test('ue-events-soak', ue_events_soak_test,
 test('xcnctl-events', find_program('python3'),
     args : [meson.current_source_dir() / 'xcnctl-events-test.py', xcnctl_exe],
     timeout : 60, suite: 'unit')
+
+upf_snapshot_test = executable('upf-snapshot-test',
+    sources : files('upf-snapshot-test.c', '../../src/upf/rate-snapshot.c'),
+    dependencies : dependency('threads'))
+test('upf-snapshot', upf_snapshot_test, suite: 'unit')

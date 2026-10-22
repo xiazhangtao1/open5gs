@@ -22,7 +22,7 @@ const Wrapper = styled.div`
     width: calc(100vw - 2rem);
   `}
 
-  background: white;
+  background: var(--surface, white);
   box-shadow: 0 10px 20px rgba(0,0,0,0.19), 0 6px 6px rgba(0,0,0,0.23);
 `
 
@@ -32,7 +32,7 @@ const Header = styled.div`
 
   padding: 1rem;
   font-size: 1.5rem;
-  background: ${oc.gray[1]};
+  background: var(--soft, ${oc.gray[1]});
 `
 
 const Body = styled.div`

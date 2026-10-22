@@ -23,6 +23,49 @@ diagnostics:
     capacity: 65536
     perUe: 512
 
+# Enable only with a runtime image containing the UPF snapshot protocol.
+# First enablement adds a sidecar and recreates the 5gc Pod: use a maintenance window.
+monitor:
+  enabled: false
+  image:
+    repository: xcn-monitor
+    tag: latest
+    pullPolicy: IfNotPresent
+  # Mandatory when enabled. Choose spare CPUs outside UPF/VPP AND their SMT siblings.
+  # Applied to collector, agent and WebUI; collector revalidates the live CPU annotations.
+  cpuSet: ""
+  # Optional pre-created Secret with key "token"; otherwise Helm preserves a generated token.
+  existingSecret: ""
+  config:
+    enabled: true
+    events_interval: 2
+    rates_interval: 2
+    info_interval: 10
+    gnbs_interval: 15
+    metrics_interval: 15
+    pods_interval: 30
+  resources:
+    requests:
+      cpu: 200m
+      memory: 256Mi
+    limits:
+      cpu: 1
+      memory: 512Mi
+  agentResources:
+    requests:
+      cpu: 50m
+      memory: 32Mi
+    limits:
+      cpu: 250m
+      memory: 128Mi
+  webuiResources:
+    requests:
+      cpu: 250m
+      memory: 256Mi
+    limits:
+      cpu: 1
+      memory: 512Mi
+
 mongodb:
   persistence:
     enabled: true

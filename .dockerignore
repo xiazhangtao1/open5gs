@@ -12,3 +12,9 @@ images
 subprojects/freeDiameter
 subprojects/libtins
 subprojects/prometheus-client-c
+webui/node_modules
+webui/.next
+webui/.env
+output
+**/__pycache__
+xcn-runtime-260831.tar

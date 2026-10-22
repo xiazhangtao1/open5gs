@@ -1,68 +1,13 @@
-import PropTypes from 'prop-types';
-
-import styled from 'styled-components';
-import oc from 'open-color';
-
-import { CircleIcon, Tooltip } from 'components';
-import MenuIcon from 'react-icons/lib/md/menu';
-import PersonIcon from 'react-icons/lib/md/person';
-
-const Wrapper = styled.div`
-  display: flex;
-  align-items: center;
-  height: 4rem;
-
-  color: white;
-  background: ${oc.indigo[9]};
-`;
-
-const Menu = styled.div`
-  display: inline-flex;
-  margin: 0 1.5rem;
-
-  cursor: pointer;
-  font-size: 1.5rem;
-`;
-
-const Title = styled.div`
-  margin: 0 0.5rem;
-
-  font-size: 1.5rem;
-  font-family: 'Ubuntu', sans-serif;
-`;
-
-const Thumbnail = styled.div`
-  padding: 1rem 0;
-
-  position: absolute;
-  right: 2rem;
-
-  cursor: pointer;
-`;
-
-const propTypes = {
-  onSidebarToggle: PropTypes.func.isRequired,
-  onLogoutRequest: PropTypes.func.isRequired
+export default function Header({onSidebarToggle, onLogoutRequest, theme, onToggleTheme}) {
+  return <header className="xcn-header">
+    <button type="button" className="xcn-icon-button" aria-label="展开或收起导航" onClick={onSidebarToggle}>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+    </button>
+    <div className="xcn-brand"><b>X-CN</b><span>核心网控制台</span></div>
+    <div className="xcn-header-actions">
+      <button type="button" className="xcn-quiet-button" onClick={onToggleTheme}
+        aria-label={theme === 'dark' ? '切换浅色主题' : '切换深色主题'}>{theme === 'dark' ? '浅色' : '深色'}</button>
+      <button type="button" className="xcn-quiet-button" onClick={onLogoutRequest}>退出登录</button>
+    </div>
+  </header>;
 }
-
-const Header = ({ onSidebarToggle, onLogoutRequest }) => (
-  <Wrapper>
-    <Menu onClick={onSidebarToggle}>
-      <MenuIcon/>
-    </Menu>
-    <Title>
-      X-CN
-    </Title>
-    <Thumbnail onClick={onLogoutRequest}>
-      <Tooltip bottom content='Logout' width="60px">
-        <CircleIcon size="2rem" background={oc['pink'][4]}>
-          <PersonIcon/>
-        </CircleIcon>
-      </Tooltip>
-    </Thumbnail>
-  </Wrapper>
-)
-
-Header.propTypes = propTypes;
-
-export default Header;

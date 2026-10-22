@@ -7,8 +7,8 @@ import oc from 'open-color';
 import withRipple from './withRipple';
 
 function getBgColor(props) {
-  let color = oc.indigo[7];
-  let colorDark = oc.indigo[8];
+  let color = '#2563EB';
+  let colorDark = '#1D4ED8';
 
   // Determine color based on props
   if (props.secondary) {
@@ -33,12 +33,12 @@ function getBgColor(props) {
   }
 
   /* eslint-disable max-len */
-  return `background: ${color}; background: linear-gradient(to bottom, ${color} 0%, ${colorDark} 100%);`;
+  return `background: ${color};`;
   /* eslint-enable max-len */
 }
 
 function getHoverColor(props) {
-  let color = oc.indigo[8];
+  let color = '#1D4ED8';
   if (props.secondary) color = oc.violet[8];
   if (props.info) color = oc.gray[8];
   if (props.danger) color = oc.red[8];
@@ -49,7 +49,7 @@ function getHoverColor(props) {
 }
 
 function getActiveColor(props) {
-  let color = oc.indigo[9];
+  let color = '#1E40AF';
   if (props.secondary) color = oc.violet[9];
   if (props.info) color = oc.gray[9];
   if (props.danger) color = oc.red[9];
@@ -59,12 +59,12 @@ function getActiveColor(props) {
 }
 
 function getColor(props) {
-  if (props.primary) return oc.indigo[7];
+  if (props.primary) return 'var(--primary, #2563EB)';
   if (props.secondary) return oc.violet[7];
   if (props.info) return oc.gray[7];
   if (props.danger) return oc.red[7];
   if (props.success) return oc.lime[7];
-  return oc.indigo[7]; // default
+  return 'var(--primary, #2563EB)'; // default
 }
 
 const ButtonWrapper = styled.button`

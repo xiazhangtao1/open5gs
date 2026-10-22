@@ -25,6 +25,16 @@ router.get('/session', (req, res) => {
   return res.json(session)
 })
 
+router.get('/monitor-token', (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  if (!req.user) return res.status(401).json({error: '请先登录'});
+  const token = jwt.sign({scope: 'monitor:read'}, secret, {
+    algorithm: 'HS256', audience: 'xcn-monitor', issuer: 'xcn-webui',
+    subject: String(req.user._id), expiresIn: '5m'
+  });
+  return res.json({token, expiresIn: 300});
+});
+
 router.post('/login', 
   passport.authenticate('local', { successRedirect: '/' }));
 

@@ -11,6 +11,7 @@
 {{- $upfGtpuAdvertiseAddress := include "xcn.upfGtpuAdvertiseAddress" . }}
 {{- $upfN3MemifLocalAddress := include "xcn.upfN3MemifLocalAddress" . }}
 {{- $upfHostInterface := dig "n3" "hostInterface" "" .Values.networking.upf }}
+{{- $monitorName := include "xcn.componentName" (dict "root" . "component" "monitor") }}
 {{- if and $upfHostInterface (or (not .Values.fivegc.hostNetwork.enabled) (ne $upfN3Backend "udp")) }}
 {{- fail "networking.upf.n3.hostInterface requires hostNetwork and UDP N3" }}
 {{- end }}
@@ -370,6 +371,10 @@ spec:
           image: {{ printf "%s:%s" .Values.images.runtime.repository .Values.images.runtime.tag }}
           imagePullPolicy: {{ .Values.images.runtime.pullPolicy }}
           env:
+{{- if .Values.monitor.enabled }}
+            - name: XCN_UPF_MONITOR_SNAPSHOT
+              value: "1"
+{{- end }}
             - name: WAIT_TIMEOUT
               value: {{ .Values.fivegc.wait.timeout | quote }}
             - name: WAIT_INTERVAL
@@ -477,6 +482,10 @@ spec:
               mountPath: /etc/open5gs
             - name: logs
               mountPath: /var/log/open5gs
+{{- if .Values.monitor.enabled }}
+            - name: upf-stats
+              mountPath: {{ dir .Values.networking.upf.rateStats.socket }}
+{{- end }}
 {{- if eq $upfN6Backend "tun" }}
             - name: dev-net-tun
               mountPath: /dev/net/tun
@@ -485,6 +494,40 @@ spec:
               mountPath: /run/vpp
 {{- end }}
 {{- include "xcn.localtimeVolumeMount" . | nindent 12 }}
+{{- if .Values.monitor.enabled }}
+        - name: upf-monitor-agent
+          image: {{ printf "%s:%s" .Values.monitor.image.repository .Values.monitor.image.tag }}
+          imagePullPolicy: {{ .Values.monitor.image.pullPolicy }}
+          command: ["python3", "/opt/xcn-monitor/agent.py"]
+          env:
+            - name: MONITOR_CPUSET
+              value: {{ required "monitor.cpuSet is required" .Values.monitor.cpuSet | quote }}
+            - name: MONITOR_URL
+              value: {{ printf "http://%s:9998" $monitorName | quote }}
+            - name: MONITOR_INTERNAL_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ default $monitorName .Values.monitor.existingSecret }}
+                  key: token
+            - name: UPF_STATS_SOCKET
+              value: {{ .Values.networking.upf.rateStats.socket | quote }}
+          resources:
+{{ toYaml .Values.monitor.agentResources | indent 12 }}
+          securityContext:
+            # The existing UPF CLI socket is root-owned mode 0600.
+            runAsUser: 0
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: upf-stats
+              mountPath: {{ dir .Values.networking.upf.rateStats.socket }}
+              readOnly: true
+            - name: monitor-config
+              mountPath: /etc/xcn-monitor
+              readOnly: true
+{{- end }}
 {{- if $vppEnabled }}
         - name: vpp
           image: {{ printf "%s:%s" .Values.vpp.image.repository .Values.vpp.image.tag }}
@@ -885,6 +928,15 @@ spec:
               mountPath: /var/log/open5gs
 {{- include "xcn.localtimeVolumeMount" . | nindent 12 }}
       volumes:
+{{- if .Values.monitor.enabled }}
+        - name: upf-stats
+          emptyDir:
+            medium: Memory
+            sizeLimit: 1Mi
+        - name: monitor-config
+          configMap:
+            name: {{ $monitorName }}
+{{- end }}
         - name: config
           configMap:
             name: {{ include "xcn.componentName" (dict "root" . "component" "config") }}

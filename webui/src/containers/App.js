@@ -11,8 +11,23 @@ import Notification from 'containers/Notification';
 import * as Subscriber from 'containers/Subscriber';
 import * as Profile from 'containers/Profile';
 import * as Account from 'containers/Account';
+import Monitor from 'components/Monitor';
 
 class App extends Component {
+  state = {theme: 'light'};
+
+  componentDidMount() {
+    try {
+      this.setState({theme: localStorage.getItem('xcn-theme') ||
+        (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')});
+    } catch (err) {}
+  }
+
+  toggleTheme = () => {
+    const theme = this.state.theme === 'dark' ? 'light' : 'dark';
+    this.setState({theme});
+    try { localStorage.setItem('xcn-theme', theme); } catch (err) {}
+  };
   static propTypes = {
     session: PropTypes.object.isRequired,
     view: PropTypes.string.isRequired,
@@ -36,14 +51,11 @@ class App extends Component {
       session
     } = this.props;
 
-    if (view === "subscriber") {
-      document.body.style.backgroundColor = "#e9ecef";
-    } else {
-      document.body.style.backgroundColor = "white";
-    }
-
     return (
-      <Layout>
+      <Layout title="X-CN 核心网控制台" theme={this.state.theme} onToggleTheme={this.toggleTheme}>
+        <Layout.Container visible={['overview', 'ues', 'gnbs', 'sessions', 'events', 'system'].indexOf(view) >= 0}>
+          <Monitor view={view} theme={this.state.theme} onNavigate={this.props.SidebarActions.selectView}/>
+        </Layout.Container>
         <Layout.Container visible={view === "subscriber"}>
           <Subscriber.Collection/>
         </Layout.Container>
