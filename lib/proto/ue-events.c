@@ -168,10 +168,12 @@ void ogs_ue_events_open(const char *nf)
     if (!valid || capacity > MAX_CAPACITY || per_ue > capacity) on = false;
     if (!ogs_ue_events_init(nf, on ? capacity : 0, per_ue))
         ogs_warn("%s UE event history disabled (configuration or allocation)", nf);
+    if (store.slots) ogs_ue_trace_open(nf, store.boot);
 }
 
 void ogs_ue_events_final(void)
 {
+    ogs_ue_trace_close();
     pthread_mutex_lock(&lock);
     free(store.slots); free(store.groups); free(store.hash);
     memset(&store, 0, sizeof(store));

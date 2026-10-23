@@ -118,11 +118,14 @@ class Cache:
         self.memory = memory or MemoryBudget()
         self.view_bytes = 0
         self.last_reclaim = 0
+        self.signals = None
 
     def relieve_memory(self):
         if self.memory.sample(force=True) < self.memory.high or time.monotonic() - self.last_reclaim < 5:
             return
         self.last_reclaim = time.monotonic()
+        if self.signals:
+            self.signals.trim(pressure=True)
         # Preserve latest NF/session state; history is expendable under pressure.
         self.evict_events(1000, self.max_event_bytes)
         for key in list(self.curves):
@@ -235,7 +238,7 @@ class Cache:
             sources[name] = {k: v for k, v in s.items() if k != "data"}
             sources[name].update(age_seconds=age, stale=age is None or age > max(6, s["interval"] * 3))
         return dict(started_at=self.started_at, enabled=self.enabled, sources=sources,
-                    memory=self.memory.status(),
+                    memory=self.memory.status(), signals=self.signals.status() if self.signals else {},
                     trend_retention_seconds=self.trend_retention, event_coverage=self.event_coverage(),
                     events=len(self.events), event_bytes=self.event_bytes,
                     event_evictions=self.event_evictions, curves=len(self.curves),
@@ -491,4 +494,6 @@ class Cache:
         if endpoint == "events":
             result["coverage"] = self.event_coverage()
             result["protocols"] = protocols
+            if self.signals:
+                result["items"] = [dict(r, detail_available=r.get("event_id") in self.signals.raw or r.get("event_id") in self.signals.decoded) for r in result["items"]]
         return result

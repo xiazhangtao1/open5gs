@@ -1,0 +1,36 @@
+FROM python:3.12-slim AS build
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential cmake ninja-build flex bison pkg-config curl xz-utils \
+    libglib2.0-dev libgcrypt20-dev libpcre2-dev zlib1g-dev \
+    && rm -rf /var/lib/apt/lists/*
+WORKDIR /build
+RUN curl -fsSL https://www.wireshark.org/download/src/wireshark-4.6.9.tar.xz -o source.tar.xz \
+    && echo 'd062d416a1ab3a49975aafe3a671c882dde0562ccd71b078808ceb59d465fc0f  source.tar.xz' | sha256sum -c - \
+    && tar -xf source.tar.xz && rm source.tar.xz
+RUN apt-get update && apt-get install -y --no-install-recommends libc-ares-dev && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends libxml2-dev && rm -rf /var/lib/apt/lists/*
+RUN cmake -S wireshark-4.6.9 -B out -G Ninja \
+    -DCMAKE_BUILD_TYPE=Release -DBUILD_wireshark=OFF -DBUILD_stratoshark=OFF \
+    -DBUILD_tshark=ON -DBUILD_dumpcap=OFF -DBUILD_sharkd=OFF -DENABLE_PCAP=OFF \
+    -DENABLE_LUA=OFF -DENABLE_PLUGINS=OFF -DENABLE_GNUTLS=OFF \
+    -DENABLE_KERBEROS=OFF -DENABLE_SMI=OFF \
+    -DENABLE_LZ4=OFF -DENABLE_ZSTD=OFF -DENABLE_BROTLI=OFF \
+    -DENABLE_MINIZIP=OFF -DENABLE_SPEEXDSP=OFF -DENABLE_SPANDSP=OFF \
+    -DENABLE_SBC=OFF -DENABLE_ILBC=OFF -DENABLE_NGHTTP2=OFF -DENABLE_NGHTTP3=OFF
+# Keep builds on explicitly supplied spare CPUs too; image builds share the host.
+ARG BUILD_CPUSET=36-37
+RUN taskset -c "$BUILD_CPUSET" cmake --build out --target tshark -j2 \
+    && mkdir /runtime \
+    && cp -a out/run/tshark out/run/libwireshark.so* out/run/libwiretap.so* out/run/libwsutil.so* /runtime/
+
+FROM python:3.12-slim
+RUN apt-get update && apt-get install -y --no-install-recommends libglib2.0-0 libgcrypt20 libpcre2-8-0 libc-ares2 libxml2 zlib1g \
+    && rm -rf /var/lib/apt/lists/*
+COPY --from=build /runtime/ /opt/wireshark/
+ENV LD_LIBRARY_PATH=/opt/wireshark PATH=/opt/wireshark:$PATH PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1
+WORKDIR /opt/xcn-monitor
+COPY monitor/requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+COPY monitor/ .
+USER 65532:65532
+ENTRYPOINT ["python3", "decoder.py"]

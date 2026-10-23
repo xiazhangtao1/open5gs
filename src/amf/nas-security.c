@@ -34,11 +34,13 @@ ogs_pkbuf_t *nas_5gs_security_encode(
     ogs_assert(amf_ue);
     ogs_assert(message);
 
-    amf_ue_event_nas(NULL, amf_ue, message, false);
+    uint64_t trace_seq = amf_ue_event_nas(NULL, amf_ue, message, false);
 
     switch (message->h.security_header_type) {
     case OGS_NAS_SECURITY_HEADER_PLAIN_NAS_MESSAGE:
-        return ogs_nas_5gs_plain_encode(message);
+        new = ogs_nas_5gs_plain_encode(message);
+        if (new) ogs_ue_trace_record(trace_seq, OGS_TRACE_5GMM, OGS_TRACE_PLAIN | OGS_TRACE_PREPARED, new->data, new->len);
+        return new;
     case OGS_NAS_SECURITY_HEADER_INTEGRITY_PROTECTED:
         integrity_protected = 1;
         break;
@@ -83,6 +85,8 @@ ogs_pkbuf_t *nas_5gs_security_encode(
         return NULL;
     }
 
+    ogs_ue_trace_record(trace_seq, OGS_TRACE_5GMM, OGS_TRACE_PREPARED, new->data, new->len);
+
     if (ciphered) {
         /* encrypt NAS message */
         ogs_nas_encrypt(amf_ue->selected_enc_algorithm,
@@ -119,9 +123,12 @@ ogs_pkbuf_t *nas_5gs_security_encode(
 }
 
 int nas_5gs_security_decode(amf_ue_t *amf_ue,
-    ogs_nas_security_header_type_t security_header_type, ogs_pkbuf_t *pkbuf)
+    ogs_nas_security_header_type_t security_header_type, ogs_pkbuf_t *pkbuf, uint8_t *trace_security)
 {
+    uint8_t status = security_header_type.type ? 0 : OGS_TRACE_PLAIN;
     ogs_assert(amf_ue);
+    if (!amf_ue->security_context_available && security_header_type.ciphered) status |= OGS_TRACE_UNAVAILABLE;
+    if (trace_security) *trace_security = status;
     ogs_assert(pkbuf);
     ogs_assert(pkbuf->data);
 
@@ -173,6 +180,9 @@ int nas_5gs_security_decode(amf_ue_t *amf_ue,
                 ogs_warn("NAS MAC verification failed(0x%x != 0x%x)",
                     be32toh(h->message_authentication_code), be32toh(mac32));
                 amf_ue->mac_failed = 1;
+                status |= OGS_TRACE_MAC_FAILED;
+            } else {
+                status |= OGS_TRACE_VERIFIED;
             }
         }
 
@@ -189,8 +199,10 @@ int nas_5gs_security_decode(amf_ue_t *amf_ue,
                 amf_ue->knas_enc, amf_ue->ul_count.i32,
                 amf_ue->nas.access_type,
                 OGS_NAS_SECURITY_UPLINK_DIRECTION, pkbuf);
+            status |= OGS_TRACE_DECRYPTED;
         }
     }
 
+    if (trace_security) *trace_security = status;
     return OGS_OK;
 }

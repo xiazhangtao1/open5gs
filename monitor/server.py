@@ -9,11 +9,12 @@ import time
 
 from aiohttp import web
 from cache import Cache
+from signals import Signals, MAX_BATCH
 from collector import Collector
 from common import config
 from memory import MemoryPressure, UPF_BODY_LIMIT, MIB
 
-ENDPOINTS = {"overview", "ues", "gnbs", "sessions", "rates", "events", "trends", "health", "system"}
+ENDPOINTS = {"overview", "ues", "gnbs", "sessions", "rates", "events", "trends", "health", "system", "signal"}
 
 
 def validate_snapshot(doc):
@@ -55,6 +56,8 @@ def application(token=None, collecting=True):
         raise ValueError("MONITOR_INTERNAL_TOKEN must contain at least 32 characters")
     cache = Cache()
     collector = Collector(cache)
+    signals = Signals(cache.memory)
+    cache.signals = signals
     app = web.Application(client_max_size=UPF_BODY_LIMIT)
     app["cache"], app["collector"] = cache, collector
     ingest = {"busy": False}
@@ -81,6 +84,9 @@ def application(token=None, collecting=True):
         if any(len(k) > 32 or len(v) > 128 for k, v in query.items()):
             raise web.HTTPBadRequest(text="query too long")
         try:
+            if endpoint == "signal":
+                doc = signals.query(query.get("id", ""), query.get("view", "decoded"))
+                return web.json_response(doc, headers={"Cache-Control": "no-store"})
             body, etag = cache.response(endpoint, query)
         except (MemoryPressure, MemoryError):
             cache.relieve_memory()
@@ -162,6 +168,48 @@ def application(token=None, collecting=True):
         cache.fail("upf_rates", str(doc.get("error", "UPF agent unavailable"))[:200])
         return web.json_response({"ok": True})
 
+    async def trace_control(request):
+        available = config()["enabled"] and config()["trace_enabled"] and collector.collection_ready
+        try:
+            cache.admit(32 * MIB, "信令采集准入")
+        except MemoryPressure:
+            available = False
+        affinity = getattr(cache, "trace_affinity", cache.affinity)
+        available = available and affinity.get("verified", False)
+        return web.json_response(dict(enabled=bool(available), affinity=affinity))
+
+    async def ingest_signals(request):
+        if not config()["enabled"] or not config()["trace_enabled"] or not collector.collection_ready:
+            raise web.HTTPServiceUnavailable()
+        try:
+            cache.admit(20 * MIB, "信令批次")
+            data = bytearray()
+            async def read():
+                async for chunk in request.content.iter_chunked(65536):
+                    if len(data) + len(chunk) > MAX_BATCH:
+                        raise web.HTTPRequestEntityTooLarge(max_size=MAX_BATCH, actual_size=len(data) + len(chunk))
+                    data.extend(chunk)
+            await asyncio.wait_for(read(), 1)
+            signals.admit(bytes(data))
+            cache.changed()
+        except (MemoryPressure, MemoryError):
+            cache.relieve_memory()
+            raise web.HTTPServiceUnavailable()
+        except (ValueError, UnicodeError, TimeoutError):
+            raise web.HTTPBadRequest(text="invalid trace batch")
+        return web.json_response({"ok": True})
+
+    async def trace_status(request):
+        doc = await read_json(request, 4096)
+        if not isinstance(doc, dict) or set(doc) - {"rings", "upload_dropped"}:
+            raise web.HTTPBadRequest()
+        signals.agent = doc
+        return web.json_response({"ok": True})
+
+    app.router.add_get("/internal/trace-control", trace_control)
+    app.router.add_post("/internal/signals", ingest_signals)
+    app.router.add_post("/internal/trace-status", trace_status)
+    app.cleanup_ctx.append(signals.context)
     app.router.add_get("/healthz", healthz)
     app.router.add_get("/api/{endpoint}", api)
     app.router.add_get("/internal/control", control)

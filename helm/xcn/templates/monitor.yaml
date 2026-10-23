@@ -107,6 +107,10 @@ spec:
           image: {{ printf "%s:%s" (default .Values.monitor.image.repository .Values.monitor.collectorImage.repository) (default .Values.monitor.image.tag .Values.monitor.collectorImage.tag) }}
           imagePullPolicy: {{ default .Values.monitor.image.pullPolicy .Values.monitor.collectorImage.pullPolicy }}
           env:
+{{- if dig "trace" "enabled" false .Values.monitor }}
+            - name: TRACE_DECODER_URL
+              value: {{ printf "http://%s-trace-decoder:9997" $name | quote }}
+{{- end }}
             - name: MONITOR_MEMORY_LIMIT_BYTES
               valueFrom:
                 resourceFieldRef:

@@ -36,6 +36,23 @@ monitor:
     repository: ""
     tag: ""
     pullPolicy: ""
+  # First installation recreates the 5gc Pod. Hot-stop via config.trace_enabled=false.
+  trace:
+    enabled: false
+    agentImage:
+      repository: xcn-monitor
+      tag: latest
+      pullPolicy: IfNotPresent
+    decoderImage:
+      repository: xcn-trace-decoder
+      tag: latest
+      pullPolicy: IfNotPresent
+    agentResources:
+      requests: {cpu: 50m, memory: 32Mi}
+      limits: {cpu: 250m, memory: 128Mi}
+    decoderResources:
+      requests: {cpu: 100m, memory: 128Mi}
+      limits: {cpu: 500m, memory: 512Mi}
   # Mandatory when enabled. Choose spare CPUs outside UPF/VPP AND their SMT siblings.
   # Applied to collector, agent and WebUI; collector revalidates the live CPU annotations.
   cpuSet: ""
@@ -43,6 +60,7 @@ monitor:
   existingSecret: ""
   config:
     enabled: true
+    trace_enabled: false
     events_interval: 2
     rates_interval: 2
     info_interval: 10

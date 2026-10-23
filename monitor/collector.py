@@ -10,7 +10,7 @@ from pathlib import Path
 
 import aiohttp
 from cache import encode
-from common import config, cpu_list, pin_cpu, read_limited
+from common import config, cpu_list, pin_cpu, read_limited, siblings
 from memory import MemoryPressure, MIB
 
 LOG = logging.getLogger("xcn-monitor")
@@ -130,7 +130,7 @@ class Collector:
         namespace = os.getenv("POD_NAMESPACE", "xcn")
         doc = await self.kube(f"/api/v1/namespaces/{namespace}/pods", "pods")
         own_node = os.getenv("NODE_NAME")
-        reserved, rows = set(), []
+        reserved, trace_reserved, rows = set(), set(), []
         for p in doc.get("items", []):
             meta, spec, status = p.get("metadata", {}), p.get("spec", {}), p.get("status", {})
             containers = status.get("containerStatuses", [])
@@ -144,12 +144,18 @@ class Collector:
             for name in ("upf", "vpp"):
                 if name in assigned:
                     reserved.update(cpu_list(str(assigned[name].get("cpu", ""))))
+            for name in ("amf", "smf"):
+                if name in assigned:
+                    trace_reserved.update(cpu_list(str(assigned[name].get("cpu", ""))))
         if not reserved and os.getenv("MONITOR_REQUIRE_AFFINITY", "1") == "1":
             raise ValueError("无法取得本节点 UPF/VPP CPU 分配，已停止采集；检查 xnet.com/used-core 注解")
         try:
             # Revalidate when UPF/VPP placement changes. Affinity is never widened.
             cpus = pin_cpu(reserved)
             self.cache.affinity = dict(verified=True, cpus=cpus, reserved=sorted(reserved), checked_at=time.time())
+            trace_reserved.update(reserved)
+            self.cache.trace_affinity = dict(verified=not bool(set(cpus) & siblings(trace_reserved)),
+                                            cpus=cpus, reserved=sorted(trace_reserved), checked_at=time.time())
             self.collection_ready = True
         except (OSError, ValueError) as exc:
             self.collection_ready = False

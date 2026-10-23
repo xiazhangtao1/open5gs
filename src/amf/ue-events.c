@@ -141,12 +141,12 @@ void amf_ue_event_session(amf_ue_t *ue, ran_ue_t *ran, amf_sess_t *sess,
 /* Every case uses its generated ASN.1 type and checks the CHOICE discriminator. */
 #include "ue-events-ngap.inc"
 
-void amf_ue_event_ngap(amf_gnb_t *gnb, ogs_ngap_message_t *message,
+uint64_t amf_ue_event_ngap(amf_gnb_t *gnb, ogs_ngap_message_t *message,
         const char *direction, const char *result)
 {
-    if (!ogs_ue_events_enabled() || !gnb || !message) return;
+    if (!ogs_ue_events_enabled() || !gnb || !message) return 0;
     ngap_meta_t m = ngap_metadata(message);
-    if (!m.name) return;
+    if (!m.name) return 0;
     ran_ue_t *ran = NULL;
     if (m.has_amf) {
         /* The implementation's pool index is 32-bit; never truncate a wire ID. */
@@ -156,7 +156,7 @@ void amf_ue_event_ngap(amf_gnb_t *gnb, ogs_ngap_message_t *message,
             ran = NULL;
     } else if (m.has_ran) ran = ran_ue_find_by_ran_ue_ngap_id(gnb, m.ran_id);
     /* InitialUEMessage is recorded after its new RAN context has been created. */
-    if (!ran && !strcmp(m.name, "InitialUEMessage")) return;
+    if (!ran && !strcmp(m.name, "InitialUEMessage")) return 0;
     char cause[96] = "";
     if (m.cause) {
         long value = 0;
@@ -184,13 +184,13 @@ void amf_ue_event_ngap(amf_gnb_t *gnb, ogs_ngap_message_t *message,
                 !strcmp(direction, "gNB->AMF") ? "peer-failed" : "failure-queued", cause, info, true);
     if (ran && !strcmp(m.name, "PathSwitchRequestAcknowledge"))
         amf_ue_event(ran, NULL, "ACTION", direction, "PathSwitch", result, cause, info, true);
-
+    return seq;
 }
 
-void amf_ue_event_nas(ran_ue_t *ran, amf_ue_t *ue,
+uint64_t amf_ue_event_nas(ran_ue_t *ran, amf_ue_t *ue,
         ogs_nas_5gs_message_t *message, bool received)
 {
-    if (!ogs_ue_events_enabled() || !message) return;
+    if (!ogs_ue_events_enabled() || !message) return 0;
     const char *name = "Unknown5GMM", *action = NULL, *result = NULL;
     ngap_meta_t wire = {0};
     char cause[96] = "";
@@ -244,7 +244,7 @@ void amf_ue_event_nas(ran_ue_t *ran, amf_ue_t *ue,
     if (received && ue && (message->gmm.h.message_type == OGS_NAS_5GS_REGISTRATION_REQUEST ||
                 message->gmm.h.message_type == OGS_NAS_5GS_SERVICE_REQUEST))
         ue->event_flow_id = ogs_ue_events_new_trace();
-    record_event(ran, ue, "NAS-5GMM", received ? "UE->AMF" : "AMF->UE", name,
+    uint64_t seq = record_event(ran, ue, "NAS-5GMM", received ? "UE->AMF" : "AMF->UE", name,
             received ? "received" : "prepared", cause, NULL, false, NULL, &wire);
     if (received && message->gmm.h.message_type == OGS_NAS_5GS_REGISTRATION_REQUEST)
         amf_ue_event(ran, ue, "ACTION", "UE->AMF", "Registration", "started", NULL, NULL, true);
@@ -253,4 +253,13 @@ void amf_ue_event_nas(ran_ue_t *ran, amf_ue_t *ue,
     if (!received && action)
         amf_ue_event(ran, ue, "ACTION", "AMF->UE", action, result, cause,
                 "NAS response prepared; see NGAP transmit result", true);
+    return seq;
+}
+
+ogs_pkbuf_t *amf_ue_event_nas_encode(amf_ue_t *ue, ogs_nas_5gs_message_t *message)
+{
+    uint64_t seq = amf_ue_event_nas(NULL, ue, message, false);
+    ogs_pkbuf_t *p = ogs_nas_5gs_plain_encode(message);
+    if (p) ogs_ue_trace_record(seq, OGS_TRACE_5GMM, OGS_TRACE_PLAIN | OGS_TRACE_PREPARED, p->data, p->len);
+    return p;
 }

@@ -3,6 +3,7 @@
 #define OGS_UE_EVENTS_H
 
 #include "core/ogs-core.h"
+#include "ue-trace.h"
 
 /* Value snapshots only. No packet, UE, session or ASN.1 pointers survive a hook. */
 typedef struct {

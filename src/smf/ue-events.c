@@ -1,11 +1,11 @@
 /* SPDX-License-Identifier: AGPL-3.0-or-later */
 #include "ue-events.h"
 
-static void record_event(smf_sess_t *sess, const char *protocol, const char *direction,
+static uint64_t record_event(smf_sess_t *sess, const char *protocol, const char *direction,
         const char *name, const char *result, const char *cause, const char *info, bool action,
         const ogs_ue_event_t *wire)
 {
-    if (!ogs_ue_events_enabled() || !sess || !sess->psi || !sess->event_trace_id) return;
+    if (!ogs_ue_events_enabled() || !sess || !sess->psi || !sess->event_trace_id) return 0;
     ogs_ue_event_t e = {.trace_id = sess->event_trace_id, .action = action,
         .flow_id = sess->event_flow_id, .psi = sess->psi, .pti = sess->pti,
         .amf_ngap_id = sess->xcn_amf_ue_ngap_id, .ran_ngap_id = sess->xcn_ran_ue_ngap_id,
@@ -43,13 +43,13 @@ static void record_event(smf_sess_t *sess, const char *protocol, const char *dir
         if (wire->flow_id) e.flow_id = wire->flow_id;
         if (wire->qfi) { e.qfi = wire->qfi; e.fiveqi = wire->fiveqi; }
     }
-    ogs_ue_events_record(&e);
+    return ogs_ue_events_record(&e);
 }
 
-void smf_ue_event(smf_sess_t *sess, const char *protocol, const char *direction,
+uint64_t smf_ue_event(smf_sess_t *sess, const char *protocol, const char *direction,
         const char *name, const char *result, const char *cause, const char *info, bool action)
 {
-    record_event(sess, protocol, direction, name, result, cause, info, action, NULL);
+    return record_event(sess, protocol, direction, name, result, cause, info, action, NULL);
 }
 
 void smf_ue_event_qos(smf_sess_t *sess, const char *result, unsigned qfi, unsigned fiveqi, const char *info)
@@ -76,9 +76,9 @@ void smf_ue_event_establishment_n4(smf_sess_t *sess, ogs_pool_id_t xact_id,
         smf_ue_event_establishment_end(sess, result, info);
 }
 
-void smf_ue_event_nas(smf_sess_t *sess, ogs_nas_5gs_message_t *message, bool received)
+uint64_t smf_ue_event_nas(smf_sess_t *sess, ogs_nas_5gs_message_t *message, bool received)
 {
-    if (!ogs_ue_events_enabled() || !sess || !message) return;
+    if (!ogs_ue_events_enabled() || !sess || !message) return 0;
     const char *name = "Unknown5GSM", *action = NULL, *result = NULL;
     char cause[96] = "";
     switch (message->gsm.h.message_type) {
@@ -120,10 +120,19 @@ void smf_ue_event_nas(smf_sess_t *sess, ogs_nas_5gs_message_t *message, bool rec
         memset(&sess->event_establishment, 0, sizeof(sess->event_establishment));
     }
     ogs_ue_event_t wire = {.psi = message->gsm.h.pdu_session_identity, .pti = message->gsm.h.procedure_transaction_identity};
-    record_event(sess, "NAS-5GSM", received ? "UE->SMF" : "SMF->UE", name,
+    uint64_t seq = record_event(sess, "NAS-5GSM", received ? "UE->SMF" : "SMF->UE", name,
             received ? "received" : "prepared", cause, NULL, false, &wire);
     if (action) smf_ue_event(sess, "ACTION", received ? "UE->SMF" : "SMF->UE",
             action, result, cause, NULL, true);
+    return seq;
+}
+
+ogs_pkbuf_t *smf_ue_event_nas_encode(smf_sess_t *sess, ogs_nas_5gs_message_t *message)
+{
+    uint64_t seq = smf_ue_event_nas(sess, message, false);
+    ogs_pkbuf_t *p = ogs_nas_5gs_plain_encode(message);
+    if (p) ogs_ue_trace_record(seq, OGS_TRACE_5GSM, OGS_TRACE_PLAIN | OGS_TRACE_PREPARED, p->data, p->len);
+    return p;
 }
 
 void smf_ue_event_pfcp(smf_sess_t *sess, uint8_t type, const char *result, uint8_t cause)

@@ -1,6 +1,7 @@
 import {Component} from 'react';
 import axios from 'axios';
 import Chart from './Chart';
+import SignalDetails from './SignalDetails';
 import {get} from './client';
 
 const titles = {overview: '概览', ues: '终端', gnbs: '基站', sessions: '会话', events: '事件', system: '状态'};
@@ -329,7 +330,7 @@ export default class Monitor extends Component {
         <dt>方向</dt><dd>{value(r.direction)}</dd><dt>结果</dt><dd><Status state={r.result}/></dd>
         <dt>终端</dt><dd><button className="xcn-link xcn-mono" type="button" disabled={!r.supi} onClick={() => this.select({supi: r.supi}, 'ues')}>{value(r.supi)}</button></dd>
         <dt>详情</dt><dd>{value(r.info)}</dd>{r.cause && <dt>原因</dt>}{r.cause && <dd>{r.cause}</dd>}
-      </dl></div>}
+      </dl><SignalDetails key={r.event_id} event={r}/></div>}
       {r.supi && type === 'ues' && <div><h3>UPF 会话</h3>{sessions.length ? sessions.map(s => <div className="xcn-detail-session" key={s.seid}>
         <button type="button" className="xcn-link" onClick={() => this.select(s, 'sessions')}>PSI {value(s.psi)} / {s.dnn}</button>
         <p className="xcn-mono">SEID {s.seid}　{value(s.ue_ip)}</p><p>{rate(s.ul_bps)} ↑　{rate(s.dl_bps)} ↓</p></div>) : <Empty>{detail ? '暂无匹配的 UPF 会话。' : '正在读取会话…'}</Empty>}</div>}

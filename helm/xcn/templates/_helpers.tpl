@@ -284,4 +284,13 @@ violate Open5GS' worker-to-TX-qid ownership requirement.
   value: {{ $events.capacity | quote }}
 - name: OPEN5GS_UE_EVENTS_PER_UE
   value: {{ $events.perUe | quote }}
+{{- if dig "trace" "enabled" false .Values.monitor }}
+{{- if or (not .Values.monitor.enabled) (not $events.enabled) }}
+{{- fail "monitor.trace.enabled requires monitor.enabled and diagnostics.ueEvents.enabled" }}
+{{- end }}
+- name: XCN_TRACE_ENABLED
+  value: "1"
+- name: XCN_TRACE_DIR
+  value: /run/xcn-trace
+{{- end }}
 {{- end -}}

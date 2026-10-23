@@ -30,7 +30,7 @@ extern "C" {
 ogs_pkbuf_t *nas_5gs_security_encode(
     amf_ue_t *amf_ue, ogs_nas_5gs_message_t *message);
 int nas_5gs_security_decode(amf_ue_t *amf_ue, 
-    ogs_nas_security_header_type_t security_header_type, ogs_pkbuf_t *pkbuf);
+    ogs_nas_security_header_type_t security_header_type, ogs_pkbuf_t *pkbuf, uint8_t *trace_security);
 
 #ifdef __cplusplus
 }

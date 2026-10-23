@@ -1409,9 +1409,12 @@ void smf_state_operational(ogs_fsm_t *s, smf_event_t *e)
         pkbuf = e->pkbuf;
         ogs_assert(pkbuf);
 
+        const uint8_t *trace_nas_data = pkbuf->data;
+        size_t trace_nas_len = pkbuf->len;
         if (ogs_nas_5gsm_decode(&nas_message, pkbuf) != OGS_OK) {
             ogs_error("ogs_nas_5gsm_decode() failed");
-            smf_ue_event(smf_sess_find_by_id(e->sess_id), "ACTION", "UE->SMF", "NASDecode", "failed", "Malformed 5GSM message", NULL, true);
+            uint64_t seq = smf_ue_event(smf_sess_find_by_id(e->sess_id), "ACTION", "UE->SMF", "NASDecode", "failed", "Malformed 5GSM message", NULL, true);
+            ogs_ue_trace_record(seq, OGS_TRACE_5GSM, OGS_TRACE_PLAIN, trace_nas_data, trace_nas_len);
             ogs_pkbuf_free(pkbuf);
             return;
         }
@@ -1423,7 +1426,8 @@ void smf_state_operational(ogs_fsm_t *s, smf_event_t *e)
             break;
         }
 
-        smf_ue_event_nas(sess, &nas_message, true);
+        uint64_t trace_seq = smf_ue_event_nas(sess, &nas_message, true);
+        ogs_ue_trace_record(trace_seq, OGS_TRACE_5GSM, OGS_TRACE_PLAIN, pkbuf->data, pkbuf->len);
         e->nas.message = &nas_message;
         ogs_fsm_dispatch(&sess->sm, e);
 

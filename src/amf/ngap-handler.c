@@ -455,7 +455,7 @@ void ngap_handle_ng_setup_request(amf_gnb_t *gnb, ogs_ngap_message_t *message)
     ogs_assert(r != OGS_ERROR);
 }
 
-void ngap_handle_initial_ue_message(amf_gnb_t *gnb, ogs_ngap_message_t *message)
+uint64_t ngap_handle_initial_ue_message(amf_gnb_t *gnb, ogs_ngap_message_t *message, const ogs_pkbuf_t *raw)
 {
     int i, r;
     char buf[OGS_ADDRSTRLEN];
@@ -517,7 +517,7 @@ void ngap_handle_initial_ue_message(amf_gnb_t *gnb, ogs_ngap_message_t *message)
                 NGAP_Cause_PR_protocol, NGAP_CauseProtocol_semantic_error);
         ogs_expect(r == OGS_OK);
         ogs_assert(r != OGS_ERROR);
-        return;
+        return 0;
     }
 
     ran_ue = ran_ue_find_by_ran_ue_ngap_id(gnb, *RAN_UE_NGAP_ID);
@@ -529,7 +529,7 @@ void ngap_handle_initial_ue_message(amf_gnb_t *gnb, ogs_ngap_message_t *message)
                     NGAP_CauseMisc_control_processing_overload);
             ogs_expect(r == OGS_OK);
             ogs_assert(r != OGS_ERROR);
-            return;
+            return 0;
         }
 
         /* Find AMF_UE if 5G-S_TMSI included */
@@ -612,7 +612,7 @@ void ngap_handle_initial_ue_message(amf_gnb_t *gnb, ogs_ngap_message_t *message)
                 NGAP_Cause_PR_protocol, NGAP_CauseProtocol_semantic_error);
         ogs_expect(r == OGS_OK);
         ogs_assert(r != OGS_ERROR);
-        return;
+        return 0;
     }
 
     if (UserLocationInformation->present !=
@@ -623,7 +623,7 @@ void ngap_handle_initial_ue_message(amf_gnb_t *gnb, ogs_ngap_message_t *message)
                 NGAP_Cause_PR_protocol, NGAP_CauseProtocol_unspecified);
         ogs_expect(r == OGS_OK);
         ogs_assert(r != OGS_ERROR);
-        return;
+        return 0;
     }
 
     if (!NAS_PDU) {
@@ -632,7 +632,7 @@ void ngap_handle_initial_ue_message(amf_gnb_t *gnb, ogs_ngap_message_t *message)
                 NGAP_Cause_PR_protocol, NGAP_CauseProtocol_semantic_error);
         ogs_expect(r == OGS_OK);
         ogs_assert(r != OGS_ERROR);
-        return;
+        return 0;
     }
 
     UserLocationInformationNR =
@@ -654,10 +654,12 @@ void ngap_handle_initial_ue_message(amf_gnb_t *gnb, ogs_ngap_message_t *message)
         }
     }
 
-    amf_ue_event_ngap(gnb, message, "gNB->AMF", "received");
+    uint64_t trace_seq = amf_ue_event_ngap(gnb, message, "gNB->AMF", "received");
+    if (raw) ogs_ue_trace_record(trace_seq, OGS_TRACE_NGAP, 0, raw->data, raw->len);
     amf_ue_event(ran_ue, NULL, "ACTION", "gNB->AMF", "RANAccess", "started", NULL, NULL, true);
     ogs_expect(OGS_OK == ngap_send_to_nas(
                 ran_ue, NGAP_ProcedureCode_id_InitialUEMessage, NAS_PDU));
+    return trace_seq;
 }
 
 void ngap_handle_uplink_nas_transport(

@@ -3,6 +3,8 @@
 #include "../../src/amf/ue-info.h"
 #include "../../src/amf/gnb-info.h"
 #include "../../src/amf/ue-events.h"
+#include "../../src/amf/nas-security.h"
+#include <unistd.h>
 
 static const char *event_arg(void *request, const char *key)
 {
@@ -360,6 +362,82 @@ static void test_event_metadata(ogs_sock_t *sock)
     ogs_ue_events_final();
 }
 
+static ogs_pkbuf_t *protected_uplink(amf_ue_t *ue, bool bad_mac)
+{
+    ogs_nas_5gs_message_t message = {0};
+    message.gmm.h.extended_protocol_discriminator = OGS_NAS_EXTENDED_PROTOCOL_DISCRIMINATOR_5GMM;
+    message.gmm.h.message_type = OGS_NAS_5GS_REGISTRATION_COMPLETE;
+    ogs_pkbuf_t *p = ogs_nas_5gs_plain_encode(&message);
+    ogs_nas_encrypt(2, ue->knas_enc, 1, ue->nas.access_type, OGS_NAS_SECURITY_UPLINK_DIRECTION, p);
+    ogs_pkbuf_push(p, 1); p->data[0] = 1;
+    uint8_t mac[4];
+    ogs_nas_mac_calculate(2, ue->knas_int, 1, ue->nas.access_type, OGS_NAS_SECURITY_UPLINK_DIRECTION, p, mac);
+    ogs_pkbuf_push(p, 6);
+    p->data[0] = 0x7e; p->data[1] = OGS_NAS_SECURITY_HEADER_INTEGRITY_PROTECTED_AND_CIPHERED;
+    memcpy(p->data + 2, mac, 4);
+    if (bad_mac) p->data[2] ^= 1;
+    ogs_pkbuf_pull(p, 7); /* Match the NGAP handler's security-header stripping. */
+    return p;
+}
+
+static void test_nas_trace(void)
+{
+    char directory[] = "/tmp/amf-trace-test-XXXXXX", path[256];
+    uint8_t bytes[OGS_TRACE_MAX_PDU + OGS_TRACE_WIRE_HEADER];
+    ogs_assert(mkdtemp(directory));
+    setenv("XCN_TRACE_DIR", directory, 1); setenv("XCN_TRACE_ENABLED", "1", 1);
+    setenv("OPEN5GS_UE_EVENTS_CAPACITY", "64", 1); setenv("OPEN5GS_UE_EVENTS_PER_UE", "8", 1);
+    ogs_ue_events_open("AMF");
+    snprintf(path, sizeof(path), "%s/AMF.ring", directory);
+    void *reader = xcn_trace_reader_open(path); ogs_assert(reader);
+    amf_ue_t ue = {0};
+    char supi[] = "imsi-001010000000001";
+    ue.supi = supi;
+    ue.event_trace_id = ogs_ue_events_new_trace();
+    ue.security_context_available = 1;
+    ue.selected_enc_algorithm = ue.selected_int_algorithm = 2;
+    ue.nas.access_type = 1;
+    ogs_nas_5gs_message_t message = {0};
+    message.h.security_header_type = OGS_NAS_SECURITY_HEADER_INTEGRITY_PROTECTED_AND_CIPHERED;
+    message.h.extended_protocol_discriminator = 0x7e;
+    message.gmm.h.extended_protocol_discriminator = 0x7e;
+    message.gmm.h.message_type = OGS_NAS_5GS_REGISTRATION_COMPLETE;
+    ogs_pkbuf_t *off = nas_5gs_security_encode(&ue, &message);
+    ogs_assert(off && xcn_trace_reader_read(reader, bytes, sizeof(bytes)) == 0);
+    ue.dl_count = 0;
+    xcn_trace_reader_lease(reader, 1);
+    ogs_pkbuf_t *on = nas_5gs_security_encode(&ue, &message);
+    ogs_assert(on && on->len == off->len && !memcmp(on->data, off->data, on->len));
+    ogs_assert(on->len == 10 && memcmp(on->data + 7, "\x7e\x00\x43", 3));
+    ogs_pkbuf_free(off); ogs_pkbuf_free(on);
+    ogs_assert(xcn_trace_reader_read(reader, bytes, sizeof(bytes)) == 71);
+    ogs_assert(bytes[4] == OGS_TRACE_5GMM && bytes[5] == OGS_TRACE_PREPARED);
+    ogs_assert(!memcmp(bytes + OGS_TRACE_WIRE_HEADER, "\x7e\x00\x43", 3));
+    ogs_nas_security_header_type_t h = {0};
+    h.integrity_protected = h.ciphered = 1;
+    uint8_t status;
+    ogs_pkbuf_t *up = protected_uplink(&ue, false);
+    ogs_assert(nas_5gs_security_decode(&ue, h, up, &status) == OGS_OK);
+    ogs_assert(status == (OGS_TRACE_VERIFIED | OGS_TRACE_DECRYPTED));
+    ogs_assert(!memcmp(up->data, "\x7e\x00\x43", 3)); ogs_pkbuf_free(up);
+    ue.ul_count.i32 = 0;
+    up = protected_uplink(&ue, true);
+    ogs_assert(nas_5gs_security_decode(&ue, h, up, &status) == OGS_OK);
+    ogs_assert(status == (OGS_TRACE_MAC_FAILED | OGS_TRACE_DECRYPTED) && ue.mac_failed);
+    ogs_pkbuf_free(up);
+    ue.security_context_available = 0;
+    up = protected_uplink(&ue, false);
+    ogs_assert(nas_5gs_security_decode(&ue, h, up, &status) == OGS_OK);
+    ogs_assert(status & OGS_TRACE_UNAVAILABLE);
+    ogs_ue_trace_record(999, OGS_TRACE_5GMM, status, up->data, up->len);
+    ogs_assert(xcn_trace_reader_read(reader, bytes, sizeof(bytes)) == 0);
+    ogs_pkbuf_free(up);
+    xcn_trace_reader_close(reader); ogs_ue_events_final();
+    unlink(path); rmdir(directory);
+    unsetenv("XCN_TRACE_DIR"); unsetenv("XCN_TRACE_ENABLED");
+    unsetenv("OPEN5GS_UE_EVENTS_CAPACITY"); unsetenv("OPEN5GS_UE_EVENTS_PER_UE");
+}
+
 int main(void)
 {
     unsigned i;
@@ -370,6 +448,7 @@ int main(void)
 
     ogs_core_initialize();
     ogs_log_install_domain(&__ogs_sbi_domain, "sbi", OGS_LOG_ERROR);
+    ogs_log_install_domain(&__ogs_nas_domain, "nas", OGS_LOG_ERROR);
     ogs_pkbuf_default_init(&packet_config);
     ogs_pkbuf_default_create(&packet_config);
     ogs_app_context_init();
@@ -387,6 +466,7 @@ int main(void)
     ogs_list_add(&amf_self()->ngap_list, &node);
     for (i = 0; i < OGS_ARRAY_SIZE(widths); i++) test_width(&sock, widths[i]);
     test_event_metadata(&sock);
+    test_nas_trace();
     ogs_list_remove(&amf_self()->ngap_list, &node);
     amf_context_final();
     amf_metrics_final();

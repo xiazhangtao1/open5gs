@@ -65,12 +65,14 @@ typedef struct amf_event_s {
         uint16_t max_num_of_istreams;
         uint16_t max_num_of_ostreams;
 
+        uint64_t trace_seq;
         NGAP_ProcedureCode_t code;
         ogs_ngap_message_t *message;
     } ngap;
 
     struct {
         uint8_t type;
+        uint8_t trace_security;
         ogs_nas_5gs_message_t *message;
     } nas;
 

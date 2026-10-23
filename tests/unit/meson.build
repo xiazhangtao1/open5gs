@@ -65,13 +65,13 @@ test('xcnctl-inspect', find_program('python3'),
 ue_events_test = executable('ue-events-test',
     sources : files('ue-events-test.c', '../../lib/proto/ue-events.c'),
     c_args : ['-std=gnu11'],
-    dependencies : [libcore_dep, libsbi_dep])
+    dependencies : [libcore_dep, libproto_dep, libsbi_dep])
 test('ue-events', ue_events_test, suite: 'unit')
 
 ue_events_soak_test = executable('ue-events-soak-test',
     sources : files('ue-events-soak-test.c', '../../lib/proto/ue-events.c'),
     c_args : ['-std=gnu11'],
-    dependencies : [libcore_dep, libsbi_dep])
+    dependencies : [libcore_dep, libproto_dep, libsbi_dep])
 test('ue-events-soak', ue_events_soak_test,
     timeout : 300, is_parallel : false, suite: 'stress')
 
@@ -83,3 +83,11 @@ upf_snapshot_test = executable('upf-snapshot-test',
     sources : files('upf-snapshot-test.c', '../../src/upf/rate-snapshot.c'),
     dependencies : dependency('threads'))
 test('upf-snapshot', upf_snapshot_test, suite: 'unit')
+
+ue_trace_test = executable('ue-trace-test',
+    sources : files('ue-trace-test.c', '../../lib/proto/ue-trace.c'),
+    c_args : ['-std=gnu11'], dependencies : dependency('threads'))
+test('ue-trace', ue_trace_test, suite: 'unit')
+
+executable('signal-fixtures', sources : files('signal-fixtures.c'),
+    dependencies : [libngap_dep, libnas_5gs_dep], install : false)

@@ -72,6 +72,8 @@ int ngap_send_to_gnb(amf_gnb_t *gnb, ogs_pkbuf_t *pkbuf, uint16_t stream_no)
     ogs_ngap_message_t event_message = {0};
     bool tracing = ogs_ue_events_enabled();
     bool decoded = tracing && ogs_ngap_decode(&event_message, pkbuf) == OGS_OK;
+    void *trace = decoded ? ogs_ue_trace_begin(OGS_TRACE_NGAP, 0, pkbuf->data, pkbuf->len) : NULL;
+    uint64_t trace_seq = 0;
     int result;
     if (gnb->sctp.type == SOCK_STREAM) {
         ogs_sctp_write_to_buffer(&gnb->sctp, pkbuf);
@@ -79,8 +81,9 @@ int ngap_send_to_gnb(amf_gnb_t *gnb, ogs_pkbuf_t *pkbuf, uint16_t stream_no)
     } else {
         result = ogs_sctp_senddata(gnb->sctp.sock, pkbuf, gnb->sctp.addr);
     }
-    if (decoded) amf_ue_event_ngap(gnb, &event_message, "AMF->gNB",
+    if (decoded) trace_seq = amf_ue_event_ngap(gnb, &event_message, "AMF->gNB",
             result == OGS_OK ? "queued" : "send-failed");
+    ogs_ue_trace_commit(trace, trace_seq);
     if (tracing) ogs_ngap_free(&event_message);
     return result;
 }
@@ -170,6 +173,7 @@ int ngap_send_to_nas(ran_ue_t *ran_ue,
 
     ogs_nas_5gs_security_header_t *sh = NULL;
     ogs_nas_security_header_type_t security_header_type;
+    uint8_t trace_security = 0;
 
     ogs_nas_5gmm_header_t *h = NULL;
     ogs_pkbuf_t *nasbuf = NULL;
@@ -227,9 +231,11 @@ int ngap_send_to_nas(ran_ue_t *ran_ue,
         return OGS_ERROR;
     }
 
+    trace_security = security_header_type.ciphered ? OGS_TRACE_UNAVAILABLE :
+        security_header_type.type ? 0 : OGS_TRACE_PLAIN;
     if (amf_ue) {
         if (nas_5gs_security_decode(amf_ue,
-                security_header_type, nasbuf) != OGS_OK) {
+                security_header_type, nasbuf, &trace_security) != OGS_OK) {
             amf_ue_event(ran_ue, amf_ue, "ACTION", "UE->AMF", "NASSecurity", "failed", "NAS integrity/decryption failed", NULL, true);
             ogs_error("nas_eps_security_decode failed()");
             ran_ue_remove(ran_ue);
@@ -276,6 +282,7 @@ int ngap_send_to_nas(ran_ue_t *ran_ue,
         e->ran_ue_id = ran_ue->id;
         e->ngap.code = procedureCode;
         e->nas.type = security_header_type.type;
+        e->nas.trace_security = trace_security;
         e->pkbuf = nasbuf;
         rv = ogs_queue_push(ogs_app()->queue, e);
         if (rv != OGS_OK) {

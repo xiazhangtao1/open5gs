@@ -25,6 +25,7 @@ libproto_sources = files('''
 
     types.c
     conv.c
+    ue-trace.c
     event.c
     timer.c
 '''.split())

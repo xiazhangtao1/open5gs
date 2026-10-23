@@ -2,7 +2,7 @@ import json
 import os
 from pathlib import Path
 
-DEFAULTS = dict(enabled=True, events_interval=2, rates_interval=2, info_interval=10,
+DEFAULTS = dict(enabled=True, trace_enabled=False, events_interval=2, rates_interval=2, info_interval=10,
                 gnbs_interval=15, metrics_interval=15, pods_interval=30)
 
 
@@ -14,10 +14,11 @@ def config():
         data = json.loads(Path(path).read_text())
         if not isinstance(data, dict):
             raise ValueError("configuration must be an object")
-        if type(data.get("enabled")) is bool:
-            result["enabled"] = data["enabled"]
+        for flag in ("enabled", "trace_enabled"):
+            if type(data.get(flag)) is bool:
+                result[flag] = data[flag]
         for key, minimum in DEFAULTS.items():
-            if key != "enabled" and type(data.get(key)) in (int, float):
+            if key not in ("enabled", "trace_enabled") and type(data.get(key)) in (int, float):
                 result[key] = min(300, max(minimum, data[key]))
     except FileNotFoundError:
         pass

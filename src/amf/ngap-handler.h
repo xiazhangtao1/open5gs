@@ -28,8 +28,8 @@ extern "C" {
 
 void ngap_handle_ng_setup_request(
         amf_gnb_t *gnb, ogs_ngap_message_t *message);
-void ngap_handle_initial_ue_message(
-        amf_gnb_t *gnb, ogs_ngap_message_t *message);
+uint64_t ngap_handle_initial_ue_message(
+        amf_gnb_t *gnb, ogs_ngap_message_t *message, const ogs_pkbuf_t *raw);
 void ngap_handle_uplink_nas_transport(
         amf_gnb_t *gnb, ogs_ngap_message_t *message);
 void ngap_handle_ue_radio_capability_info_indication(

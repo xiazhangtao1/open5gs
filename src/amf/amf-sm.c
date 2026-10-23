@@ -1042,14 +1042,25 @@ void amf_state_operational(ogs_fsm_t *s, amf_event_t *e)
         rc = ogs_ngap_decode(&ngap_message, pkbuf);
         if (rc == OGS_OK) {
             e->gnb_id = gnb->id;
+            e->ngap.trace_seq = 0;
             e->ngap.message = &ngap_message;
             if (!(ngap_message.present == NGAP_NGAP_PDU_PR_initiatingMessage &&
-                    ngap_message.choice.initiatingMessage->procedureCode == NGAP_ProcedureCode_id_InitialUEMessage))
-                amf_ue_event_ngap(gnb, &ngap_message, "gNB->AMF", "received");
+                    ngap_message.choice.initiatingMessage->procedureCode == NGAP_ProcedureCode_id_InitialUEMessage)) {
+                uint64_t seq = amf_ue_event_ngap(gnb, &ngap_message, "gNB->AMF", "received");
+                ogs_ue_trace_record(seq, OGS_TRACE_NGAP, 0, pkbuf->data, pkbuf->len);
+            }
             ogs_fsm_dispatch(&gnb->sm, e);
+            if (ogs_ue_trace_active() && !e->ngap.trace_seq &&
+                    ngap_message.present == NGAP_NGAP_PDU_PR_initiatingMessage &&
+                    ngap_message.choice.initiatingMessage->procedureCode == NGAP_ProcedureCode_id_InitialUEMessage) {
+                uint64_t seq = amf_ue_event(NULL, NULL, "NGAP", "gNB->AMF", "InitialUEMessage",
+                        "received-unassociated", NULL, "No RAN context was created", false);
+                ogs_ue_trace_record(seq, OGS_TRACE_NGAP, 0, pkbuf->data, pkbuf->len);
+            }
         } else {
             ogs_error("Cannot decode NGAP message");
-            amf_ue_event(NULL, NULL, "ACTION", "gNB->AMF", "NGAPDecode", "failed", "Malformed NGAP; UE identity unavailable", NULL, true);
+            uint64_t seq = amf_ue_event(NULL, NULL, "ACTION", "gNB->AMF", "NGAPDecode", "failed", "Malformed NGAP; UE identity unavailable", NULL, true);
+            ogs_ue_trace_record(seq, OGS_TRACE_NGAP, 0, pkbuf->data, pkbuf->len);
             r = ngap_send_error_indication(
                     gnb, NULL, NULL, NGAP_Cause_PR_protocol, 
                     NGAP_CauseProtocol_abstract_syntax_error_falsely_constructed_message);
@@ -1102,9 +1113,12 @@ void amf_state_operational(ogs_fsm_t *s, amf_event_t *e)
             break;
         }
 
+        const uint8_t *trace_nas_data = pkbuf->data;
+        size_t trace_nas_len = pkbuf->len;
         if (ogs_nas_5gmm_decode(&nas_message, pkbuf) != OGS_OK) {
             ogs_error("ogs_nas_5gmm_decode() failed");
-            amf_ue_event(ran_ue, NULL, "ACTION", "UE->AMF", "NASDecode", "failed", "Malformed 5GMM message", NULL, true);
+            uint64_t seq = amf_ue_event(ran_ue, NULL, "ACTION", "UE->AMF", "NASDecode", "failed", "Malformed 5GMM message", NULL, true);
+            ogs_ue_trace_record(seq, OGS_TRACE_5GMM, e->nas.trace_security, trace_nas_data, trace_nas_len);
             ogs_pkbuf_free(pkbuf);
             break;
         }
@@ -1139,13 +1153,16 @@ void amf_state_operational(ogs_fsm_t *s, amf_event_t *e)
                     /* Decryption was performed in NGAP handler.
                      * So, we disabled 'ciphered' not to decrypt NAS message */
                     h.ciphered = 0;
-                    if (nas_5gs_security_decode(amf_ue, h, pkbuf) != OGS_OK) {
+                    uint8_t checked = 0;
+                    if (nas_5gs_security_decode(amf_ue, h, pkbuf, &checked) != OGS_OK) {
                         amf_ue_event(ran_ue, amf_ue, "ACTION", "UE->AMF", "NASSecurity", "failed", "NAS integrity check failed", NULL, true);
                         ogs_error("[%s] nas_security_decode() failed",
                                 amf_ue->suci);
                         ogs_pkbuf_free(pkbuf);
                         break;
                     }
+                    e->nas.trace_security = (e->nas.trace_security &
+                            ~(OGS_TRACE_VERIFIED | OGS_TRACE_MAC_FAILED)) | checked;
                 }
 
                 /*
@@ -1206,7 +1223,8 @@ void amf_state_operational(ogs_fsm_t *s, amf_event_t *e)
         ogs_assert(OGS_FSM_STATE(&amf_ue->sm));
 
         e->amf_ue_id = amf_ue->id;
-        amf_ue_event_nas(ran_ue, amf_ue, &nas_message, true);
+        uint64_t trace_seq = amf_ue_event_nas(ran_ue, amf_ue, &nas_message, true);
+        ogs_ue_trace_record(trace_seq, OGS_TRACE_5GMM, e->nas.trace_security, pkbuf->data, pkbuf->len);
         e->nas.message = &nas_message;
 
         ogs_fsm_dispatch(&amf_ue->sm, e);
