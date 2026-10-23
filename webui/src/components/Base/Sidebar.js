@@ -28,8 +28,8 @@ const paths = {
   profile: 'M5 2h10l4 4v16H5z M8 11h8 M8 16h8',
   account: 'M15 14a5 5 0 1 0-4-4 L2 19v3h3v-3h3l3-3'
 };
-const monitor = [['overview', '运行概览'], ['ues', 'UE 终端'], ['gnbs', 'gNB 接入'],
-  ['sessions', '会话与速率'], ['events', '事件时间线'], ['system', '系统状态']];
+const monitor = [['overview', '概览'], ['ues', '终端'], ['gnbs', '基站'],
+  ['sessions', '会话'], ['events', '事件'], ['system', '状态']];
 const manage = [['subscriber', '用户管理'], ['profile', '模板管理'], ['account', '账户管理']];
 
 export default function Sidebar({isOpen, selectedView, onSelectView}) {
@@ -42,6 +42,5 @@ export default function Sidebar({isOpen, selectedView, onSelectView}) {
   return <Menu visible={isOpen} aria-label="主导航" aria-hidden={!isOpen}>
     <div className="xcn-nav-group">核心网监控</div>{monitor.map(item)}
     <div className="xcn-nav-group manage">配置管理</div>{manage.map(item)}
-    <div className="xcn-nav-note">X-CN<br/><span>5G 核心网控制台</span></div>
   </Menu>;
 }

@@ -57,9 +57,10 @@ export default class Chart extends Component {
   }
   render() {
     const empty = !(this.props.points || []).length;
+    const failed = this.state && this.state.error;
     return <div className="xcn-chart-wrap">
       <div ref={e => { this.element = e; }} className="xcn-chart" role="img" aria-label="上行与下行速率趋势图"/>
-      {empty && <div className="xcn-chart-empty">{this.state && this.state.error ? '图表资源加载失败' : '等待流量采样，暂时没有历史数据'}</div>}
+      {(empty || failed) && <div className="xcn-chart-empty">{failed ? '图表资源加载失败，请刷新重试' : '等待流量采样，暂时没有历史数据'}</div>}
     </div>;
   }
 }

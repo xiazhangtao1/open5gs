@@ -430,11 +430,12 @@ class Cache:
         if endpoint == "overview":
             states = {s: sum(u.get("cm_state", "unknown") == s for u in self.ues)
                       for s in ("connected", "idle", "unknown")}
+            events = self.query("events", {"limit": "6", "protocol": query.get("protocol", "NGAP")})
             return dict(ue_count=len(self.ues), cm_states=states, gnb_count=len(self.gnbs),
                         session_count=len(self.sessions),
                         ul_bps=str(sum(int(s["ul_bps"]) for s in self.sessions)),
                         dl_bps=str(sum(int(s["dl_bps"]) for s in self.sessions)),
-                        events=self.query("events", {"limit": "6"})["items"], health=self.health())
+                        events=events["items"], protocols=events["protocols"], health=self.health())
         if endpoint == "trends":
             key = query.get("key", "global")
             window = min(1800, max(60, int(query.get("seconds", 1800))))
@@ -442,9 +443,7 @@ class Cache:
             return dict(key=key, points=curve.points(time.time() - window) if curve else [],
                         started_at=self.started_at, window_seconds=window)
         if endpoint == "system":
-            return dict(health=self.health(), pods=self.source("pods")["data"],
-                        metrics={k: s["data"] for k, s in self.sources.items() if k.endswith("_metrics")},
-                        usage=self.source("usage")["data"])
+            return dict(health=self.health(), pods=self.source("pods")["data"])
         rates = self.sessions
         if endpoint == "rates" and query.get("level") in ("bearer", "rule"):
             field = "bearers" if query["level"] == "bearer" else "rules"
@@ -454,16 +453,25 @@ class Cache:
             users = {}
             for s in self.sessions:
                 u = users.setdefault(s.get("supi"), dict(supi=s.get("supi"), cm_state=s.get("cm_state"),
+                                                         dnns=set(), session_count=0,
                                                          **{k: 0 for k in ("ul_bps", "dl_bps", "ul_bytes", "dl_bytes")}))
+                if s.get("dnn"):
+                    u["dnns"].add(s["dnn"])
+                u["session_count"] += 1
                 for k in ("ul_bps", "dl_bps", "ul_bytes", "dl_bytes"):
                     u[k] += int(s[k])
-            rates = [{k: str(v) if k in ("ul_bps", "dl_bps", "ul_bytes", "dl_bytes") else v for k, v in u.items()}
-                     for u in users.values()]
+            rates = []
+            for u in users.values():
+                u["dnns"] = sorted(u["dnns"])
+                u["dnn"] = ", ".join(u["dnns"])
+                rates.append({k: str(v) if k in ("ul_bps", "dl_bps", "ul_bytes", "dl_bytes") else v
+                              for k, v in u.items()})
         rows = {"ues": self.ues, "gnbs": self.gnbs, "sessions": self.sessions, "rates": rates}.get(endpoint)
         if endpoint == "events":
             rows = sorted((v[0] for v in self.events.values()),
                           key=lambda e: (int(e.get("order_timestamp_us", e.get("timestamp_us", 0))), e.get("nf", ""),
                                          int(e.get("seq", 0))), reverse=True)
+            protocols = sorted({r["protocol"] for r in rows if isinstance(r.get("protocol"), str) and r["protocol"]})
         if rows is None:
             raise KeyError(endpoint)
         for name in ("supi", "cm_state", "seid", "nf", "psi", "result", "protocol", "gnb_id", "gnb_id_bits", "plmn"):
@@ -482,4 +490,5 @@ class Cache:
                       sources=self.health()["sources"])
         if endpoint == "events":
             result["coverage"] = self.event_coverage()
+            result["protocols"] = protocols
         return result

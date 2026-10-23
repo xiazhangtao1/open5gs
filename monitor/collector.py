@@ -156,18 +156,10 @@ class Collector:
             self.cache.affinity = dict(verified=False, error=str(exc))
             raise
         self.cache.replace("pods", rows, interval)
-        try:
-            usage = await self.kube(f"/apis/metrics.k8s.io/v1beta1/namespaces/{namespace}/pods", "usage")
-            values = [dict(name=p.get("metadata", {}).get("name"), containers=p.get("containers", []))
-                      for p in usage.get("items", [])]
-            self.cache.replace("usage", values, interval)
-        except (aiohttp.ClientError, OSError, ValueError, TimeoutError, MemoryPressure, MemoryError):
-            self.cache.relieve_memory()
-            self.cache.fail("usage", "Metrics API 不可用；无法显示容器 CPU/内存实时用量")
 
     async def nf_loop(self, nf):
-        # One serial scheduler per NF: events, pages and metrics cannot overlap.
-        jobs = ["events", "info", "metrics"] if nf in ("amf", "smf") else ["metrics"]
+        # One serial scheduler per NF: event and detail reads cannot overlap.
+        jobs = ["events", "info"]
         if nf == "amf":
             jobs.append("gnbs")
         while True:
@@ -222,7 +214,7 @@ class Collector:
         async with aiohttp.ClientSession(timeout=timeout, trust_env=False,
                                          connector=aiohttp.TCPConnector(limit=4)) as self.http:
             self.tasks = [asyncio.create_task(self.pod_loop()), asyncio.create_task(self.memory_loop())]
-            self.tasks += [asyncio.create_task(self.nf_loop(nf)) for nf in self.bases]
+            self.tasks += [asyncio.create_task(self.nf_loop(nf)) for nf in ("amf", "smf")]
             try:
                 yield
             finally:

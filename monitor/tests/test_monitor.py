@@ -133,6 +133,34 @@ class CacheTests(unittest.TestCase):
         cache.replace("upf_rates", cache.sessions, 2)
         self.assertIsNone(cache.sessions[0]["psi"])
 
+    def test_user_rates_keep_all_dnns_and_exact_totals(self):
+        cache = seeded()
+        rows = copy.deepcopy(snapshot()["sessions"])
+        second = copy.deepcopy(rows[0])
+        second.update(seid="812", dnn="cmnet")
+        rows.extend([second, dict(copy.deepcopy(second), seid="813")])
+        cache.replace("upf_rates", rows, 2)
+        user = cache.query("rates", {"level": "user"})["items"][0]
+        self.assertEqual(user["dnns"], ["cmnet", "internet"])
+        self.assertEqual(user["dnn"], "cmnet, internet")
+        self.assertEqual(user["session_count"], 3)
+        self.assertEqual(user["ul_bytes"], str(3 * 18446744073709551615))
+        self.assertEqual(len(cache.query("sessions", {"supi": user["supi"]})["items"]), 3)
+
+    def test_event_protocol_filter_and_overview_default(self):
+        cache = Cache()
+        items = [dict(seq=str(i), timestamp_us=str(int(time.time() * 1e6)), protocol=p)
+                 for i, p in enumerate(["SBI", "NGAP", "NGAP", "PFCP"], 1)]
+        cache.add_events("amf", dict(boot_id="a", items=items))
+        filtered = cache.query("events", {"protocol": "NGAP", "limit": "1"})
+        self.assertEqual(filtered["total"], 2)
+        self.assertEqual(len(filtered["items"]), 1)
+        self.assertEqual(filtered["items"][0]["protocol"], "NGAP")
+        self.assertEqual(filtered["protocols"], ["NGAP", "PFCP", "SBI"])
+        self.assertEqual(cache.query("events", {"protocol": ""})["total"], 4)
+        self.assertEqual(len(cache.query("overview", {})["events"]), 2)
+        self.assertEqual(len(cache.query("overview", {"protocol": ""})["events"]), 4)
+
     def test_ipv6_and_ambiguous_match(self):
         cache = seeded()
         rows = snapshot()["sessions"]
@@ -335,6 +363,22 @@ class AsyncTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(collector.cursors["amf"]["after"], "9007199254740994")
         self.assertEqual(collector.cache.source("amf_events")["gap_count"], 2)
         self.assertEqual(collector.cursors["amf"]["boot_id"], "new-boot")
+
+    async def test_pod_status_does_not_require_metrics_api(self):
+        collector = self.app["collector"]
+        paths = []
+        async def kube(path, name):
+            paths.append(path)
+            return {"items": [{"metadata": {"name": "fivegc", "annotations": {
+                "xnet.com/used-core": '{"upf":{"cpu":"48-49"}}'}},
+                "spec": {"nodeName": "test-node"}, "status": {"phase": "Running"}}]}
+        collector.kube = kube
+        with patch.dict(os.environ, {"NODE_NAME": "test-node", "POD_NAMESPACE": "xcn"}), \
+                patch("collector.pin_cpu", return_value=[36, 37]):
+            await collector.pods(30)
+        self.assertEqual(paths, ["/api/v1/namespaces/xcn/pods"])
+        self.assertTrue(collector.collection_ready)
+        self.assertNotIn("usage", collector.cache.sources)
 
     async def test_event_scientific_notation_timestamp(self):
         collector = self.app["collector"]
