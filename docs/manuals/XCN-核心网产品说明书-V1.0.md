@@ -1,8 +1,8 @@
 # XCN 核心网产品说明书
 
-**纯软件部署说明｜V1.0（修订版）｜2026-10-22**
+**纯软件部署说明｜V1.0（修订版）｜2026-10-23**
 
-适用版本：Open5GS 2.7.7，XCN Helm Chart 0.1.0。部署包路径为 `helm/xcn`，参数以该版本的 `values.yaml` 和模板为准。
+适用版本：Open5GS 2.7.7，XCN Helm Chart 0.1.0。实际交付内容为相关容器镜像及 Helm Chart 包 `xcn.tgz`，部署参数以交付包中的配置为准，包版本可通过 `helm show chart ./xcn.tgz` 查看。
 
 ## 1. 软件概述
 
@@ -108,17 +108,30 @@ Chart 还提供 N2 NodePort 31412、N3 NodePort 32152、PCF NodePort 30777。本
 | UE IPv4 网段／网关 | 10.45.0.0/16／10.45.0.1 | 由 SMF、UPF/TUN 或 VPP 内侧共同使用 |
 | 动态 IPv4 范围 | 本文设置 10.45.1.2-10.45.255.254 | 静态订阅地址应避开动态范围、网关及网络／广播地址 |
 
-当前 Chart 未提供通用 PLMN／TAC values 参数；更换时需同步调整 `templates/config.yaml` 中 NRF、AMF 及相关网元配置，重新部署验证。UE 容量模板值 `global.max.ue=1024` 为资源池配置。
+当前 Chart 未提供通用 PLMN／TAC values 参数，部署时采用交付包中的预置配置；如需更换，应提供相应配置的新版 Chart 包。UE 容量模板值 `global.max.ue=1024` 为资源池配置。
 
 ## 3. 安装与部署
 
 ### 3.1 准备部署包与镜像
 
-在管理终端进入部署包目录：
+交付的 Chart 经 `helm package xcn` 打包，以 `xcn.tgz` 文件提供；镜像包括 XCN 运行镜像、WebUI 和 MongoDB，VPP/memif 模式另需 VPP 镜像。以下以交付文件放在 `/opt/xcn` 为例，离线归档的目录示例为：
+
+```text
+/opt/xcn/
+├── xcn.tgz
+└── images/
+    ├── xcn-runtime.tar
+    ├── xcn-webui.tar
+    ├── mongo.tar
+    └── vpp.tar
+```
+
+在管理终端进入实际部署目录，检查 Chart 版本并导出默认参数供核对。Helm 直接读取 `xcn.tgz`，现场参数通过独立 values 文件覆盖：
 
 ```bash
-cd /home/xiazhangtao/code/open5gs
-helm show chart helm/xcn
+cd /opt/xcn
+helm show chart ./xcn.tgz
+helm show values ./xcn.tgz > /tmp/xcn-default-values.yaml
 ```
 
 可使用镜像仓库或导入离线镜像。以下为 containerd 环境的归档导入示例，需在可能调度工作负载的各节点执行，并以实际交付的文件名和镜像标签为准：
@@ -180,16 +193,16 @@ hostNetwork 模式中，AMF 和 TUN 模式 UPF 的监听地址应已配置在选
 先检查参数并生成清单：
 
 ```bash
-helm lint helm/xcn -f /tmp/xcn-site-tun.yaml
+helm lint ./xcn.tgz -f /tmp/xcn-site-tun.yaml
 umask 077
-helm template xcn helm/xcn -n xcn \
+helm template xcn ./xcn.tgz -n xcn \
   -f /tmp/xcn-site-tun.yaml > /tmp/xcn-rendered-tun.yaml
 ```
 
 确认清单中的节点、地址、镜像和资源后首次安装。命令为 WebUI 生成独立的会话签名参数，升级时沿用原值：
 
 ```bash
-helm install xcn helm/xcn -n xcn --create-namespace \
+helm install xcn ./xcn.tgz -n xcn --create-namespace \
   -f /tmp/xcn-site-tun.yaml \
   --set-string webui.secretKey="$(openssl rand -hex 32)" \
   --set-string webui.jwtSecretKey="$(openssl rand -hex 32)" \
@@ -225,13 +238,13 @@ vpp:
 检查组合配置并在新环境安装，后一个文件覆盖前一个文件的同名参数：
 
 ```bash
-helm lint helm/xcn -f /tmp/xcn-site-tun.yaml \
+helm lint ./xcn.tgz -f /tmp/xcn-site-tun.yaml \
   -f /tmp/xcn-site-memif.yaml
 umask 077
-helm template xcn helm/xcn -n xcn \
+helm template xcn ./xcn.tgz -n xcn \
   -f /tmp/xcn-site-tun.yaml -f /tmp/xcn-site-memif.yaml \
   > /tmp/xcn-rendered-memif.yaml
-helm install xcn helm/xcn -n xcn --create-namespace \
+helm install xcn ./xcn.tgz -n xcn --create-namespace \
   -f /tmp/xcn-site-tun.yaml -f /tmp/xcn-site-memif.yaml \
   --set-string webui.secretKey="$(openssl rand -hex 32)" \
   --set-string webui.jwtSecretKey="$(openssl rand -hex 32)" \
@@ -335,12 +348,13 @@ DPDK 的 VF 流量可能绕过 Linux 抓包路径，memif 模式还应结合 VPP
 
 ### 4.4 升级与卸载
 
-升级前保存实际 Release 参数和数据库备份。以下目录变量由本次操作创建，后续命令使用同一目录：
+升级前保存原 `xcn.tgz`、实际 Release 参数和数据库备份。以下命令在部署目录执行，目录变量由本次操作创建，后续命令使用同一目录：
 
 ```bash
 umask 077
 XCN_BACKUP_DIR="$HOME/xcn-backup/$(date +%Y%m%d-%H%M%S)"
 install -d -m 700 "$XCN_BACKUP_DIR"
+cp ./xcn.tgz "$XCN_BACKUP_DIR/xcn.tgz"
 helm get values xcn -n xcn --all > "$XCN_BACKUP_DIR/values.yaml"
 kubectl -n xcn exec statefulset/xcn-mongodb -- \
   mongodump --db open5gs --archive --gzip \
@@ -348,11 +362,11 @@ kubectl -n xcn exec statefulset/xcn-mongodb -- \
 test -s "$XCN_BACKUP_DIR/open5gs.archive.gz"
 ```
 
-需要一致性备份时，先停止相关数据库写入。在已保存的 values 基础上修改形成 `/tmp/xcn-approved-values.yaml`，保留原有镜像、密钥、地址、存储和用户面参数，再执行：
+需要一致性备份时，先停止相关数据库写入。完成备份后导入新版交付镜像，并用新版 `xcn.tgz` 替换部署目录中的 Chart 包。在已保存的 values 基础上修改形成 `/tmp/xcn-approved-values.yaml`，保持现场密钥、地址、存储和用户面参数，按新版镜像更新 repository、tag，再执行：
 
 ```bash
-helm lint helm/xcn -f /tmp/xcn-approved-values.yaml
-helm upgrade xcn helm/xcn -n xcn \
+helm lint ./xcn.tgz -f /tmp/xcn-approved-values.yaml
+helm upgrade xcn ./xcn.tgz -n xcn \
   -f /tmp/xcn-approved-values.yaml --wait --timeout 10m
 ```
 
