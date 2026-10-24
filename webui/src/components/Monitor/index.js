@@ -4,9 +4,9 @@ import Chart from './Chart';
 import SignalDetails from './SignalDetails';
 import {get} from './client';
 
-const titles = {overview: '概览', ues: '终端', gnbs: '基站', sessions: '会话', events: '事件', system: '状态'};
+const titles = {overview: '概览', ues: '终端', gnbs: '基站', sessions: '会话', events: '信令', system: '状态'};
 const sourceNames = {amf_ues: '终端', smf_pdus: '会话', amf_gnbs: '基站', upf_rates: '用户面速率',
-  amf_events: 'AMF 事件', smf_events: 'SMF 事件', pods: '容器'};
+  amf_events: 'AMF 信令', smf_events: 'SMF 信令', pods: '容器'};
 const visibleSource = k => k !== 'usage' && !/_metrics$/.test(k);
 const value = v => v === null || v === undefined || v === '' ? '—' : String(v);
 const clock = v => v ? new Date(Number(v) * 1000).toLocaleTimeString('zh-CN', {hour12: false}) : '尚未采集';
@@ -45,7 +45,7 @@ class Raw extends Component {
 const Button = ({children, onClick, ...rest}) => <button type="button" className="xcn-button" onClick={onClick} {...rest}>{children}</button>;
 
 function Events({items, onSelect, compact}) {
-  if (!items || !items.length) return <Empty>暂无匹配事件，可切换协议或调整搜索条件。</Empty>;
+  if (!items || !items.length) return <Empty>暂无匹配信令，可切换协议或调整搜索条件。</Empty>;
   return <div className={'xcn-events-scroll' + (compact ? ' compact' : '')}>
     <ol className="xcn-events">{items.map((e, i) => <li key={e.event_id || i} className={bad(e.result) ? 'problem' : ''}>
       <time title={dateTime(Number(e.timestamp_us) / 1e6)}>{eventClock(e.timestamp_us)}</time>
@@ -202,8 +202,8 @@ export default class Monitor extends Component {
           <div><span><i className="xcn-flow-dot dl"/>下行</span><strong>{rate(data.dl_bps)}</strong></div></div>
         <Chart theme={this.props.theme} points={(this.state.trend || {}).points}/>
       </section>
-      <section className="xcn-panel"><div className="xcn-panel-heading"><h2>近期控制面活动</h2>
-        <div className="xcn-panel-actions">{this.protocolPicker(data)}<Button onClick={() => this.navigate('events', {protocol: this.state.protocol})}>更多事件</Button></div></div>
+      <section className="xcn-panel"><div className="xcn-panel-heading"><h2>近期信令</h2>
+        <div className="xcn-panel-actions">{this.protocolPicker(data)}<Button onClick={() => this.navigate('events', {protocol: this.state.protocol})}>更多信令</Button></div></div>
         <Events items={data.events} onSelect={e => this.select(e, 'events')}/></section>
     </div>;
   }
@@ -268,7 +268,7 @@ export default class Monitor extends Component {
           <tbody>{Object.keys(sources).filter(visibleSource).map(k => <tr key={k}><td>{sourceNames[k] || k}</td>
             <td><Status state={sources[k].error ? '异常' : sources[k].stale ? '等待更新' : 'ready'}/></td>
             <td className="xcn-nowrap">{clock(sources[k].updated_at)}</td><td>{sources[k].interval} 秒</td>
-            <td className="xcn-wrap">{sources[k].error || (sources[k].gap_count ? '检测到事件缺口 ' + sources[k].gap_count + ' 次' :
+            <td className="xcn-wrap">{sources[k].error || (sources[k].gap_count ? '检测到信令缺口 ' + sources[k].gap_count + ' 次' :
               sources[k].reset_count ? '网元序列重置 ' + sources[k].reset_count + ' 次' : '—')}</td></tr>)}</tbody></table></div>
       </section>
       <section className="xcn-panel"><div className="xcn-panel-heading"><h2>容器状态</h2></div>
@@ -339,8 +339,8 @@ export default class Monitor extends Component {
       {r.supi && type === 'ues' && <div><h3>UPF 会话</h3>{sessions.length ? sessions.map(s => <div className="xcn-detail-session" key={s.seid}>
         <button type="button" className="xcn-link" onClick={() => this.select(s, 'sessions')}>PSI {value(s.psi)} / {s.dnn}</button>
         <p className="xcn-mono">SEID {s.seid}　{value(s.ue_ip)}</p><p>{rate(s.ul_bps)} ↑　{rate(s.dl_bps)} ↓</p></div>) : <Empty>{detail ? '暂无匹配的 UPF 会话。' : '正在读取会话…'}</Empty>}</div>}
-      <Raw data={raw} label={type === 'events' ? '查看事件记录（JSON）' : undefined}/>
-      {r.supi && type !== 'events' && <div><h3>终端近期事件</h3>
+      <Raw data={raw} label={type === 'events' ? '查看信令记录（JSON）' : undefined}/>
+      {r.supi && type !== 'events' && <div><h3>终端近期信令</h3>
         <Events compact items={events} onSelect={e => this.select(e, 'events')}/></div>}
     </Drawer>;
   }
@@ -360,8 +360,8 @@ export default class Monitor extends Component {
       {data && view === 'overview' && this.overview(data)}
       {data && view === 'system' && this.system(data)}
       {data && ['ues', 'gnbs', 'sessions', 'events'].indexOf(view) >= 0 && <section className="xcn-panel">
-        {view === 'events' && data.coverage && <div className="xcn-event-range"><span>事件覆盖</span>
-          <span>{data.coverage.oldest_at ? dateTime(data.coverage.oldest_at) + ' — ' + dateTime(data.coverage.newest_at) : '暂无事件'}</span></div>}
+        {view === 'events' && data.coverage && <div className="xcn-event-range"><span>信令覆盖</span>
+          <span>{data.coverage.oldest_at ? dateTime(data.coverage.oldest_at) + ' — ' + dateTime(data.coverage.newest_at) : '暂无信令'}</span></div>}
         {view === 'events' ? <Events items={data.items} onSelect={e => this.select(e, 'events')}/> : this.table(view, data)}
         <div className="xcn-pagination"><span>共 {data.total} 条 · 第 {page + 1} 页</span><div>
           <Button disabled={page === 0} onClick={() => this.change({page: page - 1})}>上一页</Button>

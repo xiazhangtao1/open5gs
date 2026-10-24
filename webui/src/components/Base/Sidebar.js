@@ -29,7 +29,7 @@ const paths = {
   account: 'M15 14a5 5 0 1 0-4-4 L2 19v3h3v-3h3l3-3'
 };
 const monitor = [['overview', '概览'], ['ues', '终端'], ['gnbs', '基站'],
-  ['sessions', '会话'], ['events', '事件'], ['system', '状态']];
+  ['sessions', '会话'], ['events', '信令'], ['system', '状态']];
 const manage = [['subscriber', '用户管理'], ['profile', '模板管理'], ['account', '账户管理']];
 
 export default function Sidebar({isOpen, selectedView, onSelectView}) {
