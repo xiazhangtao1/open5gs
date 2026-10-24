@@ -43,6 +43,9 @@ def validate_snapshot(doc):
             if (not isinstance(r, dict) or r.get("direction") not in ("UL", "DL")
                     or type(r.get("qfi")) is not int or not 0 <= r["qfi"] <= 63):
                 raise ValueError("invalid rule")
+            for key in ("src_if", "dst_if"):
+                if key in r and (type(r[key]) is not int or r[key] not in (0, 1, 2, 3, 4, 255)):
+                    raise ValueError("invalid PFCP interface")
             for key in ("bps", "pps", "bytes", "packets"):
                 v = r.get(key)
                 if not isinstance(v, str) or not v.isdigit() or not 0 <= int(v) < 1 << 64:

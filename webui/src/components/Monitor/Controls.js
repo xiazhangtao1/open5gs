@@ -54,7 +54,7 @@ class History extends Component {
 
 const freshForm = () => ({fiveQi: '9', priority: '', arp: '8', capability: 'NOT_PREEMPT', vulnerability: 'PREEMPTABLE',
   precedence: '', maxbrUl: '', maxbrDl: '', gbrUl: '', gbrDl: '',
-  flows: 'permit out ip from any to assigned\npermit in ip from assigned to any'});
+  flows: 'permit out ip from 0.0.0.0/0 to assigned\npermit in ip from assigned to 0.0.0.0/0'});
 function appForm(app) {
   const rule = app.pccRules[0], q = rule.qos || {}, arp = q.arp || {};
   const bps = n => n === undefined ? '' : n + ' bps';
@@ -139,7 +139,7 @@ export class SessionControls extends Component {
       {loading && <p>正在读取当前策略…</p>}{error && <p className="xcn-control-error" role="alert">{error}</p>}
       {target && <div>
         <div className="xcn-control-actions"><Button primary disabled={busy || loading || !!form || !!confirm || target.releasing}
-          onClick={() => this.setState({form: freshForm(), edit: null, result: null})}>新建专载</Button>
+          onClick={() => this.setState({form: freshForm(), edit: null, result: null})}>在此会话新建专载</Button>
           <Button danger disabled={busy || loading || !!form || !!confirm || target.releasing}
             onClick={() => this.setState({confirm: {type: 'session'}, result: null})}>{target.releasing ? '会话释放中' : '释放会话'}</Button></div>
         <div className="xcn-control-rule-list">{(target.bearers || []).map(app => {

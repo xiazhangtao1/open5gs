@@ -10,7 +10,7 @@
 typedef struct {
     uint16_t pdr_id;
     uint32_t qer_id, generation;
-    uint8_t qfi, direction;
+    uint8_t qfi, direction, src_if, dst_if;
     uint64_t bps, pps, octets, packets;
 } upf_snapshot_rule_t;
 

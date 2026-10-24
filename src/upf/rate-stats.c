@@ -162,6 +162,9 @@ void upf_rate_stats_sync_rules(upf_sess_t *sess)
             continue;
         slot = &sess->rate_slot[pdr->id - 1];
         present[pdr->id - 1] = true;
+        /* Control-plane metadata only; changing FAR must not reset counters. */
+        slot->src_if = pdr->src_if;
+        slot->dst_if = pdr->far ? pdr->far->dst_if : OGS_PFCP_INTERFACE_UNKNOWN;
         if (slot->active && slot->pdr_id == pdr->id &&
             slot->qer_id == qer_id && slot->qfi == qfi &&
             slot->direction == direction)
@@ -177,6 +180,8 @@ void upf_rate_stats_sync_rules(upf_sess_t *sess)
         slot->qer_id = qer_id;
         slot->qfi = qfi;
         slot->direction = direction;
+        slot->src_if = pdr->src_if;
+        slot->dst_if = pdr->far ? pdr->far->dst_if : OGS_PFCP_INTERFACE_UNKNOWN;
     }
 
     for (i = 0; i < OGS_MAX_NUM_OF_PDR; i++) {
@@ -271,6 +276,8 @@ static void sample_rates(ogs_time_t now, ogs_time_t *previous)
                     r->generation = slot->generation;
                     r->qfi = slot->qfi;
                     r->direction = slot->direction;
+                    r->src_if = slot->src_if;
+                    r->dst_if = slot->dst_if;
                     r->bps = slot->rate_bps;
                     r->pps = slot->rate_pps;
                     r->octets = octets;

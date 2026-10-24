@@ -58,6 +58,7 @@ typedef struct upf_rate_slot_s {
     uint32_t qer_id;
     uint8_t qfi;
     uint8_t direction;
+    uint8_t src_if, dst_if;
     uint32_t generation;
     uint32_t dirty_epoch;
     uint64_t live_octets;

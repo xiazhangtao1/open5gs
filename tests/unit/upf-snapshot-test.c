@@ -45,11 +45,14 @@ int main(void)
     strcpy(f->sessions[0].dnn, "a\"b\\c\n");
     f->sessions[0].rule_count = 1;
     f->rules[0].octets = UINT64_MAX;
+    f->rules[0].src_if = 3;
+    f->rules[0].dst_if = 0;
     upf_snapshot_publish(&cache, f);
     held = upf_snapshot_acquire(&cache);
     assert(held == f);
     assert(upf_snapshot_json(f, json, sizeof(json)) < sizeof(json));
     assert(strstr(json, "\"18446744073709551615\""));
+    assert(strstr(json, "\"src_if\":3,\"dst_if\":0"));
     assert(strstr(json, "a\\\"b\\\\c\\u000a"));
     f = upf_snapshot_begin(&cache, 1);
     assert(f && f != held);

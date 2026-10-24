@@ -167,10 +167,12 @@ size_t upf_snapshot_json(const upf_snapshot_frame_t *f, char *buf, size_t cap)
             const upf_snapshot_rule_t *r = &f->rules[s->first_rule + j];
             n = emit(buf, n, cap, "%s{\"pdr_id\":%u,\"qer_id\":%u,"
                     "\"generation\":%u,\"qfi\":%u,\"direction\":\"%s\","
+                    "\"src_if\":%u,\"dst_if\":%u,"
                     "\"bps\":\"%"PRIu64"\",\"pps\":\"%"PRIu64"\","
                     "\"bytes\":\"%"PRIu64"\",\"packets\":\"%"PRIu64"\"}",
                     j ? "," : "", r->pdr_id, r->qer_id, r->generation, r->qfi,
                     r->direction == 0 ? "UL" : "DL",
+                    r->src_if, r->dst_if,
                     r->bps, r->pps, r->octets, r->packets);
         }
         n = emit(buf, n, cap, "]}");

@@ -43,6 +43,10 @@ def normalize_location(ue):
     """Mirror xcnctl's 36-bit NCI split; never assume a 22-bit gNB ID."""
     loc = ue.get("location") or {}
     stamp = loc.get("timestamp")
+    # cJSON may use scientific notation for integral microsecond timestamps.
+    # Accept only exact integers in the safe JSON numeric range.
+    if type(stamp) is float and 0 < stamp <= 9007199254740991 and stamp.is_integer():
+        loc["timestamp"] = stamp = int(stamp)
     if type(stamp) is not int or not 0 < stamp <= 9007199254740991:
         ue["location"] = dict(timestamp=None, status="unknown", gnb=None, nr_cgi=None, nr_tai=None)
         return
@@ -295,6 +299,16 @@ class Cache:
             totals = {f"{d}_{k}": 0 for d in ("ul", "dl") for k in ("bps", "pps", "bytes", "packets")}
             bearers = {}
             for r in s.get("rules", []):
+                # PFCP interface values: ACCESS=0, CORE=1, SGI_N6_LAN=2, CP=3.
+                # Missing metadata is unknown, never infer an internal rule from QFI/rate=0.
+                src, dst = r.get("src_if"), r.get("dst_if")
+                r["rule_kind"], r["rule_purpose"] = "unknown", "unclassified"
+                if src == 3 or dst == 3:
+                    r["rule_kind"] = "internal"
+                    r["rule_purpose"] = ("cp-to-ue" if src == 3 and dst == 0 else
+                                         "ue-to-cp" if src == 0 and dst == 3 else "cp-forwarding")
+                elif (src == 0 and dst in (0, 1, 2)) or (src in (1, 2) and dst == 0):
+                    r["rule_kind"], r["rule_purpose"] = "business", "user-data"
                 r["5qi"] = next((q.get("5qi") for q in p.get("qos_flows", [])
                                  if q.get("qfi") == r.get("qfi")), None)
                 d = "ul" if r["direction"] == "UL" else "dl"
@@ -452,6 +466,14 @@ class Cache:
             field = "bearers" if query["level"] == "bearer" else "rules"
             rates = [{**{k: v for k, v in s.items() if k not in ("bearers", "rules")}, **r}
                      for s in self.sessions for r in s.get(field, [])]
+            if field == "rules":
+                scope = query.get("rule_scope", "all")
+                if scope not in ("business", "internal", "all"):
+                    raise ValueError("invalid rule scope")
+                if scope == "business":
+                    rates = [r for r in rates if r["rule_kind"] != "internal"]
+                elif scope == "internal":
+                    rates = [r for r in rates if r["rule_kind"] == "internal"]
         elif endpoint == "rates" and query.get("level") == "user":
             users = {}
             for s in self.sessions:

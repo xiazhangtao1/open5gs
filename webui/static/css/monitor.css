@@ -145,7 +145,7 @@
 .xcn-session-heading h4 {font-size:14px; margin:0; color:var(--ink);}
 .xcn-session-heading>.xcn-mono {margin-left:auto; color:var(--muted);}
 .xcn-session-detail>.xcn-fields {margin:16px;}
-.xcn-session-detail>h4 {font-size:12px; color:var(--muted); font-weight:500; padding:0 16px; margin:20px 0 10px;}
+.xcn-session-detail>h4,.xcn-session-rules h4 {font-size:12px; color:var(--muted); font-weight:500; padding:0 16px; margin:20px 0 10px;}
 .xcn-session-detail .xcn-table th,.xcn-session-detail .xcn-table td {padding:11px 16px; white-space:nowrap;}
 .xcn-dnn {font-size:12px; color:var(--primary);}
 .xcn-raw {margin:16px 0; color:var(--muted); font-size:12px;}
@@ -214,6 +214,14 @@
 }
 
 /* Contextual controls follow the existing console palette and table hierarchy. */
+.xcn-rules-internal {margin:16px 0; border-top:1px solid var(--line);}
+.xcn-rules-internal summary {cursor:pointer; padding:12px 16px; color:var(--muted); font-size:13px; font-weight:600;}
+.xcn-rules-internal summary::before {content:''; display:inline-block; margin-right:8px; border-left:5px solid currentColor; border-top:4px solid transparent; border-bottom:4px solid transparent;}
+.xcn-rules-internal[open] summary::before {transform:rotate(90deg);}
+.xcn-rules-internal summary:focus-visible {outline:2px solid var(--primary); outline-offset:3px;}
+.xcn-rule-hint {margin:8px 16px 12px; color:var(--muted); font-size:12px; line-height:1.6;}
+.xcn-rule-scope {display:flex; align-items:center; gap:10px; margin:12px 0 16px; font-size:13px; color:var(--muted);}
+.xcn-rule-scope select {padding:8px 10px; color:var(--ink); background:var(--surface); border:1px solid var(--line); border-radius:5px; font:inherit;}
 .xcn-controls {margin:20px 0; padding:18px 20px; border:1px solid var(--line); border-radius:8px; background:var(--surface);}
 .xcn-control-launch {margin:16px 0 4px;}
 .xcn-control-heading {display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom:14px;}

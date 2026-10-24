@@ -47,6 +47,48 @@ def seeded():
 
 
 class CacheTests(unittest.TestCase):
+    def test_rule_purpose_uses_interfaces_and_filters_before_pagination(self):
+        cache = seeded()
+        rows = snapshot()["sessions"]
+        rules = rows[0]["rules"]
+        rules[0].update(src_if=0, dst_if=1, bps="0")
+        rules[1].update(src_if=1, dst_if=0)
+        for ident, src, dst, qfi, bps in [(3, 3, 0, 0, "0"), (4, 0, 3, 7, "900"),
+                                          (5, 1, 0, 0, "0"), (6, 0, 255, 0, "0")]:
+            rules.append(dict(pdr_id=ident, src_if=src, dst_if=dst, qfi=qfi, qer_id=0,
+                              direction="UL", bps=bps, pps="0", bytes="0", packets="0"))
+        legacy = dict(rules[-1], pdr_id=7)
+        del legacy["src_if"], legacy["dst_if"]
+        rules.append(legacy)
+        cache.replace("upf_rates", rows, 2)
+        observed = cache.sessions[0]["rules"]
+        self.assertEqual([r["rule_kind"] for r in observed],
+                         ["business", "business", "internal", "internal", "business", "unknown", "unknown"])
+        self.assertEqual([r["rule_purpose"] for r in observed[2:4]], ["cp-to-ue", "ue-to-cp"])
+        all_rules = cache.query("rates", {"level": "rule"})
+        self.assertEqual(all_rules["total"], 7)  # Legacy callers still receive every PDR.
+        business = cache.query("rates", {"level": "rule", "rule_scope": "business", "limit": "2", "page": "1"})
+        self.assertEqual(business["total"], 5)
+        self.assertEqual([r["pdr_id"] for r in business["items"]], [5, 6])
+        internal = cache.query("rates", {"level": "rule", "rule_scope": "internal"})
+        self.assertEqual([r["pdr_id"] for r in internal["items"]], [3, 4])
+        self.assertNotIn("rule_kind", rules[0])  # Cached source snapshot remains unchanged.
+        with self.assertRaises(ValueError):
+            cache.query("rates", {"level": "rule", "rule_scope": "invalid"})
+
+    def test_optional_rule_interfaces_validation(self):
+        doc = snapshot()
+        self.assertGreater(validate_snapshot(doc), 0)  # Old producers remain accepted.
+        for key in ("src_if", "dst_if"):
+            for value in (0, 1, 2, 3, 4, 255):
+                doc["sessions"][0]["rules"][0][key] = value
+                self.assertGreater(validate_snapshot(doc), 0)
+            for value in (-1, 5, 256, True, None, "3"):
+                doc["sessions"][0]["rules"][0][key] = value
+                with self.assertRaises(ValueError):
+                    validate_snapshot(doc)
+            del doc["sessions"][0]["rules"][0][key]
+
     def test_quiet_events_survive_without_time_limit(self):
         cache = Cache()
         stamp = time.time() - 7 * 86400
@@ -186,6 +228,30 @@ class CacheTests(unittest.TestCase):
         self.assertEqual(cache.query("ues", {"gnb_id": str(0x123456), "gnb_id_bits": "24", "plmn": "00101"})["total"], 1)
         self.assertEqual(cache.sessions[0]["cm_state"], "idle")
         self.assertEqual(cache.sessions[0]["gnb_peer"], "[2001:db8::1]:38412")
+
+    def test_location_scientific_notation_timestamp(self):
+        for state, status in (("connected", "reported"), ("idle", "last-known")):
+            with self.subTest(state=state):
+                ue = fixtures.ue(state=state)
+                ue["location"]["timestamp"] = json.loads("1.79284882478223e+15")
+                cache = Cache()
+                cache.replace("amf_ues", [ue], 10)
+                loc = cache.ues[0]["location"]
+                self.assertIs(type(loc["timestamp"]), int)
+                self.assertEqual(loc["timestamp"], 1792848824782230)
+                self.assertEqual(loc["status"], status)
+                self.assertEqual(loc["nr_cgi"]["nci"], ue["location"]["nr_cgi"]["nci"])
+                self.assertIs(type(ue["location"]["timestamp"]), float)
+
+    def test_location_invalid_timestamps_stay_unknown(self):
+        for stamp in (0, -1, 0.5, 1792848824782230.5, 1 << 53,
+                      float("inf"), float("nan"), True, "1792848824782230"):
+            with self.subTest(stamp=stamp):
+                ue = fixtures.ue()
+                ue["location"]["timestamp"] = stamp
+                normalize_location(ue)
+                self.assertEqual(ue["location"]["status"], "unknown")
+                self.assertIsNone(ue["location"]["nr_cgi"])
 
     def test_events_identity_reset_gap_dedup_and_bounds(self):
         cache = Cache()

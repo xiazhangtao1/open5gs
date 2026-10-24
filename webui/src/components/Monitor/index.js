@@ -3,6 +3,7 @@ import axios from 'axios';
 import Chart from './Chart';
 import SignalDetails from './SignalDetails';
 import {SessionControls, UserRelease, BulkRelease} from './Controls';
+import Rules, {Purpose, ruleIdentifier} from './Rules';
 import {get} from './client';
 
 const titles = {overview: '概览', ues: '终端', gnbs: '基站', sessions: '会话', events: '信令', system: '状态'};
@@ -95,7 +96,7 @@ class Drawer extends Component {
 
 export default class Monitor extends Component {
   state = {data: null, trend: null, error: null, loading: true, page: 0, q: '', search: '',
-    cm_state: '', protocol: 'NGAP', level: 'session', seconds: 1800, selected: null, detail: null, identityFilters: {}};
+    cm_state: '', protocol: 'NGAP', level: 'session', rule_scope: 'business', seconds: 1800, selected: null, detail: null, identityFilters: {}};
   componentDidMount() {
     this.active = true;
     document.addEventListener('visibilitychange', this.visibility);
@@ -137,6 +138,7 @@ export default class Monitor extends Component {
       if (view === 'events' || view === 'overview') params.protocol = protocol;
       const endpoint = view === 'sessions' ? 'rates' : view;
       if (view === 'sessions') params.level = level;
+      if (view === 'sessions' && level === 'rule') params.rule_scope = this.state.rule_scope;
       const calls = [get(endpoint, params, token)];
       const trending = view === 'overview' || view === 'sessions';
       if (trending) calls.push(get('trends', {seconds}, token));
@@ -226,8 +228,8 @@ export default class Monitor extends Component {
     if (this.state.level !== 'user') base.push(['PSI / SEID', r => <span className="xcn-mono xcn-nowrap">{value(r.psi)} / {value(r.seid)}</span>]);
     else base.push(['会话数', r => value(r.session_count)]);
     const addresses = this.state.level === 'user' ? [] : [['会话 IP', r => <SessionIP session={r}/>]];
-    if (this.state.level === 'bearer' || this.state.level === 'rule') base.push(['QFI / 5QI', r => value(r.qfi) + ' / ' + value(r['5qi'])]);
-    if (this.state.level === 'rule') return base.concat(addresses, [['PDR / QER', r => value(r.pdr_id) + ' / ' + value(r.qer_id)],
+    if (this.state.level === 'bearer' || this.state.level === 'rule') base.push(['QFI / 5QI', r => ruleIdentifier(r.qfi) + ' / ' + ruleIdentifier(r['5qi'])]);
+    if (this.state.level === 'rule') return base.concat(addresses, [['用途', r => <Purpose rule={r}/>], ['PDR / QER', r => ruleIdentifier(r.pdr_id) + ' / ' + ruleIdentifier(r.qer_id)],
       ['方向', r => r.direction], ['速率', r => <span className="xcn-nowrap">{rate(r.bps)}</span>], ['累计字节', r => <span className="xcn-mono">{value(r.bytes)}</span>]]);
     return base.concat([['DNN', r => value(r.dnn)]], addresses, [['上行', r => <span className="xcn-nowrap">{rate(r.ul_bps)}</span>], ['下行', r => <span className="xcn-nowrap">{rate(r.dl_bps)}</span>],
       ['累计字节 ↑ / ↓', r => <span className="xcn-mono xcn-nowrap">{value(r.ul_bytes)} / {value(r.dl_bytes)}</span>]]);
@@ -297,11 +299,7 @@ export default class Monitor extends Component {
           return q && typeof q.is_default === 'boolean' ? q.is_default ? '默认流' : '专载' : '—';
         })()}</td><td>{value(b['5qi'])}</td>
           <td>{rate(b.ul_bps)}</td><td>{rate(b.dl_bps)}</td></tr>)}</tbody></table></div> : <Empty>暂无承载数据。</Empty>}
-      <h4>规则</h4>{(s.rules || []).length ? <div className="xcn-table-scroll"><table className="xcn-table">
-        <thead><tr><th>QFI / 5QI</th><th>PDR / QER</th><th>方向</th><th>速率</th><th>累计字节</th></tr></thead>
-        <tbody>{s.rules.map((rule, i) => <tr key={i}><td>{value(rule.qfi)} / {value(rule['5qi'])}</td>
-          <td>{value(rule.pdr_id)} / {value(rule.qer_id)}</td><td>{rule.direction}</td><td>{rate(rule.bps)}</td>
-          <td className="xcn-mono">{rule.bytes}</td></tr>)}</tbody></table></div> : <Empty>暂无规则数据。</Empty>}
+      <Rules rules={s.rules} formatRate={rate}/>
       {this.canControl() && <SessionControls key={s.supi + "/" + s.psi + "/" + s.seid} session={s}/>}
     </section>;
   }
@@ -366,6 +364,10 @@ export default class Monitor extends Component {
       {view === 'sessions' && <div className="xcn-tabs" role="group" aria-label="速率层级">
         {[['user', '用户'], ['session', '会话'], ['bearer', '承载'], ['rule', '规则']].map(([k, v]) => <button key={k} type="button"
           aria-pressed={this.state.level === k} onClick={() => this.change({level: k, page: 0})}>{v}</button>)}</div>}
+      {view === 'sessions' && this.state.level === 'rule' && <label className="xcn-rule-scope">规则范围
+        <select aria-label="规则范围" value={this.state.rule_scope} onChange={e => this.change({rule_scope: e.target.value, page: 0})}>
+          <option value="business">业务规则</option><option value="internal">内部辅助规则</option><option value="all">全部规则</option>
+        </select></label>}
       {!data && <Empty>{loading ? '正在读取监控数据…' : '监控数据尚未就绪，请检查采集服务是否启用。'}</Empty>}
       {data && view === 'overview' && this.overview(data)}
       {data && view === 'system' && this.system(data)}
