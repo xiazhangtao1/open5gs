@@ -97,8 +97,8 @@
 .xcn-pagination {padding:15px 22px; border-top:1px solid var(--line); display:flex; align-items:center; justify-content:space-between; color:var(--muted); font-size:12px; gap:12px;}
 .xcn-pagination>div {display:flex; gap:8px;}
 .xcn-chart-wrap {position:relative; padding:0 12px 10px;}
-.xcn-chart-mode {position:absolute; top:0; right:18px; z-index:1; display:flex; gap:4px;}
-.xcn-chart-mode button {border:1px solid var(--line); border-radius:5px; padding:4px 8px; color:var(--muted); background:var(--surface); font-size:11px;}
+.xcn-chart-mode {position:absolute; top:0; right:18px; z-index:1; display:flex; align-items:center; gap:6px;}
+.xcn-chart-mode button,.xcn-chart-mode select {border:1px solid var(--line); border-radius:5px; padding:4px 8px; color:var(--muted); background:var(--surface); font-size:11px; min-height:30px;}
 .xcn-chart-mode button[aria-pressed="true"] {border-color:var(--primary); color:var(--primary); background:var(--soft);}
 .xcn-chart {height:255px; width:100%;}
 .xcn-chart-empty {position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:var(--muted); pointer-events:none; font-size:12px; padding:35px; text-align:center;}
@@ -170,6 +170,7 @@
   .xcn-panel-actions {gap:8px; flex-wrap:wrap; justify-content:flex-end;}
   .xcn-panel-actions .xcn-protocol-filter {font-size:0; gap:0;}
   .xcn-protocol-filter select {font-size:12px;} .xcn-chart,.xcn-traffic-panel .xcn-chart {height:225px;}
+  .xcn-chart-mode {position:static; justify-content:flex-end; margin-bottom:10px;}
   .xcn-event-range {padding:12px 16px; flex-direction:column; gap:4px;}
   .xcn-memory {padding:0 16px 20px;} .xcn-memory strong {font-size:15px;}
   .xcn-pagination {padding:12px; font-size:11px;} .xcn-pagination .xcn-button {padding:6px 10px;} .xcn-alert {align-items:flex-start; flex-wrap:wrap;}

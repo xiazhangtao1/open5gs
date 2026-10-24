@@ -34,7 +34,7 @@ function charts() {
 }
 
 export default class Chart extends Component {
-  state = {average: false};
+  state = {averageSeconds: 0, smooth: true};
   componentDidMount() {
     this.active = true;
     charts().then(ec => {
@@ -59,7 +59,7 @@ export default class Chart extends Component {
   draw() {
     if (!this.chart) return;
     const raw = this.props.points || [];
-    const points = this.state.average ? averagePoints(raw) : raw;
+    const points = this.state.averageSeconds ? averagePoints(raw, this.state.averageSeconds) : raw;
     const dark = this.props.theme === 'dark';
     this.chart.setOption({
       animation: false,
@@ -74,6 +74,7 @@ export default class Chart extends Component {
         splitLine: {lineStyle: {color: dark ? '#2B3B53' : '#E8EDF3'}}},
       series: ['上行', '下行'].map((name, i) => ({name, type: 'line', showSymbol: points.length < 2,
         symbolSize: 6, connectNulls: false, lineStyle: {width: 2},
+        smooth: this.state.smooth ? 0.25 : false, smoothMonotone: 'x',
         data: points.map(p => [p[0] * 1000, p[i + 1] === null ? null : p[i + 1] / 1000000])}))
     }, true);
   }
@@ -82,8 +83,17 @@ export default class Chart extends Component {
     const failed = this.state && this.state.error;
     return <div className="xcn-chart-wrap">
       <div className="xcn-chart-mode" role="group" aria-label="速率显示方式">
-        <button type="button" aria-pressed={!this.state.average} onClick={() => this.setState({average: false})}>原始</button>
-        <button type="button" aria-pressed={this.state.average} onClick={() => this.setState({average: true})}>10 秒平均</button>
+        <select aria-label="速率平均窗口" value={this.state.averageSeconds}
+          title="窗口越长，短时波动越小，响应变化越慢"
+          onChange={event => this.setState({averageSeconds: Number(event.target.value)})}>
+          <option value={0}>原始</option>
+          <option value={2}>2 秒平均</option>
+          <option value={5}>5 秒平均</option>
+          <option value={10}>10 秒平均</option>
+        </select>
+        <button type="button" aria-pressed={this.state.smooth}
+          title="仅改变连线形状，采样数值和峰值不变"
+          onClick={() => this.setState({smooth: !this.state.smooth})}>平滑连线</button>
       </div>
       <div ref={e => { this.element = e; }} className="xcn-chart" role="img" aria-label="上行与下行速率趋势图"/>
       {(empty || failed) && <div className="xcn-chart-empty">{failed ? '图表资源加载失败，请刷新重试' : '等待流量采样，暂时没有历史数据'}</div>}
