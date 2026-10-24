@@ -10,7 +10,7 @@
     - name: MONITOR_URL
       value: {{ if $colocated }}"http://127.0.0.1:9998"{{ else }}{{ printf "http://%s:9998" $monitor | quote }}{{ end }}
     - name: TRACE_REDACT_KEYS
-      value: {{ dig "trace" "redactKeys" true .Values.monitor | toString | quote }}
+      value: {{ dig "trace" "redactKeys" false .Values.monitor | toString | quote }}
     - name: MONITOR_INTERNAL_TOKEN
       valueFrom:
         secretKeyRef:

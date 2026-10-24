@@ -40,7 +40,7 @@ flowchart LR
 
 解析器固定为 TShark 4.6.9，构建校验源码 SHA-256，不启用 Lua、插件、抓包或捕获权限，以非 root、只读根文件系统运行。输入采用 Wireshark Exported PDU 封装，不伪造 SCTP / IP 报头。NGAP APER 和 NAS 使用同一解析器，已验证 NAS Transport 中的 5GSM 以及 PDU Session Resource Setup Transfer 中的 GTP 地址、TEID、QFI 和 5QI。
 
-所有已登录用户均可查看详情。内部上传/解码接口使用现有 Secret 令牌，外部浏览器不能直接访问采集令牌。`monitor.trace.redactKeys` 默认 `true`，服务端遮蔽 `SecurityKey`、`nextHopNH` 等密钥字段、相关祖先值和对应 HEX 字节；无正式名称的父节点以“协议项（SecurityKey）”等静态名称说明其内容，不显示含糊的“字段”。在可信测试环境可以配置 `false`，同时完整显示协议树、HEX 和复制内容，不改变核心网加密算法或转发行为。该选项不额外导出报文以外的密钥上下文；解码失败或未完整解析时仍不返回 HEX。
+所有已登录用户均可查看详情。内部上传/解码接口使用现有 Secret 令牌，外部浏览器不能直接访问采集令牌。本测试环境的 `monitor.trace.redactKeys` 默认 `false`，协议树、HEX 和复制内容完整显示，不改变核心网加密算法或转发行为。设置 `true` 可统一遮蔽 `SecurityKey`、`nextHopNH` 等密钥字段、相关祖先值和对应 HEX 字节；此时无正式名称的父节点以“协议项（SecurityKey）”等静态名称说明其内容，不显示含糊的“字段”。该选项不额外导出报文以外的密钥上下文；解码失败或未完整解析时仍不返回 HEX。
 
 密钥显示模式通过部署时的 `TRACE_REDACT_KEYS` 传给采集器和解码器，不接受浏览器请求临时覆盖。模式计入解码版本；切换配置会重建监控服务并清空其内存历史。采集器拒绝缓存不同显示模式的解码结果，避免升级过程混用遮蔽与完整结果。
 
@@ -65,7 +65,7 @@ monitor:
   trace:
     enabled: true
     decoderPlacement: colocated
-    redactKeys: true # 可信测试环境需要完整显示时设置 false
+    redactKeys: false # 本测试环境默认完整显示；设为 true 可统一遮蔽密钥
     agentImage:
       repository: localhost:5000/xcn-monitor
       tag: signal-COMMIT

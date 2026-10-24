@@ -42,8 +42,8 @@ monitor:
     # "colocated" keeps monitor and decoder in one Pod, with separate container limits.
     # "separate" preserves independently managed decoder and collector Pods.
     decoderPlacement: separate
-    # Disable only for a trusted test environment; applies to trees, HEX and copies.
-    redactKeys: true
+    # Full display for this test environment; set true to mask keys in trees, HEX and copies.
+    redactKeys: false
     agentImage:
       repository: xcn-monitor
       tag: latest

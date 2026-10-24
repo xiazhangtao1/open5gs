@@ -17,7 +17,7 @@
 {{- if not (has $placement (list "colocated" "separate")) }}
 {{- fail "monitor.trace.decoderPlacement must be colocated or separate" }}
 {{- end }}
-{{- if not (kindIs "bool" (dig "trace" "redactKeys" true .Values.monitor)) }}
+{{- if not (kindIs "bool" (dig "trace" "redactKeys" false .Values.monitor)) }}
 {{- fail "monitor.trace.redactKeys must be a boolean" }}
 {{- end }}
 {{- $colocated := and (dig "trace" "enabled" false .Values.monitor) (eq $placement "colocated") }}
@@ -124,7 +124,7 @@ spec:
             - name: TRACE_DECODER_URL
               value: {{ if $colocated }}"http://127.0.0.1:9997"{{ else }}{{ printf "http://%s-trace-decoder:9997" $name | quote }}{{ end }}
             - name: TRACE_REDACT_KEYS
-              value: {{ dig "trace" "redactKeys" true .Values.monitor | toString | quote }}
+              value: {{ dig "trace" "redactKeys" false .Values.monitor | toString | quote }}
 {{- end }}
             - name: MONITOR_MEMORY_LIMIT_BYTES
               valueFrom:
