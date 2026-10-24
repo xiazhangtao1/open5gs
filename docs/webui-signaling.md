@@ -157,3 +157,5 @@ python3 /tmp/xcn-six-users-c41fb3f91/stop-traffic.py
 本次没有修改 AMF / SMF / UPF / VPP 原生代码或添加用户面锁。上述验证确认页面和采集路径正常，不替代线速吞吐或 P99 时延验收。发布备份、升级配置、验收日志保存在仅所有者可访问的 `/tmp/xcn-monitor-refine-1024/`；截图位于 `output/playwright/refine-*.png`。测试终端与灌包继续运行。
 
 随后以 revision **186** 仅更新 WebUI 为 `localhost:5000/xcn-webui:rate-3af250664`，增加 2 / 5 秒平均与独立平滑连线。发布前渲染和发布后实际 Deployment 均确认只有 WebUI Pod 模板发生变化；核心网和 monitor / decoder 保持原 Pod、零新增重启，信令完整显示配置与缓存保留。现场浏览器验证三种平均窗口、平滑 / 折线切换及刷新后选择保持，六会话地址均正常；上行合计约 `10.77 Mbps`、下行约 `21.50 Mbps`，12 个 iperf 进程继续运行。日志为 `browser-rates-live.log` 和 `deployment.rates.final.json`，截图为 `output/playwright/rate-*.png`。
+
+按后续要求，revision **187** 仅更新 WebUI 为 `localhost:5000/xcn-webui:modes-c93a3f123`，移除平均计算及独立平滑按钮，只保留“折线 / 曲线”下拉框，默认“曲线”。生产构建与现场浏览器验证通过，图中 897 个采样点与缓存原始数据一致；切换、轮询后保持选择、详情图默认值及手机布局均正常，无运行时错误。核心网及监控 Pod 保持原实例、无新增重启，六会话与 12 个灌包进程继续运行。发布备份及日志位于 `/tmp/xcn-chart-modes-1024/`，截图为 `output/playwright/chart-modes-*.png`。
