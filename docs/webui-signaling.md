@@ -137,7 +137,7 @@ python3 /tmp/xcn-six-users-c41fb3f91/stop-traffic.py
 
 ## 2026-10-24 交互与部署优化验收
 
-现场更新为 Helm revision **185**，功能镜像为 `refine-884239f9a`，默认完整显示的部署配置提交为 `fa20736c0`。`monitor.trace.redactKeys=false` 已同时应用于 monitor 与 decoder；协议树、HEX 和复制内容完整显示，仍可显式设置 `true` 切回遮蔽模式。
+完整显示部署为 Helm revision **185**，功能镜像为 `refine-884239f9a`，默认完整显示的部署配置提交为 `fa20736c0`。`monitor.trace.redactKeys=false` 已同时应用于 monitor 与 decoder；协议树、HEX 和复制内容完整显示，仍可显式设置 `true` 切回遮蔽模式。
 
 监控采用 `decoderPlacement=colocated`：两个 agent 留在原 `xcn-5gc` Pod，monitor / decoder 放在一个独立 Pod 的两个容器内，分别限制 CPU / 内存。`xcn-5gc-794bb64998-r8zbr` 与 `xcn-core-699878b7fb-l7hcw` 保持原 Pod，所有核心网容器重启次数仍为零。两个监控进程均绑定 CPU `36-37`；只有 monitor 挂载 Kubernetes API 令牌。原 `xcn-monitor-trace-decoder` Deployment 已移除，兼容 Service 转向合并后的 Pod。
 
@@ -155,3 +155,5 @@ python3 /tmp/xcn-six-users-c41fb3f91/stop-traffic.py
 监控重建后码流缓存重新积累。为产生现场新信令，仅让 IMSI `460110000000105` 的测试 UE 无线主进程正常退出后在原 Pod 内重启，随后恢复其 `3 Mbps` 上行 / `6 Mbps` 下行；其余五个 UE 与基站保持运行。六用户地址仍与上表一致，最终确认六会话均连接且双向速率非零，六个 UE 内共 12 个 iperf 进程运行。
 
 本次没有修改 AMF / SMF / UPF / VPP 原生代码或添加用户面锁。上述验证确认页面和采集路径正常，不替代线速吞吐或 P99 时延验收。发布备份、升级配置、验收日志保存在仅所有者可访问的 `/tmp/xcn-monitor-refine-1024/`；截图位于 `output/playwright/refine-*.png`。测试终端与灌包继续运行。
+
+随后以 revision **186** 仅更新 WebUI 为 `localhost:5000/xcn-webui:rate-3af250664`，增加 2 / 5 秒平均与独立平滑连线。发布前渲染和发布后实际 Deployment 均确认只有 WebUI Pod 模板发生变化；核心网和 monitor / decoder 保持原 Pod、零新增重启，信令完整显示配置与缓存保留。现场浏览器验证三种平均窗口、平滑 / 折线切换及刷新后选择保持，六会话地址均正常；上行合计约 `10.77 Mbps`、下行约 `21.50 Mbps`，12 个 iperf 进程继续运行。日志为 `browser-rates-live.log` 和 `deployment.rates.final.json`，截图为 `output/playwright/rate-*.png`。
