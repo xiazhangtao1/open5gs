@@ -1,26 +1,6 @@
 import {Component} from 'react';
 
 let loading;
-export function averagePoints(points, seconds = 10) {
-  let window = [];
-  return points.map(point => {
-    const [stamp, ul, dl] = point;
-    if (ul === null || dl === null) { window = []; return point; }
-    if (window.length && stamp - window[window.length - 1][0] > 6) window = [];
-    window.push(point);
-    const cutoff = stamp - seconds;
-    while (window.length > 1 && window[1][0] <= cutoff) window.shift();
-    let duration = 0, up = 0, down = 0;
-    for (let i = 1; i < window.length; i++) {
-      const width = Math.max(0, window[i][0] - Math.max(cutoff, window[i - 1][0]));
-      duration += width;
-      up += width * window[i][1];
-      down += width * window[i][2];
-    }
-    return duration ? [stamp, up / duration, down / duration] : point;
-  });
-}
-
 function charts() {
   if (window.echarts) return Promise.resolve(window.echarts);
   if (!loading) loading = new Promise((resolve, reject) => {
@@ -34,7 +14,7 @@ function charts() {
 }
 
 export default class Chart extends Component {
-  state = {averageSeconds: 0, smooth: true};
+  state = {smooth: true};
   componentDidMount() {
     this.active = true;
     charts().then(ec => {
@@ -58,8 +38,7 @@ export default class Chart extends Component {
   resize = () => { if (this.chart) this.chart.resize(); };
   draw() {
     if (!this.chart) return;
-    const raw = this.props.points || [];
-    const points = this.state.averageSeconds ? averagePoints(raw, this.state.averageSeconds) : raw;
+    const points = this.props.points || [];
     const dark = this.props.theme === 'dark';
     this.chart.setOption({
       animation: false,
@@ -82,18 +61,13 @@ export default class Chart extends Component {
     const empty = !(this.props.points || []).length;
     const failed = this.state && this.state.error;
     return <div className="xcn-chart-wrap">
-      <div className="xcn-chart-mode" role="group" aria-label="速率显示方式">
-        <select aria-label="速率平均窗口" value={this.state.averageSeconds}
-          title="窗口越长，短时波动越小，响应变化越慢"
-          onChange={event => this.setState({averageSeconds: Number(event.target.value)})}>
-          <option value={0}>原始</option>
-          <option value={2}>2 秒平均</option>
-          <option value={5}>5 秒平均</option>
-          <option value={10}>10 秒平均</option>
+      <div className="xcn-chart-mode">
+        <select aria-label="速率显示方式" value={this.state.smooth ? 'smooth' : 'raw'}
+          title="仅切换折线与曲线，采样值不变"
+          onChange={event => this.setState({smooth: event.target.value === 'smooth'})}>
+          <option value="raw">折线</option>
+          <option value="smooth">曲线</option>
         </select>
-        <button type="button" aria-pressed={this.state.smooth}
-          title="仅改变连线形状，采样数值和峰值不变"
-          onClick={() => this.setState({smooth: !this.state.smooth})}>平滑连线</button>
       </div>
       <div ref={e => { this.element = e; }} className="xcn-chart" role="img" aria-label="上行与下行速率趋势图"/>
       {(empty || failed) && <div className="xcn-chart-empty">{failed ? '图表资源加载失败，请刷新重试' : '等待流量采样，暂时没有历史数据'}</div>}
