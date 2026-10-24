@@ -289,7 +289,7 @@ class Cache:
             if keyed:
                 matches = [p for p in keyed if str(p["upf_seid"]) == str(s["seid"])]
             p = matches[0] if len(matches) == 1 and compatible(s, matches[0]) else {}
-            s.update(psi=p.get("psi"), snssai=p.get("snssai"), n3=p.get("n3"),
+            s.update(qos_flows=copy.deepcopy(p.get("qos_flows", [])), psi=p.get("psi"), snssai=p.get("snssai"), n3=p.get("n3"),
                      active_in_amf=bool(p.get("psi") and any(
                          a.get("psi") == p["psi"] and compatible(a, p) for a in ue.get("pdu_sessions", []))))
             totals = {f"{d}_{k}": 0 for d in ("ul", "dl") for k in ("bps", "pps", "bytes", "packets")}

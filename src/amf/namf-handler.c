@@ -608,9 +608,10 @@ int amf_namf_callback_handle_sm_context_status(
             sess->n1_released, sess->n2_released,
             OpenAPI_resource_status_ToString(sess->resource_status));
 
-    if (sess->n1_released == true &&
-        sess->n2_released == true &&
-        sess->resource_status == OpenAPI_resource_status_RELEASED) {
+    /* RELEASED is final also when SMF skipped an idle UE or timed out
+     * waiting for N1/N2. Preserve in-flight SBI transaction ownership. */
+    if (sess->resource_status == OpenAPI_resource_status_RELEASED &&
+        ogs_list_count(&sess->sbi.xact_list) == 0) {
         amf_nsmf_pdusession_handle_release_sm_context(
                 amf_ue, ran_ue_find_by_id(sess->ran_ue_id),
                 sess, AMF_RELEASE_SM_CONTEXT_NO_STATE);

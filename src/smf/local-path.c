@@ -19,7 +19,7 @@
 
 #include "local-path.h"
 
-void smf_trigger_session_release(smf_sess_t *sess,
+int smf_trigger_session_release(smf_sess_t *sess,
     ogs_sbi_stream_t *stream, int pfcp_trigger)
 {
     int rv;
@@ -53,4 +53,5 @@ void smf_trigger_session_release(smf_sess_t *sess,
         ogs_error("ogs_queue_push failed:%d", rv);
         ogs_event_free(e);
     }
+    return rv;
 }

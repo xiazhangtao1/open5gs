@@ -90,6 +90,10 @@ spec:
                   name: {{ default (include "xcn.componentName" (dict "root" . "component" "monitor")) .Values.monitor.existingSecret }}
                   key: token
 {{- end }}
+            - name: CORE_CONTROL_PCF_URL
+              value: {{ printf "http://%s:7777" (include "xcn.componentName" (dict "root" . "component" "pcf")) | quote }}
+            - name: CORE_CONTROL_AMF_URL
+              value: {{ printf "http://%s:7777" (include "xcn.componentName" (dict "root" . "component" "amf")) | quote }}
             - name: DB_URI
               value: {{ printf "mongodb://%s/open5gs" (include "xcn.componentName" (dict "root" . "component" "mongodb")) | quote }}
             - name: HOST_IP

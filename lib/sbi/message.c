@@ -2918,6 +2918,7 @@ static int parse_json(ogs_sbi_message_t *message,
             /* PCF handles this private API from the raw HTTP body. */
             break;
 
+        CASE("xcn-session-control")
         CASE("xcn-core-query")
             /* PCF query API uses URL parameters only. */
             break;

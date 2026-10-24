@@ -54,7 +54,7 @@ class App extends Component {
     return (
       <Layout title="X-CN 核心网控制台" theme={this.state.theme} onToggleTheme={this.toggleTheme}>
         <Layout.Container visible={['overview', 'ues', 'gnbs', 'sessions', 'events', 'system'].indexOf(view) >= 0}>
-          <Monitor view={view} theme={this.state.theme} onNavigate={this.props.SidebarActions.selectView}/>
+          <Monitor session={session} view={view} theme={this.state.theme} onNavigate={this.props.SidebarActions.selectView}/>
         </Layout.Container>
         <Layout.Container visible={view === "subscriber"}>
           <Subscriber.Collection/>

@@ -626,6 +626,8 @@ static cJSON *xcn_session_to_json(pcf_sess_t *sess)
     item = cJSON_CreateObject();
     ogs_assert(item);
 
+    cJSON_AddStringToObject(item, "controlVersion", sess->control_version);
+    cJSON_AddBoolToObject(item, "releasing", sess->control_releasing);
     cJSON_AddNumberToObject(item, "pduSessionId", sess->psi);
     if (sess->dnn)
         cJSON_AddStringToObject(item, "dnn", sess->dnn);
@@ -2556,6 +2558,7 @@ bool pcf_npcf_policyauthorization_handle_delete(
         ogs_sbi_stream_t *stream, ogs_sbi_message_t *recvmsg)
 {
     int i;
+    bool sent = true;
 
     OpenAPI_sm_policy_decision_t SmPolicyDecision;
 
@@ -2567,9 +2570,11 @@ bool pcf_npcf_policyauthorization_handle_delete(
 
     OpenAPI_lnode_t *node = NULL;
 
-    ogs_assert(true == ogs_sbi_send_http_status_no_content(stream));
-
     ogs_assert(app_session);
+    if (app_session->delete_pending)
+        return xcn_send_error(stream, recvmsg, 409, "Bearer deletion already pending");
+    app_session->delete_pending = true;
+    pcf_sess_control_touch(sess);
 
     memset(&SmPolicyDecision, 0, sizeof(SmPolicyDecision));
 
@@ -2602,8 +2607,8 @@ bool pcf_npcf_policyauthorization_handle_delete(
         SmPolicyDecision.qos_decs = QosDecisionList;
 
     if (PccRuleList->count || QosDecisionList->count) {
-        ogs_assert(true == pcf_sbi_send_smpolicycontrol_delete_notify(
-                            sess, app_session, &SmPolicyDecision));
+        sent = pcf_sbi_send_smpolicycontrol_delete_notify(
+                            sess, app_session, &SmPolicyDecision);
     } else {
         pcf_app_remove(app_session);
     }
@@ -2624,7 +2629,11 @@ bool pcf_npcf_policyauthorization_handle_delete(
     }
     OpenAPI_list_free(QosDecisionList);
 
-    return true;
+    if (!sent) {
+        app_session->delete_pending = false;
+        return xcn_send_error(stream, recvmsg, 502, "SM policy notification send failed");
+    }
+    return ogs_sbi_send_http_status_no_content(stream);
 }
 
 bool pcf_xcn_dedicated_bearer_handle_create(
@@ -2725,9 +2734,16 @@ bool pcf_xcn_dedicated_bearer_handle_create(
     ogs_assert(asc_req_data->supp_feat);
 
     notif_uri = xcn_json_string(item, "notificationUri");
-    asc_req_data->notif_uri = notif_uri ?
-        ogs_strdup(notif_uri) :
-        ogs_strdup("http://127.0.0.1:7785/xcn-dedicated-bearer/v1/notifications");
+    if (notif_uri) {
+        asc_req_data->notif_uri = ogs_strdup(notif_uri);
+    } else {
+        ogs_sbi_header_t header = {0};
+        header.service.name = (char *)XCN_SVC_DEDICATED_BEARER;
+        header.api.version = (char *)OGS_SBI_API_V1;
+        header.resource.component[0] = (char *)"notifications";
+        asc_req_data->notif_uri = ogs_sbi_server_uri(
+                ogs_sbi_server_first(), &header);
+    }
     ogs_assert(asc_req_data->notif_uri);
 
     asc_req_data->supi = ogs_strdup(pcf_ue_sm->supi);
@@ -2811,6 +2827,7 @@ bool pcf_xcn_dedicated_bearer_handle_create(
     recvmsg->AppSessionContext = app_context;
     cJSON_Delete(item);
 
+    pcf_sess_control_touch(sess);
     return pcf_npcf_policyauthorization_handle_create(
             sess, stream, recvmsg,
             has_xcn_qos_override ? &xcn_qos_override : NULL);
@@ -2920,6 +2937,7 @@ static cJSON *xcn_app_to_json(pcf_app_t *app)
     item = cJSON_CreateObject();
     ogs_assert(item);
 
+    cJSON_AddBoolToObject(item, "deletePending", app->delete_pending);
     if (app->app_session_id)
         cJSON_AddStringToObject(item, "appSessionId", app->app_session_id);
     if (app->af_app_id)
@@ -3061,6 +3079,7 @@ bool pcf_xcn_dedicated_bearer_handle_update(
     pcf_free_policy_decision_lists(&pcc_rules, &qos_decs);
     OGS_PCC_RULE_FREE(&previous);
 
+    pcf_sess_control_touch(app->sess);
     response = xcn_app_to_json(app);
     sent = xcn_send_json_response(stream, OGS_SBI_HTTP_STATUS_OK, response);
 
@@ -3111,6 +3130,8 @@ bool pcf_xcn_dedicated_bearer_handle_query(
 
     cJSON_AddStringToObject(root, "supi", pcf_ue_sm->supi);
     cJSON_AddStringToObject(root, "imsi", xcn_supi_to_imsi(pcf_ue_sm->supi));
+    cJSON_AddStringToObject(root, "controlVersion", sess->control_version);
+    cJSON_AddBoolToObject(root, "releasing", sess->control_releasing);
     cJSON_AddNumberToObject(root, "pduSessionId", sess->psi);
     if (sess->ipv4addr_string)
         cJSON_AddStringToObject(root, "ueIp", sess->ipv4addr_string);
@@ -3158,9 +3179,9 @@ bool pcf_xcn_dedicated_bearer_handle_delete(
 
     app_session = pcf_app_find_by_app_session_id(
             recvmsg->h.resource.component[1]);
-    if (!app_session)
+    if (!app_session || !xcn_app_is_dedicated_bearer(app_session))
         return xcn_send_error(stream, recvmsg,
-                OGS_SBI_HTTP_STATUS_NOT_FOUND, "No appSessionId");
+                OGS_SBI_HTTP_STATUS_NOT_FOUND, "No dedicated bearer");
 
     if (app_session->intent_owned)
         return xcn_send_error(stream, recvmsg, OGS_SBI_HTTP_STATUS_CONFLICT,
@@ -3624,4 +3645,97 @@ fail:
     cJSON_Delete(body);
     return xcn_send_error(stream, message, status,
             error ? error : "Invalid intent operation");
+}
+
+
+/* Conditional writes bind a form to a live session, not a recycled pool index. */
+static bool xcn_control_check(pcf_sess_t *sess, ogs_sbi_stream_t *stream,
+        ogs_sbi_message_t *message, ogs_sbi_request_t *request, bool required)
+{
+    const char *version = ogs_sbi_header_get(request->http.headers, "if-match");
+    char quoted[OGS_UUID_FORMATTED_LENGTH + 3];
+    pcf_app_t *app;
+    ogs_snprintf(quoted, sizeof(quoted), "\"%s\"", sess->control_version);
+    if ((required && !version) || (version && strcmp(version, quoted))) {
+        xcn_send_error(stream, message, version ? 412 : 428,
+                "Session changed; refresh control information before submitting");
+        return false;
+    }
+    if (sess->control_releasing) {
+        xcn_send_error(stream, message, 409, "Session release already pending");
+        return false;
+    }
+    ogs_list_for_each(&sess->app_list, app) {
+        if (app->delete_pending || app->intent_transaction) {
+            xcn_send_error(stream, message, 409, "Session has a pending operation");
+            return false;
+        }
+    }
+    return true;
+}
+
+bool pcf_xcn_control_guard(ogs_sbi_stream_t *stream,
+        ogs_sbi_message_t *message, ogs_sbi_request_t *request)
+{
+    pcf_sess_t *sess = NULL;
+    pcf_app_t *app = NULL;
+    const char *error = NULL;
+    const char *id = message->h.resource.component[1];
+    cJSON *body = NULL;
+    if (!strcmp(message->h.method, OGS_SBI_HTTP_METHOD_POST) && !id) {
+        body = request->http.content ? cJSON_Parse(request->http.content) : NULL;
+        if (cJSON_IsObject(body)) xcn_parse_bearer_request(body, &sess, &error);
+        cJSON_Delete(body);
+    } else if (id && *id && strlen(id) <= 10 &&
+            strspn(id, "0123456789") == strlen(id)) {
+        app = pcf_app_find_by_app_session_id((char *)id);
+        if (app) sess = app->sess;
+    }
+    if (!sess) {
+        xcn_send_error(stream, message, error ? 400 : 404,
+                error ? error : "No target policy session or bearer");
+        return false;
+    }
+    return xcn_control_check(sess, stream, message, request, false);
+}
+
+bool pcf_xcn_session_control(ogs_sbi_stream_t *stream,
+        ogs_sbi_message_t *message, ogs_sbi_request_t *request)
+{
+    const char *resource = message->h.resource.component[0];
+    const char *supi = message->h.resource.component[1];
+    const char *psi = message->h.resource.component[2];
+    pcf_ue_sm_t *ue;
+    pcf_sess_t *sess;
+    cJSON *result;
+    bool sent;
+    if (!resource || strcmp(resource, "sessions") || !supi || !psi ||
+        message->h.resource.component[3] || strncmp(supi, "imsi-", 5) ||
+        !supi[5] || strlen(supi) > 20 ||
+        strspn(supi + 5, "0123456789") != strlen(supi + 5) ||
+        !*psi || strlen(psi) > 2 || strspn(psi, "0123456789") != strlen(psi) ||
+        atoi(psi) < 1 || atoi(psi) > 15)
+        return xcn_send_error(stream, message, 400, "Invalid session identity");
+    ue = pcf_ue_sm_find_by_supi((char *)supi);
+    sess = ue ? pcf_sess_find_by_psi(ue, atoi(psi)) : NULL;
+    if (!sess) return xcn_send_error(stream, message, 404, "No target session");
+    if (!strcmp(message->h.method, OGS_SBI_HTTP_METHOD_GET)) {
+        result = xcn_session_to_json(sess);
+        cJSON_AddStringToObject(result, "supi", supi);
+        sent = xcn_send_json_response(stream, 200, result);
+        cJSON_Delete(result);
+        return sent;
+    }
+    if (strcmp(message->h.method, OGS_SBI_HTTP_METHOD_DELETE))
+        return xcn_send_error(stream, message, 405, "Method not allowed");
+    if (!xcn_control_check(sess, stream, message, request, true)) return false;
+    if (!sess->notification_uri || !sess->nsmf.client)
+        return xcn_send_error(stream, message, 409, "Session policy not ready");
+    sess->control_releasing = true;
+    pcf_sess_control_touch(sess);
+    if (!pcf_sbi_send_session_release(sess, stream)) {
+        sess->control_releasing = false;
+        return xcn_send_error(stream, message, 502, "Session termination send failed");
+    }
+    return true;
 }

@@ -1884,6 +1884,8 @@ void smf_sess_remove(smf_sess_t *sess)
     sess->policy.num_of_pcc_rule = 0;
 
     smf_npcf_smpolicycontrol_clear_update_queue(sess);
+    if (sess->management_release_timer)
+        ogs_timer_delete(sess->management_release_timer);
 
     ogs_hash_set(self.smf_n4_seid_hash, &sess->smf_n4_seid,
             sizeof(sess->smf_n4_seid), NULL);

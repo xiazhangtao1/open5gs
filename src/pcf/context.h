@@ -107,6 +107,9 @@ struct pcf_sess_s {
     ogs_fsm_t sm;
 
     char *sm_policy_id;
+    /* Opaque instance/version token for conditional management writes. */
+    char control_version[OGS_UUID_FORMATTED_LENGTH + 1];
+    bool control_releasing;
 
     /* BSF sends the RESPONSE
      * of [POST] /nbsf-management/v1/PcfBindings */
@@ -188,6 +191,8 @@ struct pcf_sess_s {
 
 typedef struct pcf_app_s {
     ogs_lnode_t lnode;
+    char control_instance[OGS_UUID_FORMATTED_LENGTH + 1];
+    bool delete_pending;
 
     /* Private ePCO operation: staged until SMF confirms enforcement. */
     bool intent_owned;
@@ -290,6 +295,7 @@ int pcf_instance_get_load(void);
  *   PCF_SESSION_DATA_FLAG_NO_ERROR_LOG in the flags parameter.
  *------------------------------------------------------------------
  */
+void pcf_sess_control_touch(pcf_sess_t *sess);
 int pcf_get_session_data(const char *supi,
                          const ogs_plmn_id_t *plmn_id,
                          const ogs_s_nssai_t *s_nssai,

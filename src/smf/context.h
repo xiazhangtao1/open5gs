@@ -729,6 +729,8 @@ typedef struct smf_sess_s {
     OpenAPI_resource_status_e resource_status;
     bool n1_released;
     bool n2_released;
+    bool management_release;
+    ogs_timer_t *management_release_timer;
 /*
  * Section 4.3.3.3 'UE or network requested PDU Session Modification
  * (home-routed roaming)'

@@ -467,6 +467,8 @@ static cJSON *build_qos_flows_array_5g(const smf_sess_t *sess)
         cJSON *qfi = cJSON_CreateNumber((double)(unsigned)b->qfi);
         if (!qfi) { cJSON_Delete(q); cJSON_Delete(arr); return NULL; }
         cJSON_AddItemToObjectCS(q, "qfi", qfi);
+        cJSON_AddBoolToObject(q, "is_default", b == smf_default_bearer_in_sess((smf_sess_t *)sess));
+        if (b->pcc_rule.id) cJSON_AddStringToObject(q, "pcc_rule_id", b->pcc_rule.id);
 
         if (b->qos.index > 0) {
             cJSON *q5 = cJSON_CreateNumber((double)(unsigned)b->qos.index);

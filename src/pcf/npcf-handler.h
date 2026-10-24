@@ -60,6 +60,10 @@ bool pcf_xcn_dedicated_bearer_handle_update(
 void pcf_xcn_store_ngap_ids_from_sm_policy_content(
         pcf_sess_t *sess, const char *content);
 void pcf_xcn_refresh_ngap_ids_from_amf(void);
+bool pcf_xcn_control_guard(ogs_sbi_stream_t *stream,
+        ogs_sbi_message_t *message, ogs_sbi_request_t *request);
+bool pcf_xcn_session_control(ogs_sbi_stream_t *stream,
+        ogs_sbi_message_t *message, ogs_sbi_request_t *request);
 
 bool pcf_xcn_query_handle_users(
         ogs_sbi_stream_t *stream, ogs_sbi_message_t *recvmsg,

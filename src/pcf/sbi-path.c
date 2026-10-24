@@ -248,17 +248,79 @@ static int client_notify_cb(
     return OGS_OK;
 }
 
+typedef struct {
+    ogs_pool_id_t sess_id;
+    char app_id[24];
+    char instance[OGS_UUID_FORMATTED_LENGTH + 1];
+} delete_notify_context_t;
+
 static int client_delete_notify_cb(
         int status, ogs_sbi_response_t *response, void *data)
 {
-    pcf_app_t *app_session = data;
+    delete_notify_context_t *ctx = data;
+    pcf_app_t *app = pcf_app_find_by_app_session_id(ctx->app_id);
+    pcf_sess_t *sess = pcf_sess_find_by_id(ctx->sess_id);
+    bool accepted = status == OGS_OK && response && response->status == 204;
+    if (app && sess && app->sess == sess &&
+        !strcmp(app->control_instance, ctx->instance)) {
+        if (accepted) pcf_app_remove(app);
+        else app->delete_pending = false;
+        pcf_sess_control_touch(sess);
+    }
+    if (response) ogs_sbi_response_free(response);
+    ogs_free(ctx);
+    return accepted ? OGS_OK : OGS_ERROR;
+}
 
-    ogs_assert(app_session);
-    client_notify_cb(status, response, data);
+/* Never retain live session or HTTP stream pointers across an SBI callback. */
+typedef struct {
+    ogs_pool_id_t sess_id, stream_id;
+} release_notify_context_t;
 
-    pcf_app_remove(app_session);
-
+static int session_release_notify_cb(
+        int status, ogs_sbi_response_t *response, void *data)
+{
+    release_notify_context_t *ctx = data;
+    pcf_sess_t *sess = pcf_sess_find_by_id(ctx->sess_id);
+    ogs_sbi_stream_t *stream = ogs_sbi_stream_find_by_id(ctx->stream_id);
+    int code = status == OGS_OK && response ? response->status : 504;
+    if (code != 204 && sess) {
+        sess->control_releasing = false;
+        pcf_sess_control_touch(sess);
+    }
+    if (stream) {
+        if (code == 204) {
+            ogs_sbi_response_t *reply = ogs_sbi_response_new();
+            reply->status = 202;
+            reply->http.content = ogs_strdup("{\"status\":\"accepted\",\"scope\":\"session\"}");
+            reply->http.content_length = strlen(reply->http.content);
+            ogs_sbi_header_set(reply->http.headers, OGS_SBI_CONTENT_TYPE, OGS_SBI_CONTENT_JSON_TYPE);
+            ogs_sbi_server_send_response(stream, reply);
+        } else {
+            ogs_sbi_server_send_error(stream, code >= 400 && code <= 599 ? code : 502,
+                    NULL, "Session termination was not accepted", NULL, NULL);
+        }
+    }
+    if (response) ogs_sbi_response_free(response);
+    ogs_free(ctx);
     return OGS_OK;
+}
+
+bool pcf_sbi_send_session_release(pcf_sess_t *sess, ogs_sbi_stream_t *stream)
+{
+    ogs_sbi_request_t *request = pcf_nsmf_callback_build_smpolicycontrol_terminate(sess);
+    release_notify_context_t *ctx;
+    bool sent;
+    if (!request) return false;
+    ctx = ogs_calloc(1, sizeof(*ctx));
+    ogs_assert(ctx);
+    ctx->sess_id = sess->id;
+    ctx->stream_id = ogs_sbi_id_from_stream(stream);
+    sent = ogs_sbi_send_request_to_client(sess->nsmf.client,
+            session_release_notify_cb, request, ctx);
+    ogs_sbi_request_free(request);
+    if (!sent) ogs_free(ctx);
+    return sent;
 }
 
 bool pcf_sbi_send_am_policy_control_notify(pcf_ue_am_t *pcf_ue_am)
@@ -663,6 +725,7 @@ bool pcf_sbi_send_smpolicycontrol_delete_notify(
         OpenAPI_sm_policy_decision_t *SmPolicyDecision)
 {
     bool rc;
+    delete_notify_context_t *ctx;
     ogs_sbi_request_t *request = NULL;
     ogs_sbi_client_t *client = NULL;
 
@@ -677,11 +740,17 @@ bool pcf_sbi_send_smpolicycontrol_delete_notify(
         return false;
     }
 
+    ctx = ogs_calloc(1, sizeof(*ctx));
+    ogs_assert(ctx);
+    ctx->sess_id = sess->id;
+    ogs_cpystrn(ctx->app_id, app_session->app_session_id, sizeof(ctx->app_id));
+    ogs_cpystrn(ctx->instance, app_session->control_instance, sizeof(ctx->instance));
     rc = ogs_sbi_send_request_to_client(
-            client, client_delete_notify_cb, request, app_session);
+            client, client_delete_notify_cb, request, ctx);
     if (rc == false) {
         ogs_error("ogs_sbi_send_request_to_client() failed");
-        pcf_app_remove(app_session);
+        app_session->delete_pending = false;
+        ogs_free(ctx);
     }
 
     ogs_sbi_request_free(request);

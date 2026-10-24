@@ -2653,6 +2653,10 @@ void smf_gsm_state_wait_pfcp_deletion(ogs_fsm_t *s, smf_event_t *e)
 
                         memset(&param, 0, sizeof(param));
                         param.state = SMF_UE_OR_NETWORK_REQUESTED_PDU_SESSION_RELEASE;
+                        sess->pti = OGS_NAS_PROCEDURE_TRANSACTION_IDENTITY_UNASSIGNED;
+                        param.n1smbuf = gsm_build_pdu_session_release_command(
+                                sess, OGS_5GSM_CAUSE_REGULAR_DEACTIVATION);
+                        ogs_assert(param.n1smbuf);
                         param.n2smbuf = ngap_build_pdu_session_resource_release_command_transfer(
                                 sess,
                                 SMF_NGAP_STATE_DELETE_TRIGGER_PCF_INITIATED,
@@ -3004,8 +3008,31 @@ void smf_gsm_state_wait_5gc_n1_n2_release(ogs_fsm_t *s, smf_event_t *e)
 
     switch (e->h.id) {
     case OGS_FSM_ENTRY_SIG:
+        if (sess->management_release) {
+            if (!sess->management_release_timer)
+                sess->management_release_timer = ogs_timer_add(
+                        ogs_app()->timer_mgr, smf_timer_management_release,
+                        OGS_UINT_TO_POINTER(sess->id));
+            ogs_assert(sess->management_release_timer);
+            /* PFCP deletion has completed. Bound the remaining UE/RAN wait. */
+            ogs_timer_start(sess->management_release_timer, ogs_time_from_sec(30));
+        }
         break;
     case OGS_FSM_EXIT_SIG:
+        if (sess->management_release_timer)
+            ogs_timer_stop(sess->management_release_timer);
+        break;
+    case SMF_EVT_5GSM_TIMER:
+        if (e->h.timer_id == SMF_TIMER_MANAGEMENT_RELEASE &&
+            sess->management_release) {
+            smf_ue_event(sess, "ACTION", "LOCAL", "SessionRelease", "timeout",
+                    NULL, "UE/RAN completion missing; cleaning released session", true);
+            r = smf_sbi_cleanup_session(sess, NULL,
+                    SMF_UECM_STATE_DEREG_BY_N1N2,
+                    SMF_SBI_CLEANUP_MODE_POLICY_FIRST);
+            ogs_expect(r == OGS_OK);
+            OGS_FSM_TRAN(s, smf_gsm_state_5gc_session_will_deregister);
+        }
         break;
 
     case OGS_EVENT_SBI_SERVER:
@@ -3276,8 +3303,22 @@ void smf_gsm_state_wait_5gc_n1_n2_release(ogs_fsm_t *s, smf_event_t *e)
                     smf_ue->supi, sess->psi,
                     e->h.sbi.state, sbi_message->res_status,
                     stream, stream_id);
-                smf_namf_comm_handle_n1_n2_message_transfer(
-                        sess, stream, e->h.sbi.state, sbi_message);
+                if (sess->management_release &&
+                    e->h.sbi.state == SMF_UE_OR_NETWORK_REQUESTED_PDU_SESSION_RELEASE &&
+                    sbi_message->res_status == OGS_SBI_HTTP_STATUS_OK &&
+                    sbi_message->N1N2MessageTransferRspData &&
+                    sbi_message->N1N2MessageTransferRspData->cause ==
+                        OpenAPI_n1_n2_message_transfer_cause_N1_MSG_NOT_TRANSFERRED) {
+                    /* CM-IDLE + skip indicator: there is no N1/N2 reply to wait for. */
+                    r = smf_sbi_cleanup_session(sess, NULL,
+                            SMF_UECM_STATE_DEREG_BY_N1N2,
+                            SMF_SBI_CLEANUP_MODE_POLICY_FIRST);
+                    ogs_expect(r == OGS_OK);
+                    OGS_FSM_TRAN(s, smf_gsm_state_5gc_session_will_deregister);
+                } else {
+                    smf_namf_comm_handle_n1_n2_message_transfer(
+                            sess, stream, e->h.sbi.state, sbi_message);
+                }
                 break;
 
             DEFAULT

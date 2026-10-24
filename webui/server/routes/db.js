@@ -18,6 +18,11 @@ restify.serve(router, Profile, {
 });
 
 const Account = require('../models/account');
+const requireAdmin = require('../core-admin')();
+router.use('/Account', (req, res, next) => {
+  if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return next();
+  return requireAdmin(req, res, next);
+});
 restify.serve(router, Account, {
   prefix: '',
   version: '',

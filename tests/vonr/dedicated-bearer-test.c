@@ -1074,9 +1074,152 @@ static void intent_lifecycle(abts_case *tc, void *data)
     test_ue_remove(ue);
 }
 
+
+/* Management operations run against real NFs and controlled NAS/NGAP peers. */
+static cJSON *control_http(abts_case *tc, const char *method, const char *path,
+        cJSON *body, const char *version, int expected)
+{
+    const char *base = getenv("XCN_QOS_PCF_URL");
+    CURL *curl = curl_easy_init();
+    struct curl_slist *headers = NULL;
+    http_result_t result = {0};
+    char *url, *encoded = body ? cJSON_PrintUnformatted(body) : NULL;
+    long status = 0;
+    cJSON *json = NULL;
+    if (!base) base = "http://127.0.0.13:7777";
+    url = ogs_msprintf("%s%s", base, path);
+    headers = curl_slist_append(headers, "Content-Type: application/json");
+    if (version) {
+        char *header = ogs_msprintf("If-Match: \"%s\"", version);
+        headers = curl_slist_append(headers, header);
+        ogs_free(header);
+    }
+    curl_easy_setopt(curl, CURLOPT_URL, url);
+    curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, method);
+    curl_easy_setopt(curl, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_2_PRIOR_KNOWLEDGE);
+    curl_easy_setopt(curl, CURLOPT_NOPROXY, "*");
+    curl_easy_setopt(curl, CURLOPT_TIMEOUT, 10L);
+    curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, http_body);
+    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &result);
+    if (encoded) curl_easy_setopt(curl, CURLOPT_POSTFIELDS, encoded);
+    ogs_assert(curl_easy_perform(curl) == CURLE_OK);
+    curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &status);
+    if (status != expected) fprintf(stderr, "%s %s: %ld %s\n", method, path, status, result.body);
+    ABTS_INT_EQUAL(tc, expected, status);
+    ogs_assert(status == expected);
+    if (result.length) { json = cJSON_Parse(result.body); ogs_assert(json); }
+    curl_slist_free_all(headers); curl_easy_cleanup(curl);
+    cJSON_free(encoded); ogs_free(url);
+    return json;
+}
+
+static char *control_version(abts_case *tc, const char *path)
+{
+    cJSON *data = control_http(tc, "GET", path, NULL, NULL, 200);
+    cJSON *version = cJSON_GetObjectItemCaseSensitive(data, "controlVersion");
+    char *copy;
+    ogs_assert(cJSON_IsString(version) && strlen(version->valuestring) == 36);
+    copy = ogs_strdup(version->valuestring);
+    cJSON_Delete(data);
+    return copy;
+}
+
+static void control_lifecycle(abts_case *tc, void *data)
+{
+    ogs_socknode_t *ngap = testngap_client(1, AF_INET);
+    ogs_socknode_t *gtpu = test_gtpu_server(1, AF_INET);
+    test_ue_t *ue = register_ue(tc, ngap);
+    test_sess_t *first = establish_session(tc, ue, ngap, 5);
+    test_sess_t *other = establish_session(tc, ue, ngap, 6);
+    char *path = ogs_msprintf("/xcn-session-control/v1/sessions/imsi-%s/5", ue->imsi);
+    char *version = control_version(tc, path), *new_version;
+    char app_id[256], bearer_path[320];
+    cJSON *body = bearer_body(first, 20);
+    cJSON_Delete(control_http(tc, "DELETE", path, NULL, NULL, 428));
+    cJSON_Delete(control_http(tc, "DELETE", path, NULL,
+            "00000000-0000-0000-0000-000000000000", 412));
+    cJSON_Delete(request(tc, "POST", "", body, 201, app_id));
+    modify_complete(tc, first, ngap, 20, false);
+    new_version = control_version(tc, path);
+    ogs_assert(strcmp(version, new_version));
+    ogs_snprintf(bearer_path, sizeof(bearer_path),
+            "/xcn-dedicated-bearer/v1/bearers/%s", app_id);
+    cJSON_Delete(control_http(tc, "PATCH", bearer_path, body, version, 412));
+    cJSON_Delete(control_http(tc, "PATCH", bearer_path, body, new_version, 200));
+    /* A no-op QoS replacement does not require another NAS procedure. */
+    ogs_msleep(100);
+    ogs_free(version); ogs_free(new_version);
+    version = control_version(tc, path);
+    cJSON_Delete(control_http(tc, "DELETE", path, NULL, version, 202));
+    ue->gsm_message_type = 0;
+    receive_ngap(tc, ue, ngap, NGAP_ProcedureCode_id_PDUSessionResourceRelease);
+    ABTS_INT_EQUAL(tc, OGS_NAS_5GS_PDU_SESSION_RELEASE_COMMAND, ue->gsm_message_type);
+    ogs_assert(ue->gsm_message_type == OGS_NAS_5GS_PDU_SESSION_RELEASE_COMMAND);
+    send_ngap(tc, ngap, testngap_build_pdu_session_resource_release_response(first));
+    memset(&first->ul_nas_transport_param, 0, sizeof(first->ul_nas_transport_param));
+    send_sm(tc, first, ngap, testgsm_build_pdu_session_release_complete(first));
+    ogs_msleep(200);
+    cJSON_Delete(control_http(tc, "GET", path, NULL, NULL, 404));
+    test_sess_remove(first);
+    probe_flow(tc, gtpu, test_qos_flow_find_by_qfi(other, 1), true);
+    /* Reusing PSI must never accept the old form's conditional write. */
+    first = establish_session(tc, ue, ngap, 5);
+    cJSON_Delete(control_http(tc, "DELETE", path, NULL, version, 412));
+    ogs_free(version);
+    version = control_version(tc, path);
+    cJSON_Delete(control_http(tc, "DELETE", path, NULL, version, 202));
+    ue->gsm_message_type = 0;
+    receive_ngap(tc, ue, ngap, NGAP_ProcedureCode_id_PDUSessionResourceRelease);
+    ABTS_INT_EQUAL(tc, OGS_NAS_5GS_PDU_SESSION_RELEASE_COMMAND, ue->gsm_message_type);
+    /* Reverse N1/N2 completion order. */
+    memset(&first->ul_nas_transport_param, 0, sizeof(first->ul_nas_transport_param));
+    send_sm(tc, first, ngap, testgsm_build_pdu_session_release_complete(first));
+    send_ngap(tc, ngap, testngap_build_pdu_session_resource_release_response(first));
+    ogs_msleep(200);
+    cJSON_Delete(control_http(tc, "GET", path, NULL, NULL, 404));
+    test_sess_remove(first);
+    ping_flow(tc, gtpu, test_qos_flow_find_by_qfi(other, 1));
+    /* Lost N1 and N2 completions must not retain a dead session forever. */
+    first = establish_session(tc, ue, ngap, 5);
+    ogs_free(version);
+    version = control_version(tc, path);
+    cJSON_Delete(control_http(tc, "DELETE", path, NULL, version, 202));
+    receive_ngap(tc, ue, ngap, NGAP_ProcedureCode_id_PDUSessionResourceRelease);
+    ogs_msleep(31000);
+    cJSON_Delete(control_http(tc, "GET", path, NULL, NULL, 404));
+    test_sess_remove(first);
+    ping_flow(tc, gtpu, test_qos_flow_find_by_qfi(other, 1));
+    release_session(tc, other, ngap);
+    /* An idle UE needs no paging or resource setup after skip-ind release. */
+    first = establish_session(tc, ue, ngap, 5);
+    send_ngap(tc, ngap, testngap_build_ue_context_release_request(ue,
+                NGAP_Cause_PR_radioNetwork, NGAP_CauseRadioNetwork_user_inactivity, true));
+    receive_ngap(tc, ue, ngap, NGAP_ProcedureCode_id_UEContextRelease);
+    send_ngap(tc, ngap, testngap_build_ue_context_release_complete(ue));
+    ogs_msleep(100);
+    ogs_free(version);
+    version = control_version(tc, path);
+    cJSON_Delete(control_http(tc, "DELETE", path, NULL, version, 202));
+    ogs_msleep(500);
+    cJSON_Delete(control_http(tc, "GET", path, NULL, NULL, 404));
+    {
+        struct pollfd pfd = { .fd = ngap->sock->fd, .events = POLLIN };
+        ABTS_INT_EQUAL(tc, 0, poll(&pfd, 1, 200));
+    }
+    test_sess_remove(first);
+    ABTS_INT_EQUAL(tc, OGS_OK, test_db_remove_ue(ue));
+    testgnb_gtpu_close(gtpu); testgnb_ngap_close(ngap); test_ue_remove(ue);
+    ogs_free(version); ogs_free(path); cJSON_Delete(body);
+}
+
 abts_suite *test_dedicated_bearer(abts_suite *suite)
 {
     suite = ADD_SUITE(suite);
+    if (getenv("XCN_CONTROL_TEST")) {
+        abts_run_test(suite, control_lifecycle, NULL);
+        return suite;
+    }
     if (getenv("XCN_INTENT_TEST")) {
         abts_run_test(suite, intent_lifecycle, NULL);
         return suite;

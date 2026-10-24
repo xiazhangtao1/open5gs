@@ -2,6 +2,7 @@ import {Component} from 'react';
 import axios from 'axios';
 import Chart from './Chart';
 import SignalDetails from './SignalDetails';
+import {SessionControls, UserRelease, BulkRelease} from './Controls';
 import {get} from './client';
 
 const titles = {overview: '概览', ues: '终端', gnbs: '基站', sessions: '会话', events: '信令', system: '状态'};
@@ -74,7 +75,7 @@ class Drawer extends Component {
   key = e => {
     if (e.key === 'Escape') this.props.onClose();
     if (e.key === 'Tab') {
-      const list = Array.from(this.panel.querySelectorAll('button, a, input, select, summary, [tabindex="0"]'))
+      const list = Array.from(this.panel.querySelectorAll('button, a, input, select, textarea, summary, [tabindex="0"]'))
         .filter(e => !e.disabled && e.getClientRects().length);
       const first = list[0], last = list[list.length - 1];
       if (e.shiftKey && document.activeElement === first) { last.focus(); e.preventDefault(); }
@@ -280,6 +281,9 @@ export default class Monitor extends Component {
           </tr>))}</tbody></table></div>}</section>
     </div>;
   }
+  canControl() {
+    return (((this.props.session || {}).user || {}).roles || []).indexOf('admin') >= 0;
+  }
   sessionRules(s) {
     return <section className="xcn-session-detail" key={s.seid}>
       <div className="xcn-session-heading"><h4>PSI {value(s.psi)}</h4><span className="xcn-dnn">{value(s.dnn)}</span>
@@ -287,14 +291,18 @@ export default class Monitor extends Component {
       <dl className="xcn-fields"><dt>会话 IP</dt><dd><SessionIP session={s}/></dd>
         <dt>上行 / 下行</dt><dd>{rate(s.ul_bps)} / {rate(s.dl_bps)}</dd></dl>
       <h4>承载</h4>{(s.bearers || []).length ? <div className="xcn-table-scroll"><table className="xcn-table">
-        <thead><tr><th>QFI</th><th>5QI</th><th>上行</th><th>下行</th></tr></thead>
-        <tbody>{s.bearers.map(b => <tr key={b.qfi}><td>{value(b.qfi)}</td><td>{value(b['5qi'])}</td>
+        <thead><tr><th>QFI</th><th>类型</th><th>5QI</th><th>上行</th><th>下行</th></tr></thead>
+        <tbody>{s.bearers.map(b => <tr key={b.qfi}><td>{value(b.qfi)}</td><td>{(() => {
+          const q = (s.qos_flows || []).find(q => q.qfi === b.qfi);
+          return q && typeof q.is_default === 'boolean' ? q.is_default ? '默认流' : '专载' : '—';
+        })()}</td><td>{value(b['5qi'])}</td>
           <td>{rate(b.ul_bps)}</td><td>{rate(b.dl_bps)}</td></tr>)}</tbody></table></div> : <Empty>暂无承载数据。</Empty>}
       <h4>规则</h4>{(s.rules || []).length ? <div className="xcn-table-scroll"><table className="xcn-table">
         <thead><tr><th>QFI / 5QI</th><th>PDR / QER</th><th>方向</th><th>速率</th><th>累计字节</th></tr></thead>
         <tbody>{s.rules.map((rule, i) => <tr key={i}><td>{value(rule.qfi)} / {value(rule['5qi'])}</td>
           <td>{value(rule.pdr_id)} / {value(rule.qer_id)}</td><td>{rule.direction}</td><td>{rate(rule.bps)}</td>
           <td className="xcn-mono">{rule.bytes}</td></tr>)}</tbody></table></div> : <Empty>暂无规则数据。</Empty>}
+      {this.canControl() && <SessionControls key={s.supi + "/" + s.psi + "/" + s.seid} session={s}/>}
     </section>;
   }
   detail() {
@@ -316,6 +324,7 @@ export default class Monitor extends Component {
       {r.supi && type !== 'events' && <div><div className="xcn-detail-identity"><span className="xcn-mono">{r.supi}</span><Status state={r.cm_state}/></div>
         <div className="xcn-panel-heading"><h3>速率趋势</h3>{this.windowPicker()}</div>
         <Chart theme={this.props.theme} points={detail && detail[2].points}/></div>}
+      {type === 'ues' && r.supi && this.canControl() && <UserRelease key={r.supi} supi={r.supi}/>}
       {type === 'ues' && <div><h3>接入与位置</h3><dl className="xcn-fields"><dt>位置状态</dt><dd>{value((r.location || {}).status)}</dd>
         <dt>gNB / PLMN</dt><dd className="xcn-mono">{value((r.gnb || (r.location || {}).gnb || {}).gnb_id)} / {value((r.gnb || (r.location || {}).gnb || {}).plmn)}</dd>
         <dt>小区 NCI</dt><dd className="xcn-mono">{value(((r.location || {}).nr_cgi || {}).nci_hex)}</dd></dl>
@@ -353,6 +362,7 @@ export default class Monitor extends Component {
           {typeof document !== 'undefined' && document.hidden ? '后台已暂停刷新' : '约 2 秒更新'}<small>页面更新 {updated ? clock(updated / 1000) : '等待数据'}</small></div></div>
       {error && <div className="xcn-alert warn" role="status">{error}<Button onClick={() => this.change({})}>重试</Button></div>}
       {['ues', 'gnbs', 'sessions', 'events'].indexOf(view) >= 0 && this.filters()}
+      {view === 'ues' && this.canControl() && <BulkRelease/>}
       {view === 'sessions' && <div className="xcn-tabs" role="group" aria-label="速率层级">
         {[['user', '用户'], ['session', '会话'], ['bearer', '承载'], ['rule', '规则']].map(([k, v]) => <button key={k} type="button"
           aria-pressed={this.state.level === k} onClick={() => this.change({level: k, page: 0})}>{v}</button>)}</div>}

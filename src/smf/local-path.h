@@ -26,7 +26,7 @@
 extern "C" {
 #endif
 
-void smf_trigger_session_release(smf_sess_t *sess,
+int smf_trigger_session_release(smf_sess_t *sess,
     ogs_sbi_stream_t *stream, int pfcp_trigger);
 
 #ifdef __cplusplus

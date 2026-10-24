@@ -1454,6 +1454,7 @@ void smf_state_operational(ogs_fsm_t *s, smf_event_t *e)
         ogs_pkbuf_free(pkbuf);
         break;
 
+    case SMF_EVT_5GSM_TIMER:
     case SMF_EVT_SESSION_RELEASE:
         sess = smf_sess_find_by_id(e->sess_id);
         if (!sess) {

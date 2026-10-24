@@ -212,3 +212,42 @@
   .xcn-signal-tree ul { margin-left: 6px; padding-left: 4px; }
   .xcn-signal-actions { gap: 8px; }
 }
+
+/* Contextual controls follow the existing console palette and table hierarchy. */
+.xcn-controls {margin:20px 0; padding:18px 20px; border:1px solid var(--line); border-radius:8px; background:var(--surface);}
+.xcn-control-launch {margin:16px 0 4px;}
+.xcn-control-heading {display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom:14px;}
+.xcn-controls h4 {margin:0; font-size:15px; font-weight:600; color:var(--ink);}
+.xcn-control-heading small,.xcn-control-hint {font-size:12px; color:var(--muted);}
+.xcn-control-actions {display:flex; align-items:center; flex-wrap:wrap; gap:8px; margin:12px 0;}
+.xcn-button.xcn-primary {background:var(--primary); color:var(--surface); border-color:var(--primary);}
+.xcn-button.xcn-danger {color:var(--error); border-color:var(--error); background:var(--surface);}
+.xcn-control-rule {display:flex; align-items:center; justify-content:space-between; gap:16px; padding:12px 0; border-top:1px solid var(--line);}
+.xcn-control-rule>div:first-child {display:flex; align-items:baseline; gap:12px; flex-wrap:wrap;}
+.xcn-control-rule small {width:100%; color:var(--muted);}
+.xcn-control-rule .xcn-control-actions {flex-shrink:0; margin:0;}
+.xcn-control-editor {padding:18px; margin-top:16px; background:var(--soft); border-radius:6px;}
+.xcn-control-grid {display:grid; grid-template-columns:1fr 1fr; gap:14px 18px; margin:16px 0;}
+.xcn-controls label {display:flex; flex-direction:column; gap:6px; color:var(--muted); font-size:12px;}
+.xcn-controls input,.xcn-controls select,.xcn-controls textarea {box-sizing:border-box; width:100%; min-width:0; padding:9px 10px; color:var(--ink); background:var(--surface); border:1px solid var(--line); border-radius:5px; font:inherit; font-size:14px;}
+.xcn-controls textarea {font-family:ui-monospace,SFMono-Regular,Consolas,monospace; resize:vertical; line-height:1.6;}
+.xcn-control-confirm {border-left:3px solid var(--error); padding:14px 16px; margin:16px 0; background:var(--soft);}
+.xcn-control-confirm p {font-size:13px; color:var(--muted);}
+.xcn-control-notice {display:flex; flex-direction:column; gap:4px; margin:12px 0; padding:12px 14px; border-left:3px solid var(--primary); background:var(--soft); font-size:13px; overflow-wrap:anywhere;}
+.xcn-control-notice.failed {border-color:var(--error);}.xcn-control-notice.unknown {border-color:var(--warning);}
+.xcn-control-error {color:var(--error); font-size:13px;}
+.xcn-control-history {margin-top:16px; font-size:12px; color:var(--muted);}
+.xcn-control-history summary,.xcn-bulk-release summary {cursor:pointer; padding:6px 0;}
+.xcn-control-history>div {display:grid; grid-template-columns:65px 1fr auto; gap:6px 12px; border-bottom:1px solid var(--line); padding:9px 0;}
+.xcn-control-history small {grid-column:2 / -1; overflow-wrap:anywhere;}
+.xcn-bulk-release {margin:12px 0 20px;}.xcn-bulk-release>details {display:inline-block;}
+.xcn-bulk-targets,.xcn-bulk-results {max-height:220px; overflow:auto; margin:10px 0;}
+.xcn-bulk-confirm {max-width:240px; margin-top:14px;}
+.xcn-bulk-results>div {display:flex; flex-wrap:wrap; gap:8px 16px; padding:6px 0; border-bottom:1px solid var(--line); font-size:13px;}
+.xcn-bulk-results small {color:var(--error);}
+@media(max-width:600px) {
+  .xcn-controls {padding:14px;}.xcn-control-grid {grid-template-columns:1fr;}.xcn-control-editor {padding:12px;}
+  .xcn-control-rule {align-items:flex-start;}.xcn-control-rule>div:first-child {gap:4px; flex-direction:column;}
+  .xcn-control-heading {align-items:flex-start;}.xcn-control-history>div {grid-template-columns:60px 1fr;}
+  .xcn-control-history strong,.xcn-control-history small {grid-column:2;}
+}

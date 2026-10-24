@@ -27,6 +27,7 @@ passport.use(
 );
 
 router.use('/auth', auth);
+router.use('/core-control', require('../core-control')());
 router.use('/db', passport.authenticate('jwt', { session: false }), db);
 
 module.exports = router;

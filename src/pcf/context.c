@@ -588,6 +588,7 @@ pcf_sess_t *pcf_sess_add(pcf_ue_sm_t *pcf_ue_sm, uint8_t psi)
 
     sess->pcf_ue_sm_id = pcf_ue_sm->id;
     sess->psi = psi;
+    pcf_sess_control_touch(sess);
 
     sess->s_nssai.sst = 0;
     sess->s_nssai.sd.v = OGS_S_NSSAI_NO_SD_VALUE;
@@ -863,15 +864,25 @@ pcf_sess_t *pcf_sess_find_by_id(ogs_pool_id_t id)
     return ogs_pool_find_by_id(&pcf_sess_pool, id);
 }
 
+void pcf_sess_control_touch(pcf_sess_t *sess)
+{
+    ogs_uuid_t uuid;
+    ogs_uuid_get(&uuid);
+    ogs_uuid_format(sess->control_version, &uuid);
+}
+
 pcf_app_t *pcf_app_add(pcf_sess_t *sess)
 {
     pcf_app_t *app = NULL;
+    ogs_uuid_t uuid;
 
     ogs_assert(sess);
 
     ogs_pool_alloc(&pcf_app_pool, &app);
     ogs_assert(app);
     memset(app, 0, sizeof *app);
+    ogs_uuid_get(&uuid);
+    ogs_uuid_format(app->control_instance, &uuid);
 
     app->app_session_id = ogs_msprintf("%d",
             (int)ogs_pool_index(&pcf_app_pool, app));

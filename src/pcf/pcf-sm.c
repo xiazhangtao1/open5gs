@@ -363,7 +363,17 @@ void pcf_state_operational(ogs_fsm_t *s, pcf_event_t *e)
                 break;
             }
             SWITCH(message.h.resource.component[0])
+            CASE("notifications")
+                if (!strcmp(message.h.method, OGS_SBI_HTTP_METHOD_POST))
+                    ogs_assert(true == ogs_sbi_send_http_status_no_content(stream));
+                else
+                    ogs_assert(true == ogs_sbi_server_send_error(stream,
+                            405, &message, "Invalid HTTP method", NULL, NULL));
+                break;
             CASE(XCN_RESOURCE_BEARERS)
+                if (strcmp(message.h.method, OGS_SBI_HTTP_METHOD_GET) &&
+                    !pcf_xcn_control_guard(stream, &message, request))
+                    break;
                 SWITCH(message.h.method)
                 CASE(OGS_SBI_HTTP_METHOD_GET)
                     if (message.h.resource.component[1]) {
@@ -411,6 +421,10 @@ void pcf_state_operational(ogs_fsm_t *s, pcf_event_t *e)
                         "Unknown resource name",
                         message.h.resource.component[0], NULL));
             END
+            break;
+
+        CASE("xcn-session-control")
+            pcf_xcn_session_control(stream, &message, request);
             break;
 
         CASE(XCN_SVC_CORE_QUERY)

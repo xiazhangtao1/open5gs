@@ -25,6 +25,7 @@
 #include "user-intent.h"
 
 #include "npcf-handler.h"
+#include "smf-sm.h"
 
 typedef struct smf_sm_policy_update_s {
     ogs_lnode_t node;
@@ -791,6 +792,11 @@ bool smf_npcf_smpolicycontrol_handle_update_notify(
             SmPolicyDecision->qos_decs ?
                 (int)SmPolicyDecision->qos_decs->count : 0);
 
+    if (!OGS_FSM_CHECK(&sess->sm, smf_gsm_state_operational) ||
+        ogs_list_count(&sess->sm_policy_update_list) >= 32)
+        return ogs_sbi_server_send_error(stream, 409, recvmsg,
+                "Session is releasing or policy queue is full", NULL, NULL);
+
     update = ogs_calloc(1, sizeof(*update));
     ogs_assert(update);
     update->decision =
@@ -884,10 +890,20 @@ bool smf_npcf_smpolicycontrol_handle_terminate_notify(
 
     ogs_assert(recvmsg);
 
+    if (!OGS_FSM_CHECK(&sess->sm, smf_gsm_state_operational) ||
+        sess->sm_policy_update_in_progress || smf_user_intent_busy(sess) ||
+        ogs_list_first(&sess->sm_policy_update_list))
+        return ogs_sbi_server_send_error(stream, 409, recvmsg,
+                "Session has a pending procedure", NULL, NULL);
+    if (HOME_ROUTED_ROAMING_IN_HSMF(sess) || HOME_ROUTED_ROAMING_IN_VSMF(sess))
+        return ogs_sbi_server_send_error(stream, 501, recvmsg,
+                "Management release currently supports local sessions", NULL, NULL);
+    if (smf_trigger_session_release(
+            sess, NULL, OGS_PFCP_DELETE_TRIGGER_PCF_INITIATED) != OGS_OK)
+        return ogs_sbi_server_send_error(stream, 503, recvmsg,
+                "Session release queue unavailable", NULL, NULL);
+    sess->management_release = true;
     ogs_assert(true == ogs_sbi_send_http_status_no_content(stream));
-
-    smf_trigger_session_release(
-            sess, NULL, OGS_PFCP_DELETE_TRIGGER_PCF_INITIATED);
 
     return true;
 }

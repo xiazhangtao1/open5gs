@@ -83,3 +83,28 @@ end:
 
     return request;
 }
+
+
+ogs_sbi_request_t *pcf_nsmf_callback_build_smpolicycontrol_terminate(pcf_sess_t *sess)
+{
+    ogs_sbi_message_t message = {0};
+    OpenAPI_termination_notification_t notification = {0};
+    ogs_sbi_request_t *request;
+    ogs_sbi_header_t header = {0};
+    ogs_sbi_server_t *server = ogs_sbi_server_first();
+    if (!server) return NULL;
+    header.service.name = (char *)OGS_SBI_SERVICE_NAME_NPCF_SMPOLICYCONTROL;
+    header.api.version = (char *)OGS_SBI_API_V1;
+    header.resource.component[0] = (char *)OGS_SBI_RESOURCE_NAME_SM_POLICIES;
+    header.resource.component[1] = sess->sm_policy_id;
+    notification.resource_uri = ogs_sbi_server_uri(server, &header);
+    if (!notification.resource_uri) return NULL;
+    notification.cause = OpenAPI_sm_policy_association_release_cause_UNSPECIFIED;
+    message.h.method = (char *)OGS_SBI_HTTP_METHOD_POST;
+    message.h.uri = ogs_msprintf("%s/terminate", sess->notification_uri);
+    message.TerminationNotification = &notification;
+    request = ogs_sbi_build_request(&message);
+    ogs_free(notification.resource_uri);
+    ogs_free(message.h.uri);
+    return request;
+}
