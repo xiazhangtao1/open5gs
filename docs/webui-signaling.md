@@ -1,6 +1,8 @@
 # WebUI 信令详情
 
-事件详情支持 NGAP ASN.1 协议树、5GMM / 5GSM 明文、NGAP 内嵌 Transfer、字段搜索、字段对应字节以及复制。默认隐藏 PER 编码辅助字段，可手动展开。协议树与码流使用同一条事件的 `NF / boot_id / seq` 关联，不根据 IMSI 或相邻时间猜测配对。原有事件摘要和采样路径继续工作。
+事件详情支持 NGAP ASN.1 协议树、5GMM / 5GSM 明文、NGAP 内嵌 Transfer、字段搜索、字段对应字节以及复制。“展开全部”显示所有已解析层级及 PER 编码辅助字段，“收起全部”回到协议树顶层；这两个操作清除搜索条件，节点仍可单独展开。协议树与码流使用同一条事件的 `NF / boot_id / seq` 关联，不根据 IMSI 或相邻时间猜测配对。原有事件摘要和采样路径继续工作。
+
+会话、承载和规则表显示对应会话的 IPv4 / IPv6，双栈地址分行呈现，未分配地址显示 `—`。速率图默认保留原始采样，可切换“10 秒平均”；平均按相邻采样间隔加权，不跨越采集断点，切换不触发额外采集或解码。
 
 ## 数据路径与性能边界
 
@@ -12,7 +14,7 @@ flowchart LR
     W[已登录浏览器] --> P[WebUI 只读代理]
     P --> C
     C -->|点击详情时合并请求| D[独立 TShark 解析容器]
-    D -->|遮蔽后的协议树 / HEX| C
+    D -->|按部署配置生成协议树 / HEX| C
 ```
 
 在新增信令详情采集路径中，AMF / SMF 不生成 JSON、运行 TShark、访问数据库或等待网页请求。生产者使用 C11 原子操作、单生产者单消费者共享内存，先验证边界、容量和速率，再复制。发送 NGAP 在现有 SCTP 发送消耗缓冲前复制，发送结果生成后发布原有事件序号；不保留报文指针。NAS 使用核心网本来就编码或解密后的缓冲，不额外编解码，也不导出核心网安全上下文。完整性校验状态按本条消息记录；失败不会被误标为校验通过。下行 NAS 标记为“发送前明文”，不代表 UE 已收到。
@@ -38,11 +40,15 @@ flowchart LR
 
 解析器固定为 TShark 4.6.9，构建校验源码 SHA-256，不启用 Lua、插件、抓包或捕获权限，以非 root、只读根文件系统运行。输入采用 Wireshark Exported PDU 封装，不伪造 SCTP / IP 报头。NGAP APER 和 NAS 使用同一解析器，已验证 NAS Transport 中的 5GSM 以及 PDU Session Resource Setup Transfer 中的 GTP 地址、TEID、QFI 和 5QI。
 
-所有已登录用户均可查看详情。内部上传/解码接口使用现有 Secret 令牌，外部浏览器不能直接访问采集令牌。服务端遮蔽 `SecurityKey`、`nextHopNH` 等密钥字段、相关祖先值和对应 HEX 字节；浏览器收到的已经是遮蔽结果。解码失败不返回原始字节；检测到未知/未完整解析字段时也不返回 HEX。协议本身可见的用户标识和业务参数仍可用于定位问题，不在页面提供核心网密钥上下文。
+所有已登录用户均可查看详情。内部上传/解码接口使用现有 Secret 令牌，外部浏览器不能直接访问采集令牌。`monitor.trace.redactKeys` 默认 `true`，服务端遮蔽 `SecurityKey`、`nextHopNH` 等密钥字段、相关祖先值和对应 HEX 字节；无正式名称的父节点以“协议项（SecurityKey）”等静态名称说明其内容，不显示含糊的“字段”。在可信测试环境可以配置 `false`，同时完整显示协议树、HEX 和复制内容，不改变核心网加密算法或转发行为。该选项不额外导出报文以外的密钥上下文；解码失败或未完整解析时仍不返回 HEX。
 
-“查看完整字段”展开的是事件记录的 JSON，包括时间、IMSI、协议、方向、结果、事件 ID 和关联标识等。“信令内容”中的协议树才是对 NGAP / NAS 报文的解析结果。“已遮蔽”表示主动隐藏敏感字段，与加密后无法解码不同；NAS 明文来自核心网正常解密后的采集位置。
+密钥显示模式通过部署时的 `TRACE_REDACT_KEYS` 传给采集器和解码器，不接受浏览器请求临时覆盖。模式计入解码版本；切换配置会重建监控服务并清空其内存历史。采集器拒绝缓存不同显示模式的解码结果，避免升级过程混用遮蔽与完整结果。
 
-点击详情后的主要解析 CPU 消耗发生在独立 `xcn-monitor-trace-decoder` Pod 的 TShark 子进程，使用 `monitor.cpuSet` 并受整个容器 `500m` 总 CPU 配额约束。采集器负责排队、缓存和响应，浏览器负责树形展示。5gc Pod 新增的 `signal-trace-agent` 只读取 AMF / SMF 共享环并上传，资源上限 `250m / 128 MiB`；解析器不在 5gc Pod 内。
+“查看事件记录（JSON）”展开事件的结构化日志，包括时间、IMSI、协议、方向、结果、事件 ID 和关联标识等；其他详情使用“查看原始记录（JSON）”。“信令内容”中的协议树才是对 NGAP / NAS 报文的解析结果。“已遮蔽”表示主动隐藏敏感字段，与加密后无法解码不同；NAS 明文来自核心网正常解密后的采集位置。
+
+点击详情后的主要解析 CPU 消耗发生在 decoder 容器的 TShark 子进程，使用 `monitor.cpuSet` 并受整个容器 `500m` 总 CPU 配额约束。采集器负责排队、缓存和响应，浏览器负责树形展示。5gc Pod 的 `signal-trace-agent` 只读取 AMF / SMF 共享环并上传，资源上限 `250m / 128 MiB`；解析器不在 5gc Pod 内。
+
+`monitor.trace.decoderPlacement` 支持 `separate`（默认、保留独立解码 Pod）和 `colocated`（monitor、decoder 两个容器放入同一监控 Pod）。两种布局中，`upf-monitor-agent` 与 `signal-trace-agent` 都留在 5gc Pod，共享本地 socket / tmpfs；不能直接把 `emptyDir` 挪给另一个 Pod 使用。合并后 monitor 与 decoder 通过 localhost 通信，仍各自限制 CPU / 内存，分别接受存活探测；解码器没有采集器的 Kubernetes API 令牌挂载。监控 Service 在此布局发布未就绪地址，保证仅 decoder 重启时，仍运行的采集器可以继续提供普通状态 API。Pod 整体重建、节点故障和升级会同时影响两者，因此需要独立升级时使用 `separate`。
 
 ## 构建与启用
 
@@ -58,6 +64,8 @@ monitor:
   cpuSet: "36-37" # 示例，必须按目标机器实际 CPU / SMT 分配确认
   trace:
     enabled: true
+    decoderPlacement: colocated
+    redactKeys: true # 可信测试环境需要完整显示时设置 false
     agentImage:
       repository: localhost:5000/xcn-monitor
       tag: signal-COMMIT

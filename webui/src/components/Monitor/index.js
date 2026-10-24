@@ -29,11 +29,15 @@ const Status = ({state}) => <span className={'xcn-status ' +
   {({connected: '已连接', idle: '空闲', unknown: '未知', ready: '就绪', completed: '已完成',
     accepted: '已接受', created: '已创建', removed: '已删除', rejected: '已拒绝', failed: '失败'})[state] || value(state)}</span>;
 const Empty = ({children}) => <div className="xcn-empty">{children || '当前没有匹配的数据。可调整筛选条件或检查数据源状态。'}</div>;
+const SessionIP = ({session}) => {
+  const addresses = Array.from(new Set([session.ipv4, session.ipv6, session.ue_ip].filter(ip => ip && ip !== '-' && ip !== '—')));
+  return addresses.length ? <span className="xcn-session-ips xcn-mono">{addresses.map(ip => <span key={ip}>{ip}</span>)}</span> : <span>—</span>;
+};
 class Raw extends Component {
   state = {expanded: false};
   render() {
     return <details className="xcn-raw" open={this.state.expanded}>
-      <summary onClick={e => { e.preventDefault(); this.setState({expanded: !this.state.expanded}); }}>查看完整字段</summary>
+      <summary onClick={e => { e.preventDefault(); this.setState({expanded: !this.state.expanded}); }}>{this.props.label || '查看原始记录（JSON）'}</summary>
       {this.state.expanded && <pre>{JSON.stringify(this.props.data, null, 2)}</pre>}
     </details>;
   }
@@ -216,20 +220,21 @@ export default class Monitor extends Component {
       ['NG 接口', r => <Status state={(r.ng || {}).setup_success ? 'ready' : '未建立'}/>],
       ['SCTP 对端', r => <span className="xcn-mono">{value((((r.ng || {}).sctp || {}).peer))}</span>],
       ['关联终端', r => (r.associated_ues || []).length], ['观测小区', r => (r.observed_cells || []).length]];
-    const base = [['终端 SUPI', r => <button className="xcn-link xcn-mono" type="button" onClick={() => this.select(r, 'sessions')}>{value(r.supi)}</button>],
+    const base = [['终端 SUPI', r => <button className="xcn-link xcn-mono xcn-nowrap" type="button" onClick={() => this.select(r, 'sessions')}>{value(r.supi)}</button>],
       ['连接状态', r => <Status state={r.cm_state}/>]];
-    if (this.state.level !== 'user') base.push(['PSI / SEID', r => <span className="xcn-mono">{value(r.psi)} / {value(r.seid)}</span>]);
+    if (this.state.level !== 'user') base.push(['PSI / SEID', r => <span className="xcn-mono xcn-nowrap">{value(r.psi)} / {value(r.seid)}</span>]);
     else base.push(['会话数', r => value(r.session_count)]);
+    const addresses = this.state.level === 'user' ? [] : [['会话 IP', r => <SessionIP session={r}/>]];
     if (this.state.level === 'bearer' || this.state.level === 'rule') base.push(['QFI / 5QI', r => value(r.qfi) + ' / ' + value(r['5qi'])]);
-    if (this.state.level === 'rule') return base.concat([['PDR / QER', r => value(r.pdr_id) + ' / ' + value(r.qer_id)],
-      ['方向', r => r.direction], ['速率', r => rate(r.bps)], ['累计字节', r => <span className="xcn-mono">{value(r.bytes)}</span>]]);
-    return base.concat([['DNN', r => value(r.dnn)], ['上行', r => rate(r.ul_bps)], ['下行', r => rate(r.dl_bps)],
-      ['累计字节 ↑ / ↓', r => <span className="xcn-mono">{value(r.ul_bytes)} / {value(r.dl_bytes)}</span>]]);
+    if (this.state.level === 'rule') return base.concat(addresses, [['PDR / QER', r => value(r.pdr_id) + ' / ' + value(r.qer_id)],
+      ['方向', r => r.direction], ['速率', r => <span className="xcn-nowrap">{rate(r.bps)}</span>], ['累计字节', r => <span className="xcn-mono">{value(r.bytes)}</span>]]);
+    return base.concat([['DNN', r => value(r.dnn)]], addresses, [['上行', r => <span className="xcn-nowrap">{rate(r.ul_bps)}</span>], ['下行', r => <span className="xcn-nowrap">{rate(r.dl_bps)}</span>],
+      ['累计字节 ↑ / ↓', r => <span className="xcn-mono xcn-nowrap">{value(r.ul_bytes)} / {value(r.dl_bytes)}</span>]]);
   }
   table(view, data) {
     const columns = this.columns(view);
     if (!data.items || !data.items.length) return <Empty/>;
-    return <div className="xcn-table-scroll"><table className="xcn-table"><thead><tr>{columns.map(([title]) => <th key={title} scope="col">{title}</th>)}</tr></thead>
+    return <div className="xcn-table-scroll"><table className={'xcn-table' + (view === 'sessions' ? ' xcn-session-table' : '')}><thead><tr>{columns.map(([title]) => <th key={title} scope="col">{title}</th>)}</tr></thead>
       <tbody>{data.items.map((row, i) => <tr key={row.event_id || [row.supi, row.seid, row.qfi, row.pdr_id, row.gnb_id, i].join('/')}>
         {columns.map(([title, render]) => <td key={title}>{render(row)}</td>)}</tr>)}</tbody></table></div>;
   }
@@ -279,7 +284,7 @@ export default class Monitor extends Component {
     return <section className="xcn-session-detail" key={s.seid}>
       <div className="xcn-session-heading"><h4>PSI {value(s.psi)}</h4><span className="xcn-dnn">{value(s.dnn)}</span>
         <span className="xcn-mono">SEID {value(s.seid)}</span></div>
-      <dl className="xcn-fields"><dt>终端地址</dt><dd className="xcn-mono">{value(s.ue_ip)}</dd>
+      <dl className="xcn-fields"><dt>会话 IP</dt><dd><SessionIP session={s}/></dd>
         <dt>上行 / 下行</dt><dd>{rate(s.ul_bps)} / {rate(s.dl_bps)}</dd></dl>
       <h4>承载</h4>{(s.bearers || []).length ? <div className="xcn-table-scroll"><table className="xcn-table">
         <thead><tr><th>QFI</th><th>5QI</th><th>上行</th><th>下行</th></tr></thead>
@@ -334,7 +339,7 @@ export default class Monitor extends Component {
       {r.supi && type === 'ues' && <div><h3>UPF 会话</h3>{sessions.length ? sessions.map(s => <div className="xcn-detail-session" key={s.seid}>
         <button type="button" className="xcn-link" onClick={() => this.select(s, 'sessions')}>PSI {value(s.psi)} / {s.dnn}</button>
         <p className="xcn-mono">SEID {s.seid}　{value(s.ue_ip)}</p><p>{rate(s.ul_bps)} ↑　{rate(s.dl_bps)} ↓</p></div>) : <Empty>{detail ? '暂无匹配的 UPF 会话。' : '正在读取会话…'}</Empty>}</div>}
-      <Raw data={raw}/>
+      <Raw data={raw} label={type === 'events' ? '查看事件记录（JSON）' : undefined}/>
       {r.supi && type !== 'events' && <div><h3>终端近期事件</h3>
         <Events compact items={events} onSelect={e => this.select(e, 'events')}/></div>}
     </Drawer>;

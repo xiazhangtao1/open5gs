@@ -39,6 +39,11 @@ monitor:
   # First installation recreates the 5gc Pod. Hot-stop via config.trace_enabled=false.
   trace:
     enabled: false
+    # "colocated" keeps monitor and decoder in one Pod, with separate container limits.
+    # "separate" preserves independently managed decoder and collector Pods.
+    decoderPlacement: separate
+    # Disable only for a trusted test environment; applies to trees, HEX and copies.
+    redactKeys: true
     agentImage:
       repository: xcn-monitor
       tag: latest

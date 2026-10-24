@@ -13,11 +13,11 @@ const security = (flags, protocol) => [flags & 1 ? protocol === 'NAS-5GSM' ? '�
   flags & 4 ? '已解密' : null, flags & 8 ? '完整性校验失败' : null,
   flags & 16 ? '发送前明文' : null].filter(Boolean).join(' · ') || '完整性未检查';
 
-function filterTree(nodes, query, encoding) {
+function filterTree(nodes, query) {
+  if (!query) return nodes;
   return nodes.reduce((out, n) => {
-    const children = filterTree(n.children || [], query, encoding);
-    if (!encoding && n.name.startsWith('per.')) return out.concat(children);
-    if (!query || [n.name, n.label, n.value].join(' ').toLowerCase().includes(query)) out.push({...n, children: query ? filterTree(n.children || [], '', encoding) : children});
+    const children = filterTree(n.children || [], query);
+    if ([n.name, n.label, n.value].join(' ').toLowerCase().includes(query)) out.push(n);
     else if (children.length) out.push({...n, children});
     return out;
   }, []);
@@ -38,13 +38,14 @@ async function copy(text) {
 }
 
 class TreeNode extends Component {
-  state = {open: this.props.depth < 3 || this.props.depth <= 10 &&
+  state = {open: this.props.expansion !== null ? this.props.expansion : this.props.depth < 3 || this.props.depth <= 10 &&
     ((this.props.node.children || []).length === 1 ||
       ['ngap.protocolIEs', 'ngap.ProtocolIE_Field_element'].includes(this.props.node.name)), count: 100};
   render() {
     const {node, depth, searching, select} = this.props;
     const children = node.children || [];
     const open = this.state.open || searching;
+    const count = this.props.expansion === true ? children.length : this.state.count;
     return <li className="xcn-signal-node">
       <div className={node.redacted ? 'redacted' : ''}>
         {children.length ? <button type="button" className="xcn-tree-toggle" aria-expanded={open}
@@ -54,17 +55,17 @@ class TreeNode extends Component {
           {node.label || node.name}{node.redacted && <span className="xcn-signal-masked"> 已遮蔽</span>}
         </button>
       </div>
-      {!!children.length && open && <ul>{children.slice(0, this.state.count).map((n, i) =>
-        <TreeNode key={i} node={n} depth={depth + 1} searching={searching} select={select}/>)}
-        {children.length > this.state.count && <li><button type="button" className="xcn-link"
-          onClick={() => this.setState({count: this.state.count + 100})}>继续显示字段（剩余 {children.length - this.state.count}）</button></li>}
+      {!!children.length && open && <ul>{children.slice(0, count).map((n, i) =>
+        <TreeNode key={i} node={n} depth={depth + 1} searching={searching} expansion={this.props.expansion} select={select}/>)}
+        {children.length > count && <li><button type="button" className="xcn-link"
+          onClick={() => this.setState({count: this.state.count + 100})}>继续显示字段（剩余 {children.length - count}）</button></li>}
       </ul>}
     </li>;
   }
 }
 
 export default class SignalDetails extends Component {
-  state = {view: 'decoded', doc: null, hex: null, query: '', encoding: false, error: null, copied: '', page: 0, selected: null};
+  state = {view: 'decoded', doc: null, hex: null, query: '', expansion: null, treeVersion: 0, error: null, copied: '', page: 0, selected: null};
   componentDidMount() { this.active = true; this.started = Date.now(); this.load(); }
   componentWillUnmount() { this.active = false; clearTimeout(this.timer); if (this.cancel) this.cancel.cancel(); }
   load = async () => {
@@ -86,6 +87,7 @@ export default class SignalDetails extends Component {
   };
   retry = () => { this.started = Date.now(); this.load(); };
   view = view => { this.setState({view, error: null}, this.load); };
+  expand = expansion => this.setState(state => ({expansion, treeVersion: state.treeVersion + 1, query: ''}));
   select = node => {
     this.setState({selected: node, page: Math.floor((node.offset || 0) / 512)});
   };
@@ -113,7 +115,7 @@ export default class SignalDetails extends Component {
     const {view, query, selected, error} = this.state;
     const doc = view === 'hex' ? this.state.hex : this.state.doc;
     const ready = doc && doc.state === 'ready';
-    const nodes = ready && view === 'decoded' ? filterTree(doc.tree || [], query.toLowerCase(), this.state.encoding) : [];
+    const nodes = ready && view === 'decoded' ? filterTree(doc.tree || [], query.toLowerCase()) : [];
     return <section className="xcn-signal-detail" aria-label="信令内容">
       <div className="xcn-signal-heading"><h3>信令内容</h3><div className="xcn-signal-tabs">
         <button type="button" aria-pressed={view === 'decoded'} onClick={() => this.view('decoded')}>协议内容</button>
@@ -127,12 +129,17 @@ export default class SignalDetails extends Component {
             {doc.protocol !== 'NGAP' && <p className={'xcn-signal-note ' + (doc.security & 8 ? 'failure' : '')}>{security(doc.security, doc.protocol)}</p>}
             {doc.redacted && <p className="xcn-signal-note">密钥字段已遮蔽，码流中以 ** 表示。</p>}
             {view === 'decoded' ? <div>
-              <input className="xcn-signal-search" aria-label="搜索协议字段" placeholder="搜索字段名或内容" value={query}
-                onChange={e => this.setState({query: e.target.value})}/>
-              <label className="xcn-signal-encoding"><input type="checkbox" checked={this.state.encoding}
-                onChange={e => this.setState({encoding: e.target.checked})}/>显示 PER 编码细节</label>
+              <div className="xcn-signal-toolbar">
+                <input className="xcn-signal-search" aria-label="搜索协议字段" placeholder="搜索字段名或内容" value={query}
+                  onChange={e => this.setState({query: e.target.value})}/>
+                <div className="xcn-tree-controls" role="group" aria-label="协议树展开方式">
+                  <button type="button" onClick={() => this.expand(true)}>展开全部</button>
+                  <button type="button" onClick={() => this.expand(false)}>收起全部</button>
+                </div>
+              </div>
               {nodes.length ? <ul className="xcn-signal-tree">{nodes.map((node, i) =>
-                <TreeNode key={query + '/' + this.state.encoding + '/' + i} node={node} depth={0} searching={!!query} select={this.select}/>)}</ul> : <p>未找到匹配字段。</p>}
+                <TreeNode key={query + '/' + this.state.treeVersion + '/' + i} node={node} depth={0} searching={!!query}
+                  expansion={this.state.expansion} select={this.select}/>)}</ul> : <p>未找到匹配字段。</p>}
               <div className="xcn-signal-actions"><button type="button" onClick={() => this.copy(JSON.stringify(doc, null, 2))}>复制解析内容</button></div>
             </div> : this.renderHex(doc)}
             {selected && <div className="xcn-selected-field"><b>{selected.name}</b><span>{selected.value || selected.label}</span>

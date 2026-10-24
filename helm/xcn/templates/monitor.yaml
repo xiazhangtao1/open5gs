@@ -13,6 +13,14 @@
 {{- fail "monitor.enabled requires UPF rateStats.intervalMs <= 2000 for snapshot freshness" }}
 {{- end }}
 {{- $name := include "xcn.componentName" (dict "root" . "component" "monitor") }}
+{{- $placement := dig "trace" "decoderPlacement" "separate" .Values.monitor }}
+{{- if not (has $placement (list "colocated" "separate")) }}
+{{- fail "monitor.trace.decoderPlacement must be colocated or separate" }}
+{{- end }}
+{{- if not (kindIs "bool" (dig "trace" "redactKeys" true .Values.monitor)) }}
+{{- fail "monitor.trace.redactKeys must be a boolean" }}
+{{- end }}
+{{- $colocated := and (dig "trace" "enabled" false .Values.monitor) (eq $placement "colocated") }}
 {{- $secret := default $name .Values.monitor.existingSecret }}
 {{- if not .Values.monitor.existingSecret }}
 {{- $old := lookup "v1" "Secret" .Release.Namespace $secret }}
@@ -66,6 +74,10 @@ kind: Service
 metadata:
   name: {{ $name }}
 spec:
+{{- if $colocated }}
+  # Keep snapshot APIs reachable while only the optional decoder is restarting.
+  publishNotReadyAddresses: true
+{{- end }}
   selector:
     app: {{ $name }}
   ports:
@@ -91,6 +103,7 @@ spec:
         app: {{ $name }}
     spec:
       serviceAccountName: {{ $name }}
+      automountServiceAccountToken: false
 {{- with .Values.nodeSelector }}
       nodeSelector:
 {{ toYaml . | indent 8 }}
@@ -109,7 +122,9 @@ spec:
           env:
 {{- if dig "trace" "enabled" false .Values.monitor }}
             - name: TRACE_DECODER_URL
-              value: {{ printf "http://%s-trace-decoder:9997" $name | quote }}
+              value: {{ if $colocated }}"http://127.0.0.1:9997"{{ else }}{{ printf "http://%s-trace-decoder:9997" $name | quote }}{{ end }}
+            - name: TRACE_REDACT_KEYS
+              value: {{ dig "trace" "redactKeys" true .Values.monitor | toString | quote }}
 {{- end }}
             - name: MONITOR_MEMORY_LIMIT_BYTES
               valueFrom:
@@ -158,10 +173,34 @@ spec:
             capabilities:
               drop: ["ALL"]
           volumeMounts:
+            - name: monitor-api-access
+              mountPath: /var/run/secrets/kubernetes.io/serviceaccount
+              readOnly: true
             - name: monitor-config
               mountPath: /etc/xcn-monitor
               readOnly: true
+{{- if $colocated }}
+{{ include "xcn.traceDecoderContainer" . | indent 8 }}
+{{- end }}
       volumes:
+        - name: monitor-api-access
+          projected:
+            defaultMode: 420
+            sources:
+              - serviceAccountToken:
+                  expirationSeconds: 3600
+                  path: token
+              - configMap:
+                  name: kube-root-ca.crt
+                  items:
+                    - key: ca.crt
+                      path: ca.crt
+              - downwardAPI:
+                  items:
+                    - path: namespace
+                      fieldRef:
+                        apiVersion: v1
+                        fieldPath: metadata.namespace
         - name: monitor-config
           configMap:
             name: {{ $name }}

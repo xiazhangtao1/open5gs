@@ -6,6 +6,13 @@ DEFAULTS = dict(enabled=True, trace_enabled=False, events_interval=2, rates_inte
                 gnbs_interval=15, metrics_interval=15, pods_interval=30)
 
 
+def trace_redact_keys():
+    value = os.getenv("TRACE_REDACT_KEYS", "true").lower()
+    if value not in ("true", "false"):
+        raise ValueError("TRACE_REDACT_KEYS must be true or false")
+    return value == "true"
+
+
 def config():
     """Mounted ConfigMap updates are picked up without restarting core processes."""
     result = DEFAULTS.copy()

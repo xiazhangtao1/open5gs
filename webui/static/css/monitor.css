@@ -84,17 +84,22 @@
 .xcn-table {width:100%; border-collapse:collapse; text-align:left; font-size:12px;}
 .xcn-table th {background:var(--soft); color:var(--muted); font-weight:500; white-space:nowrap;}
 .xcn-table th,.xcn-table td {padding:14px 20px; border-bottom:1px solid var(--line); vertical-align:middle;}
+.xcn-session-table th,.xcn-session-table td {padding:14px;}
 .xcn-table tbody tr:last-child td {border-bottom:0;}
 .xcn-table tbody tr:hover {background:var(--soft);}
 .xcn-mono {font-family:ui-monospace,"SFMono-Regular",Consolas,"Liberation Mono",monospace; font-size:12px; font-variant-numeric:tabular-nums;}
 .xcn-nowrap {white-space:nowrap;} .xcn-wrap {overflow-wrap:anywhere; min-width:160px; max-width:580px;}
 .xcn-subtext {display:block; color:var(--muted); font-size:11px; margin-top:4px;}
+.xcn-session-ips {display:grid; gap:4px; min-width:120px; max-width:260px; overflow-wrap:anywhere;}
 .xcn-status {display:inline-block; font-size:11px; color:var(--muted); white-space:nowrap;}
 .xcn-status:before {content:''; width:5px; height:5px; border-radius:50%; display:inline-block; margin-right:6px; background:currentColor; vertical-align:middle;}
 .xcn-status.good {color:var(--success);} .xcn-status.warn {color:var(--warning);} .xcn-status.bad {color:var(--error);}
 .xcn-pagination {padding:15px 22px; border-top:1px solid var(--line); display:flex; align-items:center; justify-content:space-between; color:var(--muted); font-size:12px; gap:12px;}
 .xcn-pagination>div {display:flex; gap:8px;}
 .xcn-chart-wrap {position:relative; padding:0 12px 10px;}
+.xcn-chart-mode {position:absolute; top:0; right:18px; z-index:1; display:flex; gap:4px;}
+.xcn-chart-mode button {border:1px solid var(--line); border-radius:5px; padding:4px 8px; color:var(--muted); background:var(--surface); font-size:11px;}
+.xcn-chart-mode button[aria-pressed="true"] {border-color:var(--primary); color:var(--primary); background:var(--soft);}
 .xcn-chart {height:255px; width:100%;}
 .xcn-chart-empty {position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:var(--muted); pointer-events:none; font-size:12px; padding:35px; text-align:center;}
 .xcn-events-scroll {overflow:auto;}
@@ -177,12 +182,16 @@
 .xcn-signal-heading { justify-content: space-between; margin-bottom: 14px; }
 .xcn-signal-heading h3 { margin: 0; }
 .xcn-signal-tabs { display: flex; gap: 4px; }
-.xcn-signal-tabs button, .xcn-signal-actions button { background: transparent; color: inherit; border: 1px solid var(--line); border-radius: 6px; padding: 7px 12px; cursor: pointer; }
+.xcn-signal-tabs button, .xcn-signal-actions button, .xcn-tree-controls button { background: transparent; color: inherit; border: 1px solid var(--line); border-radius: 6px; padding: 7px 12px; cursor: pointer; }
 .xcn-signal-tabs button[aria-pressed="true"] { background: var(--soft); color: var(--primary); border-color: var(--primary); }
 .xcn-signal-actions button:disabled { opacity: .4; cursor: default; }
 .xcn-signal-note { color: var(--muted); font-size: 12px; line-height: 1.6; }
 .xcn-signal-note.failure { color: #d95963; }
 .xcn-signal-search { width: 100%; box-sizing: border-box; background: transparent; color: inherit; border: 1px solid var(--line); border-radius: 6px; padding: 9px 12px; }
+.xcn-signal-toolbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.xcn-signal-toolbar .xcn-signal-search { flex: 1 1 180px; width: auto; min-width: 0; }
+.xcn-tree-controls { display: flex; gap: 6px; font-size: 12px; }
+.xcn-tree-controls button { white-space: nowrap; }
 .xcn-signal-tree, .xcn-signal-tree ul { list-style: none; margin: 0; padding: 0; }
 .xcn-signal-tree { max-height: 480px; overflow: auto; margin: 12px 0; font-size: 12px; line-height: 1.65; }
 .xcn-signal-tree ul { margin-left: 12px; padding-left: 8px; border-left: 1px solid var(--line); }
@@ -200,7 +209,6 @@
 .xcn-hex-offset { color: var(--muted); user-select: none; }
 .xcn-hex .selected { background: var(--primary); color: #fff; }
 .xcn-hex .masked { color: var(--muted); }
-.xcn-signal-encoding { display: flex; gap: 6px; align-items: center; color: var(--muted); font-size: 12px; margin-top: 10px; }
 @media(max-width:600px) {
   .xcn-signal-tree ul { margin-left: 6px; padding-left: 4px; }
   .xcn-signal-actions { gap: 8px; }

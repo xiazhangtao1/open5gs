@@ -7,7 +7,7 @@ import struct
 from collections import OrderedDict
 
 import aiohttp
-from common import config
+from common import config, trace_redact_keys
 from memory import MIB, MemoryPressure
 
 HEADER = struct.Struct("!4sBBHQQI36s4s")
@@ -54,6 +54,7 @@ class Signals:
         self.agent = {}
         self.decoder_version = None
         self.decoder_ready = False
+        self.redact_keys = trace_redact_keys()
 
     def admit(self, data):
         self.memory.check(16 * MIB + len(data) * 4, "信令详情采集")
@@ -87,10 +88,12 @@ class Signals:
                     decoded_records=len(self.decoded), decoded_bytes=self.decoded_bytes,
                     evicted=self.evicted, decoded_evicted=self.decoded_evicted,
                     pending=len(self.pending), failures=self.failures, decode_errors=self.decode_errors,
-                    decoder_version=self.decoder_version, decoder_ready=self.decoder_ready,
+                    decoder_version=self.decoder_version, decoder_ready=self.decoder_ready, redact_keys=self.redact_keys,
                     decode_requests=self.requests, enabled=bool(config()["enabled"] and config().get("trace_enabled")), agent=self.agent)
 
     def remember(self, ident, doc):
+        if doc.get("redact_keys", True) is not self.redact_keys:
+            raise ValueError("decoder disclosure policy does not match collector")
         body = json.dumps(doc, ensure_ascii=False, separators=(",", ":")).encode()
         if len(body) > MIB:
             body = b'{"state":"error","reason":"output_limit"}'
@@ -186,6 +189,8 @@ class Signals:
                                 if response.status != 200 or len(data) > 4096:
                                     raise ValueError("decoder health unavailable")
                                 health = json.loads(data)
+                            if health.get("redact_keys", True) is not self.redact_keys:
+                                raise ValueError("decoder disclosure policy does not match collector")
                             version = health.get("decoder_version")
                             if not isinstance(version, str) or not 1 <= len(version) <= 128:
                                 raise ValueError("invalid decoder version")

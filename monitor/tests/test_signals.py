@@ -11,6 +11,7 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from signals import Signals, HEADER, unpack_batch
 from decoder import upper_pdu, protocol_tree
+from common import trace_redact_keys
 from memory import MemoryPressure
 from aiohttp import ClientSession, web
 from server import application
@@ -96,6 +97,33 @@ class SignalsTest(unittest.TestCase):
         self.assertEqual(doc['hex'], '00 01 ** ** ** ** 06 07 08 09 0a 0b')
         self.assertTrue(doc['redacted'])
 
+    def test_full_display_preserves_keys_and_changes_cache_version(self):
+        xml = b'''<pdml><packet><proto name="ngap" pos="0" size="12"><field name="" showname="Item 0: SECRET"><field name="ngap.SecurityKey" pos="2" size="4" showname="SecurityKey: SECRET" show="SECRET"/></field><field name="ngap.procedureCode" pos="0" size="1" show="14"/></proto></packet></pdml>'''
+        masked = protocol_tree(xml, bytes(range(12)), 0)
+        full = protocol_tree(xml, bytes(range(12)), 0, redact_keys=False)
+        self.assertNotIn('SECRET', json.dumps(masked))
+        self.assertIn('协议项（SecurityKey）', json.dumps(masked, ensure_ascii=False))
+        self.assertIn('SECRET', json.dumps(full))
+        self.assertFalse(full['redacted'])
+        self.assertFalse(full['redact_keys'])
+        self.assertEqual(full['hex'], '00 01 02 03 04 05 06 07 08 09 0a 0b')
+        self.assertNotEqual(masked['decoder_version'], full['decoder_version'])
+        self.assertEqual(masked['tree'][0]['children'][1]['value'], '14')
+
+    def test_disclosure_configuration_and_cache_policy(self):
+        for setting, expected in [('true', True), ('false', False)]:
+            with patch.dict(os.environ, TRACE_REDACT_KEYS=setting):
+                self.assertEqual(trace_redact_keys(), expected)
+                cache = Signals(Budget())
+                with self.assertRaises(ValueError):
+                    cache.remember(ident(), dict(state='ready', redact_keys=not expected, hex='secret'))
+                self.assertFalse(cache.decoded)
+                cache.remember(ident(), dict(state='ready', redact_keys=expected))
+                self.assertIn(ident(), cache.decoded)
+        with patch.dict(os.environ, TRACE_REDACT_KEYS='invalid'):
+            with self.assertRaises(ValueError):
+                Signals(Budget())
+
     def test_partial_and_malformed_never_return_raw_hex(self):
         xml = b'<pdml><packet><proto name="ngap"><field name="_ws.expert.message" show="Unknown extension"/></proto></packet></pdml>'
         self.assertIsNone(protocol_tree(xml, b'secret', 0)['hex'])
@@ -116,6 +144,7 @@ class SignalHTTPTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.decode_count = 0
         self.version = 'test-decoder-1'
+        self.redact_keys = True
         decoder = web.Application()
         async def decode(request):
             self.assertEqual(request.headers.get('Authorization'), 'Bearer ' + 't' * 64)
@@ -123,16 +152,16 @@ class SignalHTTPTests(unittest.IsolatedAsyncioTestCase):
             self.decode_count += 1
             await asyncio.sleep(.05)
             return web.json_response(dict(state='ready', tree=[dict(name='nas-5gs.mm.message_type', value='0x43')],
-                                          hex='7e 00 43', decoder_version=self.version))
+                                          hex='7e 00 43', decoder_version=self.version, redact_keys=self.redact_keys))
         async def health(request):
-            return web.json_response(dict(ready=True, decoder_version=self.version))
+            return web.json_response(dict(ready=True, decoder_version=self.version, redact_keys=self.redact_keys))
         decoder.router.add_post('/decode', decode)
         decoder.router.add_get('/healthz', health)
         self.decoder = web.AppRunner(decoder)
         await self.decoder.setup()
         site = web.TCPSite(self.decoder, '127.0.0.1', 0); await site.start()
         url = 'http://127.0.0.1:' + str(site._server.sockets[0].getsockname()[1])
-        self.env = patch.dict(os.environ, TRACE_DECODER_URL=url, MONITOR_INTERNAL_TOKEN='t' * 64)
+        self.env = patch.dict(os.environ, TRACE_DECODER_URL=url, MONITOR_INTERNAL_TOKEN='t' * 64, TRACE_REDACT_KEYS='true')
         self.env.start()
         self.cfg = patch('signals.config', return_value=dict(enabled=True, trace_enabled=True)); self.cfg.start()
         self.app = application('t' * 64, collecting=False)
@@ -185,6 +214,27 @@ class SignalHTTPTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((await self.ready())['decoder_version'], self.version)
         self.assertEqual(self.decode_count, 2)
 
+    async def test_full_decoder_response_is_rejected_by_masked_collector(self):
+        self.redact_keys = False
+        await self.get()
+        for _ in range(30):
+            if self.signals.failures:
+                break
+            await asyncio.sleep(.05)
+        self.assertGreater(self.signals.failures, 0)
+        self.assertNotIn(ident(), self.signals.decoded)
+        result = await self.get()
+        self.assertNotIn('tree', result)
+        self.assertNotIn('hex', result)
+
+    async def test_decoder_failure_keeps_snapshot_apis_and_cached_details(self):
+        await self.ready()
+        await self.decoder.cleanup()
+        async with self.http.get(self.url + '/api/overview') as response:
+            self.assertEqual(response.status, 200)
+        self.assertEqual((await self.get())['state'], 'ready')
+        self.assertFalse(self.app['collector'].tasks)
+
     async def test_invalid_queries_and_authorization(self):
         async with ClientSession() as guest:
             async with guest.get(self.url + '/api/signal', params=dict(id=ident())) as response:
@@ -196,6 +246,16 @@ class SignalHTTPTests(unittest.IsolatedAsyncioTestCase):
 
 @unittest.skipUnless(os.getenv('TRACE_FIXTURES'), 'set TRACE_FIXTURES to real codec-generated PDU directory')
 class RealDecoderTests(unittest.IsolatedAsyncioTestCase):
+    async def test_real_key_can_be_displayed_in_test_mode(self):
+        from decoder import run_tshark
+        data = (Path(os.environ['TRACE_FIXTURES']) / 'initial-context-key.bin').read_bytes()
+        doc = await asyncio.wait_for(run_tshark(data, 1, redact_keys=False), 4)
+        self.assertEqual(doc['state'], 'ready')
+        self.assertFalse(doc['redacted'])
+        self.assertFalse(doc['redact_keys'])
+        self.assertIn(' '.join(['a5'] * 32), doc['hex'])
+        self.assertTrue(doc['decoder_version'].endswith('/full'))
+
     async def test_ngap_nas_nested_transfer_and_redaction(self):
         from decoder import run_tshark
         directory = Path(os.environ['TRACE_FIXTURES'])

@@ -1,4 +1,4 @@
-"""Isolated, bounded TShark decoding. Only sanitized protocol trees leave this service."""
+"""Isolated, bounded TShark decoding with an explicit deployment disclosure policy."""
 import asyncio
 import contextlib
 import hmac
@@ -12,9 +12,9 @@ import time
 import aiohttp
 from aiohttp import web
 from defusedxml import ElementTree as ET
-from common import pin_cpu, read_limited
+from common import pin_cpu, read_limited, trace_redact_keys
 
-VERSION = "tshark-4.6.9/xcn-tree-2"
+VERSION = "tshark-4.6.9/xcn-tree-3"
 MAX_OUTPUT = 4 * 1024 * 1024
 SECRET = re.compile(r"(?:securitykey|nexthopnh|kgnb|kamf|knas|kasme)", re.I)
 
@@ -31,7 +31,11 @@ def upper_pdu(data, kind):
     return pcap, len(prefix)
 
 
-def protocol_tree(xml, data, prefix):
+def decoder_version(redact_keys):
+    return VERSION + ("/masked" if redact_keys else "/full")
+
+
+def protocol_tree(xml, data, prefix, redact_keys=True):
     stack, roots, secrets, count = [], [], [], 0
     malformed = False
     uncertain = False
@@ -58,9 +62,10 @@ def protocol_tree(xml, data, prefix):
             if SECRET.search(name):
                 if not valid or size == 0:
                     uncertain = True
-                else:
+                elif redact_keys:
                     secrets.append((start, start + size))
-                node.update(label=name + "：已遮蔽", value="已遮蔽", redacted=True)
+                if redact_keys:
+                    node.update(label=name, value="已遮蔽", redacted=True)
             stack.append((element.tag, node))
         else:
             tag, node = stack.pop()
@@ -70,7 +75,16 @@ def protocol_tree(xml, data, prefix):
                 stack[-1][1]["children"].append(node)
             element.clear()
     if malformed or not roots:
-        return dict(state="error", reason="malformed", decoder_version=VERSION)
+        return dict(state="error", reason="malformed", decoder_version=decoder_version(redact_keys), redact_keys=redact_keys)
+
+    def protected_names(node):
+        if node.get("redacted"):
+            return [node["name"].split('.')[-1]]
+        names = []
+        for child in node.get("children", []):
+            names.extend(protected_names(child))
+        return list(dict.fromkeys(names))[:3]
+
     def sanitize(node):
         # A parent can repeat secret bytes without a usable offset of its own.
         child_secret = False
@@ -82,7 +96,10 @@ def protocol_tree(xml, data, prefix):
             node.update(label=node["name"], value="已遮蔽")
         elif child_secret or overlap:
             # Reconstruct a static label rather than echoing any ancestor's raw data.
-            label = "NG Application Protocol" if node["name"] == "ngap" else node["name"].split('.')[-1].removesuffix('_element') or "字段"
+            label = "NG Application Protocol" if node["name"] == "ngap" else node["name"].split('.')[-1].removesuffix('_element')
+            if not label:
+                names = protected_names(node)
+                label = "协议项（" + "、".join(names) + "）" if names else "协议数据项"
             node.update(label=label, value="", contains_redacted=True)
         if not node["children"]:
             node.pop("children")
@@ -94,10 +111,10 @@ def protocol_tree(xml, data, prefix):
         octets[begin:end] = ["**"] * (end - begin)
     return dict(state="ready", tree=roots, hex=" ".join(octets) if not uncertain else None,
                 hex_unavailable="incomplete_decode" if uncertain else None,
-                redacted=bool(secrets), length=len(data), decoder_version=VERSION)
+                redacted=bool(secrets), redact_keys=redact_keys, length=len(data), decoder_version=decoder_version(redact_keys))
 
 
-async def run_tshark(data, kind):
+async def run_tshark(data, kind, redact_keys=True):
     pcap, prefix = upper_pdu(data, kind)
     proc = await asyncio.create_subprocess_exec(os.getenv("TSHARK", "tshark"),
             "-n", "-r", "-", "-T", "pdml", "--disable-heuristic", "nas_5gs_udp",
@@ -118,7 +135,7 @@ async def run_tshark(data, kind):
             result.extend(chunk)
         if await proc.wait():
             raise ValueError("decode_failed")
-        return protocol_tree(result, data, prefix)
+        return protocol_tree(result, data, prefix, redact_keys=redact_keys)
     finally:
         if proc.returncode is None:
             with contextlib.suppress(ProcessLookupError):
@@ -130,6 +147,8 @@ def application():
     token = os.getenv("MONITOR_INTERNAL_TOKEN", "")
     if len(token) < 32:
         raise ValueError("internal token required")
+    redact_keys = trace_redact_keys()
+    version = decoder_version(redact_keys)
     app = web.Application(client_max_size=32768)
     busy = False
     ready = os.getenv("MONITOR_REQUIRE_AFFINITY", "1") == "0"
@@ -175,20 +194,20 @@ def application():
             if not data or len(data) > 32768:
                 raise web.HTTPBadRequest()
             try:
-                result = await asyncio.wait_for(run_tshark(data, int(request.headers["X-Trace-Kind"])), 2)
+                result = await asyncio.wait_for(run_tshark(data, int(request.headers["X-Trace-Kind"]), redact_keys=redact_keys), 2)
             except TimeoutError:
-                result = dict(state="error", reason="decode_timeout", decoder_version=VERSION)
+                result = dict(state="error", reason="decode_timeout", decoder_version=version, redact_keys=redact_keys)
             except (ValueError, ET.ParseError, OSError):
-                result = dict(state="error", reason="decode_failed", decoder_version=VERSION)
+                result = dict(state="error", reason="decode_failed", decoder_version=version, redact_keys=redact_keys)
             body = json.dumps(result, ensure_ascii=False, separators=(",", ":")).encode()
             if len(body) > 1024 * 1024:
-                body = b'{"state":"error","reason":"output_limit"}'
+                body = json.dumps(dict(state="error", reason="output_limit", decoder_version=version, redact_keys=redact_keys)).encode()
             return web.Response(body=body, content_type="application/json", headers={"Cache-Control": "no-store"})
         finally:
             busy = False
 
     async def health(request):
-        return web.json_response({"ok": True, "ready": ready, "decoder_version": VERSION})
+        return web.json_response({"ok": True, "ready": ready, "decoder_version": version, "redact_keys": redact_keys})
     app.router.add_get("/healthz", health)
     app.router.add_post("/decode", decode)
     app.cleanup_ctx.append(guard)
