@@ -72,6 +72,7 @@
  * }
  */ 
 
+#include "session-control.h"
 #include <string.h>
 #include <stdbool.h>
 #include <limits.h>
@@ -587,6 +588,8 @@ static cJSON *build_single_pdu_object(const smf_sess_t *sess, int *any_active, i
         if (!sn) { cJSON_Delete(pdu); return NULL; }
         cJSON_AddItemToObjectCS(pdu, "snssai", sn);
     }
+
+    if (is5g) cJSON_AddItemToObject(pdu, "session_control", smf_session_control_snapshot(sess));
 
     /* QoS flows */
     {

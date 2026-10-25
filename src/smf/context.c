@@ -17,6 +17,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+#include "session-control.h"
 #include "ue-events.h"
 #include "context.h"
 #include "user-intent.h"
@@ -1853,6 +1854,8 @@ void smf_sess_remove(smf_sess_t *sess)
     ogs_assert(sess);
     smf_ue_event_establishment_end(sess, "cancelled", "Local context removed before initial N2/N4 setup completed");
     smf_ue_event(sess, "ACTION", "LOCAL", "SessionContext", "removed", NULL, "Local context removal; see release and PFCP outcomes", true);
+    smf_session_control_cancel(sess);
+    smf_session_control_clear(sess);
     smf_user_intent_clear(sess);
     smf_ue = smf_ue_find_by_id(sess->smf_ue_id);
     ogs_assert(smf_ue);

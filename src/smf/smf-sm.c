@@ -17,6 +17,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+#include "session-control.h"
 #include "ue-events.h"
 #include "context.h"
 #include "gtp-path.h"
@@ -101,6 +102,10 @@ void smf_state_operational(ogs_fsm_t *s, smf_event_t *e)
         break;
 
     case OGS_FSM_EXIT_SIG:
+        break;
+
+    case SMF_EVT_SESSION_CONTROL:
+        smf_session_control_event(e);
         break;
 
     case SMF_EVT_USER_INTENT:
@@ -770,8 +775,9 @@ void smf_state_operational(ogs_fsm_t *s, smf_event_t *e)
                 CASE(OGS_SBI_RESOURCE_NAME_UPDATE)
 #define ENABLE_PCF_INITIATED_SESSION_RELEASE 0
 #if !ENABLE_PCF_INITIATED_SESSION_RELEASE
-                    smf_npcf_smpolicycontrol_handle_update_notify(
-                            sess, stream, &sbi_message);
+                    if (!smf_session_control_request(sess, stream, &sbi_message, sbi_request))
+                        smf_npcf_smpolicycontrol_handle_update_notify(
+                                sess, stream, &sbi_message);
                     break;
                 CASE(OGS_SBI_RESOURCE_NAME_TERMINATE)
 #endif

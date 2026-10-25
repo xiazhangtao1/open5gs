@@ -4,6 +4,7 @@ const http = require('http');
 const crypto = require('crypto');
 const mongoose = require('mongoose');
 const requireAdmin = require('./core-admin');
+const {validateSessionConfig} = require('../lib/session-control');
 const SUPI = /^imsi-[0-9]{5,15}$/;
 const VERSION = /^"[0-9a-f-]{36}"$/i;
 const failure = (status, message, state) => Object.assign(new Error(message), {status, state});
@@ -11,7 +12,7 @@ const failure = (status, message, state) => Object.assign(new Error(message), {s
 // Two fixed SBI origins, bounded bodies, deadlines, no proxy and no automatic retry.
 function sbiClient() {
   const connections = new Map();
-  const request = (origin, path, method = 'GET', body, version) => new Promise((resolve, reject) => {
+  const request = (origin, path, method = 'GET', body, version, operationId) => new Promise((resolve, reject) => {
     let stream, timer, done = false, size = 0, status;
     const chunks = [];
     const finish = (err, value) => {
@@ -29,7 +30,7 @@ function sbiClient() {
         session.on('close', () => { if (connections.get(origin) === session) connections.delete(origin); });
       }
       stream = session.request({':path': path, ':method': method,
-        ...(body ? {'content-type': 'application/json'} : {}), ...(version ? {'if-match': version} : {})});
+        ...(body ? {'content-type': 'application/json'} : {}), ...(version ? {'if-match': version} : {}), ...(operationId ? {'x-operation-id': operationId} : {})});
       timer = setTimeout(() => finish(failure(504, '请求超时，结果待确认；请刷新当前状态，勿重复提交', method === 'GET' ? 'failed' : 'unknown')), 5000);
       stream.on('response', h => { status = h[':status']; });
       stream.on('data', data => {
@@ -161,7 +162,8 @@ module.exports = function controlRouter(options = {}) {
   });
   const checked = result => {
     if (result.status < 200 || result.status >= 300) {
-      const message = ({404: '目标已不存在，请刷新', 409: '目标正在处理其他操作或不支持此修改，请刷新后检查',
+      const message = ({404: '目标已不存在，请刷新', 409: '终端未连接、会话繁忙或状态已变化，请重新读取后检查',
+        501: '当前会话类型暂不支持此操作',
         412: '会话或策略已变化，请刷新后重新编辑', 428: '缺少会话版本，请重新读取详情'})[result.status];
       throw failure(result.status, message || String(result.data.detail || result.data.title || '核心网拒绝了请求').slice(0, 300));
     }
@@ -195,11 +197,13 @@ module.exports = function controlRouter(options = {}) {
       try {
         const upstream = await fn(req);
         const data = checked(upstream);
-        result = {status: 202, data: {operationId: id, state: 'accepted', message: '核心网已受理，请查看当前状态及相关信令',
+        result = {status: data.status === 'unchanged' ? 200 : 202, data: {operationId: id,
+          state: data.status === 'unchanged' ? 'unchanged' : 'accepted',
+          message: data.status === 'unchanged' ? '参数没有变化，未发送修改信令' : '核心网已受理，请查看当前状态及相关信令',
           upstreamStatus: upstream.status, ...(data.appSessionId ? {appSessionId: data.appSessionId} : {}),
           ...(data.accepted !== undefined ? {accepted: data.accepted, skipped: data.skipped} : {})}};
       } catch (e) {
-        result = {status: e.status || 503, data: {operationId: id, state: e.state || (e.status >= 500 ? 'unknown' : 'failed'), error: e.status ? e.message : '控制服务暂时不可用'}};
+        result = {status: e.status || 503, data: {operationId: id, state: e.state || (e.status >= 500 && e.status !== 501 ? 'unknown' : 'failed'), error: e.status ? e.message : '控制服务暂时不可用'}};
       }
       try { await audit.result(id, {...record, ...result, kind: 'result', timestamp: new Date()}); }
       catch (e) { result.data.auditWarning = '操作记录保存失败，请保留本次结果'; }
@@ -232,6 +236,10 @@ module.exports = function controlRouter(options = {}) {
     if (!app) throw failure(404, '该专载不属于当前会话');
     if (app.intentManaged || app.deletePending) throw failure(409, '该专载由终端意图管理或正在删除');
     return send(pcf, '/xcn-dedicated-bearer/v1/bearers/' + req.params.app, method.toUpperCase(), method === 'patch' ? req.body : undefined, v);
+  }));
+  router.patch('/sessions/:supi/:psi', write('modify-session', req => {
+    identity(req); const v = version(req); validateSessionConfig(req.body);
+    return send(pcf, sessionPath(req), 'PATCH', req.body, v, req.get('X-Operation-ID'));
   }));
   router.delete('/sessions/:supi/:psi', write('release-session', req => {
     identity(req); return send(pcf, sessionPath(req), 'DELETE', undefined, version(req));

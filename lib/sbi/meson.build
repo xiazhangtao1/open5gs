@@ -27,6 +27,8 @@ libsbi_sources = files('''
     conv.c
     timer.c
     message.c
+    session-control.c
+    session-control.h
 
     mhd-server.c
     nghttp2-server.c

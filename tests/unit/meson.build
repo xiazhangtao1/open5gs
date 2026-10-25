@@ -29,6 +29,7 @@ testunit_unit_sources = files('''
     precedence-test.c
     qos-priority-test.c
     user-intent-test.c
+    session-control-test.c
 '''.split())
 
 testunit_unit_exe = executable('unit',

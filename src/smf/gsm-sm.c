@@ -17,6 +17,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+#include "session-control.h"
 #include "ue-events.h"
 #include "binding.h"
 #include "user-intent.h"
@@ -1841,6 +1842,14 @@ void smf_gsm_state_operational(ogs_fsm_t *s, smf_event_t *e)
 
         switch (nas_message->gsm.h.message_type) {
         case OGS_NAS_5GS_PDU_SESSION_MODIFICATION_REQUEST:
+            if (smf_session_control_busy(sess)) {
+                ogs_pkbuf_t *reject = gsm_build_pdu_session_modification_reject(
+                        sess, OGS_5GSM_CAUSE_REQUEST_REJECTED_UNSPECIFIED);
+                if (reject) smf_sbi_send_sm_context_update_error_n1_n2_message(stream,
+                        OGS_SBI_HTTP_STATUS_BAD_REQUEST, reject,
+                        OpenAPI_n2_sm_info_type_NULL, NULL);
+                break;
+            }
             if (HOME_ROUTED_ROAMING_IN_VSMF(sess)) {
                 sess->nsmf_param.request_indication =
                     OpenAPI_request_indication_UE_REQ_PDU_SES_MOD;
@@ -1863,11 +1872,19 @@ void smf_gsm_state_operational(ogs_fsm_t *s, smf_event_t *e)
             break;
 
         case OGS_NAS_5GS_PDU_SESSION_MODIFICATION_COMMAND_REJECT:
+            if (smf_session_control_nas(sess, nas_message->gsm.h.procedure_transaction_identity, false)) {
+                ogs_sbi_send_http_status_no_content(stream);
+                break;
+            }
             smf_user_intent_rejected(sess, nas_message->gsm.h.procedure_transaction_identity);
             ogs_sbi_send_http_status_no_content(stream);
             break;
 
         case OGS_NAS_5GS_PDU_SESSION_MODIFICATION_COMPLETE:
+            if (smf_session_control_nas(sess, nas_message->gsm.h.procedure_transaction_identity, true)) {
+                ogs_sbi_send_http_status_no_content(stream);
+                break;
+            }
 
             smf_ue_event(sess, "ACTION", "UE->SMF", "SessionModification", "completed", NULL, NULL, true);
             smf_user_intent_complete(sess, nas_message->gsm.h.procedure_transaction_identity);
@@ -1990,7 +2007,12 @@ void smf_gsm_state_operational(ogs_fsm_t *s, smf_event_t *e)
             }
             break;
 
+        case OpenAPI_n2_sm_info_type_PDU_RES_MOD_FAIL:
+            if (smf_session_control_n2(sess, stream, pkbuf, false)) break;
+            ogs_sbi_server_send_error(stream, 409, NULL, "Unexpected PDU resource modification failure", NULL, NULL);
+            break;
         case OpenAPI_n2_sm_info_type_PDU_RES_MOD_RSP:
+            if (smf_session_control_n2(sess, stream, pkbuf, true)) break;
             if (smf_user_intent_n2(sess, stream, pkbuf))
                 break;
     /*

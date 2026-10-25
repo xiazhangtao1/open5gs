@@ -6,9 +6,10 @@ const session = require('express-session');
 const csrf = require('lusca').csrf();
 const admin = require('../core-admin');
 const control = require('../core-control');
+const {bitrate, validateSessionConfig} = require('../../lib/session-control');
 
 async function main() {
-  let latestRole = 'admin', sent = [], clock = Date.now(), held, stall = false;
+  let latestRole = 'admin', sent = [], clock = Date.now(), held, stall = false, sessionStatus = 202;
   const version = '11111111-1111-1111-1111-111111111111';
   const pcf = http2.createServer();
   pcf.on('stream', (stream, headers) => {
@@ -16,12 +17,15 @@ async function main() {
     stream.on('data', b => { body += b; });
     stream.on('error', () => {});
     stream.on('end', () => {
-      sent.push({method: headers[':method'], path: headers[':path'], body: body ? JSON.parse(body) : null, version: headers['if-match']});
+      sent.push({method: headers[':method'], path: headers[':path'], body: body ? JSON.parse(body) : null, version: headers['if-match'], operationId: headers['x-operation-id']});
       if (stall && headers[':method'] !== 'GET') { held = stream; return; }
       if (headers[':method'] === 'GET') {
         stream.respond({':status': 200, 'content-type': 'application/json'});
         stream.end(JSON.stringify({controlVersion: version, supi: 'imsi-460110000000100', pduSessionId: 1,
           bearers: [{appSessionId: '7', pccRules: []}]}));
+      } else if (headers[':method'] === 'PATCH' && headers[':path'].includes('/xcn-session-control/')) {
+        stream.respond({':status': sessionStatus, 'content-type': 'application/json'});
+        stream.end(JSON.stringify({status: sessionStatus === 200 ? 'unchanged' : 'accepted'}));
       } else { stream.respond({':status': 204}); stream.end(); }
     });
   });
@@ -66,16 +70,24 @@ async function main() {
   }
   const root = '/api/core-control', target = root + '/sessions/imsi-460110000000100/1';
   const rule = {flowDescriptions: ['permit out ip from any to assigned'], qos: {'5qi': 9}};
+  const config = {defaultQos: {'5qi': 8, priorityLevel: 70, arp: {priorityLevel: 8,
+    preemptionCapability: 'NOT_PREEMPT', preemptionVulnerability: 'PREEMPTABLE'}},
+    sessionAmbr: {uplink: '10 Mbps', downlink: '20 Mbps'}};
   const write = (path, method, body, extra = {}) => {
     clock += 1000;
     return request(path, method, body, {'X-Operation-ID': 'operation-test-' + (++serial), 'If-Match': '"' + version + '"', ...extra});
   };
   try {
+    assert.strictEqual(bitrate('0.000001 Tbps'), 1000000);
+    for (const value of ['0 Mbps', '1 bps', '65535001 bps', 'NaN Mbps', '1e3 Mbps', '4.000001 Tbps'])
+      assert.throws(() => bitrate(value));
+    assert.deepStrictEqual(validateSessionConfig(config), config);
     const c = await request('/csrf'); cookie = c.cookie.split(';')[0]; token = c.data.token;
     assert.strictEqual((await request(target, 'GET', undefined, {}, false)).status, 401);
     latestRole = 'user';
     assert.strictEqual((await request(target)).status, 403, 'fresh role beats stale admin JWT claim');
     assert.strictEqual((await write('/api/db/Account/admin', 'PATCH', {roles: ['admin']})).status, 403);
+    assert.strictEqual((await write(target, 'PATCH', config)).status, 403);
     latestRole = 'admin';
     assert.strictEqual((await write(target + '/bearers', 'POST', rule, {'X-CSRF-TOKEN': 'invalid'})).status, 403);
     assert.strictEqual((await request(target)).status, 200);
@@ -92,6 +104,29 @@ async function main() {
     assert.strictEqual((await write(target + '/bearers', 'POST', {qos: {'5qi': 8}, flowDescriptions: rule.flowDescriptions}, {'X-Operation-ID': id})).status, 409);
     assert.strictEqual((await write(target + '/bearers/99', 'DELETE')).status, 404);
     assert.strictEqual((await write(target + '/bearers/7', 'PATCH', rule)).status, 202);
+    assert.strictEqual((await write(target, 'PATCH', config, {'X-CSRF-TOKEN': 'invalid'})).status, 403);
+    assert.strictEqual((await write(target, 'PATCH', config, {'If-Match': ''})).status, 428);
+    before = sent.length;
+    for (const invalid of [{...config, supi: 'imsi-460110000000999'},
+      {...config, defaultQos: {...config.defaultQos, '5qi': 1}},
+      {...config, defaultQos: {...config.defaultQos, priorityLevel: 128}},
+      {...config, sessionAmbr: {uplink: '1 bps', downlink: '20 Mbps'}}])
+      assert.strictEqual((await write(target, 'PATCH', invalid)).status, 400);
+    assert.strictEqual(sent.length, before, 'invalid session changes never reach the core');
+    const changed = await write(target, 'PATCH', config);
+    assert.strictEqual(changed.status, 202);
+    assert.strictEqual(sent[sent.length - 1].operationId, changed.data.operationId);
+    assert.deepStrictEqual(sent[sent.length - 1].body, config);
+    sessionStatus = 200;
+    const noop = await write(target, 'PATCH', config);
+    assert.strictEqual(noop.status, 200); assert.strictEqual(noop.data.state, 'unchanged');
+    for (const status of [409, 412, 501, 503]) {
+      sessionStatus = status;
+      const error = await write(target, 'PATCH', config);
+      assert.strictEqual(error.status, status);
+      assert.strictEqual(error.data.state, status >= 500 && status !== 501 ? 'unknown' : 'failed');
+    }
+    sessionStatus = 202;
     assert.strictEqual((await write(target, 'DELETE')).status, 202);
     assert.strictEqual(sent[sent.length - 1].path, '/xcn-session-control/v1/sessions/imsi-460110000000100/1');
     assert.strictEqual((await write(root + '/ues/imsi-460110000000100', 'DELETE')).status, 202);

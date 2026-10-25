@@ -17,6 +17,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+#include "session-control.h"
 #include "ngap-build.h"
 
 /**
@@ -405,6 +406,21 @@ ogs_pkbuf_t *ngap_build_pdu_session_resource_modify_request_transfer(
     ogs_debug("PDUSessionResourceModifyRequestTransfer");
     memset(&message, 0, sizeof(NGAP_PDUSessionResourceModifyRequestTransfer_t));
 
+    if (smf_session_control_ambr_changed(sess)) {
+        NGAP_PDUSessionAggregateMaximumBitRate_t *ambr;
+        ie = CALLOC(1, sizeof(*ie));
+        ogs_assert(ie);
+        ASN_SEQUENCE_ADD(&message.protocolIEs, ie);
+        ie->id = NGAP_ProtocolIE_ID_id_PDUSessionAggregateMaximumBitRate;
+        ie->criticality = NGAP_Criticality_reject;
+        ie->value.present = NGAP_PDUSessionResourceModifyRequestTransferIEs__value_PR_PDUSessionAggregateMaximumBitRate;
+        ambr = &ie->value.choice.PDUSessionAggregateMaximumBitRate;
+        asn_uint642INTEGER(&ambr->pDUSessionAggregateMaximumBitRateUL, sess->session.ambr.uplink);
+        asn_uint642INTEGER(&ambr->pDUSessionAggregateMaximumBitRateDL, sess->session.ambr.downlink);
+    }
+    if (smf_session_control_pending(sess) && !smf_session_control_qos_changed(sess))
+        goto encode;
+
     ie = CALLOC(1, sizeof(NGAP_PDUSessionResourceModifyRequestTransferIEs_t));
     ogs_assert(ie);
     ASN_SEQUENCE_ADD(&message.protocolIEs, ie);
@@ -532,6 +548,7 @@ ogs_pkbuf_t *ngap_build_pdu_session_resource_modify_request_transfer(
         }
     }
 
+encode:
     return ogs_asn_encode(
             &asn_DEF_NGAP_PDUSessionResourceModifyRequestTransfer, &message);
 }

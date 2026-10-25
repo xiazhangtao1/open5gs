@@ -215,6 +215,8 @@ class Cache:
                         if p.get("qos_flows") is not None and (not isinstance(p["qos_flows"], list)
                                 or len(p["qos_flows"]) > 63 or not all(isinstance(q, dict) for q in p["qos_flows"])):
                             raise ValueError("invalid QoS flows")
+                        if p.get("session_control") is not None and not isinstance(p["session_control"], dict):
+                            raise ValueError("invalid session control snapshot")
         source = self.source(name)
         old = source.copy()
         source.update(data=data, updated_at=time.time(), error=None, errors=0, interval=interval)
@@ -265,7 +267,7 @@ class Cache:
                 matches = [s for s in pdu_list if type(p.get("psi")) is int and p["psi"] > 0
                            and s.get("psi") == p["psi"]]
                 match = matches[0] if len(matches) == 1 and compatible(p, matches[0]) else {}
-                for k in ("ipv4", "ipv6", "pdu_state", "upf_seid", "qos_flows", "n3"):
+                for k in ("ipv4", "ipv6", "pdu_state", "upf_seid", "qos_flows", "n3", "session_control"):
                     p[k] = copy.deepcopy(match.get(k))
                 p["smf_info_status"] = "available" if match else "not-matched" if self.source("smf_pdus")["updated_at"] else "unavailable"
         ue_map = {}
@@ -293,7 +295,8 @@ class Cache:
             if keyed:
                 matches = [p for p in keyed if str(p["upf_seid"]) == str(s["seid"])]
             p = matches[0] if len(matches) == 1 and compatible(s, matches[0]) else {}
-            s.update(qos_flows=copy.deepcopy(p.get("qos_flows", [])), psi=p.get("psi"), snssai=p.get("snssai"), n3=p.get("n3"),
+            s.update(session_control=copy.deepcopy(p.get("session_control")),
+                     qos_flows=copy.deepcopy(p.get("qos_flows", [])), psi=p.get("psi"), snssai=p.get("snssai"), n3=p.get("n3"),
                      active_in_amf=bool(p.get("psi") and any(
                          a.get("psi") == p["psi"] and compatible(a, p) for a in ue.get("pdu_sessions", []))))
             totals = {f"{d}_{k}": 0 for d in ("ul", "dl") for k in ("bps", "pps", "bytes", "packets")}

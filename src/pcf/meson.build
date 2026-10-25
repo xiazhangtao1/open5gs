@@ -17,6 +17,8 @@
 
 libpcf_sources = files('''
     context.c
+    session-control.c
+    session-control.h
     precedence.c
     metrics.c
     event.c

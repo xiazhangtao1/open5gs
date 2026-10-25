@@ -120,6 +120,7 @@ typedef struct ogs_pfcp_xact_s {
 #define OGS_PFCP_MODIFY_URR_TIME_THRESH ((uint64_t)1<<34)
 #define OGS_PFCP_MODIFY_SM_POLICY_UPDATE ((uint64_t)1<<35)
 #define OGS_PFCP_MODIFY_USER_INTENT ((uint64_t)1<<36)
+#define OGS_PFCP_MODIFY_SESSION_CONTROL ((uint64_t)1<<37)
     uint64_t        modify_flags;
     uint64_t        intent_generation;
     /* CP-local metadata, not carried on the PFCP wire. */

@@ -2919,8 +2919,10 @@ static int parse_json(ogs_sbi_message_t *message,
             break;
 
         CASE("xcn-session-control")
+            /* PCF handles the versioned management body itself. */
+            break;
         CASE("xcn-core-query")
-            /* PCF query API uses URL parameters only. */
+            /* Read-only query API uses URL parameters only. */
             break;
 
         CASE(OGS_SBI_SERVICE_NAME_N32C_HANDSHAKE)

@@ -320,13 +320,19 @@ int amf_namf_comm_handle_n1_n2_message_transfer(
         break;
 
     case OpenAPI_ngap_ie_type_PDU_RES_MOD_REQ:
-        if (!n1buf) {
-            ogs_error("[%s] No N1 SM Content", amf_ue->supi);
-            return OGS_ERROR;
-        }
         if (!n2buf) {
             ogs_error("[%s] No N2 SM Content", amf_ue->supi);
             return OGS_ERROR;
+        }
+
+        /* A QoS priority/ARP change can carry N2 without changing NAS QoS.
+         * This management phase supports immediately connected UEs only. */
+        if (!n1buf && (!ran_ue_find_by_id(amf_ue->ran_ue_id) ||
+                !(CONTEXT_SETUP_ESTABLISHED(amf_ue)))) {
+            ogs_pkbuf_free(n2buf);
+            ogs_sbi_server_send_error(stream, 409, recvmsg,
+                    "N2-only modification requires an established RAN connection", NULL, NULL);
+            return OGS_OK;
         }
 
         if (CM_IDLE(amf_ue)) {

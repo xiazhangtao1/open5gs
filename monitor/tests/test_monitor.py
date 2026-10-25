@@ -47,6 +47,26 @@ def seeded():
 
 
 class CacheTests(unittest.TestCase):
+    def test_session_control_observation_uses_shared_cache_and_exact_session(self):
+        cache = seeded()
+        rows = [fixtures.pdu()]
+        expected = {"confirmed": {"defaultQos": {"5qi": 9}},
+                    "operation": {"state": "unknown", "operationId": "test-operation-001",
+                                  "stages": {"pfcp": "confirmed", "nas": "unknown", "ngap": "confirmed"}}}
+        rows[0]["pdu"][0]["session_control"] = copy.deepcopy(expected)
+        cache.replace("smf_pdus", rows, 10)
+        self.assertEqual(cache.sessions[0]["session_control"], expected)
+        self.assertEqual(cache.ues[0]["pdu_sessions"][0]["session_control"], expected)
+        cache.sessions[0]["session_control"]["operation"]["state"] = "confirmed"
+        self.assertEqual(rows[0]["pdu"][0]["session_control"], expected)
+        for bad in ([], "confirmed", 42):
+            invalid = copy.deepcopy(rows)
+            invalid[0]["pdu"][0]["session_control"] = bad
+            with self.assertRaises(ValueError):
+                cache.replace("smf_pdus", invalid, 10)
+        self.assertEqual(cache.sessions[0]["session_control"]["operation"]["state"], "confirmed")
+
+
     def test_rule_purpose_uses_interfaces_and_filters_before_pagination(self):
         cache = seeded()
         rows = snapshot()["sessions"]

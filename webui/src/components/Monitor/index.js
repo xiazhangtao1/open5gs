@@ -2,7 +2,7 @@ import {Component} from 'react';
 import axios from 'axios';
 import Chart from './Chart';
 import SignalDetails from './SignalDetails';
-import {SessionControls, UserRelease, BulkRelease} from './Controls';
+import {SessionControls, SessionPolicyStatus, UserRelease, BulkRelease} from './Controls';
 import Rules, {Purpose, ruleIdentifier} from './Rules';
 import {get} from './client';
 
@@ -300,6 +300,7 @@ export default class Monitor extends Component {
         })()}</td><td>{value(b['5qi'])}</td>
           <td>{rate(b.ul_bps)}</td><td>{rate(b.dl_bps)}</td></tr>)}</tbody></table></div> : <Empty>暂无承载数据。</Empty>}
       <Rules rules={s.rules} formatRate={rate}/>
+      <SessionPolicyStatus session={s}/>
       {this.canControl() && <SessionControls key={s.supi + "/" + s.psi + "/" + s.seid} session={s}/>}
     </section>;
   }

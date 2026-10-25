@@ -63,4 +63,29 @@ void testgsm_handle_pdu_session_modification_command(test_sess_t *sess,
 {
     ogs_assert(sess);
     ogs_assert(pdu_session_modification_command);
+    memset(&sess->modification, 0, sizeof(sess->modification));
+    sess->modification.ambr_present = !!(pdu_session_modification_command->presencemask &
+            OGS_NAS_5GS_PDU_SESSION_MODIFICATION_COMMAND_SESSION_AMBR_PRESENT);
+    sess->modification.rules_present = !!(pdu_session_modification_command->presencemask &
+            OGS_NAS_5GS_PDU_SESSION_MODIFICATION_COMMAND_AUTHORIZED_QOS_RULES_PRESENT);
+    if (sess->modification.ambr_present) {
+        sess->modification.ambr.uplink = ogs_nas_bitrate_to_uint64(&pdu_session_modification_command->session_ambr.uplink);
+        sess->modification.ambr.downlink = ogs_nas_bitrate_to_uint64(&pdu_session_modification_command->session_ambr.downlink);
+    }
+    if (pdu_session_modification_command->presencemask &
+            OGS_NAS_5GS_PDU_SESSION_MODIFICATION_COMMAND_AUTHORIZED_QOS_FLOW_DESCRIPTIONS_PRESENT) {
+        ogs_nas_qos_flow_description_t flows[OGS_NAS_MAX_NUM_OF_QOS_FLOW_DESCRIPTION];
+        int i;
+        memset(flows, 0, sizeof(flows));
+        sess->modification.flow_count = ogs_nas_parse_qos_flow_descriptions(flows,
+                &pdu_session_modification_command->authorized_qos_flow_descriptions);
+        ogs_assert(sess->modification.flow_count > 0);
+        sess->modification.qfi = flows[0].identifier;
+        ogs_assert(flows[0].code == OGS_NAS_MODIFY_NEW_QOS_FLOW_DESCRIPTION ||
+                   flows[0].code == OGS_NAS_CREATE_NEW_QOS_FLOW_DESCRIPTION ||
+                   flows[0].code == OGS_NAS_DELETE_NEW_QOS_FLOW_DESCRIPTION);
+        for (i = 0; i < flows[0].num_of_parameter; i++)
+            if (flows[0].param[i].identifier == OGS_NAX_QOS_FLOW_PARAMETER_ID_5QI)
+                sess->modification.five_qi = flows[0].param[i].qos_index;
+    }
 }

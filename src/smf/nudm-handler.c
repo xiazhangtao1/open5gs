@@ -226,8 +226,8 @@ bool smf_nudm_sdm_handle_get(smf_sess_t *sess, ogs_sbi_stream_t *stream,
             _5gQoSProfile = dnnConfiguration->_5g_qos_profile;
             if (_5gQoSProfile) {
                 sess->session.qos.index = _5gQoSProfile->_5qi;
-                sess->session.qos.arp.priority_level =
-                    _5gQoSProfile->priority_level;
+                sess->session.qos.priority_level = _5gQoSProfile->is_priority_level ?
+                    _5gQoSProfile->priority_level : 0;
                 if (_5gQoSProfile->arp) {
                     sess->session.qos.arp.priority_level =
                             _5gQoSProfile->arp->priority_level;

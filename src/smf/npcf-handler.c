@@ -17,6 +17,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+#include "session-control.h"
 #include "sbi-path.h"
 #include "pfcp-path.h"
 #include "nas-path.h"
@@ -479,8 +480,8 @@ bool smf_npcf_smpolicycontrol_handle_create(
             if (AuthDefQos && trigger_results[
                 OpenAPI_policy_control_request_trigger_DEF_QOS_CH] == true) {
                 sess->session.qos.index = AuthDefQos->_5qi;
-                sess->session.qos.arp.priority_level =
-                    AuthDefQos->priority_level;
+                sess->session.qos.priority_level = AuthDefQos->is_priority_level ?
+                    AuthDefQos->priority_level : 0;
                 if (AuthDefQos->arp) {
                     sess->session.qos.arp.priority_level =
                             AuthDefQos->arp->priority_level;
@@ -792,7 +793,8 @@ bool smf_npcf_smpolicycontrol_handle_update_notify(
             SmPolicyDecision->qos_decs ?
                 (int)SmPolicyDecision->qos_decs->count : 0);
 
-    if (!OGS_FSM_CHECK(&sess->sm, smf_gsm_state_operational) ||
+    if (smf_session_control_busy(sess) ||
+        !OGS_FSM_CHECK(&sess->sm, smf_gsm_state_operational) ||
         ogs_list_count(&sess->sm_policy_update_list) >= 32)
         return ogs_sbi_server_send_error(stream, 409, recvmsg,
                 "Session is releasing or policy queue is full", NULL, NULL);
@@ -831,7 +833,7 @@ static void smf_npcf_smpolicycontrol_process_update_queue(
     ogs_assert(sess);
 
     while (sess->sm_policy_update_in_progress == false &&
-            !smf_user_intent_busy(sess)) {
+            !smf_session_control_busy(sess) && !smf_user_intent_busy(sess)) {
         update = ogs_list_first(&sess->sm_policy_update_list);
         if (!update)
             return;
@@ -891,6 +893,7 @@ bool smf_npcf_smpolicycontrol_handle_terminate_notify(
     ogs_assert(recvmsg);
 
     if (!OGS_FSM_CHECK(&sess->sm, smf_gsm_state_operational) ||
+        smf_session_control_pending(sess) ||
         sess->sm_policy_update_in_progress || smf_user_intent_busy(sess) ||
         ogs_list_first(&sess->sm_policy_update_list))
         return ogs_sbi_server_send_error(stream, 409, recvmsg,
@@ -898,6 +901,7 @@ bool smf_npcf_smpolicycontrol_handle_terminate_notify(
     if (HOME_ROUTED_ROAMING_IN_HSMF(sess) || HOME_ROUTED_ROAMING_IN_VSMF(sess))
         return ogs_sbi_server_send_error(stream, 501, recvmsg,
                 "Management release currently supports local sessions", NULL, NULL);
+    smf_session_control_cancel(sess);
     if (smf_trigger_session_release(
             sess, NULL, OGS_PFCP_DELETE_TRIGGER_PCF_INITIATED) != OGS_OK)
         return ogs_sbi_server_send_error(stream, 503, recvmsg,

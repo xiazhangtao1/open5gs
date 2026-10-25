@@ -423,6 +423,14 @@ typedef struct test_sess_s {
 
     uint8_t psi;
 
+    /* Last decoded NAS modification, for protocol-level assertions. */
+    struct {
+        bool ambr_present, rules_present;
+        ogs_bitrate_t ambr;
+        int flow_count;
+        uint8_t qfi, five_qi;
+    } modification;
+
     uint8_t pti;
     uint8_t pdu_session_type;
     union {

@@ -1,4 +1,5 @@
 /* SPDX-License-Identifier: AGPL-3.0-or-later */
+#include "session-control.h"
 #include "ue-events.h"
 #include "user-intent.h"
 #include "binding.h"
@@ -573,7 +574,7 @@ bool smf_user_intent_busy(smf_sess_t *sess)
 }
 void smf_user_intent_resume(smf_sess_t *sess)
 {
-    start_next(sess);
+    if (!smf_session_control_busy(sess)) start_next(sess);
 }
 uint64_t smf_user_intent_generation(smf_sess_t *sess)
 {
@@ -613,6 +614,10 @@ bool smf_user_intent_request(smf_sess_t *sess, ogs_sbi_stream_t *stream,
             req->extended_protocol_configuration_options.length,
             smf_self()->user_intent.container_id, &smf_self()->user_intent.plmn, &value);
     if (parsed == OGS_DONE) return false;
+    if (smf_session_control_busy(sess)) {
+        reject(sess, stream, sess->pti, OGS_5GSM_CAUSE_REQUEST_REJECTED_UNSPECIFIED);
+        return true;
+    }
     if (parsed != OGS_OK || !sess->pti || sess->pti == 255) {
         uint8_t cause = parsed != OGS_OK ?
             OGS_5GSM_CAUSE_INVALID_MANDATORY_INFORMATION : OGS_5GSM_CAUSE_INVALID_PTI_VALUE;
@@ -687,7 +692,7 @@ static void start_next(smf_sess_t *sess)
     ogs_uuid_t uuid;
     cJSON *body, *qos, *arp;
     ogs_nas_5gs_message_t decoded;
-    if (!st || st->active || sess->sm_policy_update_in_progress) return;
+    if (!st || st->active || sess->sm_policy_update_in_progress || smf_session_control_busy(sess)) return;
     st->request = ogs_list_first(&st->queue);
     if (!st->request) return;
     ogs_list_remove(&st->queue, st->request);

@@ -29,6 +29,7 @@
 #include "ogs-diameter-s6b.h"
 #include "ogs-pfcp.h"
 #include "ogs-sbi.h"
+#include "sbi/session-control.h"
 #include "ogs-app.h"
 #include "ogs-ngap.h"
 #include "ogs-nas-5gs.h"
@@ -720,6 +721,7 @@ typedef struct smf_sess_s {
     ogs_list_t      sm_policy_update_list;
     bool            sm_policy_update_in_progress;
     struct smf_user_intent_s *user_intent;
+    struct smf_session_control_s *session_control;
 
     ogs_gtp_node_t  *gnode;
     ogs_pfcp_node_t *pfcp_node;

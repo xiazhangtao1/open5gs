@@ -1,9 +1,10 @@
 import {Component} from 'react';
 import axios from 'axios';
 import Session from 'modules/auth/session';
+import sessionConfig from '../../../lib/session-control';
 
-const labels = {'create-bearer': '新建专载', 'modify-bearer': '修改专载', 'delete-bearer': '删除专载', 'release-session': '释放会话', 'release-ue': '释放用户'};
-const states = {accepted: '已受理', failed: '失败', unknown: '结果待确认'};
+const labels = {'create-bearer': '新建专载', 'modify-bearer': '修改专载', 'delete-bearer': '删除专载', 'modify-session': '修改默认 QoS / Session-AMBR', 'release-session': '释放会话', 'release-ue': '释放用户'};
+const states = {accepted: '已受理', pending: '信令处理中', confirmed: '信令流程完成', failed: '失败', unknown: '结果待确认', unchanged: '参数未变化', 'not-required': '无需修改'};
 const message = e => (e.response && e.response.data && e.response.data.error) || e.message || '请求未完成，请核对当前状态';
 const operationId = () => {
   const bytes = new Uint8Array(16); window.crypto.getRandomValues(bytes);
@@ -22,7 +23,8 @@ const Button = ({children, danger, primary, ...props}) => <button type="button"
   className={'xcn-button' + (danger ? ' xcn-danger' : primary ? ' xcn-primary' : '')} {...props}>{children}</button>;
 const Notice = ({result}) => result ? <div className={'xcn-control-notice ' + (result.state || 'failed')} role="status">
   <strong>{states[result.state] || '操作提示'}</strong><span>{result.error || result.message}</span>
-  {result.auditWarning && <span>{result.auditWarning}</span>}</div> : null;
+  {result.auditWarning && <span>{result.auditWarning}</span>}
+  {result.operationId && <small>操作编号 {result.operationId}</small>}</div> : null;
 function failed(e) {
   return e.response && e.response.data && e.response.data.state ? e.response.data :
     {state: e.response ? 'failed' : 'unknown', error: message(e)};
@@ -73,6 +75,63 @@ function ruleBody(f) {
   return {qos, flowDescriptions: f.flows.split('\n').map(s => s.trim()).filter(Boolean)};
 }
 
+const rate = text => {
+  if (!text) return '—';
+  const match = /^(\d+) bps$/.exec(text);
+  if (!match) return text;
+  const n = Number(match[1]);
+  for (const [unit, divisor] of [['Tbps', 1e12], ['Gbps', 1e9], ['Mbps', 1e6], ['Kbps', 1e3]])
+    if (n >= divisor && n % divisor === 0) return n / divisor + ' ' + unit;
+  return text;
+};
+const configRows = value => {
+  const c = value || {}, q = c.defaultQos || {}, a = q.arp || {}, r = c.sessionAmbr || {};
+  return [['默认 5QI', q['5qi'] || '—'], ['调度优先级', q.priorityLevel || '使用 5QI 默认值'],
+    ['ARP 优先级', a.priorityLevel || '—'], ['抢占能力', a.preemptionCapability === 'MAY_PREEMPT' ? '允许抢占' : '不抢占'],
+    ['被抢占能力', a.preemptionVulnerability === 'PREEMPTABLE' ? '允许被抢占' : '不允许被抢占'],
+    ['Session-AMBR 上行', rate(r.uplink)], ['Session-AMBR 下行', rate(r.downlink)]];
+};
+function sessionForm(config) {
+  const q = config.defaultQos, a = q.arp;
+  return {kind: 'session', fiveQi: String(q['5qi']), priority: q.priorityLevel === undefined ? '' : String(q.priorityLevel),
+    arp: String(a.priorityLevel), capability: a.preemptionCapability, vulnerability: a.preemptionVulnerability,
+    uplink: rate(config.sessionAmbr.uplink), downlink: rate(config.sessionAmbr.downlink)};
+}
+function sessionBody(f) {
+  const defaultQos = {'5qi': Number(f.fiveQi), arp: {priorityLevel: Number(f.arp),
+    preemptionCapability: f.capability, preemptionVulnerability: f.vulnerability}};
+  if (f.priority !== '') defaultQos.priorityLevel = Number(f.priority);
+  return sessionConfig.validateSessionConfig({defaultQos, sessionAmbr: {uplink: f.uplink.trim(), downlink: f.downlink.trim()}});
+}
+
+// This component only reads the shared monitoring snapshot. It does not query a NF.
+export const SessionPolicyStatus = ({session: s}) => {
+  const snapshot = s.session_control;
+  if (!snapshot) return null;
+  const op = snapshot.operation;
+  const current = snapshot.confirmed || snapshot.observed;
+  const defaultFlow = (s.qos_flows || []).find(q => q.is_default === true);
+  return <section className="xcn-session-policy" aria-label="默认 QoS 与会话速率参数">
+    <div className="xcn-control-heading"><h4>默认 QoS / Session-AMBR</h4><small>默认 QFI {defaultFlow ? defaultFlow.qfi : '—'}</small></div>
+    <dl className="xcn-session-config">{configRows(current).map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>
+    {op && ['pending', 'unknown'].includes(op.state) && <div>
+      <p className="xcn-control-hint">上方为最近确认的配置，本次下发目标尚未全部确认。</p>
+      <details className="xcn-control-target"><summary>本次下发目标</summary>
+        <dl className="xcn-session-config">{configRows(op.target).map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>
+      </details>
+    </div>}
+    {op && <div className={'xcn-control-notice ' + op.state} role="status">
+      <strong>{states[op.state] || '结果待确认'}</strong>
+      <div className="xcn-control-stages">{[['pfcp', 'UPF'], ['nas', '终端'], ['ngap', '基站']].map(([key, label]) =>
+        <span key={key}>{label}：{states[(op.stages || {})[key]] || '待确认'}</span>)}</div>
+      {op.state === 'unknown' && <span>部分参数可能已下发，请核对信令。该会话暂停新的策略修改，可显式释放后重建。</span>}
+      {op.state === 'failed' && <span>修改未提交或被核心网拒绝，请重新读取会话后检查。</span>}
+      <small>操作编号 {op.operationId}</small>
+    </div>}
+    <p className="xcn-control-hint">仅作用于当前会话。Session-AMBR 是全部 Non-GBR 流的聚合速率参数；实际限速效果未验证。</p>
+  </section>;
+};
+
 export class SessionControls extends Component {
   state = {open: false, target: null, busy: false, loading: false, error: '', form: null, edit: null, confirm: null, result: null, revision: 0};
   componentDidMount() { this.active = true; }
@@ -83,10 +142,17 @@ export class SessionControls extends Component {
     try {
       const target = await control('get', this.path());
       if (this.active) this.setState({target, loading: false, readAt: Date.now()});
+      return target;
     } catch (e) { if (this.active) this.setState({target: null, loading: false, error: message(e)}); }
   };
   open = () => this.setState({open: true}, this.load);
   field = (key, v) => this.setState({form: {...this.state.form, [key]: v}});
+  editSession = async () => {
+    const target = await this.load();
+    if (this.active && target && target.sessionConfig &&
+        !(target.sessionControl && ['pending', 'unknown'].includes(target.sessionControl.state)))
+      this.setState({form: sessionForm(target.sessionConfig), edit: null, confirm: null, result: null});
+  };
   execute = async (method, suffix, data) => {
     if (this.state.busy) return;
     const version = this.state.target.controlVersion;
@@ -97,13 +163,16 @@ export class SessionControls extends Component {
       this.setState({result, form: null, edit: null, confirm: null, revision: this.state.revision + 1});
       await this.load();
     } catch (e) {
-      if (this.active) this.setState({result: failed(e), revision: this.state.revision + 1,
-        ...(e.response && [404, 409, 412].includes(e.response.status) ? {target: null, form: null, edit: null, confirm: null, error: '请重新读取会话后再操作'} : {})});
+      const result = failed(e);
+      if (this.active) this.setState({result, revision: this.state.revision + 1,
+        ...(result.state === 'unknown' || (e.response && [404, 409, 412].includes(e.response.status)) ?
+          {target: null, form: null, edit: null, confirm: null, error: '请重新读取会话并核对当前状态后再操作'} : {})});
     } finally { if (this.active) this.setState({busy: false}); }
   };
   editor() {
     const {form: f, edit, busy} = this.state;
     if (!f) return null;
+    if (f.kind === 'session') return this.sessionEditor();
     const number = (name, key, min, max, optional) => <label>{name}<input type="number" min={min} max={max} step="1"
       required={!optional} value={f[key]} disabled={busy || (key === 'precedence' && !!edit)}
       placeholder={optional ? '使用默认值' : ''} onChange={e => this.field(key, e.target.value)}/></label>;
@@ -127,9 +196,43 @@ export class SessionControls extends Component {
         <Button disabled={busy} onClick={() => this.setState({form: null, edit: null})}>取消</Button></div>
     </form>;
   }
+  sessionEditor() {
+    const {form: f, busy, confirm} = this.state;
+    if (confirm) return null;
+    return <form className="xcn-control-editor" onSubmit={e => {
+      e.preventDefault();
+      try { this.setState({confirm: {type: 'session-config', config: sessionBody(f)}, result: null}); }
+      catch (error) { this.setState({result: {state: 'failed', error: error.message}}); }
+    }}>
+      <h4>修改当前会话参数</h4>
+      <div className="xcn-control-grid">
+        <label>默认 5QI<select value={f.fiveQi} disabled={busy} onChange={e => this.field('fiveQi', e.target.value)}>
+          {sessionConfig.nonGbrFiveQis.map(q => <option key={q} value={q}>{q} · Non-GBR</option>)}</select></label>
+        <label>调度优先级（1–127，可留空）<input type="number" min="1" max="127" step="1" value={f.priority}
+          placeholder="使用 5QI 默认值" disabled={busy} onChange={e => this.field('priority', e.target.value)}/></label>
+        <label>ARP 优先级（1–15）<input type="number" min="1" max="15" step="1" required value={f.arp}
+          disabled={busy} onChange={e => this.field('arp', e.target.value)}/></label>
+        <label>抢占能力<select value={f.capability} disabled={busy} onChange={e => this.field('capability', e.target.value)}>
+          <option value="NOT_PREEMPT">不抢占其他承载</option><option value="MAY_PREEMPT">允许抢占</option></select></label>
+        <label>被抢占能力<select value={f.vulnerability} disabled={busy} onChange={e => this.field('vulnerability', e.target.value)}>
+          <option value="PREEMPTABLE">允许被抢占</option><option value="NOT_PREEMPTABLE">不允许被抢占</option></select></label>
+        {[['Session-AMBR 上行', 'uplink'], ['Session-AMBR 下行', 'downlink']].map(([label, key]) => <label key={key}>{label}
+          <input value={f[key]} required maxLength="40" placeholder="例如 10 Mbps" disabled={busy} onChange={e => this.field(key, e.target.value)}/></label>)}
+      </div>
+      <p className="xcn-control-hint">仅修改当前 PDU 会话，不修改签约。调度优先级与 ARP 是不同参数；AMBR 不表示已经实现实际限速。</p>
+      <div className="xcn-control-actions"><button type="submit" className="xcn-button xcn-primary" disabled={busy}>核对修改</button>
+        <Button disabled={busy} onClick={() => this.setState({form: null, confirm: null})}>取消</Button></div>
+    </form>;
+  }
   render() {
     const {session: s} = this.props;
     const {open, target, busy, loading, confirm, result, error, form} = this.state;
+    const observed = ((s.session_control || {}).operation || {});
+    const nativeOperation = (target || {}).sessionControl;
+    const operation = target && nativeOperation && observed.instance === target.controlInstance &&
+      observed.transaction === nativeOperation.transaction && observed.updatedAtUs >= nativeOperation.updatedAtUs ? observed : nativeOperation;
+    const nativeBusy = nativeOperation && ['pending', 'unknown'].includes(nativeOperation.state);
+    const policyBusy = nativeBusy || (operation && ['pending', 'unknown'].includes(operation.state));
     if (!s.supi || !s.psi) return null;
     if (!open) return <div className="xcn-control-launch"><Button onClick={this.open}>管理此会话</Button></div>;
     return <section className="xcn-controls" aria-label={'PSI ' + s.psi + ' 会话管理'}>
@@ -138,14 +241,19 @@ export class SessionControls extends Component {
       <Notice result={result}/>
       {loading && <p>正在读取当前策略…</p>}{error && <p className="xcn-control-error" role="alert">{error}</p>}
       {target && <div>
-        <div className="xcn-control-actions"><Button primary disabled={busy || loading || !!form || !!confirm || target.releasing}
+        <div className="xcn-control-actions"><Button primary disabled={busy || loading || !!form || !!confirm || target.releasing || policyBusy}
           onClick={() => this.setState({form: freshForm(), edit: null, result: null})}>在此会话新建专载</Button>
-          <Button danger disabled={busy || loading || !!form || !!confirm || target.releasing}
+          <Button disabled={busy || loading || !!form || !!confirm || target.releasing || policyBusy || !target.sessionConfig || s.cm_state !== 'connected'}
+            onClick={this.editSession}>修改默认 QoS / Session-AMBR</Button>
+          <Button danger disabled={busy || loading || !!form || !!confirm || target.releasing ||
+              (nativeOperation && nativeOperation.state === 'pending') || (operation && operation.state === 'pending')}
             onClick={() => this.setState({confirm: {type: 'session'}, result: null})}>{target.releasing ? '会话释放中' : '释放会话'}</Button></div>
+        {s.cm_state !== 'connected' && <p className="xcn-control-hint">终端连接后可修改默认 QoS / Session-AMBR。</p>}
+        {operation && policyBusy && <p className="xcn-control-hint">{nativeBusy && operation.state === 'confirmed' ? '管理侧尚未确认结果，请重新读取后核对' : states[operation.state]}，暂不能提交新的策略修改。</p>}
         <div className="xcn-control-rule-list">{(target.bearers || []).map(app => {
           const rule = (app.pccRules || [])[0] || {}, qos = rule.qos || {};
           const observed = (s.qos_flows || []).find(q => q.pcc_rule_id === rule.pccRuleId);
-          const disabled = busy || loading || !!form || !!confirm || target.releasing || app.intentManaged || app.deletePending;
+          const disabled = busy || loading || !!form || !!confirm || target.releasing || policyBusy || app.intentManaged || app.deletePending;
           return <div className="xcn-control-rule" key={app.appSessionId}>
             <div><strong>专载 {app.appSessionId}</strong><span>5QI {qos['5qi']} {observed ? '· QFI ' + observed.qfi : ''}</span>
               <small>{app.intentManaged ? '由终端意图管理' : app.deletePending ? '正在删除' : '规则顺序 ' + rule.precedence}</small></div>
@@ -155,7 +263,15 @@ export class SessionControls extends Component {
           </div>;
         })}{!target.bearers.length && <p className="xcn-control-hint">此会话暂无可管理的专载，可在上方新建。</p>}</div>
         {this.editor()}
-        {confirm && <div className="xcn-control-confirm" role="group" aria-label="确认操作">
+        {confirm && confirm.type === 'session-config' && <div className="xcn-control-confirm xcn-config-confirm" role="group" aria-label="确认会话参数修改">
+          <h4>确认修改 PSI {s.psi} 的参数</h4><p>{s.supi} · {target.dnn} · {target.ipv4 || target.ipv6Prefix || '—'}</p>
+          <div className="xcn-config-comparison"><div className="xcn-config-comparison-head"><span>参数</span><span>当前配置</span><span>修改后</span></div>
+            {configRows(target.sessionConfig).map(([label, value], index) => <div key={label}><strong>{label}</strong><span>{value}</span><span>{configRows(confirm.config)[index][1]}</span></div>)}</div>
+          <p>该修改仅作用于当前会话。提交成功表示已受理，信令流程和实际限速效果需分别核对。</p>
+          <div className="xcn-control-actions"><Button primary disabled={busy} onClick={() => this.execute('patch', '', confirm.config)}>{busy ? '正在提交…' : '确认修改'}</Button>
+            <Button disabled={busy} onClick={() => this.setState({confirm: null})}>返回编辑</Button></div>
+        </div>}
+        {confirm && confirm.type !== 'session-config' && <div className="xcn-control-confirm" role="group" aria-label="确认操作">
           <h4>{confirm.type === 'session' ? '确认释放 PSI ' + s.psi : '确认删除专载 ' + confirm.app}</h4>
           <p>{confirm.type === 'session' ? '该会话的全部承载与数据连接将释放，终端注册和其他会话保留。' : '该专载的规则将移除，匹配业务可能回到默认流。'}</p>
           <div className="xcn-control-actions"><Button danger disabled={busy} onClick={() => this.execute('delete', confirm.type === 'session' ? '' : '/bearers/' + confirm.app)}>

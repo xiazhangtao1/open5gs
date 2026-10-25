@@ -20,6 +20,7 @@
 #include "sbi-path.h"
 
 #include "npcf-handler.h"
+#include "session-control.h"
 #include "precedence.h"
 
 #include <errno.h>
@@ -626,6 +627,7 @@ static cJSON *xcn_session_to_json(pcf_sess_t *sess)
     item = cJSON_CreateObject();
     ogs_assert(item);
 
+    pcf_session_control_json(sess, item);
     cJSON_AddStringToObject(item, "controlVersion", sess->control_version);
     cJSON_AddBoolToObject(item, "releasing", sess->control_releasing);
     cJSON_AddNumberToObject(item, "pduSessionId", sess->psi);
@@ -3655,10 +3657,18 @@ static bool xcn_control_check(pcf_sess_t *sess, ogs_sbi_stream_t *stream,
     const char *version = ogs_sbi_header_get(request->http.headers, "if-match");
     char quoted[OGS_UUID_FORMATTED_LENGTH + 3];
     pcf_app_t *app;
+    bool busy = pcf_session_control_busy(sess,
+            !strcmp(message->h.method, OGS_SBI_HTTP_METHOD_DELETE) &&
+            !strcmp(message->h.service.name, "xcn-session-control"));
+    /* Expiring an uncertain operation also invalidates an older form. */
     ogs_snprintf(quoted, sizeof(quoted), "\"%s\"", sess->control_version);
     if ((required && !version) || (version && strcmp(version, quoted))) {
         xcn_send_error(stream, message, version ? 412 : 428,
                 "Session changed; refresh control information before submitting");
+        return false;
+    }
+    if (busy) {
+        xcn_send_error(stream, message, 409, "Session policy update pending or result uncertain");
         return false;
     }
     if (sess->control_releasing) {
@@ -3710,7 +3720,7 @@ bool pcf_xcn_session_control(ogs_sbi_stream_t *stream,
     cJSON *result;
     bool sent;
     if (!resource || strcmp(resource, "sessions") || !supi || !psi ||
-        message->h.resource.component[3] || strncmp(supi, "imsi-", 5) ||
+        strncmp(supi, "imsi-", 5) ||
         !supi[5] || strlen(supi) > 20 ||
         strspn(supi + 5, "0123456789") != strlen(supi + 5) ||
         !*psi || strlen(psi) > 2 || strspn(psi, "0123456789") != strlen(psi) ||
@@ -3719,6 +3729,14 @@ bool pcf_xcn_session_control(ogs_sbi_stream_t *stream,
     ue = pcf_ue_sm_find_by_supi((char *)supi);
     sess = ue ? pcf_sess_find_by_psi(ue, atoi(psi)) : NULL;
     if (!sess) return xcn_send_error(stream, message, 404, "No target session");
+    if (message->h.resource.component[3]) {
+        if (strcmp(message->h.resource.component[3], "operations") ||
+            !message->h.resource.component[4] || !message->h.resource.component[5] ||
+            strcmp(message->h.resource.component[5], "result") ||
+            message->h.resource.component[6] || strcmp(message->h.method, OGS_SBI_HTTP_METHOD_POST))
+            return xcn_send_error(stream, message, 400, "Invalid result resource");
+        return pcf_session_control_result(sess, stream, message, request);
+    }
     if (!strcmp(message->h.method, OGS_SBI_HTTP_METHOD_GET)) {
         result = xcn_session_to_json(sess);
         cJSON_AddStringToObject(result, "supi", supi);
@@ -3726,9 +3744,12 @@ bool pcf_xcn_session_control(ogs_sbi_stream_t *stream,
         cJSON_Delete(result);
         return sent;
     }
-    if (strcmp(message->h.method, OGS_SBI_HTTP_METHOD_DELETE))
+    if (strcmp(message->h.method, OGS_SBI_HTTP_METHOD_DELETE) &&
+        strcmp(message->h.method, OGS_SBI_HTTP_METHOD_PATCH))
         return xcn_send_error(stream, message, 405, "Method not allowed");
     if (!xcn_control_check(sess, stream, message, request, true)) return false;
+    if (!strcmp(message->h.method, OGS_SBI_HTTP_METHOD_PATCH))
+        return pcf_session_control_update(sess, stream, message, request);
     if (!sess->notification_uri || !sess->nsmf.client)
         return xcn_send_error(stream, message, 409, "Session policy not ready");
     sess->control_releasing = true;

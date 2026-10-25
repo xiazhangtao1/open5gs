@@ -262,8 +262,8 @@ ogs_sbi_request_t *smf_npcf_smpolicycontrol_build_create(
     memset(&SubsDefQos, 0, sizeof(SubsDefQos));
     SubsDefQos.arp = &Arp;
     SubsDefQos._5qi = sess->session.qos.index;
-    SubsDefQos.is_priority_level = true;
-    SubsDefQos.priority_level = sess->session.qos.arp.priority_level;
+    SubsDefQos.is_priority_level = sess->session.qos.priority_level != 0;
+    SubsDefQos.priority_level = sess->session.qos.priority_level;
 
     SmPolicyContextData.subs_def_qos = &SubsDefQos;
 

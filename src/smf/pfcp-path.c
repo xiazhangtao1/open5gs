@@ -17,6 +17,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+#include "session-control.h"
 #include "ue-events.h"
 #include "sbi-path.h"
 #include "pfcp-path.h"
@@ -339,6 +340,9 @@ static void sess_5gc_timeout(ogs_pfcp_xact_t *xact, void *data)
         if ((xact->modify_flags & OGS_PFCP_MODIFY_USER_INTENT) &&
             xact->intent_generation == smf_user_intent_generation(sess))
             smf_user_intent_pfcp(sess, xact->modify_flags, false);
+        if ((xact->modify_flags & OGS_PFCP_MODIFY_SESSION_CONTROL) &&
+            xact->intent_generation == smf_session_control_generation(sess))
+            smf_session_control_pfcp(sess, false);
         if (xact->modify_flags & OGS_PFCP_MODIFY_SM_POLICY_UPDATE)
             smf_npcf_smpolicycontrol_complete_update(sess);
         break;
@@ -673,6 +677,8 @@ int smf_5gc_pfcp_send_all_pdr_modification_request(
             sess->event_establishment.stream_id == xact->assoc_stream_id &&
             flags == (OGS_PFCP_MODIFY_DL_ONLY|OGS_PFCP_MODIFY_ACTIVATE))
         sess->event_establishment.xact_id = xact->id;
+    if (flags & OGS_PFCP_MODIFY_SESSION_CONTROL)
+        xact->intent_generation = smf_session_control_generation(sess);
     if (flags & OGS_PFCP_MODIFY_USER_INTENT)
         xact->intent_generation = smf_user_intent_generation(sess);
     xact->delete_trigger = trigger;
@@ -739,6 +745,8 @@ int smf_5gc_pfcp_send_qos_flow_list_modification_request(
 
     xact->local_seid = sess->smf_n4_seid;
     xact->modify_flags = flags | OGS_PFCP_MODIFY_SESSION;
+    if (flags & OGS_PFCP_MODIFY_SESSION_CONTROL)
+        xact->intent_generation = smf_session_control_generation(sess);
     if (flags & OGS_PFCP_MODIFY_USER_INTENT)
         xact->intent_generation = smf_user_intent_generation(sess);
 

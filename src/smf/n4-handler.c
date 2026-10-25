@@ -17,6 +17,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+#include "session-control.h"
 #include "context.h"
 #include "s5c-build.h"
 #include "pfcp-path.h"
@@ -283,6 +284,11 @@ void smf_5gc_n4_handle_session_modification_response(
     next_offset = xact->handover_next_offset;
     more = xact->handover_more;
     flags = xact->modify_flags;
+    if ((flags & OGS_PFCP_MODIFY_SESSION_CONTROL) &&
+        (!sess || xact->intent_generation != smf_session_control_generation(sess))) {
+        ogs_pfcp_xact_commit(xact);
+        return;
+    }
     if ((flags & OGS_PFCP_MODIFY_USER_INTENT) &&
         (!sess || xact->intent_generation != smf_user_intent_generation(sess))) {
         ogs_pfcp_xact_commit(xact);
@@ -436,6 +442,10 @@ void smf_5gc_n4_handle_session_modification_response(
         status = sbi_status_from_pfcp(pfcp_cause_value);
     }
 
+    if (sess && (flags & OGS_PFCP_MODIFY_SESSION_CONTROL)) {
+        smf_session_control_pfcp(sess, status == OGS_SBI_HTTP_STATUS_OK);
+        return;
+    }
     if (sess && (flags & OGS_PFCP_MODIFY_USER_INTENT)) {
         smf_user_intent_pfcp(sess, flags, status == OGS_SBI_HTTP_STATUS_OK);
         return;

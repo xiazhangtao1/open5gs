@@ -1667,7 +1667,6 @@ ogs_pkbuf_t *ngap_build_pdu_session_resource_modify_request(
     NGAP_NAS_PDU_t *nAS_PDU = NULL;
     OCTET_STRING_t *transfer = NULL;
 
-    ogs_assert(gmmbuf);
     ogs_assert(n2smbuf);
     ogs_assert(sess);
 
@@ -1734,11 +1733,13 @@ ogs_pkbuf_t *ngap_build_pdu_session_resource_modify_request(
 
     PDUSessionItem->pDUSessionID = sess->psi;
 
-    PDUSessionItem->nAS_PDU = nAS_PDU = CALLOC(1, sizeof(NGAP_NAS_PDU_t));
-    nAS_PDU->size = gmmbuf->len;
-    nAS_PDU->buf = CALLOC(nAS_PDU->size, sizeof(uint8_t));
-    memcpy(nAS_PDU->buf, gmmbuf->data, nAS_PDU->size);
-    ogs_pkbuf_free(gmmbuf);
+    if (gmmbuf) {
+        PDUSessionItem->nAS_PDU = nAS_PDU = CALLOC(1, sizeof(NGAP_NAS_PDU_t));
+        nAS_PDU->size = gmmbuf->len;
+        nAS_PDU->buf = CALLOC(nAS_PDU->size, sizeof(uint8_t));
+        memcpy(nAS_PDU->buf, gmmbuf->data, nAS_PDU->size);
+        ogs_pkbuf_free(gmmbuf);
+    }
 
     transfer = &PDUSessionItem->pDUSessionResourceModifyRequestTransfer;
     transfer->size = n2smbuf->len;

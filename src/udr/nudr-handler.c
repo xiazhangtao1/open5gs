@@ -897,8 +897,8 @@ bool udr_nudr_dr_handle_subscription_provisioned(
                 _5gQoSProfile = ogs_calloc(1, sizeof(*_5gQoSProfile));
                 ogs_assert(_5gQoSProfile);
                 _5gQoSProfile->_5qi = session->qos.index;
-                _5gQoSProfile->is_priority_level = true;
-                _5gQoSProfile->priority_level = session->qos.arp.priority_level;
+                _5gQoSProfile->is_priority_level = session->qos.priority_level != 0;
+                _5gQoSProfile->priority_level = session->qos.priority_level;
                 _5gQoSProfile->arp = ogs_calloc(1, sizeof(OpenAPI_arp_t));
                 ogs_assert(_5gQoSProfile->arp);
                 _5gQoSProfile->arp->priority_level =

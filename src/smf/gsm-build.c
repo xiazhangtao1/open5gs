@@ -17,6 +17,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+#include "session-control.h"
 #include "ue-events.h"
 #include "gsm-build.h"
 
@@ -352,8 +353,21 @@ ogs_pkbuf_t *gsm_build_pdu_session_modification_command(
     message.gsm.h.extended_protocol_discriminator =
             OGS_NAS_EXTENDED_PROTOCOL_DISCRIMINATOR_5GSM;
     message.gsm.h.pdu_session_identity = sess->psi;
-    message.gsm.h.procedure_transaction_identity = sess->pti;
+    message.gsm.h.procedure_transaction_identity = smf_session_control_pending(sess) ? 0 : sess->pti;
     message.gsm.h.message_type = OGS_NAS_5GS_PDU_SESSION_MODIFICATION_COMMAND;
+
+    if (smf_session_control_ambr_changed(sess)) {
+        uint8_t unit;
+        uint16_t value;
+        ogs_nas_session_ambr_t *ambr = &pdu_session_modification_command->session_ambr;
+        if (!ogs_sbi_session_ambr_encode(sess->session.ambr.uplink, &unit, &value)) return NULL;
+        ambr->uplink.unit = unit; ambr->uplink.value = value;
+        if (!ogs_sbi_session_ambr_encode(sess->session.ambr.downlink, &unit, &value)) return NULL;
+        ambr->downlink.unit = unit; ambr->downlink.value = value;
+        ambr->length = 6;
+        pdu_session_modification_command->presencemask |=
+            OGS_NAS_5GS_PDU_SESSION_MODIFICATION_COMMAND_SESSION_AMBR_PRESENT;
+    }
 
     /* QoS rule */
     if (HOME_ROUTED_ROAMING_IN_VSMF(sess)) {

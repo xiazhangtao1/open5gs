@@ -64,6 +64,7 @@ typedef enum {
 
     SMF_EVT_SESSION_RELEASE,
     SMF_EVT_USER_INTENT,
+    SMF_EVT_SESSION_CONTROL,
 
     SMF_EVT_TOP,
 

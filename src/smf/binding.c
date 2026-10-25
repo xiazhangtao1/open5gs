@@ -17,6 +17,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+#include "session-control.h"
 #include "binding.h"
 #include "user-intent.h"
 #include "s5c-build.h"
@@ -560,6 +561,8 @@ bool smf_qos_flow_binding(smf_sess_t *sess)
     uint64_t pfcp_flags, check;
 
     ogs_assert(sess);
+
+    if (smf_session_control_busy(sess)) return false;
 
     pfcp_flags = OGS_PFCP_MODIFY_NETWORK_REQUESTED;
 

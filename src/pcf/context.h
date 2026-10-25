@@ -23,6 +23,7 @@
 #include "ogs-app.h"
 #include "ogs-crypt.h"
 #include "ogs-sbi.h"
+#include "sbi/session-control.h"
 #include "ogs-dbi.h"
 
 #include "pcf-sm.h"
@@ -110,6 +111,10 @@ struct pcf_sess_s {
     /* Opaque instance/version token for conditional management writes. */
     char control_version[OGS_UUID_FORMATTED_LENGTH + 1];
     bool control_releasing;
+    char control_instance[OGS_UUID_FORMATTED_LENGTH + 1];
+    bool session_config_ready, session_config_confirmed;
+    ogs_sbi_session_config_t session_config;
+    ogs_sbi_session_operation_t session_operation;
 
     /* BSF sends the RESPONSE
      * of [POST] /nbsf-management/v1/PcfBindings */

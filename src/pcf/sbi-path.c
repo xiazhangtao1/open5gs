@@ -18,6 +18,7 @@
  */
 
 #include "sbi-path.h"
+#include "session-control.h"
 
 int pcf_sbi_open(void)
 {
@@ -482,8 +483,8 @@ bool pcf_sbi_send_smpolicycontrol_create_response(
 
         AuthDefQos.is__5qi = true;
         AuthDefQos._5qi = session->qos.index;
-        AuthDefQos.is_priority_level = true;
-        AuthDefQos.priority_level = session->qos.arp.priority_level;
+        AuthDefQos.is_priority_level = session->qos.priority_level != 0;
+        AuthDefQos.priority_level = session->qos.priority_level;
 
         if (session->qos.arp.pre_emption_capability ==
                 OGS_5GC_PRE_EMPTION_ENABLED)
@@ -510,8 +511,8 @@ bool pcf_sbi_send_smpolicycontrol_create_response(
 
         if (sess->subscribed_default_qos->_5qi != AuthDefQos._5qi)
             triggered = true;
-        if (sess->subscribed_default_qos->priority_level !=
-                AuthDefQos.priority_level)
+        if (sess->subscribed_default_qos->is_priority_level != AuthDefQos.is_priority_level ||
+            sess->subscribed_default_qos->priority_level != AuthDefQos.priority_level)
             triggered = true;
         if (sess->subscribed_default_qos->arp) {
             if (sess->subscribed_default_qos->arp->priority_level !=
@@ -531,6 +532,8 @@ bool pcf_sbi_send_smpolicycontrol_create_response(
                 (void *)OpenAPI_policy_control_request_trigger_DEF_QOS_CH);
 
     }
+
+    pcf_session_control_initial(sess, SessionRule);
 
     SessRuleMap = OpenAPI_map_create(
             SessionRule->sess_rule_id, SessionRule);

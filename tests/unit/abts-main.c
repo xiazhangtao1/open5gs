@@ -40,6 +40,7 @@ abts_suite *test_crash(abts_suite *suite);
 abts_suite *test_ipfw(abts_suite *suite);
 abts_suite *test_precedence(abts_suite *suite);
 abts_suite *test_user_intent(abts_suite *suite);
+abts_suite *test_session_control(abts_suite *suite);
 abts_suite *test_qos_priority(abts_suite *suite);
 
 const struct testlist {
@@ -57,6 +58,7 @@ const struct testlist {
     {test_precedence},
     {test_qos_priority},
     {test_user_intent},
+    {test_session_control},
     {NULL},
 };
 
