@@ -398,6 +398,10 @@ vpp:
     # Keep the container alive while the CPUSet controller converges after a
     # node restart. A missing or invalid allocation still fails after timeout.
     cpusetWaitSeconds: 120
+    # Opt-in workaround for measured CFS stalls on dedicated polling CPUs.
+    # Requires the real kernel cpuset to match the validated allocation first.
+    # Only VPP's own time quota is removed; ancestor/other-container limits stay.
+    disableCfsQuota: false
   n3:
     interfaceAddress: ""
     defaultGateway: ""

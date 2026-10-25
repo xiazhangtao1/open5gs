@@ -666,6 +666,22 @@ The normal mode is `dense`. An explicit numeric `workers` value remains
 available for diagnostic A/B tests. `isolated` may be selected when the CPU
 allocation provides `workers + 1` distinct physical cores.
 
+`vpp.cpu.disableCfsQuota` defaults to `false`. On a platform where a repeated
+same-flow A/B demonstrates CFS bandwidth stalls in VPP polling threads, enable
+it explicitly with `--set vpp.cpu.disableCfsQuota=true`. The entrypoint waits
+until the **actual kernel cgroup cpuset** exactly matches the validated CPU
+allocation, then removes only the VPP container's own CPU time quota. An ISOCPU
+hint without the matching kernel cpuset is insufficient. Missing allocation,
+unwritable quota or failed readback stops startup. Both scoped and whole-tree
+cgroup v1/v2 mounts resolve to the process's own leaf; parent quotas, other
+containers, CPU requests/limits and `SCHED_OTHER` are retained. No host-wide
+kubelet setting or new privilege/mount is added. This is a platform-specific
+workaround, not a general replacement for diagnosing thread load or sizing.
+Setting it back to `false` and completing the Helm rollout recreates the
+container with its normal Kubernetes quota. Check `cpu.stat` for new throttles
+after resource changes; an ancestor quota can still throttle the workload.
+See [the measured site A/B](../../docs/vpp-cfs-latency-validation.md).
+
 With one Worker, `vpp.n6.nat44.workers` stays empty because VPP rejects the
 `set nat workers` command unless at least two Workers exist. When allocating
 more VPP Workers, set it explicitly if NAT should use a selected worker set.

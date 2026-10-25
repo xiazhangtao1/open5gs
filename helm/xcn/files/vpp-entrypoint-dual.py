@@ -103,6 +103,77 @@ def allocated_cpus(limit, wait_seconds, poll_interval):
             time.sleep(min(poll_interval, deadline - now))
 
 
+def own_cgroup_file(controller, v1_name, v2_name):
+    """Resolve the process's leaf, including mounts exposing the whole tree."""
+    groups = [line.split(":", 2) for line in
+              Path("/proc/self/cgroup").read_text(encoding="ascii").splitlines()]
+    group = next((row for row in groups if controller in row[1].split(",")), None)
+    unified = group is None
+    if unified:
+        group = next((row for row in groups if row[0] == "0" and not row[1]), None)
+    if group is None:
+        raise ConfigError(f"cannot locate own {controller} cgroup")
+    group_path = Path(group[2])
+    for line in Path("/proc/self/mountinfo").read_text(encoding="ascii").splitlines():
+        left, right = line.split(" - ", 1)
+        fields, fs = left.split(), right.split()
+        if fs[0] != ("cgroup2" if unified else "cgroup"):
+            continue
+        if not unified and controller not in fs[2].split(","):
+            continue
+        root, mount = (Path(re.sub(r"\\([0-7]{3})",
+                                  lambda m: chr(int(m[1], 8)), value))
+                       for value in fields[3:5])
+        try:
+            relative = group_path.relative_to(root)
+        except ValueError:
+            continue
+        return mount / relative / (v2_name if unified else v1_name)
+    raise ConfigError(f"cannot locate own {controller} cgroup mount")
+
+
+def configure_cfs_quota(cpus, wait_seconds, poll_interval):
+    value = os.environ.get("VPP_DISABLE_CFS_QUOTA", "false").strip().lower()
+    if value not in ("true", "false", "1", "0"):
+        raise ConfigError("VPP_DISABLE_CFS_QUOTA must be true or false")
+    if value in ("false", "0"):
+        return
+
+    # An ISOCPU hint alone is insufficient: every auxiliary thread must also
+    # remain bounded by the real kernel cpuset before removing the time quota.
+    cpuset = own_cgroup_file("cpuset", "cpuset.cpus", "cpuset.cpus.effective")
+    deadline = time.monotonic() + wait_seconds
+    while True:
+        raw = cpuset.read_text(encoding="ascii").strip()
+        if raw and parse_cpuset(raw) == sorted(cpus):
+            break
+        if time.monotonic() >= deadline:
+            raise ConfigError(
+                f"refusing to disable CFS quota: actual cpuset {raw!r} "
+                f"does not match allocation {cpus}")
+        time.sleep(min(poll_interval, max(0, deadline - time.monotonic())))
+
+    quota = own_cgroup_file("cpu", "cpu.cfs_quota_us", "cpu.max")
+    before = quota.read_text(encoding="ascii").strip()
+    if quota.name == "cpu.max":
+        parts = before.split()
+        if (len(parts) != 2 or not parts[1].isdigit() or int(parts[1]) <= 0 or
+                (parts[0] != "max" and
+                 (not parts[0].isdigit() or int(parts[0]) <= 0))):
+            raise ConfigError(f"invalid own cgroup CPU quota {before!r}")
+        target = f"max {parts[1]}"
+    else:
+        if before != "-1" and (not before.isdigit() or int(before) <= 0):
+            raise ConfigError(f"invalid own cgroup CPU quota {before!r}")
+        target = "-1"
+    if before != target:
+        quota.write_text(target + "\n", encoding="ascii")
+    if quota.read_text(encoding="ascii").strip() != target:
+        raise ConfigError("own cgroup CPU quota update was not applied")
+    print(f"VPP own CFS quota: {before} -> {target}; kernel cpuset {cpus}; "
+          "ancestor quotas unchanged", flush=True)
+
+
 def parse_pcis(value):
     devices = sorted(item.strip().lower() for item in (value or "").split(",") if item.strip())
     if len(devices) != 2 or len(set(devices)) != 2:
@@ -302,6 +373,7 @@ def main():
         cpuset_wait_seconds = positive_integer("VPP_CPUSET_WAIT_SECONDS", 0)
         cpus = allocated_cpus(
             cpu_limit, cpuset_wait_seconds, poll_ms / 1000)
+        configure_cfs_quota(cpus, cpuset_wait_seconds, poll_ms / 1000)
         groups, layouts = affinity_layouts(cpus, worker_count)
         initial_mode = os.environ.get(
             "VPP_AFFINITY_INITIAL_MODE", "isolated").strip()

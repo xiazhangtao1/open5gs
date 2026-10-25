@@ -552,6 +552,8 @@ spec:
               value: {{ .Values.vpp.cpu.affinityPollMs | quote }}
             - name: VPP_CPUSET_WAIT_SECONDS
               value: {{ dig "cpusetWaitSeconds" 120 .Values.vpp.cpu | quote }}
+            - name: VPP_DISABLE_CFS_QUOTA
+              value: {{ dig "disableCfsQuota" false .Values.vpp.cpu | quote }}
             - name: VPP_N3_INTERFACE_ADDRESS
               value: {{ .Values.vpp.n3.interfaceAddress | quote }}
 {{- if ne (toString .Values.vpp.n3.defaultGateway) "" }}
