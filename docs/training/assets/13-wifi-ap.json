@@ -1,0 +1,118 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "模拟 UE 下挂 Wi-Fi：AP / 桥接模式",
+    "locale": "zh-CN",
+    "output": "docs/training/assets/13-wifi-ap.html",
+    "quality_profile": "showcase"
+  },
+  "components": [
+    {
+      "id": "n0",
+      "type": "external",
+      "label": "手机或电脑",
+      "sublabel": "192.168.40.10:40000",
+      "pos": [
+        40,
+        40
+      ],
+      "size": [
+        210,
+        76
+      ]
+    },
+    {
+      "id": "n1",
+      "type": "backend",
+      "label": "Wi-Fi AP / 桥接",
+      "sublabel": "不进行 IP 源转换",
+      "pos": [
+        410,
+        40
+      ],
+      "size": [
+        210,
+        76
+      ]
+    },
+    {
+      "id": "n2",
+      "type": "backend",
+      "label": "模拟 UE · LAN",
+      "sublabel": "dpdk0 / 192.168.40.1/22",
+      "pos": [
+        780,
+        40
+      ],
+      "size": [
+        210,
+        76
+      ]
+    },
+    {
+      "id": "n3",
+      "type": "backend",
+      "label": "模拟 UE · memif",
+      "sublabel": "SNAT → 10.45.0.2:p1",
+      "pos": [
+        780,
+        260
+      ],
+      "size": [
+        210,
+        76
+      ]
+    },
+    {
+      "id": "n4",
+      "type": "external",
+      "label": "基站及后续路径",
+      "sublabel": "核心 DN / 边缘 DN",
+      "pos": [
+        410,
+        260
+      ],
+      "size": [
+        210,
+        76
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "from": "n0",
+      "to": "n1",
+      "label": "Wi-Fi",
+      "variant": "emphasis"
+    },
+    {
+      "from": "n1",
+      "to": "n2",
+      "label": "以太网",
+      "variant": "emphasis"
+    },
+    {
+      "from": "n2",
+      "to": "n3",
+      "label": "LAN → UE NAT",
+      "variant": "emphasis"
+    },
+    {
+      "from": "n3",
+      "to": "n4",
+      "label": "无线/仿真",
+      "variant": "emphasis"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "读图说明",
+      "items": [
+        "AP 接入侧使用模拟 UE LAN 网段；DHCP/DNS 需另行提供，函数本身不配置 DHCP。",
+        "下行先逆 UE NAT，再经 LAN 与 AP 返回 192.168.40.10。"
+      ]
+    }
+  ]
+}

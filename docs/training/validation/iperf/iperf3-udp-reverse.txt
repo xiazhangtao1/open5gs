@@ -1,0 +1,34 @@
+SERVER: iperf3 -s -B 127.0.0.1 -p 38785
+CLIENT: iperf3 -c 127.0.0.1 -p 38785 -t 2 -b 1M -u -l 1200 -R
+
+CLIENT OUTPUT
+Connecting to host 127.0.0.1, port 38785
+Reverse mode, remote host 127.0.0.1 is sending
+[  5] local 127.0.0.1 port 46489 connected to 127.0.0.1 port 38785
+[ ID] Interval           Transfer     Bitrate         Jitter    Lost/Total Datagrams
+[  5]   0.00-1.00   sec   129 KBytes  1.06 Mbits/sec  0.006 ms  0/110 (0%)  
+[  5]   1.00-2.00   sec   122 KBytes   998 Kbits/sec  0.005 ms  0/104 (0%)  
+- - - - - - - - - - - - - - - - - - - - - - - - -
+[ ID] Interval           Transfer     Bitrate         Jitter    Lost/Total Datagrams
+[  5]   0.00-2.05   sec   251 KBytes  1.00 Mbits/sec  0.000 ms  0/214 (0%)  sender
+[  5]   0.00-2.00   sec   251 KBytes  1.03 Mbits/sec  0.005 ms  0/214 (0%)  receiver
+
+iperf Done.
+
+SERVER OUTPUT
+-----------------------------------------------------------
+Server listening on 38785
+-----------------------------------------------------------
+Accepted connection from 127.0.0.1, port 38346
+[  5] local 127.0.0.1 port 38785 connected to 127.0.0.1 port 46489
+[ ID] Interval           Transfer     Bitrate         Total Datagrams
+[  5]   0.00-1.00   sec   123 KBytes  1.01 Mbits/sec  105  
+[  5]   1.00-2.00   sec   122 KBytes   998 Kbits/sec  104  
+[  5]   2.00-2.05   sec  5.86 KBytes   917 Kbits/sec  5  
+- - - - - - - - - - - - - - - - - - - - - - - - -
+[ ID] Interval           Transfer     Bitrate         Jitter    Lost/Total Datagrams
+[  5]   0.00-2.05   sec   251 KBytes  1.00 Mbits/sec  0.000 ms  0/214 (0%)  sender
+iperf3: interrupt - the server has terminated
+-----------------------------------------------------------
+Server listening on 38785
+-----------------------------------------------------------

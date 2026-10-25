@@ -1,0 +1,119 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "模拟 UE 下挂 Wi-Fi：WAN 路由 / NAT 模式",
+    "locale": "zh-CN",
+    "output": "docs/training/assets/14-wifi-router.html",
+    "quality_profile": "showcase"
+  },
+  "components": [
+    {
+      "id": "n0",
+      "type": "external",
+      "label": "手机或电脑",
+      "sublabel": "192.168.50.10:40000",
+      "pos": [
+        40,
+        40
+      ],
+      "size": [
+        210,
+        76
+      ]
+    },
+    {
+      "id": "n1",
+      "type": "backend",
+      "label": "Wi-Fi 路由器",
+      "sublabel": "WAN 192.168.40.2:p1",
+      "pos": [
+        410,
+        40
+      ],
+      "size": [
+        210,
+        76
+      ]
+    },
+    {
+      "id": "n2",
+      "type": "backend",
+      "label": "模拟 UE · LAN",
+      "sublabel": "网关 192.168.40.1/22",
+      "pos": [
+        780,
+        40
+      ],
+      "size": [
+        210,
+        76
+      ]
+    },
+    {
+      "id": "n3",
+      "type": "backend",
+      "label": "模拟 UE · memif",
+      "sublabel": "再 SNAT → 10.45.0.2:p2",
+      "pos": [
+        780,
+        260
+      ],
+      "size": [
+        210,
+        76
+      ]
+    },
+    {
+      "id": "n4",
+      "type": "external",
+      "label": "基站及后续出口",
+      "sublabel": "可再做核心/边缘 NAT",
+      "pos": [
+        410,
+        260
+      ],
+      "size": [
+        210,
+        76
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "from": "n0",
+      "to": "n1",
+      "label": "Wi-Fi NAT",
+      "variant": "emphasis"
+    },
+    {
+      "from": "n1",
+      "to": "n2",
+      "label": "WAN → LAN",
+      "variant": "emphasis"
+    },
+    {
+      "from": "n2",
+      "to": "n3",
+      "label": "UE NAT",
+      "variant": "emphasis"
+    },
+    {
+      "from": "n3",
+      "to": "n4",
+      "label": "无线/仿真",
+      "variant": "emphasis"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "读图说明",
+      "items": [
+        "Wi-Fi LAN 192.168.50.0/24 与模拟 UE LAN 192.168.40.0/22 不重叠。",
+        "回包按出口 NAT、UE NAT、Wi-Fi NAT 的逆序逐层还原。",
+        "同一物理 dpdk0 不能同时属于多个 session VRF；多会话共享 LAN 需额外设计。"
+      ]
+    }
+  ]
+}

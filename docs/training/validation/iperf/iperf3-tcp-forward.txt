@@ -1,0 +1,32 @@
+SERVER: iperf3 -s -B 127.0.0.1 -p 51861
+CLIENT: iperf3 -c 127.0.0.1 -p 51861 -t 2 -b 1M
+
+CLIENT OUTPUT
+Connecting to host 127.0.0.1, port 51861
+[  5] local 127.0.0.1 port 60144 connected to 127.0.0.1 port 51861
+[ ID] Interval           Transfer     Bitrate         Retr  Cwnd
+[  5]   0.00-1.00   sec   128 KBytes  1.05 Mbits/sec    0    639 KBytes       
+[  5]   1.00-2.00   sec   128 KBytes  1.05 Mbits/sec    0    639 KBytes       
+- - - - - - - - - - - - - - - - - - - - - - - - -
+[ ID] Interval           Transfer     Bitrate         Retr
+[  5]   0.00-2.00   sec   256 KBytes  1.05 Mbits/sec    0             sender
+[  5]   0.00-2.05   sec   256 KBytes  1.02 Mbits/sec                  receiver
+
+iperf Done.
+
+SERVER OUTPUT
+-----------------------------------------------------------
+Server listening on 51861
+-----------------------------------------------------------
+Accepted connection from 127.0.0.1, port 60142
+[  5] local 127.0.0.1 port 51861 connected to 127.0.0.1 port 60144
+[ ID] Interval           Transfer     Bitrate
+[  5]   0.00-1.00   sec   128 KBytes  1.05 Mbits/sec                  
+[  5]   1.00-2.00   sec   128 KBytes  1.05 Mbits/sec                  
+- - - - - - - - - - - - - - - - - - - - - - - - -
+[ ID] Interval           Transfer     Bitrate
+[  5]   0.00-2.05   sec   256 KBytes  1.02 Mbits/sec                  receiver
+iperf3: interrupt - the server has terminated
+-----------------------------------------------------------
+Server listening on 51861
+-----------------------------------------------------------

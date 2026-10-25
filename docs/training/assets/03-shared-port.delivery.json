@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "receiptId": "4d8cdffe-adc0-4dfa-8e1e-7a4d046c27a8",
+  "status": "current",
+  "command": "deliver",
+  "type": "architecture",
+  "input": "/home/xiazhangtao/code/open5gs/docs/training/assets/03-shared-port.json",
+  "output": "/home/xiazhangtao/code/open5gs/docs/training/assets/03-shared-port.html",
+  "specification": {
+    "sha256": "809cc34a314010faf4417c3803e956acbe444b57dae4a26d7f87321689e73cde",
+    "bytes": 2277
+  },
+  "artifact": {
+    "sha256": "73f5feaa96fa9f265c28f8306a679104b60ae74cf3c9e42bd97824c8a199b8fb",
+    "bytes": 813299
+  }
+}

@@ -1,0 +1,20 @@
+SERVER: iperf -s -B 127.0.0.1 -p 45147
+CLIENT: iperf -c 127.0.0.1 -p 45147 -t 2 -b 1M -R
+
+CLIENT OUTPUT
+------------------------------------------------------------
+Client connecting to 127.0.0.1, TCP port 45147
+TCP window size: 7.77 MByte (default)
+------------------------------------------------------------
+[  1] local 127.0.0.1 port 46628 connected with 127.0.0.1 port 45147 (reverse)
+[ ID] Interval       Transfer     Bandwidth
+[ *1] 0.0000-2.9999 sec   384 KBytes  1.05 Mbits/sec
+
+SERVER OUTPUT
+------------------------------------------------------------
+Server listening on TCP port 45147
+TCP window size:  256 KByte (default)
+------------------------------------------------------------
+[  1] local 127.0.0.1 port 45147 connected with 127.0.0.1 port 46628 (reverse)
+[ ID] Interval       Transfer     Bandwidth
+[  1] 0.0000-3.0021 sec   384 KBytes  1.05 Mbits/sec

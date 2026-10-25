@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "receiptId": "7fdc19f4-0158-4867-935e-91559bd60feb",
+  "status": "current",
+  "command": "deliver",
+  "type": "architecture",
+  "input": "/home/xiazhangtao/code/open5gs/docs/training/assets/12-edge-route.json",
+  "output": "/home/xiazhangtao/code/open5gs/docs/training/assets/12-edge-route.html",
+  "specification": {
+    "sha256": "393ad6551803a790a0b6e066138a4e3d92ed587d77cc270d6be55394bac2fd2b",
+    "bytes": 2233
+  },
+  "artifact": {
+    "sha256": "c69440ac9e36d815cbd65b2475b5563a884242d32dce60ec8a118ece72274a02",
+    "bytes": 811966
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "receiptId": "8ce14f84-cf19-4ad5-bbad-48fb7257f31b",
+  "status": "current",
+  "command": "deliver",
+  "type": "architecture",
+  "input": "/home/xiazhangtao/code/open5gs/docs/training/assets/06-overview.json",
+  "output": "/home/xiazhangtao/code/open5gs/docs/training/assets/06-overview.html",
+  "specification": {
+    "sha256": "5446430d6c0bfc28e217432168b3b4f95d87e70b33b2177b99bcb1025a9ad5eb",
+    "bytes": 2654
+  },
+  "artifact": {
+    "sha256": "a6496696ab2f5f27c0618190f25032163880eb0082cd25cc21c0fbc9fe2a49a0",
+    "bytes": 814295
+  }
+}

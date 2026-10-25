@@ -1,0 +1,6 @@
+# Preserve generated renderer bytes and raw command output for provenance.
+assets/*.html linguist-generated=true -whitespace
+assets/*.svg linguist-generated=true -whitespace
+assets/*.delivery.json linguist-generated=true
+validation/*.json linguist-generated=true
+validation/iperf/*.txt -whitespace

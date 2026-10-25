@@ -1,0 +1,182 @@
+[
+  {
+    "figure": "01-nfvi",
+    "status": "pass",
+    "gates": {
+      "validate": "pass",
+      "deliver": "pass",
+      "check": "pass",
+      "browser-check": "pass"
+    },
+    "specification_sha256": "0159a1ffb5f2c555b131c45a3db4d57afc66809e1db0c09addc5995f43093cba",
+    "html_sha256": "3fb92772ea8e54304df009b83bf003dab702861ba947722623090571fef7fa4b"
+  },
+  {
+    "figure": "02-platform",
+    "status": "pass",
+    "gates": {
+      "validate": "pass",
+      "deliver": "pass",
+      "check": "pass",
+      "browser-check": "pass"
+    },
+    "specification_sha256": "9f97c273be3da0ee81a4a0ec23e08946f8590dff4a5326a56c141c6fa65a3274",
+    "html_sha256": "d896b92d10b0a88a71ac33821114c2fdcaf6b5896cd85578619fd5974f14938f"
+  },
+  {
+    "figure": "03-shared-port",
+    "status": "pass",
+    "gates": {
+      "validate": "pass",
+      "deliver": "pass",
+      "check": "pass",
+      "browser-check": "pass"
+    },
+    "specification_sha256": "809cc34a314010faf4417c3803e956acbe444b57dae4a26d7f87321689e73cde",
+    "html_sha256": "73f5feaa96fa9f265c28f8306a679104b60ae74cf3c9e42bd97824c8a199b8fb"
+  },
+  {
+    "figure": "04-shared-switch",
+    "status": "pass",
+    "gates": {
+      "validate": "pass",
+      "deliver": "pass",
+      "check": "pass",
+      "browser-check": "pass"
+    },
+    "specification_sha256": "3d31e023c8feea93f0dc519baa4032b8e2cec43ea44133abefcf3183c8032e51",
+    "html_sha256": "9d322c528df83ddd52a82864547cb8de56a5ac805ee3d3aecd50df0034cbe1dd"
+  },
+  {
+    "figure": "05-split-switches",
+    "status": "pass",
+    "gates": {
+      "validate": "pass",
+      "deliver": "pass",
+      "check": "pass",
+      "browser-check": "pass"
+    },
+    "specification_sha256": "5b17f92b155a2c16d8ae1772af8aac7d2b95e87d260f7161582f10f60a284e76",
+    "html_sha256": "6d87524cb61123e8a9086a16df91f9a2a5c6c766bb4335182171b2f5a4d6678a"
+  },
+  {
+    "figure": "06-overview",
+    "status": "pass",
+    "gates": {
+      "validate": "pass",
+      "deliver": "pass",
+      "check": "pass",
+      "browser-check": "pass"
+    },
+    "specification_sha256": "5446430d6c0bfc28e217432168b3b4f95d87e70b33b2177b99bcb1025a9ad5eb",
+    "html_sha256": "a6496696ab2f5f27c0618190f25032163880eb0082cd25cc21c0fbc9fe2a49a0"
+  },
+  {
+    "figure": "07-core-memif",
+    "status": "pass",
+    "gates": {
+      "validate": "pass",
+      "deliver": "pass",
+      "check": "pass",
+      "browser-check": "pass"
+    },
+    "specification_sha256": "90f4e5b3253c2714a546dd0d92d755a14705c3fb59ca9a541e4f7b5a3fc77ea9",
+    "html_sha256": "a80fe8511f7b2e6ba23ad490a349e90fcf47a6f94bfd6b9e3bdffd5b133b42dc"
+  },
+  {
+    "figure": "08-core-tun",
+    "status": "pass",
+    "gates": {
+      "validate": "pass",
+      "deliver": "pass",
+      "check": "pass",
+      "browser-check": "pass"
+    },
+    "specification_sha256": "63999ddc79d608a9e263ca855f0686f41a79f56df0f1c5ea5d2ee728b9ccadf2",
+    "html_sha256": "a0b5e331f9fdb4437aaab0d6a01463963140d752f729d54e98f809bd12227d96"
+  },
+  {
+    "figure": "09-core-nat",
+    "status": "pass",
+    "gates": {
+      "validate": "pass",
+      "deliver": "pass",
+      "check": "pass",
+      "browser-check": "pass"
+    },
+    "specification_sha256": "c07009d4d2cf8b9ed4f029a1f525866a29044089c3284515d5ba75cbed0def43",
+    "html_sha256": "22c9e15416e2ed47194987ca31bff1e1db5031382ceb4b4a32d6718a908eb4e2"
+  },
+  {
+    "figure": "10-core-route",
+    "status": "pass",
+    "gates": {
+      "validate": "pass",
+      "deliver": "pass",
+      "check": "pass",
+      "browser-check": "pass"
+    },
+    "specification_sha256": "404711be1f14d3281b1ddd01fc236fdadf75e516a64ebdb58335e5cd338ea419",
+    "html_sha256": "e61f965b714572d930ca5344244b2a36c9bcaf14f0bd13a036bb13e1494623cb"
+  },
+  {
+    "figure": "11-edge-nat",
+    "status": "pass",
+    "gates": {
+      "validate": "pass",
+      "deliver": "pass",
+      "check": "pass",
+      "browser-check": "pass"
+    },
+    "specification_sha256": "701a9f39b43c4a90c70d44838307d6d8df605ef79e8c19080ba50fb52a7a150b",
+    "html_sha256": "3b478909d9073bc55863a25763ed7e0f4307a2b49d39d6bd0af28ba02a2f9f7c"
+  },
+  {
+    "figure": "12-edge-route",
+    "status": "pass",
+    "gates": {
+      "validate": "pass",
+      "deliver": "pass",
+      "check": "pass",
+      "browser-check": "pass"
+    },
+    "specification_sha256": "393ad6551803a790a0b6e066138a4e3d92ed587d77cc270d6be55394bac2fd2b",
+    "html_sha256": "c69440ac9e36d815cbd65b2475b5563a884242d32dce60ec8a118ece72274a02"
+  },
+  {
+    "figure": "13-wifi-ap",
+    "status": "pass",
+    "gates": {
+      "validate": "pass",
+      "deliver": "pass",
+      "check": "pass",
+      "browser-check": "pass"
+    },
+    "specification_sha256": "fcc2f6635d25255bfac257704e92fb8116cf3f83899890bde73cfcebcde9e0a1",
+    "html_sha256": "a884ea9d0a8d753c780d3c7b5586ae10797eec55660a16e71cc27e8492f1e527"
+  },
+  {
+    "figure": "14-wifi-router",
+    "status": "pass",
+    "gates": {
+      "validate": "pass",
+      "deliver": "pass",
+      "check": "pass",
+      "browser-check": "pass"
+    },
+    "specification_sha256": "0634fd8612174b83ad5a8c958f86f4b85cf8906f7c2f9e76ddd6a5731acc6e79",
+    "html_sha256": "bc8dcbf6563b5bdfee062d55574ed8df2b8e0dbf1ae75b90d67fc80af084128e"
+  },
+  {
+    "figure": "15-troubleshoot",
+    "status": "pass",
+    "gates": {
+      "validate": "pass",
+      "deliver": "pass",
+      "check": "pass",
+      "browser-check": "pass"
+    },
+    "specification_sha256": "a7f89b9667a830775ca4e217251b94ab297945b2dbba2076bf71e8887ad16e9e",
+    "html_sha256": "97fc5cbc4fea43bf3750f4c0f5030d080d0c47bffe7dc6b5671487d07d71db9e"
+  }
+]

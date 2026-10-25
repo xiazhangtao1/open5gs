@@ -1,0 +1,158 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "镜像、发布与容器网络的职责",
+    "locale": "zh-CN",
+    "output": "docs/training/assets/02-platform.html",
+    "quality_profile": "showcase"
+  },
+  "components": [
+    {
+      "id": "build",
+      "type": "backend",
+      "label": "Docker 构建",
+      "sublabel": "代码 + Dockerfile",
+      "pos": [
+        40,
+        40
+      ],
+      "size": [
+        210,
+        76
+      ]
+    },
+    {
+      "id": "registry",
+      "type": "database",
+      "label": "Harbor 镜像仓库",
+      "sublabel": "项目 / 镜像 / 权限",
+      "pos": [
+        410,
+        40
+      ],
+      "size": [
+        210,
+        76
+      ]
+    },
+    {
+      "id": "runtime",
+      "type": "backend",
+      "label": "containerd",
+      "sublabel": "节点拉取镜像与启动容器",
+      "pos": [
+        780,
+        40
+      ],
+      "size": [
+        210,
+        76
+      ]
+    },
+    {
+      "id": "helm",
+      "type": "backend",
+      "label": "Helm",
+      "sublabel": "Chart + values",
+      "pos": [
+        40,
+        290
+      ],
+      "size": [
+        210,
+        76
+      ]
+    },
+    {
+      "id": "k8s",
+      "type": "backend",
+      "label": "Kubernetes",
+      "sublabel": "API / 调度 / kubelet",
+      "pos": [
+        410,
+        290
+      ],
+      "size": [
+        210,
+        76
+      ]
+    },
+    {
+      "id": "pod",
+      "type": "backend",
+      "label": "业务 Pod",
+      "sublabel": "普通网络 + 可选 VF",
+      "pos": [
+        780,
+        290
+      ],
+      "size": [
+        210,
+        76
+      ]
+    },
+    {
+      "id": "cni",
+      "type": "backend",
+      "label": "CNI 与设备插件",
+      "sublabel": "网络配置 / PCI 资源分配",
+      "pos": [
+        780,
+        510
+      ],
+      "size": [
+        210,
+        76
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "from": "build",
+      "to": "registry",
+      "label": "推送",
+      "variant": "emphasis"
+    },
+    {
+      "from": "registry",
+      "to": "runtime",
+      "label": "镜像拉取",
+      "variant": "emphasis"
+    },
+    {
+      "from": "helm",
+      "to": "k8s",
+      "label": "提交清单",
+      "variant": "emphasis"
+    },
+    {
+      "from": "k8s",
+      "to": "pod",
+      "label": "维护副本",
+      "variant": "emphasis"
+    },
+    {
+      "from": "runtime",
+      "to": "pod",
+      "label": "执行容器",
+      "variant": "emphasis"
+    },
+    {
+      "from": "cni",
+      "to": "pod",
+      "label": "接入与分配",
+      "variant": "emphasis"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "读图说明",
+      "items": [
+        "Kubernetes 通过 kubelet/CRI 调用运行时；图中按职责概括，不展示全部内部 RPC。",
+        "本机 Docker 与 Kubernetes containerd 镜像存储不能假定共用。"
+      ]
+    }
+  ]
+}

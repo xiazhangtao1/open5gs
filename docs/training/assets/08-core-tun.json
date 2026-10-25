@@ -1,0 +1,118 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "核心网 TUN：Linux UDP、ogstun 与内核 NAT",
+    "locale": "zh-CN",
+    "output": "docs/training/assets/08-core-tun.html",
+    "quality_profile": "showcase"
+  },
+  "components": [
+    {
+      "id": "n0",
+      "type": "external",
+      "label": "基站 N3",
+      "sublabel": "UDP/2152 + GTP-U",
+      "pos": [
+        40,
+        40
+      ],
+      "size": [
+        210,
+        76
+      ]
+    },
+    {
+      "id": "n1",
+      "type": "backend",
+      "label": "Linux UDP socket",
+      "sublabel": "UPF 绑定可达 N3 地址",
+      "pos": [
+        410,
+        40
+      ],
+      "size": [
+        210,
+        76
+      ]
+    },
+    {
+      "id": "n2",
+      "type": "backend",
+      "label": "Open5GS UPF",
+      "sublabel": "GTP-U 解封装 / 会话规则",
+      "pos": [
+        780,
+        40
+      ],
+      "size": [
+        210,
+        76
+      ]
+    },
+    {
+      "id": "n3",
+      "type": "backend",
+      "label": "ogstun + Linux",
+      "sublabel": "路由 / FORWARD / MASQUERADE",
+      "pos": [
+        780,
+        260
+      ],
+      "size": [
+        210,
+        76
+      ]
+    },
+    {
+      "id": "n4",
+      "type": "external",
+      "label": "外部 DN",
+      "sublabel": "收到普通 IP 报文",
+      "pos": [
+        410,
+        260
+      ],
+      "size": [
+        210,
+        76
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "from": "n0",
+      "to": "n1",
+      "label": "N3",
+      "variant": "emphasis"
+    },
+    {
+      "from": "n1",
+      "to": "n2",
+      "label": "UDP 交付",
+      "variant": "emphasis"
+    },
+    {
+      "from": "n2",
+      "to": "n3",
+      "label": "内层 IP",
+      "variant": "emphasis"
+    },
+    {
+      "from": "n3",
+      "to": "n4",
+      "label": "N6",
+      "variant": "emphasis"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "读图说明",
+      "items": [
+        "箭头为上行；下行经 Linux 路由进入 ogstun，UPF 封装 GTP-U 后返回基站。",
+        "当前 Chart 的 TUN 初始化会添加 MASQUERADE；VPP NAT 开关不控制此规则。"
+      ]
+    }
+  ]
+}

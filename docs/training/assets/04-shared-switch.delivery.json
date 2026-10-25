@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "receiptId": "7f5951cd-0b5b-45e4-99eb-e762cec891b5",
+  "status": "current",
+  "command": "deliver",
+  "type": "architecture",
+  "input": "/home/xiazhangtao/code/open5gs/docs/training/assets/04-shared-switch.json",
+  "output": "/home/xiazhangtao/code/open5gs/docs/training/assets/04-shared-switch.html",
+  "specification": {
+    "sha256": "3d31e023c8feea93f0dc519baa4032b8e2cec43ea44133abefcf3183c8032e51",
+    "bytes": 3187
+  },
+  "artifact": {
+    "sha256": "9d322c528df83ddd52a82864547cb8de56a5ac805ee3d3aecd50df0034cbe1dd",
+    "bytes": 820157
+  }
+}

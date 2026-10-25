@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "receiptId": "a6031307-b81e-4b2b-bde8-f772e03d25b5",
+  "status": "current",
+  "command": "deliver",
+  "type": "architecture",
+  "input": "/home/xiazhangtao/code/open5gs/docs/training/assets/07-core-memif.json",
+  "output": "/home/xiazhangtao/code/open5gs/docs/training/assets/07-core-memif.html",
+  "specification": {
+    "sha256": "90f4e5b3253c2714a546dd0d92d755a14705c3fb59ca9a541e4f7b5a3fc77ea9",
+    "bytes": 4754
+  },
+  "artifact": {
+    "sha256": "a80fe8511f7b2e6ba23ad490a349e90fcf47a6f94bfd6b9e3bdffd5b133b42dc",
+    "bytes": 817425
+  }
+}

@@ -1,0 +1,117 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "方式一：一个交换机，一个物理口",
+    "locale": "zh-CN",
+    "output": "docs/training/assets/03-shared-port.html",
+    "quality_profile": "showcase"
+  },
+  "components": [
+    {
+      "id": "gnb",
+      "type": "backend",
+      "label": "基站 网口1",
+      "sublabel": "控制面 + 用户面",
+      "pos": [
+        40,
+        40
+      ],
+      "size": [
+        210,
+        76
+      ]
+    },
+    {
+      "id": "sw",
+      "type": "cloud",
+      "label": "共享交换机",
+      "sublabel": "10G 或 100G 设计示例",
+      "pos": [
+        410,
+        40
+      ],
+      "size": [
+        210,
+        76
+      ]
+    },
+    {
+      "id": "core",
+      "type": "backend",
+      "label": "核心网 网口1",
+      "sublabel": "PF 内核 + VF 用户态",
+      "pos": [
+        780,
+        40
+      ],
+      "size": [
+        210,
+        76
+      ]
+    },
+    {
+      "id": "dn",
+      "type": "external",
+      "label": "DN / 上游路由器",
+      "sublabel": "经共享网络或明确的下一跳",
+      "pos": [
+        410,
+        280
+      ],
+      "size": [
+        210,
+        76
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "from": "gnb",
+      "to": "sw",
+      "label": "上行",
+      "variant": "emphasis"
+    },
+    {
+      "from": "sw",
+      "to": "gnb",
+      "label": "下行",
+      "variant": "emphasis"
+    },
+    {
+      "from": "sw",
+      "to": "core",
+      "label": "上行",
+      "variant": "emphasis"
+    },
+    {
+      "from": "core",
+      "to": "sw",
+      "label": "下行",
+      "variant": "emphasis"
+    },
+    {
+      "from": "sw",
+      "to": "dn",
+      "label": "到 DN",
+      "variant": "emphasis"
+    },
+    {
+      "from": "dn",
+      "to": "sw",
+      "label": "从 DN",
+      "variant": "emphasis"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "读图说明",
+      "items": [
+        "图示为设计拓扑；当前 X710 活跃口协商为 1Gbps，不是 100G 实测。",
+        "DN 必须有明确的二层接入或三层下一跳。N3、N6 可用同一用户面 PF 的不同 VF。",
+        "不同网段不等于不同广播域；需要二层隔离时配置 VLAN。"
+      ]
+    }
+  ]
+}

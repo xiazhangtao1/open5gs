@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "receiptId": "27a7f974-415c-4036-baa4-e54b099f3fe2",
+  "status": "current",
+  "command": "deliver",
+  "type": "architecture",
+  "input": "/home/xiazhangtao/code/open5gs/docs/training/assets/08-core-tun.json",
+  "output": "/home/xiazhangtao/code/open5gs/docs/training/assets/08-core-tun.html",
+  "specification": {
+    "sha256": "63999ddc79d608a9e263ca855f0686f41a79f56df0f1c5ea5d2ee728b9ccadf2",
+    "bytes": 2173
+  },
+  "artifact": {
+    "sha256": "a0b5e331f9fdb4437aaab0d6a01463963140d752f729d54e98f809bd12227d96",
+    "bytes": 811904
+  }
+}

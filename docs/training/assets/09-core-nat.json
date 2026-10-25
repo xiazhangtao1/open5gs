@@ -1,0 +1,119 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "经核心网：N6 动态 NAT",
+    "locale": "zh-CN",
+    "output": "docs/training/assets/09-core-nat.html",
+    "quality_profile": "showcase"
+  },
+  "components": [
+    {
+      "id": "n0",
+      "type": "external",
+      "label": "UE 会话",
+      "sublabel": "源 10.45.0.2:40000",
+      "pos": [
+        40,
+        40
+      ],
+      "size": [
+        210,
+        76
+      ]
+    },
+    {
+      "id": "n1",
+      "type": "backend",
+      "label": "基站分流",
+      "sublabel": "未命中边缘 CIDR",
+      "pos": [
+        410,
+        40
+      ],
+      "size": [
+        210,
+        76
+      ]
+    },
+    {
+      "id": "n2",
+      "type": "backend",
+      "label": "UPF 解封装",
+      "sublabel": "内层源 10.45.0.2",
+      "pos": [
+        780,
+        40
+      ],
+      "size": [
+        210,
+        76
+      ]
+    },
+    {
+      "id": "n3",
+      "type": "backend",
+      "label": "核心 VPP NAT",
+      "sublabel": "源转换 198.51.100.1:p1",
+      "pos": [
+        780,
+        260
+      ],
+      "size": [
+        210,
+        76
+      ]
+    },
+    {
+      "id": "n4",
+      "type": "external",
+      "label": "核心 DN",
+      "sublabel": "目的 198.51.100.10:5201",
+      "pos": [
+        410,
+        260
+      ],
+      "size": [
+        210,
+        76
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "from": "n0",
+      "to": "n1",
+      "label": "无线/仿真",
+      "variant": "emphasis"
+    },
+    {
+      "from": "n1",
+      "to": "n2",
+      "label": "N3 / GTP-U",
+      "variant": "emphasis"
+    },
+    {
+      "from": "n2",
+      "to": "n3",
+      "label": "普通 IP",
+      "variant": "emphasis"
+    },
+    {
+      "from": "n3",
+      "to": "n4",
+      "label": "送往 DN",
+      "variant": "emphasis"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "读图说明",
+      "items": [
+        "箭头为上行。UE 侧若另有 LAN NAT，进入此图时源已是 UE 会话地址。",
+        "下行：DN → 198.51.100.1:p1 → 逆 NAT → UE 10.45.0.2:40000。",
+        "示例端口 p1 由 NAT 分配，不保证保留原端口。"
+      ]
+    }
+  ]
+}

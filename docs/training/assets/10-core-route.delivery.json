@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "receiptId": "2dc45668-7ba8-42cf-84b7-828093e0f8a5",
+  "status": "current",
+  "command": "deliver",
+  "type": "architecture",
+  "input": "/home/xiazhangtao/code/open5gs/docs/training/assets/10-core-route.json",
+  "output": "/home/xiazhangtao/code/open5gs/docs/training/assets/10-core-route.html",
+  "specification": {
+    "sha256": "404711be1f14d3281b1ddd01fc236fdadf75e516a64ebdb58335e5cd338ea419",
+    "bytes": 2227
+  },
+  "artifact": {
+    "sha256": "e61f965b714572d930ca5344244b2a36c9bcaf14f0bd13a036bb13e1494623cb",
+    "bytes": 811940
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "receiptId": "0509ff29-76e5-4585-9a1d-c04162e9fd6d",
+  "status": "current",
+  "command": "deliver",
+  "type": "workflow",
+  "input": "/home/xiazhangtao/code/open5gs/docs/training/assets/15-troubleshoot.json",
+  "output": "/home/xiazhangtao/code/open5gs/docs/training/assets/15-troubleshoot.html",
+  "specification": {
+    "sha256": "a7f89b9667a830775ca4e217251b94ab297945b2dbba2076bf71e8887ad16e9e",
+    "bytes": 3080
+  },
+  "artifact": {
+    "sha256": "97fc5cbc4fea43bf3750f4c0f5030d080d0c47bffe7dc6b5671487d07d71db9e",
+    "bytes": 813782
+  }
+}

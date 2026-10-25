@@ -1,0 +1,123 @@
+{
+  "source": {
+    "shell_blocks": 23,
+    "images": 15,
+    "chapters": 6,
+    "vpp_capture_section": "removed"
+  },
+  "helm": {
+    "lint": "==> Linting ./helm/xcn\n[INFO] Chart.yaml: icon is recommended\n\n1 chart(s) linted, 0 chart(s) failed",
+    "cases": [
+      {
+        "mode": "tun",
+        "nat": "Linux initialization",
+        "status": "pass",
+        "objects": 23
+      },
+      {
+        "mode": "memif",
+        "nat": true,
+        "status": "pass",
+        "objects": 26
+      },
+      {
+        "mode": "memif",
+        "nat": false,
+        "status": "pass",
+        "objects": 26
+      }
+    ]
+  },
+  "iperf": [
+    {
+      "tool": "iperf",
+      "protocol": "tcp",
+      "direction": "forward",
+      "target": "127.0.0.1",
+      "rate": "1M",
+      "seconds": 2,
+      "status": "pass"
+    },
+    {
+      "tool": "iperf",
+      "protocol": "tcp",
+      "direction": "reverse",
+      "target": "127.0.0.1",
+      "rate": "1M",
+      "seconds": 2,
+      "status": "pass"
+    },
+    {
+      "tool": "iperf",
+      "protocol": "udp",
+      "direction": "forward",
+      "target": "127.0.0.1",
+      "rate": "1M",
+      "seconds": 2,
+      "status": "pass"
+    },
+    {
+      "tool": "iperf",
+      "protocol": "udp",
+      "direction": "reverse",
+      "target": "127.0.0.1",
+      "rate": "1M",
+      "seconds": 2,
+      "status": "pass"
+    },
+    {
+      "tool": "iperf",
+      "protocol": "tcp",
+      "direction": "bidirectional",
+      "target": "127.0.0.1",
+      "rate": "1M",
+      "seconds": 2,
+      "status": "pass"
+    },
+    {
+      "tool": "iperf3",
+      "protocol": "tcp",
+      "direction": "forward",
+      "target": "127.0.0.1",
+      "rate": "1M",
+      "seconds": 2,
+      "status": "pass"
+    },
+    {
+      "tool": "iperf3",
+      "protocol": "tcp",
+      "direction": "reverse",
+      "target": "127.0.0.1",
+      "rate": "1M",
+      "seconds": 2,
+      "status": "pass"
+    },
+    {
+      "tool": "iperf3",
+      "protocol": "udp",
+      "direction": "forward",
+      "target": "127.0.0.1",
+      "rate": "1M",
+      "seconds": 2,
+      "status": "pass"
+    },
+    {
+      "tool": "iperf3",
+      "protocol": "udp",
+      "direction": "reverse",
+      "target": "127.0.0.1",
+      "rate": "1M",
+      "seconds": 2,
+      "status": "pass"
+    },
+    {
+      "tool": "iperf3",
+      "protocol": "tcp",
+      "direction": "bidirectional",
+      "target": "127.0.0.1",
+      "rate": "1M",
+      "seconds": 2,
+      "status": "pass"
+    }
+  ]
+}

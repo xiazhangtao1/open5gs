@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "receiptId": "846e00f5-dc19-4e66-8a67-8f389c633b85",
+  "status": "current",
+  "command": "deliver",
+  "type": "architecture",
+  "input": "/home/xiazhangtao/code/open5gs/docs/training/assets/13-wifi-ap.json",
+  "output": "/home/xiazhangtao/code/open5gs/docs/training/assets/13-wifi-ap.html",
+  "specification": {
+    "sha256": "fcc2f6635d25255bfac257704e92fb8116cf3f83899890bde73cfcebcde9e0a1",
+    "bytes": 2176
+  },
+  "artifact": {
+    "sha256": "a884ea9d0a8d753c780d3c7b5586ae10797eec55660a16e71cc27e8492f1e527",
+    "bytes": 811983
+  }
+}
