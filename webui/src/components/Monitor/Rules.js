@@ -29,7 +29,7 @@ export default function Rules({rules = [], formatRate}) {
   const business = rules.filter(r => r.rule_kind === 'business');
   const internal = rules.filter(r => r.rule_kind === 'internal');
   const unknown = rules.filter(r => !['business', 'internal'].includes(r.rule_kind));
-  return <div className="xcn-session-rules">
+  return <div className="xcn-session-rules" role="group" aria-label="包检测规则">
     <h4>业务规则</h4>
     {business.length ? <Table rules={business} formatRate={formatRate} label="业务规则"/> :
       <p className="xcn-rule-hint">暂无已确认用途的业务规则。</p>}
@@ -37,9 +37,11 @@ export default function Rules({rules = [], formatRate}) {
       <p className="xcn-rule-hint">接口信息尚未采集，保留展示这些规则。</p>
       <Table rules={unknown} formatRate={formatRate} label="用途待确认的规则"/></div>}
     {internal.length > 0 && <details className="xcn-rules-internal">
-      <summary>内部辅助规则（{internal.length}）</summary>
-      <p className="xcn-rule-hint">用于 IPv6 路由请求、路由通告等辅助报文；无此类流量时速率为 0 正常。</p>
-      <Table rules={internal} formatRate={formatRate} label="内部辅助规则"/>
+      <summary><span>内部辅助规则</span><span className="xcn-rule-count">{internal.length} 条</span></summary>
+      <div className="xcn-rules-internal-content">
+        <p className="xcn-rule-hint">用于 IPv6 路由请求、路由通告等辅助报文；无此类流量时速率为 0 正常。</p>
+        <Table rules={internal} formatRate={formatRate} label="内部辅助规则"/>
+      </div>
     </details>}
   </div>;
 }

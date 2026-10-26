@@ -91,6 +91,17 @@ const configRows = value => {
     ['被抢占能力', a.preemptionVulnerability === 'PREEMPTABLE' ? '允许被抢占' : '不允许被抢占'],
     ['Session-AMBR 上行', rate(r.uplink)], ['Session-AMBR 下行', rate(r.downlink)]];
 };
+function SessionConfig({config}) {
+  const rows = configRows(config);
+  return <div className="xcn-policy-groups">
+    <div className="xcn-policy-qos"><h4>QoS 参数</h4>
+      <dl className="xcn-session-config">{rows.slice(0, 5).map(([label, value]) =>
+        <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl></div>
+    <div className="xcn-policy-ambr"><h4>Session-AMBR</h4><p>全部 Non-GBR 流的聚合速率</p>
+      <dl className="xcn-session-config">{rows.slice(5).map(([label, value], i) =>
+        <div key={label}><dt>{i === 0 ? '上行' : '下行'}</dt><dd>{value}</dd></div>)}</dl></div>
+  </div>;
+}
 function sessionForm(config) {
   const q = config.defaultQos, a = q.arp;
   return {kind: 'session', fiveQi: String(q['5qi']), priority: q.priorityLevel === undefined ? '' : String(q.priorityLevel),
@@ -111,13 +122,13 @@ export const SessionPolicyStatus = ({session: s}) => {
   const op = snapshot.operation;
   const current = snapshot.confirmed || snapshot.observed;
   const defaultFlow = (s.qos_flows || []).find(q => q.is_default === true);
-  return <section className="xcn-session-policy" aria-label="默认 QoS 与会话速率参数">
-    <div className="xcn-control-heading"><h4>默认 QoS / Session-AMBR</h4><small>默认 QFI {defaultFlow ? defaultFlow.qfi : '—'}</small></div>
-    <dl className="xcn-session-config">{configRows(current).map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>
+  return <section className="xcn-session-policy" aria-label="默认承载">
+    <div className="xcn-control-heading"><h3>默认承载</h3><small>默认 QFI {defaultFlow ? defaultFlow.qfi : '—'}</small></div>
+    <SessionConfig config={current}/>
     {op && ['pending', 'unknown'].includes(op.state) && <div>
       <p className="xcn-control-hint">上方为最近确认的配置，本次下发目标尚未全部确认。</p>
       <details className="xcn-control-target"><summary>本次下发目标</summary>
-        <dl className="xcn-session-config">{configRows(op.target).map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>
+        <SessionConfig config={op.target}/>
       </details>
     </div>}
     {op && <div className={'xcn-control-notice ' + op.state} role="status">
@@ -128,7 +139,7 @@ export const SessionPolicyStatus = ({session: s}) => {
       {op.state === 'failed' && <span>修改未提交或被核心网拒绝，请重新读取会话后检查。</span>}
       <small>操作编号 {op.operationId}</small>
     </div>}
-    <p className="xcn-control-hint">仅作用于当前会话。Session-AMBR 是全部 Non-GBR 流的聚合速率参数；实际限速效果未验证。</p>
+    <p className="xcn-control-hint">以上参数仅作用于当前会话。</p>
   </section>;
 };
 
@@ -219,7 +230,7 @@ export class SessionControls extends Component {
         {[['Session-AMBR 上行', 'uplink'], ['Session-AMBR 下行', 'downlink']].map(([label, key]) => <label key={key}>{label}
           <input value={f[key]} required maxLength="40" placeholder="例如 10 Mbps" disabled={busy} onChange={e => this.field(key, e.target.value)}/></label>)}
       </div>
-      <p className="xcn-control-hint">仅修改当前 PDU 会话，不修改签约。调度优先级与 ARP 是不同参数；AMBR 不表示已经实现实际限速。</p>
+      <p className="xcn-control-hint">仅修改当前 PDU 会话，不修改签约。调度优先级与 ARP 分别配置。</p>
       <div className="xcn-control-actions"><button type="submit" className="xcn-button xcn-primary" disabled={busy}>核对修改</button>
         <Button disabled={busy} onClick={() => this.setState({form: null, confirm: null})}>取消</Button></div>
     </form>;
@@ -234,10 +245,15 @@ export class SessionControls extends Component {
     const nativeBusy = nativeOperation && ['pending', 'unknown'].includes(nativeOperation.state);
     const policyBusy = nativeBusy || (operation && ['pending', 'unknown'].includes(operation.state));
     if (!s.supi || !s.psi) return null;
-    if (!open) return <div className="xcn-control-launch"><Button onClick={this.open}>管理此会话</Button></div>;
+    if (!open) return <section className="xcn-controls xcn-controls-closed" aria-label={'PSI ' + s.psi + ' 会话管理'}>
+      <div className="xcn-control-heading"><div><h3>会话管理</h3><p className="xcn-control-hint">新建专载、调整默认承载或释放当前会话。</p></div>
+        <Button onClick={this.open} aria-expanded="false">管理此会话</Button></div></section>;
     return <section className="xcn-controls" aria-label={'PSI ' + s.psi + ' 会话管理'}>
-      <div className="xcn-control-heading"><div><h4>会话管理</h4><small>PSI {s.psi} · {(target || s).dnn} · {(target || {}).ipv4 || s.ue_ip || '—'}</small></div>
-        <Button disabled={busy || loading} onClick={() => { this.setState({form: null, edit: null, confirm: null}); this.load(); }}>重新读取</Button></div>
+      <div className="xcn-control-heading"><div><h3>会话管理</h3><small>PSI {s.psi} · {(target || s).dnn} · {(target || {}).ipv4 || s.ue_ip || '—'}</small></div>
+        <div className="xcn-control-actions">
+          <Button disabled={busy || loading} onClick={() => { this.setState({form: null, edit: null, confirm: null}); this.load(); }}>重新读取</Button>
+          <Button disabled={busy || loading || !!form || !!confirm} aria-expanded="true"
+            onClick={() => this.setState({open: false})}>收起管理</Button></div></div>
       <Notice result={result}/>
       {loading && <p>正在读取当前策略…</p>}{error && <p className="xcn-control-error" role="alert">{error}</p>}
       {target && <div>
@@ -267,7 +283,7 @@ export class SessionControls extends Component {
           <h4>确认修改 PSI {s.psi} 的参数</h4><p>{s.supi} · {target.dnn} · {target.ipv4 || target.ipv6Prefix || '—'}</p>
           <div className="xcn-config-comparison"><div className="xcn-config-comparison-head"><span>参数</span><span>当前配置</span><span>修改后</span></div>
             {configRows(target.sessionConfig).map(([label, value], index) => <div key={label}><strong>{label}</strong><span>{value}</span><span>{configRows(confirm.config)[index][1]}</span></div>)}</div>
-          <p>该修改仅作用于当前会话。提交成功表示已受理，信令流程和实际限速效果需分别核对。</p>
+          <p>该修改仅作用于当前会话。提交成功表示已受理，可在默认承载区域查看信令流程结果。</p>
           <div className="xcn-control-actions"><Button primary disabled={busy} onClick={() => this.execute('patch', '', confirm.config)}>{busy ? '正在提交…' : '确认修改'}</Button>
             <Button disabled={busy} onClick={() => this.setState({confirm: null})}>返回编辑</Button></div>
         </div>}
