@@ -36,7 +36,7 @@ const SessionIP = ({session}) => {
   const addresses = Array.from(new Set([session.ipv4, session.ipv6, session.ue_ip].filter(ip => ip && ip !== '-' && ip !== '—')));
   return addresses.length ? <span className="xcn-session-ips xcn-mono">{addresses.map(ip => <span key={ip}>{ip}</span>)}</span> : <span>—</span>;
 };
-const sessionForTrend = (items = [], seid) => items.find(s => String(s.seid) === String(seid)) || items[0] || null;
+const rowForTrend = (items = [], field, id) => items.find(r => String(r[field]) === String(id)) || items[0] || null;
 const sameSessionInstance = (current, previous) => previous &&
   ['seid', 'supi', 'dnn', 'ue_ip'].every(k => String(current[k]) === String(previous[k])) &&
   !(Number(current.uptime_seconds) < Number(previous.uptime_seconds));
@@ -102,7 +102,7 @@ class Drawer extends Component {
 export default class Monitor extends Component {
   trendViews = new Map();
   state = {data: null, trend: null, error: null, loading: true, page: 0, q: '', search: '',
-    cm_state: '', protocol: 'NGAP', level: 'session', rule_scope: 'business', seconds: 1800, trendSeid: null,
+    cm_state: '', protocol: 'NGAP', level: 'session', rule_scope: 'business', seconds: 1800, trendSeid: null, trendSupi: null,
     selected: null, detail: null, identityFilters: {}};
   componentDidMount() {
     this.active = true;
@@ -116,7 +116,7 @@ export default class Monitor extends Component {
       const filters = this.navigateFilters || {};
       this.navigateFilters = null;
       this.setState({data: null, trend: null, error: null, page: 0, q: '', search: '', cm_state: '', protocol: 'NGAP',
-        trendSeid: null, selected: null, detail: null, identityFilters: {}, ...filters}, () => this.schedule(0));
+        trendSeid: null, trendSupi: null, selected: null, detail: null, identityFilters: {}, ...filters}, () => this.schedule(0));
     }
   }
   componentWillUnmount() {
@@ -183,7 +183,7 @@ export default class Monitor extends Component {
     if (!this.active || document.hidden) return;
     const generation = this.generation;
     const {view} = this.props;
-    const {q, page, cm_state, protocol, level, seconds, selected, trendSeid} = this.state;
+    const {q, page, cm_state, protocol, level, seconds, selected, trendSeid, trendSupi} = this.state;
     this.cancel = axios.CancelToken.source();
     const token = this.cancel.token;
     try {
@@ -194,10 +194,11 @@ export default class Monitor extends Component {
       if (view === 'sessions' && level === 'rule') params.rule_scope = this.state.rule_scope;
       const data = await get(endpoint, params, token);
       if (!this.active || generation !== this.generation) return;
-      const session = view === 'sessions' && level === 'session' ? sessionForTrend(data.items, trendSeid) : null;
+      const session = view === 'sessions' && level === 'session' ? rowForTrend(data.items, 'seid', trendSeid) : null;
+      const user = view === 'sessions' && level === 'user' ? rowForTrend(data.items, 'supi', trendSupi) : null;
       const previous = ((this.state.data || {}).items || []).find(s => session && String(s.seid) === String(session.seid));
       this.resetSessionTrend(session, previous);
-      const trendKey = view === 'overview' ? 'global' : session ? 'session:' + session.seid : null;
+      const trendKey = view === 'overview' ? 'global' : user ? 'user:' + user.supi : session ? 'session:' + session.seid : null;
       const needsDetail = selected && selected.row.supi && selected.type !== 'events';
       const calls = [trendKey ? this.loadTrend(trendKey, seconds, token) : Promise.resolve(null),
         needsDetail ? this.loadDetail(selected, seconds, token) : Promise.resolve(null)];
@@ -205,6 +206,7 @@ export default class Monitor extends Component {
       if (!this.active || generation !== this.generation) return;
       this.setState({data, trend: results[0], detail: results[1],
         trendSeid: session ? String(session.seid) : trendSeid,
+        trendSupi: user ? user.supi : trendSupi,
         error: null, loading: false, updated: Date.now()});
     } catch (e) {
       if (!this.active || generation !== this.generation || axios.isCancel(e)) return;
@@ -221,10 +223,13 @@ export default class Monitor extends Component {
   };
   search = e => { e.preventDefault(); this.change({q: this.state.search.trim(), page: 0}); };
   select = (row, type) => this.change({selected: {row, type}, detail: null,
-    ...(this.props.view === 'sessions' && this.state.level === 'session' && row.seid ?
-      {trendSeid: String(row.seid), trend: null} : {})});
+    ...(this.props.view === 'sessions' && type === 'sessions' && ['user', 'session'].includes(this.state.level) ?
+      this.trendSelection(row) : {})});
+  trendSelection = row => ({[this.state.level === 'user' ? 'trendSupi' : 'trendSeid']:
+    this.state.level === 'user' ? row.supi : String(row.seid), trend: null});
+  isTrendSelected = row => this.state.level === 'user' ? row.supi === this.state.trendSupi : String(row.seid) === this.state.trendSeid;
   selectTrend = row => {
-    if (String(row.seid) !== this.state.trendSeid) this.change({trendSeid: String(row.seid), trend: null});
+    if (!this.isTrendSelected(row)) this.change(this.trendSelection(row));
   };
   close = () => this.change({selected: null, detail: null});
   navigate = (view, filters = {}) => {
@@ -232,7 +237,7 @@ export default class Monitor extends Component {
     else { this.navigateFilters = filters; this.props.onNavigate(view); }
   };
   windowPicker() {
-    return <select aria-label="趋势时间范围" value={this.state.seconds}
+    return <select aria-label="走势时间范围" value={this.state.seconds}
       onChange={e => this.change({seconds: Number(e.target.value)})}>
       <option value={300}>最近 5 分钟</option><option value={900}>最近 15 分钟</option><option value={1800}>最近 30 分钟</option>
       <option value={43200}>最近 12 小时</option><option value={86400}>最近 24 小时</option>
@@ -288,10 +293,11 @@ export default class Monitor extends Component {
     const base = [['终端 SUPI', r => <button className="xcn-link xcn-mono xcn-nowrap" type="button"
       onClick={e => { e.stopPropagation(); this.select(r, 'sessions'); }}>{value(r.supi)}</button>],
       ['连接状态', r => <Status state={r.cm_state}/>]];
-    if (this.state.level === 'session') base.unshift(['趋势', r => <label className="xcn-trend-choice" title="查看此会话的流量趋势"
-      onClick={e => e.stopPropagation()}><input type="radio" name="trend-session"
-        aria-label={'查看 ' + r.supi + ' PSI ' + value(r.psi) + ' 的流量趋势'}
-        checked={String(r.seid) === this.state.trendSeid} onChange={() => this.selectTrend(r)}/></label>]);
+    if (['user', 'session'].includes(this.state.level)) base.unshift(['走势', r => <label className="xcn-trend-choice"
+      title={'查看此' + (this.state.level === 'user' ? '用户' : '会话') + '的流量走势'}
+      onClick={e => e.stopPropagation()}><input type="radio" name={'trend-' + this.state.level}
+        aria-label={'查看 ' + r.supi + (this.state.level === 'user' ? '' : ' PSI ' + value(r.psi)) + ' 的流量走势'}
+        checked={this.isTrendSelected(r)} onChange={() => this.selectTrend(r)}/></label>]);
     if (this.state.level !== 'user') base.push(['PSI / SEID', r => <span className="xcn-mono xcn-nowrap">{value(r.psi)} / {value(r.seid)}</span>]);
     else base.push(['会话数', r => value(r.session_count)]);
     const addresses = this.state.level === 'user' ? [] : [['会话 IP', r => <SessionIP session={r}/>]];
@@ -303,11 +309,11 @@ export default class Monitor extends Component {
   }
   table(view, data) {
     const columns = this.columns(view);
-    const selectable = view === 'sessions' && this.state.level === 'session';
+    const selectable = view === 'sessions' && ['user', 'session'].includes(this.state.level);
     if (!data.items || !data.items.length) return <Empty/>;
     return <div className="xcn-table-scroll"><table className={'xcn-table' + (view === 'sessions' ? ' xcn-session-table' : '')}><thead><tr>{columns.map(([title]) => <th key={title} scope="col">{title}</th>)}</tr></thead>
       <tbody>{data.items.map((row, i) => <tr key={row.event_id || [row.supi, row.seid, row.qfi, row.pdr_id, row.gnb_id, i].join('/')}
-        className={selectable ? 'xcn-trend-row' + (String(row.seid) === this.state.trendSeid ? ' selected' : '') : undefined}
+        className={selectable ? 'xcn-trend-row' + (this.isTrendSelected(row) ? ' selected' : '') : undefined}
         onClick={selectable ? () => this.selectTrend(row) : undefined}>
         {columns.map(([title, render]) => <td key={title}>{render(row)}</td>)}</tr>)}</tbody></table></div>;
   }
@@ -356,21 +362,25 @@ export default class Monitor extends Component {
   canControl() {
     return (((this.props.session || {}).user || {}).roles || []).indexOf('admin') >= 0;
   }
-  sessionTrend(data) {
-    const s = sessionForTrend(data.items, this.state.trendSeid);
-    return <section className="xcn-panel xcn-session-trend" aria-label="会话流量趋势" data-seid={s ? s.seid : ''}>
-        <div className="xcn-panel-heading"><div><h2>会话流量趋势</h2><p>所选 PDU 会话的上行与下行历史</p></div>
+  trafficTrend(data) {
+    const user = this.state.level === 'user', label = user ? '用户' : '会话';
+    const s = rowForTrend(data.items, user ? 'supi' : 'seid', user ? this.state.trendSupi : this.state.trendSeid);
+    return <section className="xcn-panel xcn-session-trend" aria-label={label + '流量走势'}
+      data-seid={s && !user ? s.seid : ''} data-supi={s ? s.supi : ''}>
+      <div className="xcn-panel-heading"><div><h2>{label}流量走势</h2>
+        <p>{user ? '按 SUPI 汇总该用户全部 PDU 会话的上行与下行历史' : '所选 PDU 会话的上行与下行历史'}</p></div>
         {this.windowPicker()}</div>
       {s ? <div>
         <div className="xcn-trend-context"><div className="xcn-trend-identity">
           <button type="button" className="xcn-link xcn-mono" onClick={() => this.select(s, 'sessions')}>{value(s.supi)}</button>
-          <span>PSI {value(s.psi)}<span>SEID {value(s.seid)}</span><span>{value(s.dnn)}</span></span>
-        </div><SessionIP session={s}/>
+          {user ? <span>当前 {value(s.session_count)} 条会话<span>DNN {value(s.dnn)}</span></span> :
+            <span>PSI {value(s.psi)}<span>SEID {value(s.seid)}</span><span>{value(s.dnn)}</span></span>}
+        </div>{!user && <SessionIP session={s}/>}
           <div className="xcn-trend-rates"><div><span><i className="xcn-flow-dot ul"/>当前上行</span><strong>{rate(s.ul_bps)}</strong></div>
             <div><span><i className="xcn-flow-dot dl"/>当前下行</span><strong>{rate(s.dl_bps)}</strong></div></div>
         </div>
         <Chart theme={this.props.theme} trend={this.state.trend}/>
-      </div> : <Empty>暂无匹配的会话，可调整筛选条件。</Empty>}
+      </div> : <Empty>暂无匹配的{label}，可调整筛选条件。</Empty>}
     </section>;
   }
   sessionRules(s, trend) {
@@ -380,8 +390,8 @@ export default class Monitor extends Component {
       <dl className="xcn-session-overview"><div><dt>会话 IP</dt><dd><SessionIP session={s}/></dd></div>
         <div><dt><i className="xcn-flow-dot ul"/>当前上行</dt><dd>{rate(s.ul_bps)}</dd></div>
         <div><dt><i className="xcn-flow-dot dl"/>当前下行</dt><dd>{rate(s.dl_bps)}</dd></div></dl>
-      {trend !== undefined && <section className="xcn-detail-trend" aria-label="会话速率趋势">
-        <div className="xcn-panel-heading"><h3>会话速率趋势</h3>{this.windowPicker()}</div>
+      {trend !== undefined && <section className="xcn-detail-trend" aria-label="会话速率走势">
+        <div className="xcn-panel-heading"><h3>会话速率走势</h3>{this.windowPicker()}</div>
         <Chart theme={this.props.theme} trend={trend}/></section>}
       <SessionPolicyStatus session={s}/>
       <section className="xcn-session-forwarding" aria-label="承载与规则">
@@ -417,7 +427,7 @@ export default class Monitor extends Component {
       (titles[type] || '详情') + ' · ' + value(id)} onClose={this.close}>
       {r.supi && type !== 'events' && <div><div className="xcn-detail-identity"><span className="xcn-mono">{r.supi}</span><Status state={r.cm_state}/></div>
         {(type !== 'sessions' || userScope) && <div className="xcn-detail-trend">
-          <div className="xcn-panel-heading"><h3>用户速率趋势</h3>{this.windowPicker()}</div>
+          <div className="xcn-panel-heading"><h3>用户速率走势</h3>{this.windowPicker()}</div>
           <Chart theme={this.props.theme} trend={detail && detail[2]}/></div>}</div>}
       {type === 'ues' && r.supi && this.canControl() && <UserRelease key={r.supi} supi={r.supi}/>}
       {type === 'ues' && <div><h3>接入与位置</h3><dl className="xcn-fields"><dt>位置状态</dt><dd>{value((r.location || {}).status)}</dd>
@@ -470,8 +480,9 @@ export default class Monitor extends Component {
       {data && view === 'overview' && this.overview(data)}
       {data && view === 'system' && this.system(data)}
       {data && ['ues', 'gnbs', 'sessions', 'events'].indexOf(view) >= 0 && <section className="xcn-panel">
-        {view === 'sessions' && this.state.level === 'session' && <div className="xcn-panel-heading xcn-session-list-heading">
-          <h2>会话列表</h2><span>点击会话行切换趋势，点击 SUPI 查看详情</span></div>}
+        {view === 'sessions' && ['user', 'session'].includes(this.state.level) && <div className="xcn-panel-heading xcn-session-list-heading">
+          <h2>{this.state.level === 'user' ? '用户' : '会话'}列表</h2>
+          <span>点击{this.state.level === 'user' ? '用户' : '会话'}行切换走势，点击 SUPI 查看详情</span></div>}
         {view === 'events' && data.coverage && <div className="xcn-event-range"><span>信令覆盖</span>
           <span>{data.coverage.oldest_at ? dateTime(data.coverage.oldest_at) + ' — ' + dateTime(data.coverage.newest_at) : '暂无信令'}</span></div>}
         {view === 'events' ? <Events items={data.items} onSelect={e => this.select(e, 'events')}/> : this.table(view, data)}
@@ -479,7 +490,7 @@ export default class Monitor extends Component {
           <Button disabled={page === 0} onClick={() => this.change({page: page - 1})}>上一页</Button>
           <Button disabled={(page + 1) * 50 >= data.total} onClick={() => this.change({page: page + 1})}>下一页</Button></div></div>
       </section>}
-      {data && view === 'sessions' && this.state.level === 'session' && this.sessionTrend(data)}
+      {data && view === 'sessions' && ['user', 'session'].includes(this.state.level) && this.trafficTrend(data)}
       {this.detail()}
     </main>;
   }

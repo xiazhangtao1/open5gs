@@ -94,10 +94,11 @@
 .xcn-trend-choice {display:inline-flex; align-items:center; justify-content:center; width:24px; height:24px; margin:0; cursor:pointer;}
 .xcn-trend-choice input {width:15px; height:15px; min-height:0; margin:0; padding:0; accent-color:var(--primary); cursor:pointer;}
 .xcn-session-trend>.xcn-panel-heading {align-items:flex-start;}
+.xcn-session-trend>.xcn-panel-heading>div {min-width:0; max-width:100%;}
 .xcn-trend-context {display:flex; align-items:center; flex-wrap:wrap; gap:16px 28px; margin:0 24px 18px;
   padding:16px 0; border-top:1px solid var(--line); border-bottom:1px solid var(--line);}
-.xcn-trend-identity {display:flex; flex-direction:column; gap:6px;}
-.xcn-trend-identity>span {display:flex; flex-wrap:wrap; gap:6px 14px; color:var(--muted); font-size:12px;}
+.xcn-trend-identity {display:flex; flex-direction:column; gap:6px; min-width:0;}
+.xcn-trend-identity>span {display:flex; flex-wrap:wrap; gap:6px 14px; color:var(--muted); font-size:12px; overflow-wrap:anywhere;}
 .xcn-trend-rates {display:flex; gap:28px; margin-left:auto;}
 .xcn-trend-rates>div {display:flex; flex-direction:column; gap:3px;}
 .xcn-trend-rates span {font-size:12px; color:var(--muted);}
