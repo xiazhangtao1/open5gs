@@ -20,48 +20,48 @@
             <path d="M 40 0 L 0 0 0 40" stroke-width="0.5px" fill="none" fill-opacity="1" stroke="rgb(233, 237, 242)" stroke-opacity="1" stroke-dasharray="none" stroke-linecap="butt" stroke-linejoin="miter" opacity="1" font-family="&quot;JetBrains Mono&quot;, ui-monospace, SFMono-Regular, Menlo, Consolas, &quot;DejaVu Sans Mono&quot;, &quot;Liberation Mono&quot;, &quot;Noto Sans Mono CJK SC&quot;, &quot;PingFang SC&quot;, &quot;Hiragino Sans GB&quot;, &quot;Microsoft YaHei&quot;, monospace" font-size="16px" font-weight="400" text-anchor="start" letter-spacing="normal" visibility="visible" display="inline" marker-end="none" marker-start="none"/>
           </pattern>
         <marker id="arrow-51677F" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 Z" fill="#51677F"/></marker><marker id="arrow-256DB0" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 Z" fill="#256DB0"/></marker><marker id="arrow-147D6C" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 Z" fill="#147D6C"/></marker></defs>
-        
+
 
         <!-- Background Grid -->
-        
+
 
         <!-- Boundaries (behind everything) -->
 
 
         <!-- Connection paths (before components for correct z-order) -->
-        
-        
-        
-        
-        
-        
-        
+
+
+
+
+
+
+
 
         <!-- Components -->
-        
 
-        
 
-        
 
-        
 
-        
 
-        
 
-        
 
-        
+
+
+
+
+
+
+
+
 
         <!-- Connection labels -->
-        
-        
-        
-        
-        
-        
-        
+
+
+
+
+
+
+
 
         <!-- Boundary labels (foreground masks keep routes out of titles) -->
 
@@ -93,56 +93,56 @@
           <title>基站收到 UE 业务包 · 源 10.45.0.2；读取目的 IP · 架构组件</title>
           <rect x="40" y="250" width="230" height="72" rx="8" fill="rgb(255, 255, 255)" fill-opacity="1" stroke="none" stroke-width="1px" stroke-opacity="1" stroke-dasharray="none" stroke-linecap="butt" stroke-linejoin="miter" opacity="1" font-family="&quot;JetBrains Mono&quot;, ui-monospace, SFMono-Regular, Menlo, Consolas, &quot;DejaVu Sans Mono&quot;, &quot;Liberation Mono&quot;, &quot;Noto Sans Mono CJK SC&quot;, &quot;PingFang SC&quot;, &quot;Hiragino Sans GB&quot;, &quot;Microsoft YaHei&quot;, monospace" font-size="16px" font-weight="400" text-anchor="start" letter-spacing="normal" visibility="visible" display="inline" marker-end="none" marker-start="none"/>
           <rect x="40" y="250" width="230" height="72" rx="8" stroke-width="1.25px" fill="rgba(52, 211, 153, 0.18)" fill-opacity="1" stroke="rgb(5, 150, 105)" stroke-opacity="1" stroke-dasharray="none" stroke-linecap="butt" stroke-linejoin="miter" opacity="1" font-family="&quot;JetBrains Mono&quot;, ui-monospace, SFMono-Regular, Menlo, Consolas, &quot;DejaVu Sans Mono&quot;, &quot;Liberation Mono&quot;, &quot;Noto Sans Mono CJK SC&quot;, &quot;PingFang SC&quot;, &quot;Hiragino Sans GB&quot;, &quot;Microsoft YaHei&quot;, monospace" font-size="16px" font-weight="400" text-anchor="start" letter-spacing="normal" visibility="visible" display="inline" marker-end="none" marker-start="none"/>
-          
+
           <text x="155" y="279" font-size="16" font-weight="600" text-anchor="middle" fill="#24364B" fill-opacity="1" stroke="none" stroke-width="1px" stroke-opacity="1" stroke-dasharray="none" stroke-linecap="butt" stroke-linejoin="miter" opacity="1" font-family="Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif" visibility="visible" display="block" marker-end="none" marker-start="none">基站收到 UE 业务包</text>
         <text x="155" y="304" font-size="12" text-anchor="middle" fill="#24364B" fill-opacity="1" stroke="none" stroke-width="1px" stroke-opacity="1" stroke-dasharray="none" stroke-linecap="butt" stroke-linejoin="miter" opacity="1" font-family="Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif" font-weight="400" visibility="visible" display="block" marker-end="none" marker-start="none">源 10.45.0.2；读取目的 IP</text>
         </g><g id="node-match" fill="rgb(0, 0, 0)" fill-opacity="1" stroke="none" stroke-width="1px" stroke-opacity="1" stroke-dasharray="none" stroke-linecap="butt" stroke-linejoin="miter" opacity="1" font-family="&quot;JetBrains Mono&quot;, ui-monospace, SFMono-Regular, Menlo, Consolas, &quot;DejaVu Sans Mono&quot;, &quot;Liberation Mono&quot;, &quot;Noto Sans Mono CJK SC&quot;, &quot;PingFang SC&quot;, &quot;Hiragino Sans GB&quot;, &quot;Microsoft YaHei&quot;, monospace" font-size="16px" font-weight="400" text-anchor="start" letter-spacing="normal" visibility="visible" display="inline" marker-end="none" marker-start="none">
           <title>匹配边缘 CIDR？ · 203.0.113.0/24 · 架构组件</title>
           <rect x="420" y="250" width="230" height="72" rx="8" fill="rgb(255, 255, 255)" fill-opacity="1" stroke="none" stroke-width="1px" stroke-opacity="1" stroke-dasharray="none" stroke-linecap="butt" stroke-linejoin="miter" opacity="1" font-family="&quot;JetBrains Mono&quot;, ui-monospace, SFMono-Regular, Menlo, Consolas, &quot;DejaVu Sans Mono&quot;, &quot;Liberation Mono&quot;, &quot;Noto Sans Mono CJK SC&quot;, &quot;PingFang SC&quot;, &quot;Hiragino Sans GB&quot;, &quot;Microsoft YaHei&quot;, monospace" font-size="16px" font-weight="400" text-anchor="start" letter-spacing="normal" visibility="visible" display="inline" marker-end="none" marker-start="none"/>
           <rect x="420" y="250" width="230" height="72" rx="8" stroke-width="1.25px" fill="rgba(251, 113, 133, 0.15)" fill-opacity="1" stroke="rgb(225, 29, 72)" stroke-opacity="1" stroke-dasharray="none" stroke-linecap="butt" stroke-linejoin="miter" opacity="1" font-family="&quot;JetBrains Mono&quot;, ui-monospace, SFMono-Regular, Menlo, Consolas, &quot;DejaVu Sans Mono&quot;, &quot;Liberation Mono&quot;, &quot;Noto Sans Mono CJK SC&quot;, &quot;PingFang SC&quot;, &quot;Hiragino Sans GB&quot;, &quot;Microsoft YaHei&quot;, monospace" font-size="16px" font-weight="400" text-anchor="start" letter-spacing="normal" visibility="visible" display="inline" marker-end="none" marker-start="none"/>
-          
+
           <text x="535" y="279" font-size="16" font-weight="600" text-anchor="middle" fill="#24364B" fill-opacity="1" stroke="none" stroke-width="1px" stroke-opacity="1" stroke-dasharray="none" stroke-linecap="butt" stroke-linejoin="miter" opacity="1" font-family="Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif" visibility="visible" display="block" marker-end="none" marker-start="none">匹配边缘 CIDR？</text>
         <text x="535" y="304" font-size="12" text-anchor="middle" fill="#24364B" fill-opacity="1" stroke="none" stroke-width="1px" stroke-opacity="1" stroke-dasharray="none" stroke-linecap="butt" stroke-linejoin="miter" opacity="1" font-family="Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif" font-weight="400" visibility="visible" display="block" marker-end="none" marker-start="none">203.0.113.0/24</text>
         </g><g id="node-miss" fill="rgb(0, 0, 0)" fill-opacity="1" stroke="none" stroke-width="1px" stroke-opacity="1" stroke-dasharray="none" stroke-linecap="butt" stroke-linejoin="miter" opacity="1" font-family="&quot;JetBrains Mono&quot;, ui-monospace, SFMono-Regular, Menlo, Consolas, &quot;DejaVu Sans Mono&quot;, &quot;Liberation Mono&quot;, &quot;Noto Sans Mono CJK SC&quot;, &quot;PingFang SC&quot;, &quot;Hiragino Sans GB&quot;, &quot;Microsoft YaHei&quot;, monospace" font-size="16px" font-weight="400" text-anchor="start" letter-spacing="normal" visibility="visible" display="inline" marker-end="none" marker-start="none">
           <title>未命中：核心路径 · 目的示例 198.51.100.10 · 架构组件</title>
           <rect x="820" y="40" width="290" height="72" rx="8" fill="rgb(255, 255, 255)" fill-opacity="1" stroke="none" stroke-width="1px" stroke-opacity="1" stroke-dasharray="none" stroke-linecap="butt" stroke-linejoin="miter" opacity="1" font-family="&quot;JetBrains Mono&quot;, ui-monospace, SFMono-Regular, Menlo, Consolas, &quot;DejaVu Sans Mono&quot;, &quot;Liberation Mono&quot;, &quot;Noto Sans Mono CJK SC&quot;, &quot;PingFang SC&quot;, &quot;Hiragino Sans GB&quot;, &quot;Microsoft YaHei&quot;, monospace" font-size="16px" font-weight="400" text-anchor="start" letter-spacing="normal" visibility="visible" display="inline" marker-end="none" marker-start="none"/>
           <rect x="820" y="40" width="290" height="72" rx="8" stroke-width="1.25px" fill="rgba(52, 211, 153, 0.18)" fill-opacity="1" stroke="rgb(5, 150, 105)" stroke-opacity="1" stroke-dasharray="none" stroke-linecap="butt" stroke-linejoin="miter" opacity="1" font-family="&quot;JetBrains Mono&quot;, ui-monospace, SFMono-Regular, Menlo, Consolas, &quot;DejaVu Sans Mono&quot;, &quot;Liberation Mono&quot;, &quot;Noto Sans Mono CJK SC&quot;, &quot;PingFang SC&quot;, &quot;Hiragino Sans GB&quot;, &quot;Microsoft YaHei&quot;, monospace" font-size="16px" font-weight="400" text-anchor="start" letter-spacing="normal" visibility="visible" display="inline" marker-end="none" marker-start="none"/>
-          
+
           <text x="965" y="69" font-size="16" font-weight="600" text-anchor="middle" fill="#24364B" fill-opacity="1" stroke="none" stroke-width="1px" stroke-opacity="1" stroke-dasharray="none" stroke-linecap="butt" stroke-linejoin="miter" opacity="1" font-family="Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif" visibility="visible" display="block" marker-end="none" marker-start="none">未命中：核心路径</text>
         <text x="965" y="94" font-size="12" text-anchor="middle" fill="#24364B" fill-opacity="1" stroke="none" stroke-width="1px" stroke-opacity="1" stroke-dasharray="none" stroke-linecap="butt" stroke-linejoin="miter" opacity="1" font-family="Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif" font-weight="400" visibility="visible" display="block" marker-end="none" marker-start="none">目的示例 198.51.100.10</text>
         </g><g id="node-core" fill="rgb(0, 0, 0)" fill-opacity="1" stroke="none" stroke-width="1px" stroke-opacity="1" stroke-dasharray="none" stroke-linecap="butt" stroke-linejoin="miter" opacity="1" font-family="&quot;JetBrains Mono&quot;, ui-monospace, SFMono-Regular, Menlo, Consolas, &quot;DejaVu Sans Mono&quot;, &quot;Liberation Mono&quot;, &quot;Noto Sans Mono CJK SC&quot;, &quot;PingFang SC&quot;, &quot;Hiragino Sans GB&quot;, &quot;Microsoft YaHei&quot;, monospace" font-size="16px" font-weight="400" text-anchor="start" letter-spacing="normal" visibility="visible" display="inline" marker-end="none" marker-start="none">
           <title>UPF → 外部 DN · N3 加 GTP-U；N6 出口 · 架构组件</title>
           <rect x="1290" y="40" width="280" height="72" rx="8" fill="rgb(255, 255, 255)" fill-opacity="1" stroke="none" stroke-width="1px" stroke-opacity="1" stroke-dasharray="none" stroke-linecap="butt" stroke-linejoin="miter" opacity="1" font-family="&quot;JetBrains Mono&quot;, ui-monospace, SFMono-Regular, Menlo, Consolas, &quot;DejaVu Sans Mono&quot;, &quot;Liberation Mono&quot;, &quot;Noto Sans Mono CJK SC&quot;, &quot;PingFang SC&quot;, &quot;Hiragino Sans GB&quot;, &quot;Microsoft YaHei&quot;, monospace" font-size="16px" font-weight="400" text-anchor="start" letter-spacing="normal" visibility="visible" display="inline" marker-end="none" marker-start="none"/>
           <rect x="1290" y="40" width="280" height="72" rx="8" stroke-width="1.25px" fill="rgba(52, 211, 153, 0.18)" fill-opacity="1" stroke="rgb(5, 150, 105)" stroke-opacity="1" stroke-dasharray="none" stroke-linecap="butt" stroke-linejoin="miter" opacity="1" font-family="&quot;JetBrains Mono&quot;, ui-monospace, SFMono-Regular, Menlo, Consolas, &quot;DejaVu Sans Mono&quot;, &quot;Liberation Mono&quot;, &quot;Noto Sans Mono CJK SC&quot;, &quot;PingFang SC&quot;, &quot;Hiragino Sans GB&quot;, &quot;Microsoft YaHei&quot;, monospace" font-size="16px" font-weight="400" text-anchor="start" letter-spacing="normal" visibility="visible" display="inline" marker-end="none" marker-start="none"/>
-          
+
           <text x="1430" y="69" font-size="16" font-weight="600" text-anchor="middle" fill="#24364B" fill-opacity="1" stroke="none" stroke-width="1px" stroke-opacity="1" stroke-dasharray="none" stroke-linecap="butt" stroke-linejoin="miter" opacity="1" font-family="Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif" visibility="visible" display="block" marker-end="none" marker-start="none">UPF → 外部 DN</text>
         <text x="1430" y="94" font-size="12" text-anchor="middle" fill="#24364B" fill-opacity="1" stroke="none" stroke-width="1px" stroke-opacity="1" stroke-dasharray="none" stroke-linecap="butt" stroke-linejoin="miter" opacity="1" font-family="Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif" font-weight="400" visibility="visible" display="block" marker-end="none" marker-start="none">N3 加 GTP-U；N6 出口</text>
         </g><g id="node-nat" fill="rgb(0, 0, 0)" fill-opacity="1" stroke="none" stroke-width="1px" stroke-opacity="1" stroke-dasharray="none" stroke-linecap="butt" stroke-linejoin="miter" opacity="1" font-family="&quot;JetBrains Mono&quot;, ui-monospace, SFMono-Regular, Menlo, Consolas, &quot;DejaVu Sans Mono&quot;, &quot;Liberation Mono&quot;, &quot;Noto Sans Mono CJK SC&quot;, &quot;PingFang SC&quot;, &quot;Hiragino Sans GB&quot;, &quot;Microsoft YaHei&quot;, monospace" font-size="16px" font-weight="400" text-anchor="start" letter-spacing="normal" visibility="visible" display="inline" marker-end="none" marker-start="none">
           <title>命中 + 边缘 NAT · 源 10.45.0.2 → 203.0.113.1 · 架构组件</title>
           <rect x="820" y="250" width="290" height="72" rx="8" fill="rgb(255, 255, 255)" fill-opacity="1" stroke="none" stroke-width="1px" stroke-opacity="1" stroke-dasharray="none" stroke-linecap="butt" stroke-linejoin="miter" opacity="1" font-family="&quot;JetBrains Mono&quot;, ui-monospace, SFMono-Regular, Menlo, Consolas, &quot;DejaVu Sans Mono&quot;, &quot;Liberation Mono&quot;, &quot;Noto Sans Mono CJK SC&quot;, &quot;PingFang SC&quot;, &quot;Hiragino Sans GB&quot;, &quot;Microsoft YaHei&quot;, monospace" font-size="16px" font-weight="400" text-anchor="start" letter-spacing="normal" visibility="visible" display="inline" marker-end="none" marker-start="none"/>
           <rect x="820" y="250" width="290" height="72" rx="8" stroke-width="1.25px" fill="rgba(52, 211, 153, 0.18)" fill-opacity="1" stroke="rgb(5, 150, 105)" stroke-opacity="1" stroke-dasharray="none" stroke-linecap="butt" stroke-linejoin="miter" opacity="1" font-family="&quot;JetBrains Mono&quot;, ui-monospace, SFMono-Regular, Menlo, Consolas, &quot;DejaVu Sans Mono&quot;, &quot;Liberation Mono&quot;, &quot;Noto Sans Mono CJK SC&quot;, &quot;PingFang SC&quot;, &quot;Hiragino Sans GB&quot;, &quot;Microsoft YaHei&quot;, monospace" font-size="16px" font-weight="400" text-anchor="start" letter-spacing="normal" visibility="visible" display="inline" marker-end="none" marker-start="none"/>
-          
+
           <text x="965" y="279" font-size="16" font-weight="600" text-anchor="middle" fill="#24364B" fill-opacity="1" stroke="none" stroke-width="1px" stroke-opacity="1" stroke-dasharray="none" stroke-linecap="butt" stroke-linejoin="miter" opacity="1" font-family="Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif" visibility="visible" display="block" marker-end="none" marker-start="none">命中 + 边缘 NAT</text>
         <text x="965" y="304" font-size="12" text-anchor="middle" fill="#24364B" fill-opacity="1" stroke="none" stroke-width="1px" stroke-opacity="1" stroke-dasharray="none" stroke-linecap="butt" stroke-linejoin="miter" opacity="1" font-family="Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif" font-weight="400" visibility="visible" display="block" marker-end="none" marker-start="none">源 10.45.0.2 → 203.0.113.1</text>
         </g><g id="node-dn_nat" fill="rgb(0, 0, 0)" fill-opacity="1" stroke="none" stroke-width="1px" stroke-opacity="1" stroke-dasharray="none" stroke-linecap="butt" stroke-linejoin="miter" opacity="1" font-family="&quot;JetBrains Mono&quot;, ui-monospace, SFMono-Regular, Menlo, Consolas, &quot;DejaVu Sans Mono&quot;, &quot;Liberation Mono&quot;, &quot;Noto Sans Mono CJK SC&quot;, &quot;PingFang SC&quot;, &quot;Hiragino Sans GB&quot;, &quot;Microsoft YaHei&quot;, monospace" font-size="16px" font-weight="400" text-anchor="start" letter-spacing="normal" visibility="visible" display="inline" marker-end="none" marker-start="none">
           <title>边缘 DN · NAT 视角 · 收：203.0.113.1 → 203.0.113.10 · 架构组件</title>
           <rect x="1290" y="250" width="280" height="72" rx="8" fill="rgb(255, 255, 255)" fill-opacity="1" stroke="none" stroke-width="1px" stroke-opacity="1" stroke-dasharray="none" stroke-linecap="butt" stroke-linejoin="miter" opacity="1" font-family="&quot;JetBrains Mono&quot;, ui-monospace, SFMono-Regular, Menlo, Consolas, &quot;DejaVu Sans Mono&quot;, &quot;Liberation Mono&quot;, &quot;Noto Sans Mono CJK SC&quot;, &quot;PingFang SC&quot;, &quot;Hiragino Sans GB&quot;, &quot;Microsoft YaHei&quot;, monospace" font-size="16px" font-weight="400" text-anchor="start" letter-spacing="normal" visibility="visible" display="inline" marker-end="none" marker-start="none"/>
           <rect x="1290" y="250" width="280" height="72" rx="8" stroke-width="1.25px" fill="rgba(148, 163, 184, 0.18)" fill-opacity="1" stroke="rgb(100, 116, 139)" stroke-opacity="1" stroke-dasharray="none" stroke-linecap="butt" stroke-linejoin="miter" opacity="1" font-family="&quot;JetBrains Mono&quot;, ui-monospace, SFMono-Regular, Menlo, Consolas, &quot;DejaVu Sans Mono&quot;, &quot;Liberation Mono&quot;, &quot;Noto Sans Mono CJK SC&quot;, &quot;PingFang SC&quot;, &quot;Hiragino Sans GB&quot;, &quot;Microsoft YaHei&quot;, monospace" font-size="16px" font-weight="400" text-anchor="start" letter-spacing="normal" visibility="visible" display="inline" marker-end="none" marker-start="none"/>
-          
+
           <text x="1430" y="279" font-size="16" font-weight="600" text-anchor="middle" fill="#24364B" fill-opacity="1" stroke="none" stroke-width="1px" stroke-opacity="1" stroke-dasharray="none" stroke-linecap="butt" stroke-linejoin="miter" opacity="1" font-family="Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif" visibility="visible" display="block" marker-end="none" marker-start="none">边缘 DN · NAT 视角</text>
         <text x="1430" y="304" font-size="12" text-anchor="middle" fill="#24364B" fill-opacity="1" stroke="none" stroke-width="1px" stroke-opacity="1" stroke-dasharray="none" stroke-linecap="butt" stroke-linejoin="miter" opacity="1" font-family="Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif" font-weight="400" visibility="visible" display="block" marker-end="none" marker-start="none">收：203.0.113.1 → 203.0.113.10</text>
         </g><g id="node-route" fill="rgb(0, 0, 0)" fill-opacity="1" stroke="none" stroke-width="1px" stroke-opacity="1" stroke-dasharray="none" stroke-linecap="butt" stroke-linejoin="miter" opacity="1" font-family="&quot;JetBrains Mono&quot;, ui-monospace, SFMono-Regular, Menlo, Consolas, &quot;DejaVu Sans Mono&quot;, &quot;Liberation Mono&quot;, &quot;Noto Sans Mono CJK SC&quot;, &quot;PingFang SC&quot;, &quot;Hiragino Sans GB&quot;, &quot;Microsoft YaHei&quot;, monospace" font-size="16px" font-weight="400" text-anchor="start" letter-spacing="normal" visibility="visible" display="inline" marker-end="none" marker-start="none">
           <title>命中 + 边缘路由 · 源保持 10.45.0.2 · 架构组件</title>
           <rect x="820" y="480" width="290" height="72" rx="8" fill="rgb(255, 255, 255)" fill-opacity="1" stroke="none" stroke-width="1px" stroke-opacity="1" stroke-dasharray="none" stroke-linecap="butt" stroke-linejoin="miter" opacity="1" font-family="&quot;JetBrains Mono&quot;, ui-monospace, SFMono-Regular, Menlo, Consolas, &quot;DejaVu Sans Mono&quot;, &quot;Liberation Mono&quot;, &quot;Noto Sans Mono CJK SC&quot;, &quot;PingFang SC&quot;, &quot;Hiragino Sans GB&quot;, &quot;Microsoft YaHei&quot;, monospace" font-size="16px" font-weight="400" text-anchor="start" letter-spacing="normal" visibility="visible" display="inline" marker-end="none" marker-start="none"/>
           <rect x="820" y="480" width="290" height="72" rx="8" stroke-width="1.25px" fill="rgba(52, 211, 153, 0.18)" fill-opacity="1" stroke="rgb(5, 150, 105)" stroke-opacity="1" stroke-dasharray="none" stroke-linecap="butt" stroke-linejoin="miter" opacity="1" font-family="&quot;JetBrains Mono&quot;, ui-monospace, SFMono-Regular, Menlo, Consolas, &quot;DejaVu Sans Mono&quot;, &quot;Liberation Mono&quot;, &quot;Noto Sans Mono CJK SC&quot;, &quot;PingFang SC&quot;, &quot;Hiragino Sans GB&quot;, &quot;Microsoft YaHei&quot;, monospace" font-size="16px" font-weight="400" text-anchor="start" letter-spacing="normal" visibility="visible" display="inline" marker-end="none" marker-start="none"/>
-          
+
           <text x="965" y="509" font-size="16" font-weight="600" text-anchor="middle" fill="#24364B" fill-opacity="1" stroke="none" stroke-width="1px" stroke-opacity="1" stroke-dasharray="none" stroke-linecap="butt" stroke-linejoin="miter" opacity="1" font-family="Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif" visibility="visible" display="block" marker-end="none" marker-start="none">命中 + 边缘路由</text>
         <text x="965" y="534" font-size="12" text-anchor="middle" fill="#24364B" fill-opacity="1" stroke="none" stroke-width="1px" stroke-opacity="1" stroke-dasharray="none" stroke-linecap="butt" stroke-linejoin="miter" opacity="1" font-family="Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif" font-weight="400" visibility="visible" display="block" marker-end="none" marker-start="none">源保持 10.45.0.2</text>
         </g><g id="node-dn_route" fill="rgb(0, 0, 0)" fill-opacity="1" stroke="none" stroke-width="1px" stroke-opacity="1" stroke-dasharray="none" stroke-linecap="butt" stroke-linejoin="miter" opacity="1" font-family="&quot;JetBrains Mono&quot;, ui-monospace, SFMono-Regular, Menlo, Consolas, &quot;DejaVu Sans Mono&quot;, &quot;Liberation Mono&quot;, &quot;Noto Sans Mono CJK SC&quot;, &quot;PingFang SC&quot;, &quot;Hiragino Sans GB&quot;, &quot;Microsoft YaHei&quot;, monospace" font-size="16px" font-weight="400" text-anchor="start" letter-spacing="normal" visibility="visible" display="inline" marker-end="none" marker-start="none">
           <title>边缘 DN · 路由视角 · 收：10.45.0.2 → 203.0.113.10 · 架构组件</title>
           <rect x="1290" y="480" width="280" height="72" rx="8" fill="rgb(255, 255, 255)" fill-opacity="1" stroke="none" stroke-width="1px" stroke-opacity="1" stroke-dasharray="none" stroke-linecap="butt" stroke-linejoin="miter" opacity="1" font-family="&quot;JetBrains Mono&quot;, ui-monospace, SFMono-Regular, Menlo, Consolas, &quot;DejaVu Sans Mono&quot;, &quot;Liberation Mono&quot;, &quot;Noto Sans Mono CJK SC&quot;, &quot;PingFang SC&quot;, &quot;Hiragino Sans GB&quot;, &quot;Microsoft YaHei&quot;, monospace" font-size="16px" font-weight="400" text-anchor="start" letter-spacing="normal" visibility="visible" display="inline" marker-end="none" marker-start="none"/>
           <rect x="1290" y="480" width="280" height="72" rx="8" stroke-width="1.25px" fill="rgba(148, 163, 184, 0.18)" fill-opacity="1" stroke="rgb(100, 116, 139)" stroke-opacity="1" stroke-dasharray="none" stroke-linecap="butt" stroke-linejoin="miter" opacity="1" font-family="&quot;JetBrains Mono&quot;, ui-monospace, SFMono-Regular, Menlo, Consolas, &quot;DejaVu Sans Mono&quot;, &quot;Liberation Mono&quot;, &quot;Noto Sans Mono CJK SC&quot;, &quot;PingFang SC&quot;, &quot;Hiragino Sans GB&quot;, &quot;Microsoft YaHei&quot;, monospace" font-size="16px" font-weight="400" text-anchor="start" letter-spacing="normal" visibility="visible" display="inline" marker-end="none" marker-start="none"/>
-          
+
           <text x="1430" y="509" font-size="16" font-weight="600" text-anchor="middle" fill="#24364B" fill-opacity="1" stroke="none" stroke-width="1px" stroke-opacity="1" stroke-dasharray="none" stroke-linecap="butt" stroke-linejoin="miter" opacity="1" font-family="Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif" visibility="visible" display="block" marker-end="none" marker-start="none">边缘 DN · 路由视角</text>
         <text x="1430" y="534" font-size="12" text-anchor="middle" fill="#24364B" fill-opacity="1" stroke="none" stroke-width="1px" stroke-opacity="1" stroke-dasharray="none" stroke-linecap="butt" stroke-linejoin="miter" opacity="1" font-family="Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif" font-weight="400" visibility="visible" display="block" marker-end="none" marker-start="none">收：10.45.0.2 → 203.0.113.10</text>
         </g><g fill="rgb(0, 0, 0)" fill-opacity="1" stroke="none" stroke-width="1px" stroke-opacity="1" stroke-dasharray="none" stroke-linecap="butt" stroke-linejoin="miter" opacity="1" font-family="&quot;JetBrains Mono&quot;, ui-monospace, SFMono-Regular, Menlo, Consolas, &quot;DejaVu Sans Mono&quot;, &quot;Liberation Mono&quot;, &quot;Noto Sans Mono CJK SC&quot;, &quot;PingFang SC&quot;, &quot;Hiragino Sans GB&quot;, &quot;Microsoft YaHei&quot;, monospace" font-size="16px" font-weight="400" text-anchor="start" letter-spacing="normal" visibility="visible" display="inline" marker-end="none" marker-start="none">

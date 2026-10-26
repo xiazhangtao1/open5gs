@@ -20,58 +20,58 @@
             <path d="M 40 0 L 0 0 0 40" stroke-width="0.5px" fill="none" fill-opacity="1" stroke="rgb(233, 237, 242)" stroke-opacity="1" stroke-dasharray="none" stroke-linecap="butt" stroke-linejoin="miter" opacity="1" font-family="&quot;JetBrains Mono&quot;, ui-monospace, SFMono-Regular, Menlo, Consolas, &quot;DejaVu Sans Mono&quot;, &quot;Liberation Mono&quot;, &quot;Noto Sans Mono CJK SC&quot;, &quot;PingFang SC&quot;, &quot;Hiragino Sans GB&quot;, &quot;Microsoft YaHei&quot;, monospace" font-size="16px" font-weight="400" text-anchor="start" letter-spacing="normal" visibility="visible" display="inline" marker-end="none" marker-start="none"/>
           </pattern>
         <marker id="arrow-51677F" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 Z" fill="#51677F"/></marker></defs>
-        
+
 
         <!-- Background Grid -->
-        
+
 
         <!-- Boundaries (behind everything) -->
 
 
         <!-- Connection paths (before components for correct z-order) -->
-        
-        
-        
-        
-        
-        
-        
-        
-        
+
+
+
+
+
+
+
+
+
 
         <!-- Components -->
-        
 
-        
 
-        
 
-        
 
-        
 
-        
 
-        
 
-        
 
-        
 
-        
 
-        
+
+
+
+
+
+
+
+
+
+
+
 
         <!-- Connection labels -->
-        
-        
-        
-        
-        
-        
-        
-        
-        
+
+
+
+
+
+
+
+
+
 
         <!-- Boundary labels (foreground masks keep routes out of titles) -->
 
@@ -109,77 +109,77 @@
           <title>上行 ① UE · 内层 10.45.0.2 → 198.51.100.10 · 架构组件</title>
           <rect x="40" y="40" width="310" height="72" rx="8" fill="rgb(255, 255, 255)" fill-opacity="1" stroke="none" stroke-width="1px" stroke-opacity="1" stroke-dasharray="none" stroke-linecap="butt" stroke-linejoin="miter" opacity="1" font-family="&quot;JetBrains Mono&quot;, ui-monospace, SFMono-Regular, Menlo, Consolas, &quot;DejaVu Sans Mono&quot;, &quot;Liberation Mono&quot;, &quot;Noto Sans Mono CJK SC&quot;, &quot;PingFang SC&quot;, &quot;Hiragino Sans GB&quot;, &quot;Microsoft YaHei&quot;, monospace" font-size="16px" font-weight="400" text-anchor="start" letter-spacing="normal" visibility="visible" display="inline" marker-end="none" marker-start="none"/>
           <rect x="40" y="40" width="310" height="72" rx="8" stroke-width="1.25px" fill="rgba(251, 146, 60, 0.15)" fill-opacity="1" stroke="rgb(234, 88, 12)" stroke-opacity="1" stroke-dasharray="none" stroke-linecap="butt" stroke-linejoin="miter" opacity="1" font-family="&quot;JetBrains Mono&quot;, ui-monospace, SFMono-Regular, Menlo, Consolas, &quot;DejaVu Sans Mono&quot;, &quot;Liberation Mono&quot;, &quot;Noto Sans Mono CJK SC&quot;, &quot;PingFang SC&quot;, &quot;Hiragino Sans GB&quot;, &quot;Microsoft YaHei&quot;, monospace" font-size="16px" font-weight="400" text-anchor="start" letter-spacing="normal" visibility="visible" display="inline" marker-end="none" marker-start="none"/>
-          
+
           <text x="195" y="69" font-size="16" font-weight="600" text-anchor="middle" fill="#24364B" fill-opacity="1" stroke="none" stroke-width="1px" stroke-opacity="1" stroke-dasharray="none" stroke-linecap="butt" stroke-linejoin="miter" opacity="1" font-family="Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif" visibility="visible" display="block" marker-end="none" marker-start="none">上行 ① UE</text>
         <text x="195" y="94" font-size="12" text-anchor="middle" fill="#24364B" fill-opacity="1" stroke="none" stroke-width="1px" stroke-opacity="1" stroke-dasharray="none" stroke-linecap="butt" stroke-linejoin="miter" opacity="1" font-family="Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif" font-weight="400" visibility="visible" display="block" marker-end="none" marker-start="none">内层 10.45.0.2 → 198.51.100.10</text>
         </g><g id="node-ulgtp" fill="rgb(0, 0, 0)" fill-opacity="1" stroke="none" stroke-width="1px" stroke-opacity="1" stroke-dasharray="none" stroke-linecap="butt" stroke-linejoin="miter" opacity="1" font-family="&quot;JetBrains Mono&quot;, ui-monospace, SFMono-Regular, Menlo, Consolas, &quot;DejaVu Sans Mono&quot;, &quot;Liberation Mono&quot;, &quot;Noto Sans Mono CJK SC&quot;, &quot;PingFang SC&quot;, &quot;Hiragino Sans GB&quot;, &quot;Microsoft YaHei&quot;, monospace" font-size="16px" font-weight="400" text-anchor="start" letter-spacing="normal" visibility="visible" display="inline" marker-end="none" marker-start="none">
           <title>上行 ② gNB 加头 · 外层 192.168.2.10 → 192.168.2.20 · 架构组件</title>
           <rect x="520" y="40" width="320" height="72" rx="8" fill="rgb(255, 255, 255)" fill-opacity="1" stroke="none" stroke-width="1px" stroke-opacity="1" stroke-dasharray="none" stroke-linecap="butt" stroke-linejoin="miter" opacity="1" font-family="&quot;JetBrains Mono&quot;, ui-monospace, SFMono-Regular, Menlo, Consolas, &quot;DejaVu Sans Mono&quot;, &quot;Liberation Mono&quot;, &quot;Noto Sans Mono CJK SC&quot;, &quot;PingFang SC&quot;, &quot;Hiragino Sans GB&quot;, &quot;Microsoft YaHei&quot;, monospace" font-size="16px" font-weight="400" text-anchor="start" letter-spacing="normal" visibility="visible" display="inline" marker-end="none" marker-start="none"/>
           <rect x="520" y="40" width="320" height="72" rx="8" stroke-width="1.25px" fill="rgba(251, 146, 60, 0.15)" fill-opacity="1" stroke="rgb(234, 88, 12)" stroke-opacity="1" stroke-dasharray="none" stroke-linecap="butt" stroke-linejoin="miter" opacity="1" font-family="&quot;JetBrains Mono&quot;, ui-monospace, SFMono-Regular, Menlo, Consolas, &quot;DejaVu Sans Mono&quot;, &quot;Liberation Mono&quot;, &quot;Noto Sans Mono CJK SC&quot;, &quot;PingFang SC&quot;, &quot;Hiragino Sans GB&quot;, &quot;Microsoft YaHei&quot;, monospace" font-size="16px" font-weight="400" text-anchor="start" letter-spacing="normal" visibility="visible" display="inline" marker-end="none" marker-start="none"/>
-          
+
           <text x="680" y="69" font-size="16" font-weight="600" text-anchor="middle" fill="#24364B" fill-opacity="1" stroke="none" stroke-width="1px" stroke-opacity="1" stroke-dasharray="none" stroke-linecap="butt" stroke-linejoin="miter" opacity="1" font-family="Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif" visibility="visible" display="block" marker-end="none" marker-start="none">上行 ② gNB 加头</text>
         <text x="680" y="94" font-size="12" text-anchor="middle" fill="#24364B" fill-opacity="1" stroke="none" stroke-width="1px" stroke-opacity="1" stroke-dasharray="none" stroke-linecap="butt" stroke-linejoin="miter" opacity="1" font-family="Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif" font-weight="400" visibility="visible" display="block" marker-end="none" marker-start="none">外层 192.168.2.10 → 192.168.2.20</text>
         </g><g id="node-ulupf" fill="rgb(0, 0, 0)" fill-opacity="1" stroke="none" stroke-width="1px" stroke-opacity="1" stroke-dasharray="none" stroke-linecap="butt" stroke-linejoin="miter" opacity="1" font-family="&quot;JetBrains Mono&quot;, ui-monospace, SFMono-Regular, Menlo, Consolas, &quot;DejaVu Sans Mono&quot;, &quot;Liberation Mono&quot;, &quot;Noto Sans Mono CJK SC&quot;, &quot;PingFang SC&quot;, &quot;Hiragino Sans GB&quot;, &quot;Microsoft YaHei&quot;, monospace" font-size="16px" font-weight="400" text-anchor="start" letter-spacing="normal" visibility="visible" display="inline" marker-end="none" marker-start="none">
           <title>上行 ③ UPF 解头 · 内层 10.45.0.2 → 198.51.100.10 · 架构组件</title>
           <rect x="1010" y="40" width="310" height="72" rx="8" fill="rgb(255, 255, 255)" fill-opacity="1" stroke="none" stroke-width="1px" stroke-opacity="1" stroke-dasharray="none" stroke-linecap="butt" stroke-linejoin="miter" opacity="1" font-family="&quot;JetBrains Mono&quot;, ui-monospace, SFMono-Regular, Menlo, Consolas, &quot;DejaVu Sans Mono&quot;, &quot;Liberation Mono&quot;, &quot;Noto Sans Mono CJK SC&quot;, &quot;PingFang SC&quot;, &quot;Hiragino Sans GB&quot;, &quot;Microsoft YaHei&quot;, monospace" font-size="16px" font-weight="400" text-anchor="start" letter-spacing="normal" visibility="visible" display="inline" marker-end="none" marker-start="none"/>
           <rect x="1010" y="40" width="310" height="72" rx="8" stroke-width="1.25px" fill="rgba(251, 146, 60, 0.15)" fill-opacity="1" stroke="rgb(234, 88, 12)" stroke-opacity="1" stroke-dasharray="none" stroke-linecap="butt" stroke-linejoin="miter" opacity="1" font-family="&quot;JetBrains Mono&quot;, ui-monospace, SFMono-Regular, Menlo, Consolas, &quot;DejaVu Sans Mono&quot;, &quot;Liberation Mono&quot;, &quot;Noto Sans Mono CJK SC&quot;, &quot;PingFang SC&quot;, &quot;Hiragino Sans GB&quot;, &quot;Microsoft YaHei&quot;, monospace" font-size="16px" font-weight="400" text-anchor="start" letter-spacing="normal" visibility="visible" display="inline" marker-end="none" marker-start="none"/>
-          
+
           <text x="1165" y="69" font-size="16" font-weight="600" text-anchor="middle" fill="#24364B" fill-opacity="1" stroke="none" stroke-width="1px" stroke-opacity="1" stroke-dasharray="none" stroke-linecap="butt" stroke-linejoin="miter" opacity="1" font-family="Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif" visibility="visible" display="block" marker-end="none" marker-start="none">上行 ③ UPF 解头</text>
         <text x="1165" y="94" font-size="12" text-anchor="middle" fill="#24364B" fill-opacity="1" stroke="none" stroke-width="1px" stroke-opacity="1" stroke-dasharray="none" stroke-linecap="butt" stroke-linejoin="miter" opacity="1" font-family="Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif" font-weight="400" visibility="visible" display="block" marker-end="none" marker-start="none">内层 10.45.0.2 → 198.51.100.10</text>
         </g><g id="node-nat" fill="rgb(0, 0, 0)" fill-opacity="1" stroke="none" stroke-width="1px" stroke-opacity="1" stroke-dasharray="none" stroke-linecap="butt" stroke-linejoin="miter" opacity="1" font-family="&quot;JetBrains Mono&quot;, ui-monospace, SFMono-Regular, Menlo, Consolas, &quot;DejaVu Sans Mono&quot;, &quot;Liberation Mono&quot;, &quot;Noto Sans Mono CJK SC&quot;, &quot;PingFang SC&quot;, &quot;Hiragino Sans GB&quot;, &quot;Microsoft YaHei&quot;, monospace" font-size="16px" font-weight="400" text-anchor="start" letter-spacing="normal" visibility="visible" display="inline" marker-end="none" marker-start="none">
           <title>④ VPP N6 · NAT · 源 10.45.0.2 → 198.51.100.1 · 架构组件</title>
           <rect x="1010" y="240" width="310" height="72" rx="8" fill="rgb(255, 255, 255)" fill-opacity="1" stroke="none" stroke-width="1px" stroke-opacity="1" stroke-dasharray="none" stroke-linecap="butt" stroke-linejoin="miter" opacity="1" font-family="&quot;JetBrains Mono&quot;, ui-monospace, SFMono-Regular, Menlo, Consolas, &quot;DejaVu Sans Mono&quot;, &quot;Liberation Mono&quot;, &quot;Noto Sans Mono CJK SC&quot;, &quot;PingFang SC&quot;, &quot;Hiragino Sans GB&quot;, &quot;Microsoft YaHei&quot;, monospace" font-size="16px" font-weight="400" text-anchor="start" letter-spacing="normal" visibility="visible" display="inline" marker-end="none" marker-start="none"/>
           <rect x="1010" y="240" width="310" height="72" rx="8" stroke-width="1.25px" fill="rgba(52, 211, 153, 0.18)" fill-opacity="1" stroke="rgb(5, 150, 105)" stroke-opacity="1" stroke-dasharray="none" stroke-linecap="butt" stroke-linejoin="miter" opacity="1" font-family="&quot;JetBrains Mono&quot;, ui-monospace, SFMono-Regular, Menlo, Consolas, &quot;DejaVu Sans Mono&quot;, &quot;Liberation Mono&quot;, &quot;Noto Sans Mono CJK SC&quot;, &quot;PingFang SC&quot;, &quot;Hiragino Sans GB&quot;, &quot;Microsoft YaHei&quot;, monospace" font-size="16px" font-weight="400" text-anchor="start" letter-spacing="normal" visibility="visible" display="inline" marker-end="none" marker-start="none"/>
-          
+
           <text x="1165" y="269" font-size="16" font-weight="600" text-anchor="middle" fill="#24364B" fill-opacity="1" stroke="none" stroke-width="1px" stroke-opacity="1" stroke-dasharray="none" stroke-linecap="butt" stroke-linejoin="miter" opacity="1" font-family="Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif" visibility="visible" display="block" marker-end="none" marker-start="none">④ VPP N6 · NAT</text>
         <text x="1165" y="294" font-size="12" text-anchor="middle" fill="#24364B" fill-opacity="1" stroke="none" stroke-width="1px" stroke-opacity="1" stroke-dasharray="none" stroke-linecap="butt" stroke-linejoin="miter" opacity="1" font-family="Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif" font-weight="400" visibility="visible" display="block" marker-end="none" marker-start="none">源 10.45.0.2 → 198.51.100.1</text>
         </g><g id="node-dn" fill="rgb(0, 0, 0)" fill-opacity="1" stroke="none" stroke-width="1px" stroke-opacity="1" stroke-dasharray="none" stroke-linecap="butt" stroke-linejoin="miter" opacity="1" font-family="&quot;JetBrains Mono&quot;, ui-monospace, SFMono-Regular, Menlo, Consolas, &quot;DejaVu Sans Mono&quot;, &quot;Liberation Mono&quot;, &quot;Noto Sans Mono CJK SC&quot;, &quot;PingFang SC&quot;, &quot;Hiragino Sans GB&quot;, &quot;Microsoft YaHei&quot;, monospace" font-size="16px" font-weight="400" text-anchor="start" letter-spacing="normal" visibility="visible" display="inline" marker-end="none" marker-start="none">
           <title>⑤ DN 收包 / 回复 · 收：源 198.51.100.1 → DN .10 · 架构组件</title>
           <rect x="520" y="240" width="320" height="72" rx="8" fill="rgb(255, 255, 255)" fill-opacity="1" stroke="none" stroke-width="1px" stroke-opacity="1" stroke-dasharray="none" stroke-linecap="butt" stroke-linejoin="miter" opacity="1" font-family="&quot;JetBrains Mono&quot;, ui-monospace, SFMono-Regular, Menlo, Consolas, &quot;DejaVu Sans Mono&quot;, &quot;Liberation Mono&quot;, &quot;Noto Sans Mono CJK SC&quot;, &quot;PingFang SC&quot;, &quot;Hiragino Sans GB&quot;, &quot;Microsoft YaHei&quot;, monospace" font-size="16px" font-weight="400" text-anchor="start" letter-spacing="normal" visibility="visible" display="inline" marker-end="none" marker-start="none"/>
           <rect x="520" y="240" width="320" height="72" rx="8" stroke-width="1.25px" fill="rgba(148, 163, 184, 0.18)" fill-opacity="1" stroke="rgb(100, 116, 139)" stroke-opacity="1" stroke-dasharray="none" stroke-linecap="butt" stroke-linejoin="miter" opacity="1" font-family="&quot;JetBrains Mono&quot;, ui-monospace, SFMono-Regular, Menlo, Consolas, &quot;DejaVu Sans Mono&quot;, &quot;Liberation Mono&quot;, &quot;Noto Sans Mono CJK SC&quot;, &quot;PingFang SC&quot;, &quot;Hiragino Sans GB&quot;, &quot;Microsoft YaHei&quot;, monospace" font-size="16px" font-weight="400" text-anchor="start" letter-spacing="normal" visibility="visible" display="inline" marker-end="none" marker-start="none"/>
-          
+
           <text x="680" y="269" font-size="16" font-weight="600" text-anchor="middle" fill="#24364B" fill-opacity="1" stroke="none" stroke-width="1px" stroke-opacity="1" stroke-dasharray="none" stroke-linecap="butt" stroke-linejoin="miter" opacity="1" font-family="Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif" visibility="visible" display="block" marker-end="none" marker-start="none">⑤ DN 收包 / 回复</text>
         <text x="680" y="294" font-size="12" text-anchor="middle" fill="#24364B" fill-opacity="1" stroke="none" stroke-width="1px" stroke-opacity="1" stroke-dasharray="none" stroke-linecap="butt" stroke-linejoin="miter" opacity="1" font-family="Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif" font-weight="400" visibility="visible" display="block" marker-end="none" marker-start="none">收：源 198.51.100.1 → DN .10</text>
         </g><g id="node-dlnat" fill="rgb(0, 0, 0)" fill-opacity="1" stroke="none" stroke-width="1px" stroke-opacity="1" stroke-dasharray="none" stroke-linecap="butt" stroke-linejoin="miter" opacity="1" font-family="&quot;JetBrains Mono&quot;, ui-monospace, SFMono-Regular, Menlo, Consolas, &quot;DejaVu Sans Mono&quot;, &quot;Liberation Mono&quot;, &quot;Noto Sans Mono CJK SC&quot;, &quot;PingFang SC&quot;, &quot;Hiragino Sans GB&quot;, &quot;Microsoft YaHei&quot;, monospace" font-size="16px" font-weight="400" text-anchor="start" letter-spacing="normal" visibility="visible" display="inline" marker-end="none" marker-start="none">
           <title>下行 ① 逆 N6 NAT · 目的 198.51.100.1 → 10.45.0.2 · 架构组件</title>
           <rect x="40" y="240" width="310" height="72" rx="8" fill="rgb(255, 255, 255)" fill-opacity="1" stroke="none" stroke-width="1px" stroke-opacity="1" stroke-dasharray="none" stroke-linecap="butt" stroke-linejoin="miter" opacity="1" font-family="&quot;JetBrains Mono&quot;, ui-monospace, SFMono-Regular, Menlo, Consolas, &quot;DejaVu Sans Mono&quot;, &quot;Liberation Mono&quot;, &quot;Noto Sans Mono CJK SC&quot;, &quot;PingFang SC&quot;, &quot;Hiragino Sans GB&quot;, &quot;Microsoft YaHei&quot;, monospace" font-size="16px" font-weight="400" text-anchor="start" letter-spacing="normal" visibility="visible" display="inline" marker-end="none" marker-start="none"/>
           <rect x="40" y="240" width="310" height="72" rx="8" stroke-width="1.25px" fill="rgba(52, 211, 153, 0.18)" fill-opacity="1" stroke="rgb(5, 150, 105)" stroke-opacity="1" stroke-dasharray="none" stroke-linecap="butt" stroke-linejoin="miter" opacity="1" font-family="&quot;JetBrains Mono&quot;, ui-monospace, SFMono-Regular, Menlo, Consolas, &quot;DejaVu Sans Mono&quot;, &quot;Liberation Mono&quot;, &quot;Noto Sans Mono CJK SC&quot;, &quot;PingFang SC&quot;, &quot;Hiragino Sans GB&quot;, &quot;Microsoft YaHei&quot;, monospace" font-size="16px" font-weight="400" text-anchor="start" letter-spacing="normal" visibility="visible" display="inline" marker-end="none" marker-start="none"/>
-          
+
           <text x="195" y="269" font-size="16" font-weight="600" text-anchor="middle" fill="#24364B" fill-opacity="1" stroke="none" stroke-width="1px" stroke-opacity="1" stroke-dasharray="none" stroke-linecap="butt" stroke-linejoin="miter" opacity="1" font-family="Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif" visibility="visible" display="block" marker-end="none" marker-start="none">下行 ① 逆 N6 NAT</text>
         <text x="195" y="294" font-size="12" text-anchor="middle" fill="#24364B" fill-opacity="1" stroke="none" stroke-width="1px" stroke-opacity="1" stroke-dasharray="none" stroke-linecap="butt" stroke-linejoin="miter" opacity="1" font-family="Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif" font-weight="400" visibility="visible" display="block" marker-end="none" marker-start="none">目的 198.51.100.1 → 10.45.0.2</text>
         </g><g id="node-dlupf" fill="rgb(0, 0, 0)" fill-opacity="1" stroke="none" stroke-width="1px" stroke-opacity="1" stroke-dasharray="none" stroke-linecap="butt" stroke-linejoin="miter" opacity="1" font-family="&quot;JetBrains Mono&quot;, ui-monospace, SFMono-Regular, Menlo, Consolas, &quot;DejaVu Sans Mono&quot;, &quot;Liberation Mono&quot;, &quot;Noto Sans Mono CJK SC&quot;, &quot;PingFang SC&quot;, &quot;Hiragino Sans GB&quot;, &quot;Microsoft YaHei&quot;, monospace" font-size="16px" font-weight="400" text-anchor="start" letter-spacing="normal" visibility="visible" display="inline" marker-end="none" marker-start="none">
           <title>下行 ② UPF 加头 · 外层 192.168.2.20 → 192.168.2.10 · 架构组件</title>
           <rect x="40" y="440" width="310" height="72" rx="8" fill="rgb(255, 255, 255)" fill-opacity="1" stroke="none" stroke-width="1px" stroke-opacity="1" stroke-dasharray="none" stroke-linecap="butt" stroke-linejoin="miter" opacity="1" font-family="&quot;JetBrains Mono&quot;, ui-monospace, SFMono-Regular, Menlo, Consolas, &quot;DejaVu Sans Mono&quot;, &quot;Liberation Mono&quot;, &quot;Noto Sans Mono CJK SC&quot;, &quot;PingFang SC&quot;, &quot;Hiragino Sans GB&quot;, &quot;Microsoft YaHei&quot;, monospace" font-size="16px" font-weight="400" text-anchor="start" letter-spacing="normal" visibility="visible" display="inline" marker-end="none" marker-start="none"/>
           <rect x="40" y="440" width="310" height="72" rx="8" stroke-width="1.25px" fill="rgba(52, 211, 153, 0.18)" fill-opacity="1" stroke="rgb(5, 150, 105)" stroke-opacity="1" stroke-dasharray="none" stroke-linecap="butt" stroke-linejoin="miter" opacity="1" font-family="&quot;JetBrains Mono&quot;, ui-monospace, SFMono-Regular, Menlo, Consolas, &quot;DejaVu Sans Mono&quot;, &quot;Liberation Mono&quot;, &quot;Noto Sans Mono CJK SC&quot;, &quot;PingFang SC&quot;, &quot;Hiragino Sans GB&quot;, &quot;Microsoft YaHei&quot;, monospace" font-size="16px" font-weight="400" text-anchor="start" letter-spacing="normal" visibility="visible" display="inline" marker-end="none" marker-start="none"/>
-          
+
           <text x="195" y="469" font-size="16" font-weight="600" text-anchor="middle" fill="#24364B" fill-opacity="1" stroke="none" stroke-width="1px" stroke-opacity="1" stroke-dasharray="none" stroke-linecap="butt" stroke-linejoin="miter" opacity="1" font-family="Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif" visibility="visible" display="block" marker-end="none" marker-start="none">下行 ② UPF 加头</text>
         <text x="195" y="494" font-size="12" text-anchor="middle" fill="#24364B" fill-opacity="1" stroke="none" stroke-width="1px" stroke-opacity="1" stroke-dasharray="none" stroke-linecap="butt" stroke-linejoin="miter" opacity="1" font-family="Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif" font-weight="400" visibility="visible" display="block" marker-end="none" marker-start="none">外层 192.168.2.20 → 192.168.2.10</text>
         </g><g id="node-dlgnb" fill="rgb(0, 0, 0)" fill-opacity="1" stroke="none" stroke-width="1px" stroke-opacity="1" stroke-dasharray="none" stroke-linecap="butt" stroke-linejoin="miter" opacity="1" font-family="&quot;JetBrains Mono&quot;, ui-monospace, SFMono-Regular, Menlo, Consolas, &quot;DejaVu Sans Mono&quot;, &quot;Liberation Mono&quot;, &quot;Noto Sans Mono CJK SC&quot;, &quot;PingFang SC&quot;, &quot;Hiragino Sans GB&quot;, &quot;Microsoft YaHei&quot;, monospace" font-size="16px" font-weight="400" text-anchor="start" letter-spacing="normal" visibility="visible" display="inline" marker-end="none" marker-start="none">
           <title>下行 ③ gNB 解头 · 内层 198.51.100.10 → 10.45.0.2 · 架构组件</title>
           <rect x="520" y="440" width="320" height="72" rx="8" fill="rgb(255, 255, 255)" fill-opacity="1" stroke="none" stroke-width="1px" stroke-opacity="1" stroke-dasharray="none" stroke-linecap="butt" stroke-linejoin="miter" opacity="1" font-family="&quot;JetBrains Mono&quot;, ui-monospace, SFMono-Regular, Menlo, Consolas, &quot;DejaVu Sans Mono&quot;, &quot;Liberation Mono&quot;, &quot;Noto Sans Mono CJK SC&quot;, &quot;PingFang SC&quot;, &quot;Hiragino Sans GB&quot;, &quot;Microsoft YaHei&quot;, monospace" font-size="16px" font-weight="400" text-anchor="start" letter-spacing="normal" visibility="visible" display="inline" marker-end="none" marker-start="none"/>
           <rect x="520" y="440" width="320" height="72" rx="8" stroke-width="1.25px" fill="rgba(251, 146, 60, 0.15)" fill-opacity="1" stroke="rgb(234, 88, 12)" stroke-opacity="1" stroke-dasharray="none" stroke-linecap="butt" stroke-linejoin="miter" opacity="1" font-family="&quot;JetBrains Mono&quot;, ui-monospace, SFMono-Regular, Menlo, Consolas, &quot;DejaVu Sans Mono&quot;, &quot;Liberation Mono&quot;, &quot;Noto Sans Mono CJK SC&quot;, &quot;PingFang SC&quot;, &quot;Hiragino Sans GB&quot;, &quot;Microsoft YaHei&quot;, monospace" font-size="16px" font-weight="400" text-anchor="start" letter-spacing="normal" visibility="visible" display="inline" marker-end="none" marker-start="none"/>
-          
+
           <text x="680" y="469" font-size="16" font-weight="600" text-anchor="middle" fill="#24364B" fill-opacity="1" stroke="none" stroke-width="1px" stroke-opacity="1" stroke-dasharray="none" stroke-linecap="butt" stroke-linejoin="miter" opacity="1" font-family="Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif" visibility="visible" display="block" marker-end="none" marker-start="none">下行 ③ gNB 解头</text>
         <text x="680" y="494" font-size="12" text-anchor="middle" fill="#24364B" fill-opacity="1" stroke="none" stroke-width="1px" stroke-opacity="1" stroke-dasharray="none" stroke-linecap="butt" stroke-linejoin="miter" opacity="1" font-family="Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif" font-weight="400" visibility="visible" display="block" marker-end="none" marker-start="none">内层 198.51.100.10 → 10.45.0.2</text>
         </g><g id="node-dlue" fill="rgb(0, 0, 0)" fill-opacity="1" stroke="none" stroke-width="1px" stroke-opacity="1" stroke-dasharray="none" stroke-linecap="butt" stroke-linejoin="miter" opacity="1" font-family="&quot;JetBrains Mono&quot;, ui-monospace, SFMono-Regular, Menlo, Consolas, &quot;DejaVu Sans Mono&quot;, &quot;Liberation Mono&quot;, &quot;Noto Sans Mono CJK SC&quot;, &quot;PingFang SC&quot;, &quot;Hiragino Sans GB&quot;, &quot;Microsoft YaHei&quot;, monospace" font-size="16px" font-weight="400" text-anchor="start" letter-spacing="normal" visibility="visible" display="inline" marker-end="none" marker-start="none">
           <title>下行 ④ UE 收包 · 业务目的 10.45.0.2 · 架构组件</title>
           <rect x="1010" y="440" width="310" height="72" rx="8" fill="rgb(255, 255, 255)" fill-opacity="1" stroke="none" stroke-width="1px" stroke-opacity="1" stroke-dasharray="none" stroke-linecap="butt" stroke-linejoin="miter" opacity="1" font-family="&quot;JetBrains Mono&quot;, ui-monospace, SFMono-Regular, Menlo, Consolas, &quot;DejaVu Sans Mono&quot;, &quot;Liberation Mono&quot;, &quot;Noto Sans Mono CJK SC&quot;, &quot;PingFang SC&quot;, &quot;Hiragino Sans GB&quot;, &quot;Microsoft YaHei&quot;, monospace" font-size="16px" font-weight="400" text-anchor="start" letter-spacing="normal" visibility="visible" display="inline" marker-end="none" marker-start="none"/>
           <rect x="1010" y="440" width="310" height="72" rx="8" stroke-width="1.25px" fill="rgba(251, 146, 60, 0.15)" fill-opacity="1" stroke="rgb(234, 88, 12)" stroke-opacity="1" stroke-dasharray="none" stroke-linecap="butt" stroke-linejoin="miter" opacity="1" font-family="&quot;JetBrains Mono&quot;, ui-monospace, SFMono-Regular, Menlo, Consolas, &quot;DejaVu Sans Mono&quot;, &quot;Liberation Mono&quot;, &quot;Noto Sans Mono CJK SC&quot;, &quot;PingFang SC&quot;, &quot;Hiragino Sans GB&quot;, &quot;Microsoft YaHei&quot;, monospace" font-size="16px" font-weight="400" text-anchor="start" letter-spacing="normal" visibility="visible" display="inline" marker-end="none" marker-start="none"/>
-          
+
           <text x="1165" y="469" font-size="16" font-weight="600" text-anchor="middle" fill="#24364B" fill-opacity="1" stroke="none" stroke-width="1px" stroke-opacity="1" stroke-dasharray="none" stroke-linecap="butt" stroke-linejoin="miter" opacity="1" font-family="Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif" visibility="visible" display="block" marker-end="none" marker-start="none">下行 ④ UE 收包</text>
         <text x="1165" y="494" font-size="12" text-anchor="middle" fill="#24364B" fill-opacity="1" stroke="none" stroke-width="1px" stroke-opacity="1" stroke-dasharray="none" stroke-linecap="butt" stroke-linejoin="miter" opacity="1" font-family="Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif" font-weight="400" visibility="visible" display="block" marker-end="none" marker-start="none">业务目的 10.45.0.2</text>
         </g><g id="node-routemode" fill="rgb(0, 0, 0)" fill-opacity="1" stroke="none" stroke-width="1px" stroke-opacity="1" stroke-dasharray="none" stroke-linecap="butt" stroke-linejoin="miter" opacity="1" font-family="&quot;JetBrains Mono&quot;, ui-monospace, SFMono-Regular, Menlo, Consolas, &quot;DejaVu Sans Mono&quot;, &quot;Liberation Mono&quot;, &quot;Noto Sans Mono CJK SC&quot;, &quot;PingFang SC&quot;, &quot;Hiragino Sans GB&quot;, &quot;Microsoft YaHei&quot;, monospace" font-size="16px" font-weight="400" text-anchor="start" letter-spacing="normal" visibility="visible" display="inline" marker-end="none" marker-start="none">
           <title>替代选择：关闭 N6 NAT · DN 收：10.45.0.2 → 198.51.100.10 · 架构组件</title>
           <rect x="40" y="670" width="360" height="72" rx="8" fill="rgb(255, 255, 255)" fill-opacity="1" stroke="none" stroke-width="1px" stroke-opacity="1" stroke-dasharray="none" stroke-linecap="butt" stroke-linejoin="miter" opacity="1" font-family="&quot;JetBrains Mono&quot;, ui-monospace, SFMono-Regular, Menlo, Consolas, &quot;DejaVu Sans Mono&quot;, &quot;Liberation Mono&quot;, &quot;Noto Sans Mono CJK SC&quot;, &quot;PingFang SC&quot;, &quot;Hiragino Sans GB&quot;, &quot;Microsoft YaHei&quot;, monospace" font-size="16px" font-weight="400" text-anchor="start" letter-spacing="normal" visibility="visible" display="inline" marker-end="none" marker-start="none"/>
           <rect x="40" y="670" width="360" height="72" rx="8" stroke-width="1.25px" fill="rgba(52, 211, 153, 0.18)" fill-opacity="1" stroke="rgb(5, 150, 105)" stroke-opacity="1" stroke-dasharray="none" stroke-linecap="butt" stroke-linejoin="miter" opacity="1" font-family="&quot;JetBrains Mono&quot;, ui-monospace, SFMono-Regular, Menlo, Consolas, &quot;DejaVu Sans Mono&quot;, &quot;Liberation Mono&quot;, &quot;Noto Sans Mono CJK SC&quot;, &quot;PingFang SC&quot;, &quot;Hiragino Sans GB&quot;, &quot;Microsoft YaHei&quot;, monospace" font-size="16px" font-weight="400" text-anchor="start" letter-spacing="normal" visibility="visible" display="inline" marker-end="none" marker-start="none"/>
-          
+
           <text x="220" y="699" font-size="16" font-weight="600" text-anchor="middle" fill="#24364B" fill-opacity="1" stroke="none" stroke-width="1px" stroke-opacity="1" stroke-dasharray="none" stroke-linecap="butt" stroke-linejoin="miter" opacity="1" font-family="Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif" visibility="visible" display="block" marker-end="none" marker-start="none">替代选择：关闭 N6 NAT</text>
         <text x="220" y="724" font-size="12" text-anchor="middle" fill="#24364B" fill-opacity="1" stroke="none" stroke-width="1px" stroke-opacity="1" stroke-dasharray="none" stroke-linecap="butt" stroke-linejoin="miter" opacity="1" font-family="Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif" font-weight="400" visibility="visible" display="block" marker-end="none" marker-start="none">DN 收：10.45.0.2 → 198.51.100.10</text>
         </g><g id="node-returnroute" fill="rgb(0, 0, 0)" fill-opacity="1" stroke="none" stroke-width="1px" stroke-opacity="1" stroke-dasharray="none" stroke-linecap="butt" stroke-linejoin="miter" opacity="1" font-family="&quot;JetBrains Mono&quot;, ui-monospace, SFMono-Regular, Menlo, Consolas, &quot;DejaVu Sans Mono&quot;, &quot;Liberation Mono&quot;, &quot;Noto Sans Mono CJK SC&quot;, &quot;PingFang SC&quot;, &quot;Hiragino Sans GB&quot;, &quot;Microsoft YaHei&quot;, monospace" font-size="16px" font-weight="400" text-anchor="start" letter-spacing="normal" visibility="visible" display="inline" marker-end="none" marker-start="none">
           <title>DN / 上游配置 UE 回程 · 10.45.0.0/16 → N6 下一跳 198.51.100.1 · 架构组件</title>
           <rect x="620" y="670" width="410" height="72" rx="8" fill="rgb(255, 255, 255)" fill-opacity="1" stroke="none" stroke-width="1px" stroke-opacity="1" stroke-dasharray="none" stroke-linecap="butt" stroke-linejoin="miter" opacity="1" font-family="&quot;JetBrains Mono&quot;, ui-monospace, SFMono-Regular, Menlo, Consolas, &quot;DejaVu Sans Mono&quot;, &quot;Liberation Mono&quot;, &quot;Noto Sans Mono CJK SC&quot;, &quot;PingFang SC&quot;, &quot;Hiragino Sans GB&quot;, &quot;Microsoft YaHei&quot;, monospace" font-size="16px" font-weight="400" text-anchor="start" letter-spacing="normal" visibility="visible" display="inline" marker-end="none" marker-start="none"/>
           <rect x="620" y="670" width="410" height="72" rx="8" stroke-width="1.25px" fill="rgba(52, 211, 153, 0.18)" fill-opacity="1" stroke="rgb(5, 150, 105)" stroke-opacity="1" stroke-dasharray="none" stroke-linecap="butt" stroke-linejoin="miter" opacity="1" font-family="&quot;JetBrains Mono&quot;, ui-monospace, SFMono-Regular, Menlo, Consolas, &quot;DejaVu Sans Mono&quot;, &quot;Liberation Mono&quot;, &quot;Noto Sans Mono CJK SC&quot;, &quot;PingFang SC&quot;, &quot;Hiragino Sans GB&quot;, &quot;Microsoft YaHei&quot;, monospace" font-size="16px" font-weight="400" text-anchor="start" letter-spacing="normal" visibility="visible" display="inline" marker-end="none" marker-start="none"/>
-          
+
           <text x="825" y="699" font-size="16" font-weight="600" text-anchor="middle" fill="#24364B" fill-opacity="1" stroke="none" stroke-width="1px" stroke-opacity="1" stroke-dasharray="none" stroke-linecap="butt" stroke-linejoin="miter" opacity="1" font-family="Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif" visibility="visible" display="block" marker-end="none" marker-start="none">DN / 上游配置 UE 回程</text>
         <text x="825" y="724" font-size="12" text-anchor="middle" fill="#24364B" fill-opacity="1" stroke="none" stroke-width="1px" stroke-opacity="1" stroke-dasharray="none" stroke-linecap="butt" stroke-linejoin="miter" opacity="1" font-family="Noto Sans CJK SC, Microsoft YaHei, Arial, sans-serif" font-weight="400" visibility="visible" display="block" marker-end="none" marker-start="none">10.45.0.0/16 → N6 下一跳 198.51.100.1</text>
         </g><g fill="rgb(0, 0, 0)" fill-opacity="1" stroke="none" stroke-width="1px" stroke-opacity="1" stroke-dasharray="none" stroke-linecap="butt" stroke-linejoin="miter" opacity="1" font-family="&quot;JetBrains Mono&quot;, ui-monospace, SFMono-Regular, Menlo, Consolas, &quot;DejaVu Sans Mono&quot;, &quot;Liberation Mono&quot;, &quot;Noto Sans Mono CJK SC&quot;, &quot;PingFang SC&quot;, &quot;Hiragino Sans GB&quot;, &quot;Microsoft YaHei&quot;, monospace" font-size="16px" font-weight="400" text-anchor="start" letter-spacing="normal" visibility="visible" display="inline" marker-end="none" marker-start="none">
