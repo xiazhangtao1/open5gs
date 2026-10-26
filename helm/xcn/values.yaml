@@ -305,7 +305,7 @@ networking:
       # counters are published once per TX batch, not atomically per packet.
       enabled: true
       intervalMs: 1000
-      socket: /run/open5gs/upf-stats.sock
+      socket: /run/xcn/upf-stats.sock
     dataplane:
       ioPacketBudget: 1024
       ioTimeBudgetUs: 50
@@ -367,8 +367,8 @@ networking:
     port: 9999
 
 webui:
-  secretKey: change-this-open5gs-webui-secret
-  jwtSecretKey: change-this-open5gs-webui-jwt-secret
+  secretKey: change-this-xcn-webui-secret
+  jwtSecretKey: change-this-xcn-webui-jwt-secret
 
 vpp:
   # Legacy advanced override, used only when networking.upf.mode is empty.

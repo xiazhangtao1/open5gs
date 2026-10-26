@@ -2,9 +2,9 @@ FROM node:19
 
 LABEL org.opencontainers.image.authors="Sukchan Lee <acetcom@gmail.com>"
 
-COPY webui /usr/src/open5gs/webui
+COPY webui /usr/src/xcn/webui
 
-WORKDIR /usr/src/open5gs/webui
+WORKDIR /usr/src/xcn/webui
 RUN command -v taskset && npm clean-install && \
     npm run build
 

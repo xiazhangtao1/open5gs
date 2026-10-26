@@ -17,7 +17,7 @@ ring-full/alloc-fail/drop。
 Session Worker。VPP packet-generator 从 N6 以约 10 微秒节奏注入 100 Mbps、
 2 秒、1428-byte IPv4 UDP：
 
-| N6 注入 | N6 RX 计数 | Worker 0/1 | N3 输出 | Open5GS 丢包 |
+| N6 注入 | N6 RX 计数 | Worker 0/1 | N3 输出 | xcn 丢包 |
 |---:|---:|---:|---:|---:|
 | 17,506 | 17,506 | 8,752 / 8,754 | 17,506 | 0 |
 
@@ -31,14 +31,14 @@ N6 qid 最大 pending 为 48 微秒。测试后已禁用并删除临时 packet-g
 使用相同两个真实 PDU/PFCP Session、两个 Session Worker、1428-byte inner
 IPv4 UDP 和每条流约 10 微秒 `maxframe` 节奏，每档持续 10 秒。下行从 VPP
 `ip4-input` 注入 N6；上行从真实 PFCP 建链消息取得两组 UL TEID，再以 RAW-IP
-PCAP 从 VPP N3 FIB 10 注入。两方向均完整执行 Open5GS 的
+PCAP 从 VPP N3 FIB 10 注入。两方向均完整执行 xcn 的
 GTP-U/PDR/FAR/QER/URR 处理。fabric VF 未插网线造成的后续 ARP/NAT 丢包不计入
-Open5GS 段丢包。
+xcn 段丢包。
 
 下行以 `memif1/0 tx` 为 N6 输入、`memif2/0 rx` 为 N3 输出。1.2G、2G、4G
 各重复三次，其余为单次：
 
-| 目标 inner | N6 输入/每轮 | N3 输出 | Open5GS 段丢包 | 实际输出 |
+| 目标 inner | N6 输入/每轮 | N3 输出 | xcn 段丢包 | 实际输出 |
 |---:|---:|---:|---:|---:|
 | 600M | 525,210 | 525,210 | 0 | 600M |
 | 1.2G | 1,050,420 | 平均 1,046,263 | 平均 0.396%（0.343%～0.428%） | 平均 1.195G |
@@ -50,7 +50,7 @@ Open5GS 段丢包。
 
 上行以 `memif2/0 tx` 为 N3 输入、`memif1/0 rx` 为 N6 输出：
 
-| 目标 inner | N3 输入 | N6 输出 | Open5GS 段丢包 | 实际输出 |
+| 目标 inner | N3 输入 | N6 输出 | xcn 段丢包 | 实际输出 |
 |---:|---:|---:|---:|---:|
 | 600M | 525,210 | 525,079 | 0.025% | 600M |
 | 1.2G | 1,050,420 | 1,000,127 | 4.788% | 1.143G |
@@ -81,7 +81,7 @@ N3、N6 的 TX 统计由方向汇总改为逐 qid 统计。每个 qid 现在分�
 - `alloc-call/request/granted/short/fail`：buffer 申请次数、申请描述符数、实际
   获得数、短缺描述符数和完全失败的申请调用数；
 - `tx-call/request/sent`：`memif_tx_burst()` 调用次数、提交数和实际发送数；
-- `drop`：该 qid 在 Open5GS TX 路径确认丢弃的报文数。
+- `drop`：该 qid 在 xcn TX 路径确认丢弃的报文数。
 
 计数使用 relaxed atomic 读取/更新，不增加锁，不改变 Session owner、PDR/FAR/
 QER/URR、GTP-U 封装或 memif buffer 生命周期。实际日志确认 N3、N6 的 qid 0
@@ -95,9 +95,9 @@ IPv4 UDP，每档目标持续 10 秒并额外留 2 秒排空。`10us` 将每条�
 `maxframe=256`。上行报文包含真实 Session 建链产生的 UL TEID 和
 PDU Session Container（QFI=1），两方向都执行完整 UPF 语义。
 
-8192-entry ring 在所有档位均将目标包数完整提交到 Open5GS：
+8192-entry ring 在所有档位均将目标包数完整提交到 xcn：
 
-| 方向 | 节奏 | 目标 | 输入包 | 输出包 | Open5GS 段丢包 | 输出折算 |
+| 方向 | 节奏 | 目标 | 输入包 | 输出包 | xcn 段丢包 | 输出折算 |
 |---|---|---:|---:|---:|---:|---:|
 | 下行 | 10us | 1.2G | 1,050,420 | 1,050,420 | 0 | 1.200G |
 | 下行 | 10us | 2.0G | 1,750,700 | 1,721,524 | 1.667% | 1.967G |
@@ -113,11 +113,11 @@ PDU Session Container（QFI=1），两方向都执行完整 UPF 语义。
 | 上行 | burst256 | 4.0G | 3,501,400 | 3,287,499 | 6.109% | 3.756G |
 
 16384-entry ring 没有提高可持续吞吐。下表的“提交率”是 12 秒观察窗口内实际
-进入对应输入 memif 的包数除以目标包数；段丢包只计算已经进入 Open5GS 的包。
+进入对应输入 memif 的包数除以目标包数；段丢包只计算已经进入 xcn 的包。
 提交率低不是发生器主动少发，而是 memif 输入 ring 长时间不能 refill，VPP
 出现 `no free tx slots` 后受到反压：
 
-| 方向 | 节奏 | 目标 | 实际输入 | 提交率 | Open5GS 段丢包 |
+| 方向 | 节奏 | 目标 | 实际输入 | 提交率 | xcn 段丢包 |
 |---|---|---:|---:|---:|---:|
 | 下行 | 10us | 1.2G | 1,050,420 | 100.000% | 0.021% |
 | 下行 | 10us | 2.0G | 1,750,700 | 100.000% | 4.825% |
@@ -139,7 +139,7 @@ slots`。更大的 ring 扩大了单个有效 RX qid 的排队和突发，不能
 均为 8192。32768 未测试：当前 libmemif 配置边界明确要求
 `log2_ring_size <= 14`，强行放宽会超出已验证范围。
 
-## VPP/memif 与 Open5GS 责任隔离（2026-07-26）
+## VPP/memif 与 xcn 责任隔离（2026-07-26）
 
 本轮不修改UPF语义代码，在相同Pod、VPP 26.06、2 qid、8192-entry ring和
 1428-byte IPv4包条件下，分别测试完整UPF路径、VPP queue placement和裸
@@ -151,7 +151,7 @@ libmemif slave TX→VPP RX。
 
 - N6 `memif1/0` RX qid 0/1分别位于`vpp_wk_1`、`vpp_wk_2`；
 - N3 `memif2/0` RX qid 0/1分别位于`vpp_wk_3`、`vpp_wk_4`；
-- Open5GS和VPP使用不同的Guaranteed CPU cpuset，全部为`SCHED_OTHER`。
+- xcn和VPP使用不同的Guaranteed CPU cpuset，全部为`SCHED_OTHER`。
 
 将N3两个RX qid临时迁移到`vpp_wk_5`、`vpp_wk_6`后，4G/10us下行两次输出
 分别为2,964,811和3,113,619包，未优于原placement下同轮约3.18M～3.25M包。
@@ -165,7 +165,7 @@ ring瞬时积压7,218个描述符，并显著放大丢包；该组受干扰数�
 ### 裸memif同方向对照
 
 在当前VPP容器临时创建额外master memif，由UPF容器内临时libmemif客户端使用
-两个CPU、两个slave TX qid，执行与Open5GS TX相同方向的
+两个CPU、两个slave TX qid，执行与xcn TX相同方向的
 `memif_buffer_alloc(N) → payload copy → memif_tx_burst(N)`。VPP完成IPv4
 input/lookup后走临时drop路由；测试接口、socket、路由和客户端随后全部删除。
 
@@ -184,7 +184,7 @@ input/lookup后走临时drop路由；测试接口、socket、路由和客户端�
 3,153,437包，与原ARP路径同一波动范围，没有恢复到完整3,501,400包；测试后
 已删除drop路由。无网线ARP会增加VPP后续graph成本，但不是主要差值来源。
 
-### Open5GS线程与队列证据
+### xcn线程与队列证据
 
 4G/10us压测约14.95秒的`/proc`线程差分：
 
@@ -205,8 +205,8 @@ worker空队列时阻塞在`ogs_queue_pop()`的`pthread_cond_wait`，收到小ba
 - VPP/memif可持续消费能力已在同配置下确认远高于10G；
 - 当前VPP RX placement合理，迁移worker无收益；
 - `memif_tx_burst()`已提交包不继续丢；
-- allocation短缺是Open5GS小burst睡眠/唤醒和不连续TX输出追上ring的表象；
-- 当前首要优化对象是Open5GS的dispatcher→worker投递/唤醒模型，以及短时
+- allocation短缺是xcn小burst睡眠/唤醒和不连续TX输出追上ring的表象；
+- 当前首要优化对象是xcn的dispatcher→worker投递/唤醒模型，以及短时
   allocation不足时的有界重试，而不是继续扩大ring或修改VPP源码。
 
 ## Session Worker 第一阶段批量分类与投递（2026-07-25）
@@ -230,7 +230,7 @@ worker空队列时阻塞在`ogs_queue_pop()`的`pthread_cond_wait`，收到小ba
 `10.45.0.3`），inner IPv4 UDP 1428 bytes，两条流各承担一半负载。下表采用
 每条流 `maxframe=ceil(PPS/100000)` 的约 10μs 小批量节奏，每档10秒。
 
-| Worker / ring | 目标 inner | N6 memif 输入 | N3 memif 输出 | Open5GS 段丢包 |
+| Worker / ring | 目标 inner | N6 memif 输入 | N3 memif 输出 | xcn 段丢包 |
 |---:|---:|---:|---:|---:|
 | 1 / 1 | 600M | 525,210 | 525,210 | 0 |
 | 1 / 1 | 1.2G | 1,050,420 | 1,041,590 | 0.841% |
@@ -252,15 +252,15 @@ worker1 为 `2,977,514 / 0 drops`，确认 dispatcher 报文环和 batch 队列�
 ## 双 Session 下行：单 Worker 与双 Worker 对比（2026-07-25）
 
 测试使用同一个 OAI UE 建立两个真实 PDU/PFCP Session，地址为 `10.45.0.2`
-和 `10.45.0.3`。OAI UE 使用修复后的独立策略路由表 10001、10002；Open5GS
+和 `10.45.0.3`。OAI UE 使用修复后的独立策略路由表 10001、10002；xcn
 中同时存在两组 F-SEID、PDR/FAR/QER/URR 和 N3 TEID。inner IPv4 UDP 包长
 1428 bytes，两条 Session 各承担一半负载，每档持续10秒。
 
 发生器在正式 VPP 的 `ip4-input` 节点直接注入 N6 流量，以避开 OAI 空口及第三块
-VF 的性能限制。`pg0 rx = memif1/0 tx` 表示所有发生包均交给 Open5GS；
-`memif2/0 rx` 表示完成完整下行 UPF 语义和 GTP-U 封装的包。Open5GS 段丢包率
+VF 的性能限制。`pg0 rx = memif1/0 tx` 表示所有发生包均交给 xcn；
+`memif2/0 rx` 表示完成完整下行 UPF 语义和 GTP-U 封装的包。xcn 段丢包率
 按 `(memif1 tx - memif2 rx) / memif1 tx` 计算。N3 物理 fabric 口未插网线，
-后续 ARP 节流不计入 Open5GS 丢包。
+后续 ARP 节流不计入 xcn 丢包。
 
 ### 单 Worker / 单 N3、N6 memif ring
 
@@ -321,15 +321,15 @@ Linux/VPP调度严格每10μs唤醒一次。
 
 4.0G档中发生器实际只向 N6 memif 提交约 **3.818 Gbps**，因此不能声称已施加
 完整4.0G负载。双 Worker 最高确认零丢包档为 **1.2 Gbps**；2.0G 时仍可输出
-约1.988G且 Open5GS 段丢包低于1%。与单 Worker 相比，多 Session 分片确实生效，
+约1.988G且 xcn 段丢包低于1%。与单 Worker 相比，多 Session 分片确实生效，
 但 dispatcher 的单线程收包、任务复制及每 Worker 的完整 UPF 逐包处理仍限制扩展。
 
 ## 下行 N3 memif buffer 批量预申请（2026-07-25）
 
 本轮仅优化 N6→N3 的 libmemif buffer 申请和复制，不跳过或修改
 PFCP/PDR/FAR/QER/URR/GTP-U 语义。N6 仍以 256 包 burst 接收并逐包执行完整
-Open5GS 处理；N3 最多一次预申请 64 个连续 TX buffer，直接在其中完成 GTP-U
-封装，把 payload copy 从两次降为一次。复杂报文仍执行原 Open5GS 路径，最终
+xcn 处理；N3 最多一次预申请 64 个连续 TX buffer，直接在其中完成 GTP-U
+封装，把 payload copy 从两次降为一次。复杂报文仍执行原 xcn 路径，最终
 复制到同一批 TX buffer。
 
 VPP 26.06 的 slave TX ring 不能在任意时刻回退未用描述符：ring 接近满时，
@@ -342,7 +342,7 @@ VPP 26.06 的 slave TX ring 不能在任意时刻回退未用描述符：ring �
 无网线 `fabric_network` VF 生成四条均匀 UDP 流；inner IPv4 包长 1428 bytes。
 测试结束后已恢复正式 N6 NAT、删除测试专用 N3 路由和临时 Pod。
 
-| 目标/时长 | 发生器提交 | N6 memif 输入 | N3 memif/VF 输出 | Open5GS 段丢包 | 实际输出 |
+| 目标/时长 | 发生器提交 | N6 memif 输入 | N3 memif/VF 输出 | xcn 段丢包 | 实际输出 |
 |---:|---:|---:|---:|---:|---:|
 | 10M/2s | 1,751 | 1,751 | 1,751 | 0 | 10.00M |
 | 1.20G/20s | 2,100,824 | 2,100,824 | 2,100,824 | 0 | 1.200G |
@@ -351,7 +351,7 @@ VPP 26.06 的 slave TX ring 不能在任意时刻回退未用描述符：ring �
 | 1.50G/20s | 2,626,046 | 2,610,587 | 2,578,802 | 31,785（1.218%） | 1.473G |
 
 旧镜像在同样 1.20G/20s 测试中，N6 memif 输入 2,091,487 包、N3 输出
-2,069,976 包，Open5GS 段丢包 1.029%，实际输出约 1.182G。新实现将该档位
+2,069,976 包，xcn 段丢包 1.029%，实际输出约 1.182G。新实现将该档位
 提升为完整 1.200G、零丢包。1.25G 已有 0.0457% 轻微丢包，因此当前严格
 零丢包稳定值按 **1.20 Gbps** 记录；过载时可输出约 1.47G，但不能视为稳定
 能力。1.30G 以上同时出现 VPP `memif1/0-tx no free tx slots`，说明下一阶段
@@ -379,7 +379,7 @@ VPP 26.06 的 slave TX ring 不能在任意时刻回退未用描述符：ring �
 
 最终版本使用真实 PFCP 会话（UE `10.45.0.2`，本轮 UL TEID `0x1e60`）验证。
 10 Mbps/2 秒冒烟测试中，发生器、N3 VF、N3 memif、N6 memif、N6 VF 和接收
-VF 均为 1,732 包，Open5GS 日志无错误；同一镜像下连续两次重建 NR-UE，PFCP
+VF 均为 1,732 包，xcn 日志无错误；同一镜像下连续两次重建 NR-UE，PFCP
 会话均完整执行 `Removed -> Added`。并发 ticket lock 另以 4 线程、每线程
 2,000,000 次临界区执行压力测试，最终计数和 ticket 均为 8,000,000。
 
@@ -387,19 +387,19 @@ VF 均为 1,732 包，Open5GS 日志无错误；同一镜像下连续两次重�
 实际收到 14,581,151 包，N6 VF 发出 9,506,606 包，对应 N6 inner 约
 **10.86 Gbps**。此前同环境 `-O2` + pthread 单次峰值约 9.96 Gbps，本次约提升
 9%；但这是无网线 `fabric_network` VF-to-VF 内部交换且为高丢包峰值，不代表
-跨服务器 10G 物理口的无损能力。过载差值发生在 Open5GS 向 N6 memif 发送时，
+跨服务器 10G 物理口的无损能力。过载差值发生在 xcn 向 N6 memif 发送时，
 日志明确为 `Ring buffer full`；同时 N3 VF 有 `rx-miss`，不是 CFS throttling
 或线程中途被调度走导致。
 
 最终 perf 中约 67% 周期仍消耗在 N3、N6 各一次零超时
 `memif_poll_event -> epoll_pwait`。下一阶段优先合并或减少空轮询系统调用；单
 memif ring 满载也需要多 queue/会话分片解决。不能为了继续提高数字而绕过
-Open5GS UPF 语义。
+xcn UPF 语义。
 
-## Open5GS 专用 memif worker + burst（2026-07-18）
+## xcn 专用 memif worker + burst（2026-07-18）
 
-本阶段保留 Open5GS UPF 的全部 PFCP/PDR/FAR/QER/URR/GTP-U 语义，仅优化
-Open5GS 与 VPP 26.06 之间的数据面：N3/N6 libmemif 事件从 Open5GS 主事件线程
+本阶段保留 xcn UPF 的全部 PFCP/PDR/FAR/QER/URR/GTP-U 语义，仅优化
+xcn 与 VPP 26.06 之间的数据面：N3/N6 libmemif 事件从 xcn 主事件线程
 移到一个专用 worker；每次最多 256 包执行 `memif_rx_burst`、连续规则处理、
 一次 `memif_buffer_alloc` 和一次 `memif_tx_burst`。TX 队列保存 `ogs_pkbuf`
 引用而不是复制 `ogs_pkbuf`，因此没有为批量队列增加第三次 payload copy；当前
@@ -407,7 +407,7 @@ memif RX 到 `ogs_pkbuf`、再到对端 memif region 仍各有一次 payload cop
 
 PFCP 主线程修改规则和专用 worker 查询规则之间使用同一互斥锁，避免 session、
 PDR/FAR/QER/URR 生命周期竞争。`ogs_pkbuf_ref()` 使用原子引用计数，释放路径用
-CAS 处理并发递减。N3/N6 共用一个数据面 worker，当前没有并行修改 Open5GS
+CAS 处理并发递减。N3/N6 共用一个数据面 worker，当前没有并行修改 xcn
 session/rule 对象。
 
 测试继续使用无网线 `fabric_network` 第三个 VF 发生流量。所有数值均为单次
@@ -416,7 +416,7 @@ session/rule 对象。
 
 ### 上行 N3 → N6
 
-| 生成 outer | 生成包 | N3 VF/memif | N6 memif/VF | N3 rx-miss | Open5GS 段差值 | 实际 inner |
+| 生成 outer | 生成包 | N3 VF/memif | N6 memif/VF | N3 rx-miss | xcn 段差值 | 实际 inner |
 |---:|---:|---:|---:|---:|---:|---:|
 | 10M/2s | 1,732 | 1,732 | 1,732 | 0 | 0 | 9.89M |
 | 1,000M/10s | 865,648 | 801,819 | 787,245 | 63,829 | 14,574 | 899.35M |
@@ -426,25 +426,25 @@ session/rule 对象。
 | 无节流/5s | 4,373,476 | 3,901,276 | 1,749,543 | 472,200 | 严重 ring overload | 3,997.36M |
 
 同为 1 Gbps/10 秒时，旧逐包实现 N3 到 N6 丢 42,638 包，新实现丢 14,574
-包，Open5GS 段丢包减少约 66%，实际 inner 从 871.86M 提升到 899.35M。
-1.2 Gbps 档中，包一旦进入 N3 VF，Open5GS、N6 memif 和 N6 VF 的 954,034
-包完全一致，说明 burst 路径已经消除该档位的 Open5GS 段丢包。无节流约
+包，xcn 段丢包减少约 66%，实际 inner 从 871.86M 提升到 899.35M。
+1.2 Gbps 档中，包一旦进入 N3 VF，xcn、N6 memif 和 N6 VF 的 954,034
+包完全一致，说明 burst 路径已经消除该档位的 xcn 段丢包。无节流约
 4.0 Gbps 只是高丢包峰值，不是稳定吞吐。
 
 ### 下行 N6 → N3
 
-首次下行测试发现 N3 memif 只有 FIB 10、没有启用 IPv4，Open5GS 已送入 N3
+首次下行测试发现 N3 memif 只有 FIB 10、没有启用 IPv4，xcn 已送入 N3
 memif 的 1,751 包全部在 VPP `ip4-not-enabled` 丢弃。Helm 配置现已将 N3
 memif unnumbered 到 `dpdk-n3`。修复后 10M/2s 测试中，N6 VF、N6 memif、
 N3 memif、N3 VF 和接收 VF 均为 1,751 包，验证了反向 burst 及 GTP-U 封装。
 
 1 Gbps/10 秒单次下行中，发生器提交 875,348 包，N6 VF 收到 653,722 包
-（`rx-miss=221,626`），N3 memif/N3 VF 发出 653,463 包，VPP/Open5GS 段只
+（`rx-miss=221,626`），N3 memif/N3 VF 发出 653,463 包，VPP/xcn 段只
 再少 259 包，实际 inner 约 746.52M。该数据主要反映 N6 VF RX 和临时 VCL
 sink 已过载，不代表下行低丢包上限。
 
 当前结论：worker/burst 改造可行且已同时覆盖 N3/N6 上下行；1.2G 上行档
-消除了 Open5GS 段丢包，但单 memif ring、单数据面 worker、两次 payload copy
+消除了 xcn 段丢包，但单 memif ring、单数据面 worker、两次 payload copy
 以及 VF 单 flow/单 RX queue 仍限制同机 10G。下一阶段若继续冲击 10G，应先
 引入多 memif queue 和多会话分片，并让每个数据面 worker 独占 session/rule
 分片，避免用一个全局规则锁串行化。
@@ -475,13 +475,13 @@ fabric VF 或 memif 固定只能达到 1 Gbps。各档单次结果有明显波�
 1.91 Gbps 当作无损能力。
 
 当前剩余热点分为两段：N3 单 GTP-U flow 所在 VF RX queue 的 `rx-miss`，以及
-VPP N3 memif 到 Open5GS、Open5GS 到 N6 memif 的单 ring/逐包处理。下一阶段
+VPP N3 memif 到 xcn、xcn 到 N6 memif 的单 ring/逐包处理。下一阶段
 应优先实现多 memif queue 与 libmemif burst，再配合多会话/多流 RSS 验证，
 而不是继续增加空闲 VPP worker。
 
 ## external_network + N3/N6 双 memif + 双 X710 VF（2026-07-18）
 
-本轮将 N3 和 N6 都改为独立 SR-IOV VF + VPP raw-IP memif。Open5GS UPF
+本轮将 N3 和 N6 都改为独立 SR-IOV VF + VPP raw-IP memif。xcn UPF
 继续负责 PFCP、GTP-U 解封装和 PDR/FAR/QER/URR 语义；VPP 负责 N3/N6 高速
 收发、N3 独立 FIB 10、N6 NAT44。两个 iAVF 各配置 4 RX/4 TX queue、4096
 descriptor，两个 memif ring 均为 8192。VPP/UPF 各使用 8 个独占 CPU，VPP
@@ -509,20 +509,20 @@ memif 之间另有约 4,290 包差值；N6 memif 与 N6 VF TX 仍一致。N6 mem
 
 NAT44 固定到 `vpp_wk_2`，与 `memif1/0` RX queue 同 worker 后，先前的 NAT
 handoff congestion 已消失。当前首要限制是 N3 单 GTP-U 流落在单 VF RX
-queue 并产生 `rx-miss`；达到饱和后才出现单 ring/Open5GS 逐包处理压力。
+queue 并产生 `rx-miss`；达到饱和后才出现单 ring/xcn 逐包处理压力。
 要验证 10G，需先修复 PF/VF 链路协商或资源配置，使 VF 实际报告 10 Gbps，
-然后再考虑多 memif queue、libmemif burst 和 Open5GS 多 worker/会话分片。
+然后再考虑多 memif queue、libmemif burst 和 xcn 多 worker/会话分片。
 
 ## VPP 26.06 + memif + X710 VF（2026-07-18）
 
-拓扑保留 Open5GS UPF 的 PFCP/PDR/FAR/QER/GTP-U 语义，仅将 N6 TUN 替换为
+拓扑保留 xcn UPF 的 PFCP/PDR/FAR/QER/GTP-U 语义，仅将 N6 TUN 替换为
 raw-IP libmemif；VPP 26.06 sidecar 使用 `intel.com/external_network` X710 VF、
 NAT44 和 1 RX/1 TX queue。测试仍用真实 UE 建立会话，再由 `gtpu_gen` 直接
 注入当前 UL TEID，绕过 OAI 空口。
 
 功能验证：
 
-- VPP 与 Open5GS 协商 4096-entry 双向 memif ring，断线后可自动重连。
+- VPP 与 xcn 协商 4096-entry 双向 memif ring，断线后可自动重连。
 - UE `10.45.0.2` 到 `8.8.8.8` ping 5/5；NAT 映射为 `10.2.0.224`。
 - 端到端 OAI TCP 仅约 UL 125M / DL 209M，瓶颈在 OAI，不作为核心网能力。
 
@@ -549,7 +549,7 @@ worker/会话分片。
 
 环境：
 
-- Open5GS UPF hostNetwork: `10.2.0.119`
+- xcn UPF hostNetwork: `10.2.0.119`
 - UE PDU address: `10.45.0.2`
 - N6/TUN gateway: `10.45.0.1`
 - 包大小：
@@ -568,7 +568,7 @@ worker/会话分片。
 - UPF `2 CPU` 时，并发低丢包点约 `DL 700M + UL 700M`；`DL 1G + UL 500M` 基本能跑住。
 - UPF 降到 `1 CPU` 后，下行和并发退化明显；`DL 1G + UL 500M` 下行丢包约 `26.5%`。
 - 测试期间 cgroup `nr_throttled=0`，没有观察到 CFS throttling。
-- 当前 Open5GS 数据面没有按 AMBR/QER MBR 做实际限速，超过订阅 `1Gbps` 属于预期行为。
+- 当前 xcn 数据面没有按 AMBR/QER MBR 做实际限速，超过订阅 `1Gbps` 属于预期行为。
 
 ## 2 CPU 结果
 
@@ -706,23 +706,23 @@ ambr: {
 }
 ```
 
-SMF copies Session AMBR into PFCP QER MBR and sends it to UPF, but current Open5GS UPF data plane does not enforce `qer->mbr` with policing or shaping. Therefore bypass tests can exceed `1Gbps`.
+SMF copies Session AMBR into PFCP QER MBR and sends it to UPF, but current xcn UPF data plane does not enforce `qer->mbr` with policing or shaping. Therefore bypass tests can exceed `1Gbps`.
 ## Session 多 Worker 第一阶段（2026-07-25）
 
-- Open5GS 增加独立 memif dispatcher 和可配置的 `1..16` Session Worker。
+- xcn 增加独立 memif dispatcher 和可配置的 `1..16` Session Worker。
 - Session 建立时采用双候选最少连接算法固定 owner；N3 按 TEID、N6 按 UE IP
   分发，Worker 仍执行完整 PDR/FAR/QER/URR 和 GTP-U 处理。
 - 控制面使用读写屏障，PFCP/定时器修改独占写锁；数据 Worker 可并行持有读锁。
 - 每个 Worker 独占 N3/N6 memif TX ring 和批量状态，分发任务使用固定对象池，
   不执行每包 `malloc/free`。
-- VPP 26.06 与 Open5GS 已实际协商2组 N3 和2组 N6 ring，每组8192描述符；
+- VPP 26.06 与 xcn 已实际协商2组 N3 和2组 N6 ring，每组8192描述符；
   两个 Worker 均持续运行且调度策略为 `SCHED_OTHER`。
 - 进程等待 CPUManager 最终下发不含 CPU0 的 Guaranteed cpuset 后再绑核。本轮
   Pod cpuset 为 `49-52,121-124`，Worker 0、Worker 1、dispatcher 分别实际绑定
   CPU 49、50、51；主线程和控制线程保留完整 Pod cpuset，全部仍为 `SCHED_OTHER`。
 - 真实 UE `10.45.0.2` 建立 PFCP Session 后，从 VPP N6 注入100包，N6 memif
-  发送100包、Open5GS完成下行语义与GTP-U封装、N3 memif接收100包，无 Open5GS
-  丢包。N3 VF因 fabric物理口未接线发生ARP节流，不能作为Open5GS丢包计算。
+  发送100包、xcn完成下行语义与GTP-U封装、N3 memif接收100包，无 xcn
+  丢包。N3 VF因 fabric物理口未接线发生ARP节流，不能作为xcn丢包计算。
 - 当前现场只有一个活动 Session，不能据此给出2/4 Worker吞吐扩展比；正式性能
   验收需要至少 `max(2W,16)` 个真实 PFCP Session。
 
@@ -732,7 +732,7 @@ SMF copies Session AMBR into PFCP QER MBR and sends it to UPF, but current Open5
 ring，并测试0/20/50us混合轮询。两个真实Session、8192 ring、1428-byte inner
 IPv4、10us发包、目标1.2G的有效结果：
 
-| busy-poll | 方向 | 实际输入 | 输出 | Open5GS段丢包 | 实际输出 |
+| busy-poll | 方向 | 实际输入 | 输出 | xcn段丢包 | 实际输出 |
 |---:|---|---:|---:|---:|---:|
 | 0us | 下行 | 899,483 | 899,483 | 0 | 1.028G |
 | 0us | 上行 | 894,571 | 894,571 | 0 | 1.022G |
@@ -785,7 +785,7 @@ dispatcher、Worker queue、refill、TX 均无错误，N6最大在途140，测�
 
 `busy_poll_us=20`：
 
-| 节奏 | 目标 | 实际输入 | 输出 | Open5GS段丢包 |
+| 节奏 | 目标 | 实际输入 | 输出 | xcn段丢包 |
 |---|---:|---:|---:|---:|
 | 10us | 1.2G | 1,050,420 | 1,050,420 | 0 |
 | 10us | 2.0G | 1,750,700 | 1,725,778 | 1.424% |
@@ -803,7 +803,7 @@ dispatcher、Worker queue、refill、TX 均无错误，N6最大在途140，测�
 下表为相同 descriptor-lease 版本的下行10us结果。4G档位若发生器未发满，
 “实际输入”按实际 memif TX 计数记录。
 
-| 模式 | 目标 | 实际输入 | 输出 | Open5GS段丢包 |
+| 模式 | 目标 | 实际输入 | 输出 | xcn段丢包 |
 |---|---:|---:|---:|---:|
 | 阻塞（0） | 1.2G | 1,050,420 | 1,046,059 | 0.415% |
 | 阻塞（0） | 2.0G | 1,750,700 | 1,714,796 | 2.051% |
@@ -824,9 +824,9 @@ buffer allocation 压力，因此最终运行配置恢复20us混合轮询，所�
 ### 上行与剩余限制
 
 上行使用本轮真实 Session 建立产生的两组 UL TEID；每次 UPF/gNB 重建后重新
-获取。20us混合轮询的实际 Open5GS memif 段结果为：
+获取。20us混合轮询的实际 xcn memif 段结果为：
 
-| 节奏 | 目标 | 实际输入 | 输出 | Open5GS段丢包 |
+| 节奏 | 目标 | 实际输入 | 输出 | xcn段丢包 |
 |---|---:|---:|---:|---:|
 | 10us | 1.2G | 967,934 | 961,352 | 0.680% |
 | 10us | 2.0G | 1,737,634 | 1,669,070 | 3.946% |
@@ -836,7 +836,7 @@ buffer allocation 压力，因此最终运行配置恢复20us混合轮询，所�
 | burst256 | 4.0G | 2,871,613 | 2,818,561 | 1.847% |
 
 这些上行档位发生器均不同程度未发满，尤其 burst 模式，不能作为目标速率的
-稳定能力声明；这里只用于定位 Open5GS 段。
+稳定能力声明；这里只用于定位 xcn 段。
 
 运行计数确认：
 
@@ -872,7 +872,7 @@ owner 改为从全部 Worker 中选择当前 Session 数最少者，SEID 仅用�
 - UPF Guaranteed Pod 获得 8 个独占逻辑 CPU，线程为 `SCHED_OTHER`；
 - 1428-byte inner IPv4，单方向5秒，内部 VPP packet-generator；
 - 测试不经过未插网线的 fabric 物理口，ARP/NAT/VF 下游计数不计入
-  Open5GS memif 段丢包。
+  xcn memif 段丢包。
 
 OAI UE 同时请求6个 Session 时，gNB 和 UPF 均成功建立6组 DRB/TEID/PFCP
 Session，但 UE 只接受4个 NAS PDU Session Accept，另2个因并发下行 NAS
@@ -950,8 +950,8 @@ CPUManager独占逻辑CPU，线程保持`SCHED_OTHER`和20us混合轮询。报�
 
 计数口径：
 
-- 下行输入为`memif1/0 tx`，Open5GS输出为`memif2/0 rx`。
-- 上行输入为`memif2/0 tx`，Open5GS输出为`memif1/0 rx`。
+- 下行输入为`memif1/0 tx`，xcn输出为`memif2/0 rx`。
+- 上行输入为`memif2/0 tx`，xcn输出为`memif1/0 rx`。
 - 吞吐按inner 1428字节计算；未插线fabric VF之后的ARP/NAT丢包不计入。
 
 ### 1 Session，6 Worker配置
@@ -959,7 +959,7 @@ CPUManager独占逻辑CPU，线程保持`SCHED_OTHER`和20us混合轮询。报�
 只有`10.45.0.8`收到测试流量，因此该Session固定owner Worker承担实际语义
 处理，其余5个Worker空闲。
 
-| 方向 | 目标/实际输入 | 输入包 | 实际输出 | 输出包 | Open5GS段丢包 |
+| 方向 | 目标/实际输入 | 输入包 | 实际输出 | 输出包 | xcn段丢包 |
 |---|---:|---:|---:|---:|---:|
 | 下行 | 0.5G | 218,835 | 0.5000G | 218,835 | 0 |
 | 下行 | 0.6G | 262,605 | 0.5900G | 258,238 | 1.6630% |
@@ -985,14 +985,14 @@ CPUManager独占逻辑CPU，线程保持`SCHED_OTHER`和20us混合轮询。报�
 稳定支持9.4G。
 
 单Session上行10G又重复两次，均为4,376,750包输入、4,376,750包输出，三次
-均零丢包。因此本测试口径下可确认Open5GS内部N3 memif到N6 memif的单Session
+均零丢包。因此本测试口径下可确认xcn内部N3 memif到N6 memif的单Session
 上行达到10G零丢包；该结论不包含未插线VF的物理端到端链路。
 
 ### 6 Session，6 Worker
 
 总速率平均分配到`10.45.0.8..13`，每个Session固定归属不同Worker。
 
-| 方向 | 目标/实际输入 | 输入包 | 实际输出 | 输出包 | Open5GS段丢包 |
+| 方向 | 目标/实际输入 | 输入包 | 实际输出 | 输出包 | xcn段丢包 |
 |---|---:|---:|---:|---:|---:|
 | 下行 | 1.2G | 525,210 | 1.2000G | 525,210 | 0 |
 | 下行 | 2.0G | 875,350 | 2.0000G | 875,350 | 0 |
@@ -1028,7 +1028,7 @@ RX/refill/stale均为0。结果说明：
 ## 独立VCL/VF发生器隔离（2026-07-30）
 
 为验证正式VPP内置packet-generator是否因占用VPP Worker而降低memif消费速度，
-在不修改Open5GS和VPP源码的前提下创建临时VPP 26.06/VCL Pod。临时Pod申请
+在不修改xcn和VPP源码的前提下创建临时VPP 26.06/VCL Pod。临时Pod申请
 1个`intel.com/fabric_network` VF、2个CPUManager独占逻辑CPU和4GiB大页，
 通过无网线X710 fabric VF内部交换向正式VPP的N6 VF发送流量。正式VPP测试期间
 临时删除`dpdk-n6`的NAT44 outside feature，使目标UE IP的测试包直接路由到
@@ -1044,11 +1044,11 @@ N6 memif；测试结束后已恢复NAT并删除临时Pod、ConfigMap和所有PG 
 - N3 fabric物理口未插线，N3 memif后的ARP丢包不计入核心段。
 
 10M/2秒VCL冒烟中，发生器提交1,751包，正式N6 VF、N6 memif和N3 memif均为
-1,751包，证明独立发生器确实经过正式N6 VF、Open5GS语义处理和N3 memif输出。
+1,751包，证明独立发生器确实经过正式N6 VF、xcn语义处理和N3 memif输出。
 
 ### 吞吐与丢包
 
-| 发生器 | 发生包/速率 | 正式N6 VF IPv4输入 | Open5GS N6 RX | Worker处理/N3发送请求 | N3 memif输出 | 核心段丢包 |
+| 发生器 | 发生包/速率 | 正式N6 VF IPv4输入 | xcn N6 RX | Worker处理/N3发送请求 | N3 memif输出 | 核心段丢包 |
 |---|---:|---:|---:|---:|---:|---:|
 | 内置PG | 2,100,840 / 1.2000G | 不经过VF | 2,100,840 | 2,100,840 | 2,092,823 / 1.1954G | 8,017 / 0.3816% |
 | VCL/VF第1次 | 2,100,734 / 1.1999G | 1,992,314 / 1.1380G | 1,968,038 / 1.1241G | 1,912,676 | 1,911,405 / 1.0918G | 80,909 / 4.0611% |
@@ -1072,7 +1072,7 @@ N6 memif；测试结束后已恢复NAT并删除临时Pod、ConfigMap和所有PG 
 独立VCL四条流经N6 VF RSS和正式VPP后实际进入N6 memif qid 0/1/5，但Session
 归属算法将它们全部投递给Worker 0。第2次测试中：
 
-- 正式VPP尝试送入N6 memif 1,985,694包，Open5GS实际RX 1,939,958包，
+- 正式VPP尝试送入N6 memif 1,985,694包，xcn实际RX 1,939,958包，
   差45,736包，对应VPP `memif1/0-tx no free tx slots`；
 - Worker 0队列高水位达到8192，新增87,420个dispatch drop，处理
   1,852,538包；
@@ -1168,7 +1168,7 @@ GTP-U语义。
 
 临时将20微秒busy-poll期间的截止时间检查从每次空轮询一次改为每64次一次。
 100M/2秒功能冒烟输入/输出均为17,506包。优化实例首次建立Session后的三轮
-1.2G测试均输入/输出2,100,840包、Open5GS段零丢包。该实例perf中，活跃worker
+1.2G测试均输入/输出2,100,840包、xcn段零丢包。该实例perf中，活跃worker
 的未解析时间读取符号降至2.13%；主要样本变为`session_worker_main`49.72%、
 `queue_pop`15.63%、`memif_tx_burst`10.67%，说明计时热点确实下降。
 
@@ -1225,7 +1225,7 @@ condition variable：worker验证generation/sequence后以原子store标记lease
 
 增加N3 TX逐qid诊断计数和`run_dl_qid_diag.sh`。数据面处理、Session owner、
 PDR/FAR/QER/URR、PFCP和GTP-U语义均未改变。TX burst间隔采样默认关闭，仅在
-容器内存在`/tmp/open5gs-n3-tx-timing`时热启用；开关不重启UPF或Session。
+容器内存在`/tmp/xcn-n3-tx-timing`时热启用；开关不重启UPF或Session。
 
 固定Pod `xcn-5gc-6b6f8c8f78-nthfw`、6个已建立PFCP Session，只向
 `10.45.0.2`发送。该Session在整个A/B期间始终归属Worker 2/N3 TX qid 2。
@@ -1256,11 +1256,11 @@ dispatcher drop、Worker内部drop、RX/refill error均未构成主要差值。N
 
 | 线程 | 作用 | CPU运行时间 | runqueue等待 | 非自愿切换 |
 |---|---|---:|---:|---:|
-| Open5GS tid 20 | Session Worker 2 | 13.302s | 68.8ms | 22 |
-| Open5GS tid 25 | N6 dispatcher | 10.676s | 146.8ms | 169 |
+| xcn tid 20 | Session Worker 2 | 13.302s | 68.8ms | 22 |
+| xcn tid 25 | N6 dispatcher | 10.676s | 146.8ms | 169 |
 | VPP tid 12 | 消费N3 memif qid 2 | 24.448s | 10.021s | 690 |
 
-Open5GS worker的调度等待不足其运行时间的1%，不支持“Open5GS线程工作中频繁
+xcn worker的调度等待不足其运行时间的1%，不支持“xcn线程工作中频繁
 被切走导致丢包”。主要调度缺口在VPP qid消费线程。
 
 当前VPP cpuset为`49-52,121-124`，实际对应4个物理核的超线程对：
@@ -1280,13 +1280,13 @@ CPUManager随后又把各VPP线程的Linux affinity扩展到整个cpuset，Linux
 
 本轮结论：
 
-1. Open5GS不是大burst生产者，且其worker调度延迟很小；首要证据指向VPP
+1. xcn不是大burst生产者，且其worker调度延迟很小；首要证据指向VPP
    memif消费线程的运行份额/轮询间隔波动。
 2. 这不表示libmemif单队列本身只有约1G能力；裸memif线速实验没有同时运行
    当前main + 7 busy-poll worker、DPDK双VF、PG和完整UPF链路。
 3. 下一轮应先做CPU资源隔离A/B：保持CPUManager机制不变，给VPP更多成对逻辑
    CPU，但只启用所需数量的VPP worker，为每个busy-poll worker保留不运行
-   另一个VPP busy-poll线程的兄弟逻辑CPU；不得仅把ring继续放大或在Open5GS
+   另一个VPP busy-poll线程的兄弟逻辑CPU；不得仅把ring继续放大或在xcn
    worker中忙等重试。
 
 最终`qid-diag-v3`运行验证：6个PFCP Session全部重建成功；100M/2秒冒烟
@@ -1463,7 +1463,7 @@ Helm revision 98实际部署默认策略：`vpp.resources.cpu=2`、
 VPP 26.06只有一个Worker时拒绝`set nat workers`命令，因此单Worker默认不再
 生成该命令，交由NAT44使用唯一Worker。实际检查NAT44已正确配置
 `memif1/0 in`和`dpdk-n6 out`，N3/N6 memif与两个DPDK VF均为up，Pod 9/9
-Running且0重启。Open5GS保持8逻辑CPU、6个Session Worker和两个dispatcher，
+Running且0重启。xcn保持8逻辑CPU、6个Session Worker和两个dispatcher，
 六个PFCP Session（10.45.0.2至10.45.0.7）全部重建成功。
 
 六Session均匀下行100Mbps、10微秒节奏、2秒冒烟：VPP PG输入17,506包，N6
@@ -1472,7 +1472,7 @@ memif发送17,506包，N3 memif接收17,506包，核心路径零丢包。fabric 
 
 ### VPP默认两逻辑CPU的单Session下行性能（2026-08-01）
 
-保持Helm revision 98、VPP两逻辑CPU（1 main + 1 Worker）、Open5GS 8逻辑
+保持Helm revision 98、VPP两逻辑CPU（1 main + 1 Worker）、xcn 8逻辑
 CPU（6 Session Worker + N3/N6 dispatcher）和六个已建立PFCP Session不变，
 仅向`10.45.0.2`一个Session发送流量。报文为1428字节IPv4 UDP，10微秒节奏，
 每档20秒：
@@ -1488,7 +1488,7 @@ CPU（6 Session Worker + N3/N6 dispatcher）和六个已建立PFCP Session不变
 
 测试后该Session所属Worker 5累计`drops=0`、`queue-full=0`、`push-fail=0`，
 N3 TX qid 5累计`alloc-short=0`、`alloc-fail=0`、`drop=0`。Pod保持9/9
-Running、0重启。以上结论止于VPP内置PG→N6 memif→Open5GS完整UPF语义→
+Running、0重启。以上结论止于VPP内置PG→N6 memif→xcn完整UPF语义→
 N3 memif→VPP；fabric VF未插网线，N3侧ARP未解析不计为核心路径丢包，也不
 代表真实外部VF收发已经验证到10Gbps。
 
@@ -1511,14 +1511,14 @@ owner Worker、QFI和PDR/QER方向。六Session均衡注入1.2Gbps时，用户�
 性能A/B使用1428-byte inner IPv4 UDP、10微秒节奏、六Session均衡流量、每轮
 20秒，计数口径为VPP N6 memif实际输入到N3 memif实际输出：
 
-| 统计模式 | 目标/实际输入 | 输入包 | 实际输出 | 输出包 | Open5GS段丢包率 |
+| 统计模式 | 目标/实际输入 | 输入包 | 实际输出 | 输出包 | xcn段丢包率 |
 |---|---:|---:|---:|---:|---:|
 | enabled | 10.0000Gbps | 17,507,000 | 10.0000Gbps | 17,507,000 | 0% |
 | disabled | 10.0000Gbps | 17,507,000 | 10.0000Gbps | 17,507,000 | 0% |
 
 开启统计的两轮输入累计为27,999,995,520字节，CLI用户级累计值严格相等。
 本轮未观察到统计功能导致的吞吐或丢包回退。该结论覆盖VPP内置PG→N6 memif
-→Open5GS完整UPF语义→N3 memif→VPP；fabric VF未插网线，因此不代表外部VF
+→xcn完整UPF语义→N3 memif→VPP；fabric VF未插网线，因此不代表外部VF
 全链路10Gbps已验证。该轮镜像部署于Helm revision 102，保持
 `rateStats.enabled=true`。
 
@@ -1532,7 +1532,7 @@ DNN和方向左对齐，SEID、Worker、QFI/PDR/QER、Mbps、pps和累计计数�
 实际Pod对user/session/bearer/rule四级零流量表格均验证通过。六Session均衡
 1.2Gbps下行、1428-byte inner IPv4 UDP、10微秒节奏、10秒测试中，实时用户
 汇总显示约1.199Gbps，每Session约200Mbps；VPP N6 memif输入1,050,420包，
-N3 memif输出1,050,420包，Open5GS段丢包为0。非零Mbps、pps和十位累计字节
+N3 memif输出1,050,420包，xcn段丢包为0。非零Mbps、pps和十位累计字节
 同时出现时各列仍保持对齐。
 
 普通未分配TTY的`kubectl exec ... --watch --interval 0.5`运行3秒，确认每轮均
@@ -1551,7 +1551,7 @@ CPU 50，`vpp_wk_0`运行于CPU 122；两者是同一物理核的两个超线程
 测试报文为1428-byte inner IPv4 UDP，采用10微秒均匀节奏，每档持续20秒。
 扫描总速率为1/2/4/6/8/10Gbps。下行计数口径为VPP发送到N6 memif的包数与
 VPP从N3 memif收到的包数；上行计数口径为VPP发送到N3 memif的包数与VPP从
-N6 memif收到的包数。两种方向均经过Open5GS完整UPF语义处理。
+N6 memif收到的包数。两种方向均经过xcn完整UPF语义处理。
 
 单Session场景只向`10.45.0.2`灌流，该Session由一个owner Worker处理，其余
 Worker保持空闲：
@@ -1584,7 +1584,7 @@ Worker保持空闲：
 
 测试后五个UPF Worker的`drops`、`queue-full`和`push-fail`均为0；N3/N6各
 TX qid的`alloc-short`、`alloc-fail`和`drop`也全部为0。本轮证明在VPP内置
-PG→memif→Open5GS完整UPF语义→memif→VPP的同机路径中，1个VPP Worker和
+PG→memif→xcn完整UPF语义→memif→VPP的同机路径中，1个VPP Worker和
 5个UPF Worker对单Session及五Session均可达到10Gbps零丢包。fabric VF未插
 网线，测试未覆盖真实外部N3/N6 VF、网线、对端设备及线速收发，因此该结论
 不能外推为跨服务器或外部VF全链路10Gbps。
@@ -1650,12 +1650,12 @@ Worker 0外，其余Worker的`drops`和`queue-full`为0。由于VPP只有一个W
 
 ### 当前VPP单Worker裸memif性能（2026-08-10）
 
-为排除Open5GS UPF处理开销，在当前VPP 2逻辑CPU（1 main + 1 Worker）实例
+为排除xcn UPF处理开销，在当前VPP 2逻辑CPU（1 main + 1 Worker）实例
 内临时创建独立IP模式master memif。UPF容器内的临时libmemif slave客户端
 使用两个独立CPU和两个TX qid，持续执行
 `memif_buffer_alloc(256) → 1428-byte payload copy → memif_tx_burst()`；唯一
 VPP Worker接收两个qid，执行IPv4 input/lookup后命中临时drop路由。该路径不
-进入Open5GS，不执行PFCP/PDR/FAR/QER/URR或GTP-U封装/解封装。
+进入xcn，不执行PFCP/PDR/FAR/QER/URR或GTP-U封装/解封装。
 
 2秒冒烟达到客户端提交97.661Gbps。随后三轮10秒结果如下，吞吐均按1428字节
 payload和VPP接口实际RX包数计算：
@@ -1673,7 +1673,7 @@ payload和VPP接口实际RX包数计算：
 `tx-request == tx-sent`，`tx-short=0`。
 
 这说明当前单VPP Worker的IP模式memif RX + IPv4 lookup/drop能力约为96Gbps，
-远高于完整UPF单Session下行22Gbps零丢包能力。两者差值来自Open5GS完整UPF
+远高于完整UPF单Session下行22Gbps零丢包能力。两者差值来自xcn完整UPF
 语义、dispatcher到Session owner Worker队列以及反向memif发送，不是memif
 本身只能处理20～28Gbps。该裸测试是内存数据面能力，不经过VF和物理网线；
 X710外部单口吞吐仍受10Gbps物理线速限制。
@@ -1693,7 +1693,7 @@ UPF成功输出使用`xcnctl`的Session级`ul_bytes/dl_bytes`前后差分统计�
 
 1. 正式VPP内置PG不增加入口hop，但PG与memif/DPDK graph共享被测VPP Worker；
    超过约20Gbps后PG实际输入先饱和，只能给出UPF能力下界。
-2. 裸libmemif→VPP RX/IPv4 lookup/drop不经过Open5GS。当前单VPP Worker三轮
+2. 裸libmemif→VPP RX/IPv4 lookup/drop不经过xcn。当前单VPP Worker三轮
    平均96.028Gbps；历史2个VPP Worker/2 qid曾达到201.195Gbps。这类结果只
    证明共享内存和VPP memif能力，不代表完整核心网吞吐。
 3. 独立memif发生器不占正式VPP/UPF CPU，但在正式路径前额外增加一次
@@ -1769,7 +1769,7 @@ UPF下行上限。五Session上行零丢包最高实际输入为11.7514Gbps；12
 由于临时回退需要重建Pod，这仍是部署级A/B，而不是同进程热切换的唯一变量
 实验；后续如需精确量化对象池净收益，应固定CPU/qid后做多轮交叉复测。
 
-以上均为同实例VPP内置PG→memif→Open5GS完整UPF语义→memif→VPP的内存路径；
+以上均为同实例VPP内置PG→memif→xcn完整UPF语义→memif→VPP的内存路径；
 fabric VF未插网线，不代表外部X710线速测试。22Gbps单Session下行回退轮次的
 丢包高于相邻档位，反映过载后的调度/队列波动；零丢包边界以20/21Gbps相邻
 档位为准，不用单个22Gbps异常值推导线性性能。
@@ -1808,7 +1808,7 @@ socket和路由，正式N3/N6保持connected，部署恢复为单VPP Worker。
 UE重建后重新抓取PFCP Session Establishment，并按当前Access侧TEID、UE IP
 和IPv4 header checksum生成五份上行PCAP。五Session 5Mbps冒烟发送874包，
 N6输出874包，确认全部TEID/PDR有效。计数口径仍为VPP送入memif的实际包数与
-Open5GS返回VPP的实际包数，不按未达到的PG目标速率计算丢包。
+xcn返回VPP的实际包数，不按未达到的PG目标速率计算丢包。
 
 ### 单Session
 
@@ -1856,7 +1856,7 @@ Open5GS返回VPP的实际包数，不按未达到的PG目标速率计算丢包�
 
 五Session下行最高实测零丢包输入为23.6962Gbps；实际24.9141Gbps时开始丢
 2.222753%，过载后的输出约23.1至24.4Gbps。五Session上行受单VPP Worker的
-多流PG先限制，最高只实际提供24.5310Gbps，Open5GS仍零丢包，因此只能声明
+多流PG先限制，最高只实际提供24.5310Gbps，xcn仍零丢包，因此只能声明
 UPF上行零丢包能力至少24.5310Gbps，不能把它当作单UPF Worker的真实上限。
 
 高压测试后Worker 0累计`queue-high=8192`且`queue-full`增长，对应下行过载档
@@ -1901,7 +1901,7 @@ VPP或UPF数据面Worker数量。
 | 五Session | 256 | 30 Gbps | 30.0000 Gbps | 13.9123 Gbps | 53.625630% |
 
 `maxframe=32`是本轮最佳平衡：单Session最高实际26.0863Gbps、五Session最高
-实际26.0304Gbps，Open5GS段均零丢包。`maxframe=40`未继续提高发生器平台；
+实际26.0304Gbps，xcn段均零丢包。`maxframe=40`未继续提高发生器平台；
 `maxframe=64`虽然可把实际输入提高到约27.4Gbps，但25Gbps时已经出现
 0.75%至1.14%丢包；`maxframe=256`可完整送满30Gbps，却因强突发立即打满
 dispatcher→唯一Worker队列，丢包超过53%，不代表稳定业务吞吐。
@@ -1919,7 +1919,7 @@ dispatcher→唯一Worker队列，丢包超过53%，不代表稳定业务吞吐�
 
 ## VPP 1 main + 1 Worker 裸 memif 单向/双向性能（2026-08-11）
 
-本轮只测 VPP 26.06 的 IP 模式 memif，不经过 Open5GS UPF，不执行
+本轮只测 VPP 26.06 的 IP 模式 memif，不经过 xcn UPF，不执行
 PFCP/PDR/FAR/QER/URR 或 GTP-U。VPP 固定 2 个逻辑 CPU：`vpp_main` 位于 CPU
 47，唯一 `vpp_wk_0` 位于 CPU 119；两者是同一物理核的两个超线程。临时
 master `memif9/0` 使用 2 个 RX/TX queue、8192-entry ring；slave 流量端点使用
@@ -1958,7 +1958,7 @@ IPv4 input/lookup 后从 `memif10/0` 发给另一个 libmemif 接收端。路径
 
 `slave TX → memif9/0 RX → IPv4 lookup → memif10/0 TX → slave RX`
 
-该路径仍不经过 Open5GS UPF。1428-byte 测试每轮 10 秒，64-byte 测试每轮
+该路径仍不经过 xcn UPF。1428-byte 测试每轮 10 秒，64-byte 测试每轮
 5 秒，各执行三轮；结果以两个 VPP 接口的实际计数换算：
 
 | 包长 | 轮次 | `memif9/0` RX | `memif10/0` TX | 有效性能 |

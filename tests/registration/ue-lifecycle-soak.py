@@ -51,7 +51,7 @@ def children(parent):
         try:
             fields = dict(line.split(':', 1) for line in (path / 'status').read_text().splitlines())
             name = fields['Name'].strip()
-            if int(fields['PPid']) != parent or not name.startswith('open5gs-'):
+            if int(fields['PPid']) != parent or not name.startswith('xcn-'):
                 continue
             found[name] = dict(pid=int(path.name), rss_kib=int(fields.get('VmRSS', '0 kB').split()[0]),
                                hwm_kib=int(fields.get('VmHWM', '0 kB').split()[0]),
@@ -202,7 +202,7 @@ try:
                     snapshot['retained_amf_contexts'] = len(retained)
                     clean_verified[cycle] = ue_count
                     checkpoints.append(snapshot)
-                    print('CLEANUP_VERIFIED', cycle, ue_count, 'rss_kib', {k:v['rss_kib'] for k,v in current.items() if k in ['open5gs-amfd','open5gs-smfd','open5gs-upfd']}, flush=True)
+                    print('CLEANUP_VERIFIED', cycle, ue_count, 'rss_kib', {k:v['rss_kib'] for k,v in current.items() if k in ['xcn-amfd','xcn-smfd','xcn-upfd']}, flush=True)
         time.sleep(0.2)
     code = process.wait()
     assert code == 0, ('Protocol test failed', code)

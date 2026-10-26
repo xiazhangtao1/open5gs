@@ -1,9 +1,9 @@
 {
-  "name": "open5gs",
+  "name": "xcn",
   "version": "2.7.7",
-  "description": "Open5gs",
+  "description": "xcn",
   "main": "index.js",
-  "repository": "https://github.com/open5gs/open5gs/webui",
+  "repository": "https://github.com/xiazhangtao1/open5gs/tree/open5gs-basev277-develop/webui",
   "author": "Open5gs Group",
   "license": "AGPL-3.0",
   "dependencies": {

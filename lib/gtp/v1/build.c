@@ -3,7 +3,7 @@
  * Copyright (C) 2022 by sysmocom - s.f.m.c. GmbH <info@sysmocom.de>
  * Copyright (C) 2023 Sukchan Lee <acetcom@gmail.com>
  *
- * This file is part of Open5GS.
+ * This file is part of xcn.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by

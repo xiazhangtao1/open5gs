@@ -1,7 +1,7 @@
 /*
  * Copyright (C) 2019-2023 by Sukchan Lee <acetcom@gmail.com>
  *
- * This file is part of Open5GS.
+ * This file is part of xcn.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
@@ -208,7 +208,7 @@ static void test1_func(abts_case *tc, void *data)
 /*
  * Discussion #1776 was raised,
  * but we decided not to allow unspecified addresses
- * because Open5GS has already sent interface identifiers
+ * because xcn has already sent interface identifiers
  * in the registgration/attach process.
  *
  *

@@ -1,7 +1,7 @@
 /*
  * Copyright (C) 2026 by Open5GS contributors
  *
- * This file is part of Open5GS.
+ * This file is part of xcn.
  */
 
 #ifndef UPF_N6_MEMIF_H

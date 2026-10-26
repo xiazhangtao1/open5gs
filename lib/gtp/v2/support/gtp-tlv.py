@@ -1,6 +1,6 @@
 # Copyright (C) 2019-2023 by Sukchan Lee <acetcom@gmail.com>
 
-# This file is part of Open5GS.
+# This file is part of xcn.
 
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published by
@@ -62,7 +62,7 @@ def output_header_to_file(f):
     f.write("""/*
  * Copyright (C) 2019-2023 by Sukchan Lee <acetcom@gmail.com>
  *
- * This file is part of Open5GS.
+ * This file is part of xcn.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by

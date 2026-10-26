@@ -40,7 +40,8 @@ DT="$(date +%Y%m%d)+git$(git rev-parse --short HEAD)"
 TOP=$(pwd)
 
 OGS_REPO=$TOP/build/obs-repo
-PROJECT=home:acetcom:open5gs:${1-snapshot}
+: "${XCN_PACKAGE_PROJECT:?Set XCN_PACKAGE_PROJECT to your package publishing destination}"
+PROJECT=$XCN_PACKAGE_PROJECT
 OBS_DIR=$OGS_REPO/$PROJECT/$PACKAGE
 
 prepare() {

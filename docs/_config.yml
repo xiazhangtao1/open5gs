@@ -13,15 +13,16 @@
 # you will see them accessed via {{ site.title }}, {{ site.email }}, and so on.
 # You can create any custom variable you would like, and they will be accessible
 # in the templates via {{ site.myvariable }}.
-title: Open5GS
+title: xcn
 email: acetcom@gmail.com
 description: >- # this means to ignore newlines until "baseurl:"
-  Open5GS is a C-language implementation of 5G Core and EPC,
+  xcn is a C-language implementation of 5G Core and EPC,
   i.e. the core network of NR/LTE network (Release-17)
-baseurl: "/open5gs" # the subpath of your site, e.g. /blog
-url: "https://open5gs.org" # the base hostname & protocol for your site, e.g. http://example.com
+baseurl: "/xcn" # the subpath of your site, e.g. /blog
+url: "" # the base hostname & protocol for your site, e.g. http://example.com
 author: "Sukchan Lee"
-github_username: open5gs
+github_username: xiazhangtao1
+github_repository: open5gs
 google_analytics: G-12MQZTB3JH
 
 # Build settings
@@ -55,8 +56,8 @@ minima_reboot:
   date_format: "%Y-%m-%d %H:%M"
 
 footer_icons:
-  - username: open5gs
-    url: https://github.com/open5gs/open5gs
+  - username: xcn
+    url: https://github.com/xiazhangtao1/open5gs
     icon: icon-github.svg
 
 header_pages:

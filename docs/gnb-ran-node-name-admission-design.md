@@ -1,6 +1,6 @@
 # 基于 RANNodeName 的基站准入方案与开发设计
 
-版本：1.0；日期：2026-10-09；适用对象：本仓库 Open5GS AMF、xcn Chart、自研或 OAI 衍生 gNB。
+版本：1.0；日期：2026-10-09；适用对象：本仓库 xcn AMF、xcn Chart、自研或 OAI 衍生 gNB。
 
 本文保留固定名称方案作为比较参考。当前首版开发目标已升级为[独立设备密钥、时间戳、随机数、HMAC 与防重放缓存方案](gnb-ran-node-name-hmac-admission-design.md)。固定名称不能防抓包复制；新方案仍复用 RANNodeName，但需要两端动态认证逻辑。
 
@@ -260,7 +260,7 @@ static bool ran_name_equal(const uint8_t *buf, size_t size,
 | `src/amf/context.h` | 名单结构、容量限制、gNB 已准入名称和 ID 位数 |
 | `src/amf/context.c` | 配置解析与启动校验，名单查询、占用和生命周期处理 |
 | `src/amf/ngap-handler.c` | NG Setup 名称校验、RAN Configuration Update 身份检查、重复 Setup 处理 |
-| `configs/open5gs/amf.yaml.in` | 新配置项的说明和关闭默认值 |
+| `configs/xcn/amf.yaml.in` | 新配置项的说明和关闭默认值 |
 | `helm/xcn/values.yaml` | 拟新增 `fivegc.ranNodeNameAdmission` 开关和设备列表 |
 | `helm/xcn/templates/config.yaml` | 将 Chart 参数渲染进 AMF YAML |
 

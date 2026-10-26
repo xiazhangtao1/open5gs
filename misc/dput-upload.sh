@@ -39,7 +39,8 @@ PACKAGE=$(dpkg-parsechangelog | sed -n 's/^Source: //p')
 DT="$(date +%Y%m%d)+git$(git rev-parse --short HEAD)"
 TOP=$(pwd)
 
-PROJECT=ppa:open5gs/${1-snapshot}
+: "${XCN_PACKAGE_PROJECT:?Set XCN_PACKAGE_PROJECT to your package publishing destination}"
+PROJECT=$XCN_PACKAGE_PROJECT
 
 DEB_SRC=$TOP/build/deb-src
 DEB_DIR=$DEB_SRC/$PACKAGE

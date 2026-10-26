@@ -1,0 +1,16 @@
+@localstatedir@/log/xcn/*.log {
+    daily
+    sharedscripts
+    missingok
+    compress
+    rotate 14
+    create 640 xcn xcn
+
+    postrotate
+        for i in nrfd scpd seppd pcrfd hssd ausfd udmd udrd upfd sgwcd sgwud smfd mmed amfd; do
+            if systemctl --quiet is-active xcn-$i; then
+                 systemctl reload xcn-$i
+            fi
+        done
+    endscript
+}

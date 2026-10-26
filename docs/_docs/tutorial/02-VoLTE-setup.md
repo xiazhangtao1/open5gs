@@ -1,11 +1,11 @@
 ---
-title: VoLTE Setup with Kamailio IMS and Open5GS
+title: VoLTE Setup with Kamailio IMS and xcn
 head_inline: "<style> .blue { color: blue; } </style>"
 ---
 
 Setup description:
 - MCC: 001, MNC: 01
-- Single OpenStack VM with Kamailio IMS and Open5GS (Internal IP 10.4.128.21 and Floating IP 172.24.15.30)
+- Single OpenStack VM with Kamailio IMS and xcn (Internal IP 10.4.128.21 and Floating IP 172.24.15.30)
 - 4G Casa Smallcell
 - Sysmocom USIM - sysmoUSIM-SJS1
 - Oneplus 5 as UE
@@ -733,14 +733,14 @@ $ mkdir -p /var/run/kamailio_icscf
 $ kamailio -f /etc/kamailio_icscf/kamailio_icscf.cfg -P /kamailio_icscf.pid -DD -E -e
 ```
 
-#### 18. Install Open5GS in the same machine as Kamailio IMS - Install Open5GS from source
+#### 18. Install xcn in the same machine as Kamailio IMS - Install xcn from source
 
 Please refer to instructions at [https://open5gs.org/open5gs/docs/guide/02-building-open5gs-from-sources/](https://open5gs.org/open5gs/docs/guide/02-building-open5gs-from-sources/)
 
-If you are using OpenStack, installing Open5GS and Kamailio IMS on the same machine is very important because the **Framed-IP-Address** in the AAR request via Rx interface takes received IP address and port in ims_qos module, hence, if the Open5GS is on a separate VM/machine, the IP and port received in received_ip and received_port values seen by Kamailio IMS will be the NATed IP of the Open5GS machine resulting in failing of AAR request.
+If you are using OpenStack, installing xcn and Kamailio IMS on the same machine is very important because the **Framed-IP-Address** in the AAR request via Rx interface takes received IP address and port in ims_qos module, hence, if the xcn is on a separate VM/machine, the IP and port received in received_ip and received_port values seen by Kamailio IMS will be the NATed IP of the xcn machine resulting in failing of AAR request.
 {: .notice--danger}
 
-Modify below mentioned parts of configuration files in addition to **Configure Open5GS** section. For reference, look at the configuration files at [https://github.com/herlesupreeth/Open5gs_Config](https://github.com/herlesupreeth/Open5gs_Config). These configuration only holds for open5gs tag v1.3.0, please tweak configuration files based on the open5gs tag you use.
+Modify below mentioned parts of configuration files in addition to **Configure xcn** section. For reference, look at the configuration files at [https://github.com/herlesupreeth/Open5gs_Config](https://github.com/herlesupreeth/Open5gs_Config). These configuration only holds for xcn tag v1.3.0, please tweak configuration files based on the xcn tag you use.
 {: .notice--warning}
 
 - Change realm of components to `epc.mnc001.mcc001.3gppnetwork.org`
@@ -780,7 +780,7 @@ ip6tables -I INPUT -i ogstun2 -j ACCEPT
 ufw disable
 ```
 
-Add users with following APN settings in Open5GS:
+Add users with following APN settings in xcn:
 
 <pre>
 APN Configuration:
@@ -795,7 +795,7 @@ APN Configuration:
 ---------------------------------------------------------------------------------------------------------------------
 </pre>
 
-Finally, make sure of the following in Open5GS
+Finally, make sure of the following in xcn
 
 - PCO options which indicate the address of the Proxy-CSCF
 - Need to indicate support for Voice-over-Packet-Switched (VoPS) in NAS message to UE from EPC
@@ -1095,12 +1095,12 @@ Create the IMPI and Associate the IMPI to the IMSU
 Click Create & Bind new IMPI
 Enter:
 Identity = 001010123456791@ims.mnc001.mcc001.3gppnetwork.org
-Secret Key = 8baf473f2f8fd09487cccbd7097c6862 (Ki value as in Open5GS HSS database)
+Secret Key = 8baf473f2f8fd09487cccbd7097c6862 (Ki value as in xcn HSS database)
 Authentication Schemes - All
 Default = Digest-AKAv1-MD5
-AMF = 8000 (As in Open5GS HSS database)
-OP = 11111111111111111111111111111111 (As in Open5GS HSS database)
-SQN = 000000021090 (SQN value as in Open5GS HSS database)
+AMF = 8000 (As in xcn HSS database)
+OP = 11111111111111111111111111111111 (As in xcn HSS database)
+SQN = 000000021090 (SQN value as in xcn HSS database)
 Click Save
 
 Create and Associate IMPI to IMPU
@@ -1193,7 +1193,7 @@ $ ip r add 10.4.128.21/32 via 172.24.15.30
   - (Official Google method) - Please follow the instructions in the following link [@herlesupreeth/CoIMS_Wiki](https://github.com/herlesupreeth/CoIMS_Wiki) to force enable VoLTE using Carrier Privileges
   - (Risky method) With modfication to enable force IMS registration is a must or else UE will not even attempt to connect to P-CSCF. Need to apply the fix back after each update.  [https://forum.xda-developers.com/oneplus-5t/how-to/guide-volte-vowifi-german-carriers-t3817542](https://forum.xda-developers.com/oneplus-5t/how-to/guide-volte-vowifi-german-carriers-t3817542)
 
-#### 24. Start IMS components and FoHSS followed by Open5GS and eNB, then try connecting the phones
+#### 24. Start IMS components and FoHSS followed by xcn and eNB, then try connecting the phones
 
 #### 25. Test voice call
 
@@ -1203,7 +1203,7 @@ Assuming IMSI of the user1 as 001010123456791 and MSISDN is 0198765432100 and IM
 
 #### 26. For debugging
 
-Debug using wireshark at Open5GS machine and following wireshark display filter
+Debug using wireshark at xcn machine and following wireshark display filter
 
 ```
 s1ap || gtpv2 || pfcp || diameter || diameter.3gpp || sip

@@ -1,4 +1,4 @@
-Source: open5gs
+Source: xcn
 Section: net
 Priority: optional
 Maintainer: Harald Welte <laforge@gnumonks.org>
@@ -25,30 +25,30 @@ Build-Depends: debhelper (>= 11),
                libtalloc-dev,
 Standards-Version: 4.3.0
 Rules-Requires-Root: no
-Homepage: https://open5gs.org
-Vcs-Browser: https://github.com/open5gs/open5gs
-Vcs-Git: git://github.com/open5gs/open5gs
+Homepage: https://github.com/xiazhangtao1/open5gs
+Vcs-Browser: https://github.com/xiazhangtao1/open5gs
+Vcs-Git: https://github.com/xiazhangtao1/open5gs.git
 
-Package: open5gs-common
+Package: xcn-common
 Architecture: any
 Multi-Arch: same
 Depends: ${shlibs:Depends},
          ${misc:Depends}
 Description: 5G Core and EPC (Shared Files)
- Open5GS is a C-language implementation of 5G Core and EPC
+ xcn is a C-language implementation of 5G Core and EPC
  Packet Core, i.e. the core network of an NR/LTE network (Release-17)
  .
  This package contains some core libraries/plugins required by the other
- binary packages such as open5gs-{mme,sgwc,sgwu,amf,smf,upf,...}.
+ binary packages such as xcn-{mme,sgwc,sgwu,amf,smf,upf,...}.
 
-Package: open5gs-mme
+Package: xcn-mme
 Architecture: any
 Multi-Arch: same
 Depends: ${shlibs:Depends},
          ${misc:Depends},
-         open5gs-common (= ${binary:Version})
+         xcn-common (= ${binary:Version})
 Description: MME (Mobility Management Entity)
- Open5GS is a C-language implementation of 5G Core and EPC
+ xcn is a C-language implementation of 5G Core and EPC
  Packet Core, i.e. the core network of an NR/LTE network (Release-17)
  .
  This package provides the MME (Mobility Management Engine), which
@@ -56,80 +56,80 @@ Description: MME (Mobility Management Entity)
  network, and interfaces via S11 to the SGW-C as well as via S6a to the
  HSS.
 
-Package: open5gs-sgwc
+Package: xcn-sgwc
 Architecture: any
 Multi-Arch: same
 Depends: ${shlibs:Depends},
          ${misc:Depends},
-         open5gs-common (= ${binary:Version})
+         xcn-common (= ${binary:Version})
 Description: SGW-C (Serving Gateway - Control Plane)
- Open5GS is a C-language implementation of 5G Core and EPC
+ xcn is a C-language implementation of 5G Core and EPC
  Packet Core, i.e. the core network of an NR/LTE network (Release-17)
  .
  This package provides the SGW-C (Serving Gateway - Control Plane)
  which is situated between the MME and PGW. It implements the S11 interface
  to the MME, and the S5 interface to the SMF-C.
 
-Package: open5gs-smf
+Package: xcn-smf
 Architecture: any
 Multi-Arch: same
 Depends: ${shlibs:Depends},
          ${misc:Depends},
-         open5gs-common (= ${binary:Version})
+         xcn-common (= ${binary:Version})
 Description: SMF (Session Management Function)
- Open5GS is a C-language implementation of 5G Core and EPC
+ xcn is a C-language implementation of 5G Core and EPC
  Packet Core, i.e. the core network of an NR/LTE network (Release-17)
  .
  This package provides the SMF (Session Management Function)
 
-Package: open5gs-amf
+Package: xcn-amf
 Architecture: any
 Multi-Arch: same
 Depends: ${shlibs:Depends},
          ${misc:Depends},
-         open5gs-common (= ${binary:Version})
+         xcn-common (= ${binary:Version})
 Description: AMF (Access and Mobility Management Function)
- Open5GS is a C-language implementation of 5G Core and EPC
+ xcn is a C-language implementation of 5G Core and EPC
  Packet Core, i.e. the core network of an NR/LTE network (Release-17)
  .
  This package provides the AMF (Access and Mobility Management Function)
 
-Package: open5gs-sgwu
+Package: xcn-sgwu
 Architecture: any
 Multi-Arch: same
 Depends: ${shlibs:Depends},
          ${misc:Depends},
-         open5gs-common (= ${binary:Version})
+         xcn-common (= ${binary:Version})
 Description: SGW-U (Serving Gateway - User Plane)
- Open5GS is a C-language implementation of 5G Core and EPC
+ xcn is a C-language implementation of 5G Core and EPC
  Packet Core, i.e. the core network of an NR/LTE network (Release-17)
  .
  This package provides the SGW-U (Serving Gateway - User Plane)
  which is situated between the eNB and UPF. It implements the S1U interface
  to the eNB, and the S5U interface to the SMF-U.
 
-Package: open5gs-upf
+Package: xcn-upf
 Architecture: any
 Multi-Arch: same
 Depends: ${shlibs:Depends},
          ${misc:Depends},
          udev,
-         open5gs-common (= ${binary:Version})
+         xcn-common (= ${binary:Version})
 Description: UPF (User Plane Function)
- Open5GS is a C-language implementation of 5G Core and EPC
+ xcn is a C-language implementation of 5G Core and EPC
  Packet Core, i.e. the core network of an NR/LTE network (Release-17)
  .
  This package provides the UPF (User Plane Function)
 
-Package: open5gs-hss
+Package: xcn-hss
 Architecture: any
 Multi-Arch: same
 Depends: ${shlibs:Depends},
          ${misc:Depends},
          mongodb-org | mongodb,
-         open5gs-common (= ${binary:Version})
+         xcn-common (= ${binary:Version})
 Description: HSS (Home Subscriber Server)
- Open5GS is a C-language implementation of 5G Core and EPC
+ xcn is a C-language implementation of 5G Core and EPC
  Packet Core, i.e. the core network of an NR/LTE network (Release-17)
  .
  This package provides the HSS (Home Subscriber Server) element of the
@@ -138,15 +138,15 @@ Description: HSS (Home Subscriber Server)
  information, etc.  It implements the S6a interface towards the MME
  using the DIAMETER protocol.
 
-Package: open5gs-pcrf
+Package: xcn-pcrf
 Architecture: any
 Multi-Arch: same
 Depends: ${shlibs:Depends},
          ${misc:Depends},
          mongodb-org | mongodb,
-         open5gs-common (= ${binary:Version})
+         xcn-common (= ${binary:Version})
 Description: PCRF (Policy and Charging Rules Function)
- Open5GS is a C-language implementation of 5G Core and EPC
+ xcn is a C-language implementation of 5G Core and EPC
  Packet Core, i.e. the core network of an NR/LTE network (Release-17)
  .
  This package contains the PCRF (Policy and Charging Rules Function),
@@ -154,149 +154,149 @@ Description: PCRF (Policy and Charging Rules Function)
  how to account/charge related traffic.  It implements the Gx interface
  towards the SMF-C using the DIAMETER protocol.
 
-Package: open5gs-nrf
+Package: xcn-nrf
 Architecture: any
 Multi-Arch: same
 Depends: ${shlibs:Depends},
          ${misc:Depends},
-         open5gs-common (= ${binary:Version})
+         xcn-common (= ${binary:Version})
 Description: NRF (Network Repository Function)
- Open5GS is a C-language implementation of 5G Core and EPC
+ xcn is a C-language implementation of 5G Core and EPC
  Packet Core, i.e. the core network of an NR/LTE network (Release-17)
  .
  This package provides the NRF (Network Repository Function)
 
-Package: open5gs-scp
+Package: xcn-scp
 Architecture: any
 Multi-Arch: same
 Depends: ${shlibs:Depends},
          ${misc:Depends},
-         open5gs-common (= ${binary:Version})
+         xcn-common (= ${binary:Version})
 Description: SCP (Network Repository Function)
- Open5GS is a C-language implementation of 5G Core and EPC
+ xcn is a C-language implementation of 5G Core and EPC
  Packet Core, i.e. the core network of an NR/LTE network (Release-17)
  .
  This package provides the SCP (Service Communication Proxy)
 
-Package: open5gs-sepp
+Package: xcn-sepp
 Architecture: any
 Multi-Arch: same
 Depends: ${shlibs:Depends},
          ${misc:Depends},
-         open5gs-common (= ${binary:Version})
+         xcn-common (= ${binary:Version})
 Description: SEPP (Security Edge Protection Proxy)
- Open5GS is a C-language implementation of 5G Core and EPC
+ xcn is a C-language implementation of 5G Core and EPC
  Packet Core, i.e. the core network of an NR/LTE network (Release-17)
  .
  This package provides the SEPP (Security Edge Protection Proxy)
 
-Package: open5gs-ausf
+Package: xcn-ausf
 Architecture: any
 Multi-Arch: same
 Depends: ${shlibs:Depends},
          ${misc:Depends},
-         open5gs-common (= ${binary:Version})
+         xcn-common (= ${binary:Version})
 Description: AUSF (Authentication Server Function)
- Open5GS is a C-language implementation of 5G Core and EPC
+ xcn is a C-language implementation of 5G Core and EPC
  Packet Core, i.e. the core network of an NR/LTE network (Release-17)
  .
  This package provides the AUSF (Authentication Server Function)
 
-Package: open5gs-udm
+Package: xcn-udm
 Architecture: any
 Multi-Arch: same
 Depends: ${shlibs:Depends},
          ${misc:Depends},
-         open5gs-common (= ${binary:Version})
+         xcn-common (= ${binary:Version})
 Description: UDM (Unified Data Management)
- Open5GS is a C-language implementation of 5G Core and EPC
+ xcn is a C-language implementation of 5G Core and EPC
  Packet Core, i.e. the core network of an NR/LTE network (Release-17)
  .
  This package provides the UDM (Unified Data Managemement)
 
-Package: open5gs-pcf
+Package: xcn-pcf
 Architecture: any
 Multi-Arch: same
 Depends: ${shlibs:Depends},
          ${misc:Depends},
-         open5gs-common (= ${binary:Version})
+         xcn-common (= ${binary:Version})
 Description: PCF (Policy Control Function)
- Open5GS is a C-language implementation of 5G Core and EPC
+ xcn is a C-language implementation of 5G Core and EPC
  Packet Core, i.e. the core network of an NR/LTE network (Release-17)
  .
  This package provides the PCF (Policy Control Function)
 
-Package: open5gs-nssf
+Package: xcn-nssf
 Architecture: any
 Multi-Arch: same
 Depends: ${shlibs:Depends},
          ${misc:Depends},
-         open5gs-common (= ${binary:Version})
+         xcn-common (= ${binary:Version})
 Description: NSSF (Network Slice Selection Function)
- Open5GS is a C-language implementation of 5G Core and EPC
+ xcn is a C-language implementation of 5G Core and EPC
  Packet Core, i.e. the core network of an NR/LTE network (Release-17)
  .
  This package provides the NSSF (Network Slice Selection Function)
 
-Package: open5gs-bsf
+Package: xcn-bsf
 Architecture: any
 Multi-Arch: same
 Depends: ${shlibs:Depends},
          ${misc:Depends},
-         open5gs-common (= ${binary:Version})
+         xcn-common (= ${binary:Version})
 Description: BSF (Binding Support Function)
- Open5GS is a C-language implementation of 5G Core and EPC
+ xcn is a C-language implementation of 5G Core and EPC
  Packet Core, i.e. the core network of an NR/LTE network (Release-17)
  .
  This package provides the BSF (Binding Support Function)
 
-Package: open5gs-udr
+Package: xcn-udr
 Architecture: any
 Multi-Arch: same
 Depends: ${shlibs:Depends},
          ${misc:Depends},
-         open5gs-common (= ${binary:Version})
+         xcn-common (= ${binary:Version})
 Description: UDR (Unified Data Repository)
- Open5GS is a C-language implementation of 5G Core and EPC
+ xcn is a C-language implementation of 5G Core and EPC
  Packet Core, i.e. the core network of an NR/LTE network (Release-17)
  .
  This package provides the UDR (Unified Data Repository)
 
-Package: open5gs
+Package: xcn
 Architecture: any
 Multi-Arch: same
 Depends: ${misc:Depends},
-         open5gs-common (= ${binary:Version}),
-         open5gs-mme (= ${binary:Version}),
-         open5gs-sgwc (= ${binary:Version}),
-         open5gs-smf (= ${binary:Version}),
-         open5gs-amf (= ${binary:Version}),
-         open5gs-sgwu (= ${binary:Version}),
-         open5gs-upf (= ${binary:Version}),
-         open5gs-hss (= ${binary:Version}),
-         open5gs-pcrf (= ${binary:Version}),
-         open5gs-nrf (= ${binary:Version}),
-         open5gs-scp (= ${binary:Version}),
-         open5gs-sepp (= ${binary:Version}),
-         open5gs-ausf (= ${binary:Version}),
-         open5gs-udm (= ${binary:Version}),
-         open5gs-pcf (= ${binary:Version}),
-         open5gs-nssf (= ${binary:Version}),
-         open5gs-bsf (= ${binary:Version}),
-         open5gs-udr (= ${binary:Version})
+         xcn-common (= ${binary:Version}),
+         xcn-mme (= ${binary:Version}),
+         xcn-sgwc (= ${binary:Version}),
+         xcn-smf (= ${binary:Version}),
+         xcn-amf (= ${binary:Version}),
+         xcn-sgwu (= ${binary:Version}),
+         xcn-upf (= ${binary:Version}),
+         xcn-hss (= ${binary:Version}),
+         xcn-pcrf (= ${binary:Version}),
+         xcn-nrf (= ${binary:Version}),
+         xcn-scp (= ${binary:Version}),
+         xcn-sepp (= ${binary:Version}),
+         xcn-ausf (= ${binary:Version}),
+         xcn-udm (= ${binary:Version}),
+         xcn-pcf (= ${binary:Version}),
+         xcn-nssf (= ${binary:Version}),
+         xcn-bsf (= ${binary:Version}),
+         xcn-udr (= ${binary:Version})
 Description: 5G Core and EPC (metapackage)
- Open5GS is a C-language implementation of 5G Core and EPC
+ xcn is a C-language implementation of 5G Core and EPC
  Packet Core, i.e. the core network of an NR/LTE network (Release-17)
  .
- This is a metapackage that depends on all the open5gs parts.
+ This is a metapackage that depends on all the xcn parts.
 
-Package: open5gs-dbg
+Package: xcn-dbg
 Architecture: any
 Multi-Arch: same
 Depends: ${misc:Depends},
-         open5gs (= ${binary:Version})
-Description: Debug symbols for Open5GS
- Open5GS is a C-language implementation of 5G Core and EPC
+         xcn (= ${binary:Version})
+Description: Debug symbols for xcn
+ xcn is a C-language implementation of 5G Core and EPC
  Packet Core, i.e. the core network of an NR/LTE network (Release-17)
  .
- This package contains debug symbols for Open5GS.
+ This package contains debug symbols for xcn.

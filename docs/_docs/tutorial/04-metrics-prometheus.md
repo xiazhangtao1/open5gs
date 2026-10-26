@@ -4,11 +4,11 @@ title: Metrics with Prometheus
 
 #### 0. Introduction
 
-This tutorial explains how to export open5gs metrics to Prometheus, which can in
+This tutorial explains how to export xcn metrics to Prometheus, which can in
 turn be used to visualize or export them to other systems such as Grafana or
 StatsD.
 
-When this method is used, any open5gs program exporting metrics becomes a
+When this method is used, any xcn program exporting metrics becomes a
 Prometheus server, which is basically an HTTP server serving Prometheus data to
 the Prometheus scrapper.
 
@@ -17,8 +17,8 @@ hopefully follow soon.
 
 #### 1. Enable Prometheus support during build
 
-Open5GS programs use a generic internal API available in libogsmetrics. This
-library implements the API based on configuration passed during open5gs build
+xcn programs use a generic internal API available in libogsmetrics. This
+library implements the API based on configuration passed during xcn build
 time. By default, the library will be built under lib/metrics/prometheus/, which uses:
 
 * prometheus-client-c project (libprom): To generate the Prometheus expected
@@ -28,7 +28,7 @@ time. By default, the library will be built under lib/metrics/prometheus/, which
 The `prometheus-client-c` project is not currently well maintained, and uses a
 weird mixture of build systems, which makes it difficult to make it available in
 most Linux distributions. As a result, a fork of the project is available under
-Open5GS GitHub namespace, with an extra patch applied making it possible to
+xcn GitHub namespace, with an extra patch applied making it possible to
 include it as a subproject, which will be fetched and built automatically when
 building the prometheus libmetrics implementation.
 
@@ -115,12 +115,12 @@ global:
   scrape_interval: 10s
 
 scrape_configs:
-  - job_name: open5gs-smfd
+  - job_name: xcn-smfd
     static_configs:
       - targets: ["192.168.1.140:9091"]
 ```
 
-Where `192.168.1.140:9091` is the IP address and port where `open5gs-smfd` is
+Where `192.168.1.140:9091` is the IP address and port where `xcn-smfd` is
 serving its metrics, as configured in above sections.
 
 The Prometheus scrapper can be easily started from a docker container:

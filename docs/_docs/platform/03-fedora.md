@@ -61,11 +61,11 @@ $ sudo ip link set ogstun up
 $ ip link show
 ```
 
-**Tip:** The script provided in [$GIT_REPO/misc/netconf.sh](https://github.com/{{ site.github_username }}/open5gs/blob/main/misc/netconf.sh) makes it easy to configure the TUN device as follows:
+**Tip:** The script provided in [$GIT_REPO/misc/netconf.sh](https://github.com/{{ site.github_username }}/{{ site.github_repository }}/blob/open5gs-basev277-develop/misc/netconf.sh) makes it easy to configure the TUN device as follows:
 `$ sudo ./misc/netconf.sh`
 {: .notice--info}
 
-### Building Open5GS
+### Building xcn
 ---
 
 Install the depedencies for building the source code.
@@ -81,13 +81,13 @@ $ sudo dnf install meson
 Git clone.
 
 ```bash
-$ git clone https://github.com/{{ site.github_username }}/open5gs
+$ git clone --branch open5gs-basev277-develop https://github.com/{{ site.github_username }}/{{ site.github_repository }}.git xcn
 ```
 
 To compile with meson:
 
 ```bash
-$ cd open5gs
+$ cd xcn
 $ meson build --prefix=`pwd`/install
 $ ninja -C build
 ```
@@ -114,10 +114,10 @@ $ ninja install
 $ cd ../
 ```
 
-### Building WebUI of Open5GS
+### Building WebUI of xcn
 ---
 
-[Node.js](https://nodejs.org/) is required to build WebUI of Open5GS
+[Node.js](https://nodejs.org/) is required to build WebUI of xcn
 
 ```bash
 $ sudo dnf install https://rpm.nodesource.com/pub_20.x/nodistro/repo/nodesource-release-nodistro-1.noarch.rpm -y

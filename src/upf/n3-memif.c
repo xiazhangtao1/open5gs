@@ -22,7 +22,7 @@
 #define UPF_GTPU_PORT 2152
 #define UPF_MEMIF_MAX_QUEUES 16
 #define UPF_MEMIF_MAX_RING_SIZE (1U << 14)
-#define UPF_N3_TX_TIMING_CONTROL_FILE "/tmp/open5gs-n3-tx-timing"
+#define UPF_N3_TX_TIMING_CONTROL_FILE "/tmp/xcn-n3-tx-timing"
 #define UPF_N3_TX_GAP_IDLE_US 1000000
 #define UPF_N3_TX_ZERO_EPISODE_GAP_US 1000
 
@@ -560,7 +560,7 @@ int upf_n3_memif_open(void)
     memset(&socket_args, 0, sizeof(socket_args));
     ogs_cpystrn(socket_args.path, upf_self()->n3.socket_path,
             sizeof(socket_args.path));
-    ogs_cpystrn(socket_args.app_name, "open5gs-upf-n3",
+    ogs_cpystrn(socket_args.app_name, "xcn-upf-n3",
             sizeof(socket_args.app_name));
     socket_args.connection_request_timer.it_value.tv_sec = 1;
     socket_args.connection_request_timer.it_interval.tv_sec = 1;
@@ -582,7 +582,7 @@ int upf_n3_memif_open(void)
     connection_args.num_m2s_rings = upf_self()->n3.queues;
     connection_args.is_master = 0;
     connection_args.mode = MEMIF_INTERFACE_MODE_IP;
-    ogs_cpystrn((char *)connection_args.interface_name, "open5gs-n3",
+    ogs_cpystrn((char *)connection_args.interface_name, "xcn-n3",
             sizeof(connection_args.interface_name));
 
     rv = memif_create(&self.connection, &connection_args,
@@ -1221,7 +1221,7 @@ int upf_n3_memif_send_gtpu(
 
 int upf_n3_memif_open(void)
 {
-    ogs_error("N3 memif backend requested, but Open5GS lacks libmemif");
+    ogs_error("N3 memif backend requested, but xcn lacks libmemif");
     return OGS_ERROR;
 }
 

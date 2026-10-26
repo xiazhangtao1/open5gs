@@ -1,10 +1,10 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: open5gs-upf
+  name: xcn-upf
 spec:
   selector:
-    app: open5gs-5gc
+    app: xcn-5gc
   ports:
     - name: pfcp
       port: 8805
@@ -18,11 +18,11 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: open5gs-upf-n3
+  name: xcn-upf-n3
 spec:
   type: NodePort
   selector:
-    app: open5gs-5gc
+    app: xcn-5gc
   ports:
     - name: gtpu
       port: 2152
@@ -33,10 +33,10 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: open5gs-smf
+  name: xcn-smf
 spec:
   selector:
-    app: open5gs-5gc
+    app: xcn-5gc
   ports:
     - name: sbi
       port: 7777
@@ -54,10 +54,10 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: open5gs-amf
+  name: xcn-amf
 spec:
   selector:
-    app: open5gs-5gc
+    app: xcn-5gc
   ports:
     - name: sbi
       port: 7777
@@ -71,11 +71,11 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: open5gs-amf-ngap
+  name: xcn-amf-ngap
 spec:
   type: NodePort
   selector:
-    app: open5gs-5gc
+    app: xcn-5gc
   ports:
     - name: ngap
       port: 38412
@@ -86,10 +86,10 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: open5gs-ausf
+  name: xcn-ausf
 spec:
   selector:
-    app: open5gs-5gc
+    app: xcn-5gc
   ports:
     - name: sbi
       port: 7777
@@ -99,10 +99,10 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: open5gs-udm
+  name: xcn-udm
 spec:
   selector:
-    app: open5gs-5gc
+    app: xcn-5gc
   ports:
     - name: sbi
       port: 7777
@@ -112,10 +112,10 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: open5gs-udr
+  name: xcn-udr
 spec:
   selector:
-    app: open5gs-5gc
+    app: xcn-5gc
   ports:
     - name: sbi
       port: 7777
@@ -125,10 +125,10 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: open5gs-nssf
+  name: xcn-nssf
 spec:
   selector:
-    app: open5gs-5gc
+    app: xcn-5gc
   ports:
     - name: sbi
       port: 7777
@@ -138,12 +138,12 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: open5gs-pcf
+  name: xcn-pcf
 spec:
   type: NodePort
   externalTrafficPolicy: Local
   selector:
-    app: open5gs-5gc
+    app: xcn-5gc
   ports:
     - name: sbi
       port: 7777
@@ -158,22 +158,22 @@ spec:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: open5gs-5gc
+  name: xcn-5gc
 spec:
   strategy:
     type: Recreate
   replicas: 1
   selector:
     matchLabels:
-      app: open5gs-5gc
+      app: xcn-5gc
   template:
     metadata:
       labels:
-        app: open5gs-5gc
+        app: xcn-5gc
     spec:
       containers:
         - name: upf
-          image: open5gs-runtime:latest
+          image: xcn-runtime:latest
           imagePullPolicy: IfNotPresent
           env:
             - name: HOST_IP
@@ -183,12 +183,12 @@ spec:
             - name: UPF_GTPU_SERVER_ADDRESS
               valueFrom:
                 configMapKeyRef:
-                  name: open5gs-runtime-config
+                  name: xcn-runtime-config
                   key: UPF_GTPU_SERVER_ADDRESS
             - name: UPF_GTPU_ADVERTISE_ADDRESS
               valueFrom:
                 configMapKeyRef:
-                  name: open5gs-runtime-config
+                  name: xcn-runtime-config
                   key: UPF_GTPU_ADVERTISE_ADDRESS
           command:
             - /bin/sh
@@ -198,9 +198,9 @@ spec:
               sed \
                 -e "s|__UPF_GTPU_SERVER_ADDRESS__|${UPF_GTPU_SERVER_ADDRESS}|g" \
                 -e "s|__UPF_GTPU_ADVERTISE_ADDRESS__|${UPF_GTPU_ADVERTISE_ADDRESS}|g" \
-                /etc/open5gs/upf.yaml.tmpl > /tmp/upf.yaml
-              /usr/local/bin/open5gs-k8s-setup
-              exec open5gs-upfd -c /tmp/upf.yaml
+                /etc/xcn/upf.yaml.tmpl > /tmp/upf.yaml
+              /usr/local/bin/xcn-k8s-setup
+              exec xcn-upfd -c /tmp/upf.yaml
           securityContext:
             privileged: true
             capabilities:
@@ -231,20 +231,20 @@ spec:
             periodSeconds: 10
           volumeMounts:
             - name: config
-              mountPath: /etc/open5gs
+              mountPath: /etc/xcn
             - name: logs
-              mountPath: /var/log/open5gs
+              mountPath: /var/log/xcn
             - name: dev-net-tun
               mountPath: /dev/net/tun
         - name: smf
-          image: open5gs-runtime:latest
+          image: xcn-runtime:latest
           imagePullPolicy: IfNotPresent
           command:
             - /bin/sh
             - -ec
             - |
-              /usr/local/bin/wait-for-tcp.sh open5gs-scp:7777 127.0.0.1:9093
-              exec open5gs-smfd -c /etc/open5gs/smf.yaml
+              /usr/local/bin/wait-for-tcp.sh xcn-scp:7777 127.0.0.1:9093
+              exec xcn-smfd -c /etc/xcn/smf.yaml
           ports:
             - name: smf-sbi
               containerPort: 7780
@@ -270,25 +270,25 @@ spec:
             periodSeconds: 10
           volumeMounts:
             - name: config
-              mountPath: /etc/open5gs
+              mountPath: /etc/xcn
             - name: logs
-              mountPath: /var/log/open5gs
+              mountPath: /var/log/xcn
         - name: amf
-          image: open5gs-runtime:latest
+          image: xcn-runtime:latest
           imagePullPolicy: IfNotPresent
           env:
             - name: AMF_NGAP_SERVER_ADDRESS
               valueFrom:
                 configMapKeyRef:
-                  name: open5gs-runtime-config
+                  name: xcn-runtime-config
                   key: AMF_NGAP_SERVER_ADDRESS
           command:
             - /bin/sh
             - -ec
             - |
-              /usr/local/bin/wait-for-tcp.sh open5gs-scp:7777
-              sed "s|__AMF_NGAP_SERVER_ADDRESS__|${AMF_NGAP_SERVER_ADDRESS}|g" /etc/open5gs/amf.yaml.tmpl > /tmp/amf.yaml
-              exec open5gs-amfd -c /tmp/amf.yaml
+              /usr/local/bin/wait-for-tcp.sh xcn-scp:7777
+              sed "s|__AMF_NGAP_SERVER_ADDRESS__|${AMF_NGAP_SERVER_ADDRESS}|g" /etc/xcn/amf.yaml.tmpl > /tmp/amf.yaml
+              exec xcn-amfd -c /tmp/amf.yaml
           ports:
             - name: amf-sbi
               containerPort: 7779
@@ -315,18 +315,18 @@ spec:
             periodSeconds: 10
           volumeMounts:
             - name: config
-              mountPath: /etc/open5gs
+              mountPath: /etc/xcn
             - name: logs
-              mountPath: /var/log/open5gs
+              mountPath: /var/log/xcn
         - name: ausf
-          image: open5gs-runtime:latest
+          image: xcn-runtime:latest
           imagePullPolicy: IfNotPresent
           command:
             - /bin/sh
             - -ec
             - |
-              /usr/local/bin/wait-for-tcp.sh open5gs-scp:7777
-              exec open5gs-ausfd -c /etc/open5gs/ausf.yaml
+              /usr/local/bin/wait-for-tcp.sh xcn-scp:7777
+              exec xcn-ausfd -c /etc/xcn/ausf.yaml
           ports:
             - name: ausf-sbi
               containerPort: 7781
@@ -346,18 +346,18 @@ spec:
             periodSeconds: 10
           volumeMounts:
             - name: config
-              mountPath: /etc/open5gs
+              mountPath: /etc/xcn
             - name: logs
-              mountPath: /var/log/open5gs
+              mountPath: /var/log/xcn
         - name: udm
-          image: open5gs-runtime:latest
+          image: xcn-runtime:latest
           imagePullPolicy: IfNotPresent
           command:
             - /bin/sh
             - -ec
             - |
-              /usr/local/bin/wait-for-tcp.sh open5gs-scp:7777
-              exec open5gs-udmd -c /etc/open5gs/udm.yaml
+              /usr/local/bin/wait-for-tcp.sh xcn-scp:7777
+              exec xcn-udmd -c /etc/xcn/udm.yaml
           ports:
             - name: udm-sbi
               containerPort: 7782
@@ -377,20 +377,20 @@ spec:
             periodSeconds: 10
           volumeMounts:
             - name: config
-              mountPath: /etc/open5gs
+              mountPath: /etc/xcn
             - name: logs
-              mountPath: /var/log/open5gs
+              mountPath: /var/log/xcn
             - name: hnet
-              mountPath: /etc/open5gs/hnet
+              mountPath: /etc/xcn/hnet
         - name: udr
-          image: open5gs-runtime:latest
+          image: xcn-runtime:latest
           imagePullPolicy: IfNotPresent
           command:
             - /bin/sh
             - -ec
             - |
-              /usr/local/bin/wait-for-tcp.sh open5gs-mongodb:27017 open5gs-scp:7777
-              exec open5gs-udrd -c /etc/open5gs/udr.yaml
+              /usr/local/bin/wait-for-tcp.sh xcn-mongodb:27017 xcn-scp:7777
+              exec xcn-udrd -c /etc/xcn/udr.yaml
           ports:
             - name: udr-sbi
               containerPort: 7783
@@ -410,18 +410,18 @@ spec:
             periodSeconds: 10
           volumeMounts:
             - name: config
-              mountPath: /etc/open5gs
+              mountPath: /etc/xcn
             - name: logs
-              mountPath: /var/log/open5gs
+              mountPath: /var/log/xcn
         - name: nssf
-          image: open5gs-runtime:latest
+          image: xcn-runtime:latest
           imagePullPolicy: IfNotPresent
           command:
             - /bin/sh
             - -ec
             - |
-              /usr/local/bin/wait-for-tcp.sh open5gs-scp:7777 open5gs-nrf:7777
-              exec open5gs-nssfd -c /etc/open5gs/nssf.yaml
+              /usr/local/bin/wait-for-tcp.sh xcn-scp:7777 xcn-nrf:7777
+              exec xcn-nssfd -c /etc/xcn/nssf.yaml
           ports:
             - name: nssf-sbi
               containerPort: 7784
@@ -441,18 +441,18 @@ spec:
             periodSeconds: 10
           volumeMounts:
             - name: config
-              mountPath: /etc/open5gs
+              mountPath: /etc/xcn
             - name: logs
-              mountPath: /var/log/open5gs
+              mountPath: /var/log/xcn
         - name: pcf
-          image: open5gs-runtime:latest
+          image: xcn-runtime:latest
           imagePullPolicy: IfNotPresent
           command:
             - /bin/sh
             - -ec
             - |
-              /usr/local/bin/wait-for-tcp.sh open5gs-mongodb:27017 open5gs-scp:7777
-              exec open5gs-pcfd -c /etc/open5gs/pcf.yaml
+              /usr/local/bin/wait-for-tcp.sh xcn-mongodb:27017 xcn-scp:7777
+              exec xcn-pcfd -c /etc/xcn/pcf.yaml
           ports:
             - name: pcf-sbi
               containerPort: 7785
@@ -475,18 +475,18 @@ spec:
             periodSeconds: 10
           volumeMounts:
             - name: config
-              mountPath: /etc/open5gs
+              mountPath: /etc/xcn
             - name: logs
-              mountPath: /var/log/open5gs
+              mountPath: /var/log/xcn
       volumes:
         - name: config
           configMap:
-            name: open5gs-config
+            name: xcn-config
         - name: logs
           emptyDir: {}
         - name: hnet
           secret:
-            secretName: open5gs-udm-hnet
+            secretName: xcn-udm-hnet
         - name: dev-net-tun
           hostPath:
             path: /dev/net/tun

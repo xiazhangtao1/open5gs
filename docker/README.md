@@ -48,7 +48,7 @@ For OpenSUSE Build Service Release
 
 * Setup Repository
   ```
-  $ sudo sh -c "echo 'deb https://download.opensuse.org/repositories/home:/acetcom:/open5gs:/latest/xUbuntu_18.04/ ./' > /etc/apt/sources.list.d/open5gs-latest.list"
+  $ sudo sh -c "echo 'deb https://download.opensuse.org/repositories/home:/acetcom:/open5gs:/latest/xUbuntu_18.04/ ./' > /etc/apt/sources.list.d/xcn-latest.list"
   $ sudo apt-get update
   ```
   
@@ -89,30 +89,30 @@ export DEBEMAIL='acetcom@gmail.com'
 * New NF
   ```
   $ cat debian/control
-  $ cat configs/systemd/open5gs-scpd.service.in
-  $ cat configs/logrotate/open5gs.in
-  $ cat configs/newsyslog/open5gs.conf.in
+  $ cat configs/systemd/xcn-scpd.service.in
+  $ cat configs/logrotate/xcn.in
+  $ cat configs/newsyslog/xcn.conf.in
   ```
 
-* Upload OpenBuildService
+* Upload OpenBuildService (set `XCN_OBS_PROJECT` to your existing OBS project)
   
   ```
   $ dch -i
   $ meson subprojects download freeDiameter prometheus-client-c
   $ debuild -S -uc -us -d
-  $ osc co home:acetcom:open5gs latest
-  $ cd home\:acetcom\:open5gs/latest/
-  $ cp ~/git/open5gs_1.0.0.* .
+  $ osc co "$XCN_OBS_PROJECT" latest
+  $ cd "$XCN_OBS_PROJECT/latest/"
+  $ cp ~/git/xcn_1.0.0.* .
   $ osc ci -m "Update it"
   ```
 
-* Upload LaunchPad
+* Upload LaunchPad (set `XCN_PPA` to your existing Launchpad target)
   
   ```
   $ dch -i
   $ meson subprojects download freeDiameter prometheus-client-c
   $ debuild -S -d
-  $ dput ppa:open5gs/latest *.source.changes
+  $ dput "$XCN_PPA" *.source.changes
   ```
 
 * Tagging

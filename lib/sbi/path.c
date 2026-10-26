@@ -1,7 +1,7 @@
 /*
  * Copyright (C) 2019-2025 by Sukchan Lee <acetcom@gmail.com>
  *
- * This file is part of Open5GS.
+ * This file is part of xcn.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
@@ -399,7 +399,7 @@ int ogs_sbi_discover_and_send(ogs_sbi_xact_t *xact)
                     if (encoded) {
             /*
              * In http.params, the CURL library automatically encodes the URL.
-             * http.headers implements open5gs to directly encode URLs.
+             * http.headers implements xcn to directly encode URLs.
              *
              * Since it is http.headers,
              * we need to encode `v` using ogs_sbi_url_encode();
@@ -1051,7 +1051,7 @@ static void build_default_discovery_parameter(
             OpenAPI_nf_type_ToString(target_nf_type));
 
     /* Instead of Discovery-requester-nf-type,
-     * Open5GS uses User-Agent for requester-nf-type */
+     * xcn uses User-Agent for requester-nf-type */
 
     if (discovery_option) {
         if (discovery_option->requester_nf_instance_id) {
@@ -1074,7 +1074,7 @@ static void build_default_discovery_parameter(
                 if (encoded) {
             /*
              * In http.params, the CURL library automatically encodes the URL.
-             * http.headers implements open5gs to directly encode URLs.
+             * http.headers implements xcn to directly encode URLs.
              *
              * Since it is http.headers,
              * we need to encode `v` using ogs_sbi_url_encode();

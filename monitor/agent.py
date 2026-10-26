@@ -33,7 +33,7 @@ async def main():
     pin_cpu()
     url = os.environ["MONITOR_URL"].rstrip("/")
     headers = {"Authorization": "Bearer " + os.environ["MONITOR_INTERNAL_TOKEN"]}
-    path = os.getenv("UPF_STATS_SOCKET", "/run/open5gs/upf-stats.sock")
+    path = os.getenv("UPF_STATS_SOCKET", "/run/xcn/upf-stats.sock")
     timeout = aiohttp.ClientTimeout(total=2, connect=0.3)
     errors = 0
     async with aiohttp.ClientSession(timeout=timeout, headers=headers, trust_env=False) as http:

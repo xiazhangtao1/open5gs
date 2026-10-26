@@ -1,7 +1,7 @@
 /*
  * Copyright (C) 2019-2024 by Sukchan Lee <acetcom@gmail.com>
  *
- * This file is part of Open5GS.
+ * This file is part of xcn.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
@@ -3251,7 +3251,7 @@ static const uint8_t *ipcp_contains_option(
 }
 
 #include "../version.h"
-static const char *pap_welcome = "Welcome to open5gs-smfd " OPEN5GS_VERSION;
+static const char *pap_welcome = "Welcome to xcn-smfd " XCN_VERSION;
 
 int smf_pco_build(uint8_t *pco_buf, uint8_t *buffer, int length)
 {

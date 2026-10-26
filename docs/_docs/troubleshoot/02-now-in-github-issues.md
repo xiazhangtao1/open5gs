@@ -29,7 +29,7 @@ index 01925303b..8d5e23a4f 100644
 +      - /tmp/.X11-unix:/tmp/.X11-unix
      # - /etc/localtime:/etc/localtime:ro
      # - /usr/share/zoneinfo/Europe/Helsinki:/etc/localtime:ro
-     hostname: open5gs-dev
+     hostname: xcn-dev
 
 $ diff --git a/docker/ubuntu/latest/dev/Dockerfile b/docker/ubuntu/latest/dev/Dockerfile
 index 970dddb72..6902fc59c 100644
@@ -73,25 +73,25 @@ You may occasionally encounter a FATAL like the one below.
 ```
 FATAL: s1ap_build_initial_context_setup_request: Assertion `E_RABToBeSetupListCtxtSUReq->list.count' failed. (../src/mme/s1ap-build.c:577)
 01/19 22:01:49.169: [core] FATAL: backtrace() returned 10 addresses (../lib/core/ogs-abort.c:37)
-./src/mme/open5gs-mmed(+0x8ef5e) [0x55f6f8a78f5e]
-./src/mme/open5gs-mmed(+0x5910b) [0x55f6f8a4310b]
-./src/mme/open5gs-mmed(+0xa4ea5) [0x55f6f8a8eea5]
-./src/mme/open5gs-mmed(+0x88b65) [0x55f6f8a72b65]
-/home/acetcom/Documents/git/open5gs/build/src/mme/../../lib/core/libogscore.so.2(ogs_fsm_dispatch+0x119) [0x7fc2362f4c2f]
-./src/mme/open5gs-mmed(+0x9e99) [0x55f6f89f3e99]
-/home/acetcom/Documents/git/open5gs/build/src/mme/../../lib/core/libogscore.so.2(+0x1199d) [0x7fc2362e599d]
+./src/mme/xcn-mmed(+0x8ef5e) [0x55f6f8a78f5e]
+./src/mme/xcn-mmed(+0x5910b) [0x55f6f8a4310b]
+./src/mme/xcn-mmed(+0xa4ea5) [0x55f6f8a8eea5]
+./src/mme/xcn-mmed(+0x88b65) [0x55f6f8a72b65]
+/home/acetcom/Documents/git/xcn/build/src/mme/../../lib/core/libogscore.so.2(ogs_fsm_dispatch+0x119) [0x7fc2362f4c2f]
+./src/mme/xcn-mmed(+0x9e99) [0x55f6f89f3e99]
+/home/acetcom/Documents/git/xcn/build/src/mme/../../lib/core/libogscore.so.2(+0x1199d) [0x7fc2362e599d]
 /lib/x86_64-linux-gnu/libc.so.6(+0x94ac3) [0x7fc235a94ac3]
 /lib/x86_64-linux-gnu/libc.so.6(+0x126850) [0x7fc235b26850]
-[1]    41823 IOT instruction (core dumped)  ./src/mme/open5gs-mmed
+[1]    41823 IOT instruction (core dumped)  ./src/mme/xcn-mmed
 ```
 
-When a FATAL occurs, Open5GS automatically calls backtrace(), and from the address information it outputs, we can see in which source code this happened. Note the addresses 0x8ef5e, 0x5910b, 0xa4ea5, 0x88b65 in the output below. You can find those addresses in the following places.
+When a FATAL occurs, xcn automatically calls backtrace(), and from the address information it outputs, we can see in which source code this happened. Note the addresses 0x8ef5e, 0x5910b, 0xa4ea5, 0x88b65 in the output below. You can find those addresses in the following places.
 
 ```
-./src/mme/open5gs-mmed(+0x8ef5e)
-./src/mme/open5gs-mmed(+0x5910b)
-./src/mme/open5gs-mmed(+0xa4ea5)
-./src/mme/open5gs-mmed(+0x88b65)
+./src/mme/xcn-mmed(+0x8ef5e)
+./src/mme/xcn-mmed(+0x5910b)
+./src/mme/xcn-mmed(+0xa4ea5)
+./src/mme/xcn-mmed(+0x88b65)
 ```
 
 And you can use the GDB tool to provide additional information. If you are in a Ubuntu environment, you can install GDB as shown below.
@@ -102,7 +102,7 @@ $ sudo apt install gdb
 Then run gdb like below.
 
 ```
-$ gdb ./src/mme/open5gs-mmed
+$ gdb ./src/mme/xcn-mmed
 GNU gdb (Ubuntu 12.1-0ubuntu1~22.04) 12.1
 Copyright (C) 2022 Free Software Foundation, Inc.
 License GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>
@@ -118,7 +118,7 @@ Find the GDB manual and other documentation resources online at:
 
 For help, type "help".
 Type "apropos word" to search for commands related to "word"...
-Reading symbols from ./src/mme/open5gs-mmed...
+Reading symbols from ./src/mme/xcn-mmed...
 (gdb)
 ```
 
@@ -202,26 +202,26 @@ If you see the Attach reject(EMM-Cause:15] with Diameter error(Result-Code:3002)
 
 Please check the status of HSS and restart it.
 ```
-$ sudo systemctl status open5gs-hssd.service
-● open5gs-hssd.service - Open5GS HSS Daemon
-     Loaded: loaded (/lib/systemd/system/open5gs-hssd.service; disabled; vendor preset: enabled)
+$ sudo systemctl status xcn-hssd.service
+● xcn-hssd.service - xcn HSS Daemon
+     Loaded: loaded (/lib/systemd/system/xcn-hssd.service; disabled; vendor preset: enabled)
      Active: inactive (dead)
-sudo systemctl status open5gs-hssd.service
-● open5gs-hssd.service - Open5GS HSS Daemon
-     Loaded: loaded (/lib/systemd/system/open5gs-hssd.service; disabled; vendor preset: enabled)
+sudo systemctl status xcn-hssd.service
+● xcn-hssd.service - xcn HSS Daemon
+     Loaded: loaded (/lib/systemd/system/xcn-hssd.service; disabled; vendor preset: enabled)
      Active: active (running) since Sun 2021-05-09 18:36:49 KST; 1s ago
-   Main PID: 6011 (open5gs-hssd)
+   Main PID: 6011 (xcn-hssd)
       Tasks: 37 (limit: 19047)
      Memory: 14.6M
-     CGroup: /system.slice/open5gs-hssd.service
-             └─6011 /usr/bin/open5gs-hssd -c /etc/open5gs/hss.yaml
+     CGroup: /system.slice/xcn-hssd.service
+             └─6011 /usr/bin/xcn-hssd -c /etc/xcn/hss.yaml
 
-May 09 18:36:49 open5gs systemd[1]: Started Open5GS HSS Daemon.
-May 09 18:36:49 open5gs open5gs-hssd[6011]: Open5GS daemon v2.2.7
-May 09 18:36:49 open5gs open5gs-hssd[6011]: 05/09 18:36:49.987: [app] INFO: Configuration: '/etc/ope>
-May 09 18:36:49 open5gs open5gs-hssd[6011]: 05/09 18:36:49.987: [app] INFO: File Logging: '/var/log/>
-May 09 18:36:49 open5gs open5gs-hssd[6011]: 05/09 18:36:49.994: [dbi] INFO: MongoDB URI: 'mongodb://>
-May 09 18:36:50 open5gs open5gs-hssd[6011]: 05/09 18:36:50.116: [app] INFO: HSS initialize...done
+May 09 18:36:49 xcn systemd[1]: Started xcn HSS Daemon.
+May 09 18:36:49 xcn xcn-hssd[6011]: xcn daemon v2.2.7
+May 09 18:36:49 xcn xcn-hssd[6011]: 05/09 18:36:49.987: [app] INFO: Configuration: '/etc/ope>
+May 09 18:36:49 xcn xcn-hssd[6011]: 05/09 18:36:49.987: [app] INFO: File Logging: '/var/log/>
+May 09 18:36:49 xcn xcn-hssd[6011]: 05/09 18:36:49.994: [dbi] INFO: MongoDB URI: 'mongodb://>
+May 09 18:36:50 xcn xcn-hssd[6011]: 05/09 18:36:50.116: [app] INFO: HSS initialize...done
 ```
 
 #### MME Diameter-Error with HSS-crash using v2.2.x package
@@ -240,20 +240,20 @@ If the following MME log occurs while connecting to the UE, it means that you ma
 In this case, the HSS may crash as shown below.
 
 ```
-04/12 10:13:45.025: [app] INFO: Configuration: '/home/open5gs/install/etc/open5gs/hss.yaml' (../lib/app/ogs-init.c:129)
-04/12 10:13:45.025: [app] INFO: File Logging: '/home/open5gs/install/var/log/open5gs/hss.log' (../lib/app/ogs-init.c:132)
-04/12 10:13:45.028: [dbi] INFO: MongoDB URI: 'mongodb://localhost/open5gs' (../lib/dbi/ogs-mongoc.c:129)
+04/12 10:13:45.025: [app] INFO: Configuration: '/home/xcn/install/etc/xcn/hss.yaml' (../lib/app/ogs-init.c:129)
+04/12 10:13:45.025: [app] INFO: File Logging: '/home/xcn/install/var/log/xcn/hss.log' (../lib/app/ogs-init.c:132)
+04/12 10:13:45.028: [dbi] INFO: MongoDB URI: 'mongodb://localhost/xcn' (../lib/dbi/ogs-mongoc.c:129)
 04/12 10:13:45.068: [diam] INFO: CONNECTED TO 'mme.epc.mnc001.mcc001.3gppnetwork.org' (SCTP,soc#17): (../lib/diameter/common/logger.c:108)
 04/12 10:13:45.069: [app] INFO: HSS initialize...done (../src/hss/app-init.c:31)
 04/12 10:14:27.167: [core] FATAL: ogs_slice_find_by_s_nssai: Assertion `num_of_slice_data' failed. (../lib/core/ogs-3gpp-types.c:529)
 04/12 10:14:27.168: [core] FATAL: backtrace() returned 10 addresses (../lib/core/ogs-abort.c:37)
-/home/open5gs/install/lib/x86_64-linux-gnu/libogscore.so.2(ogs_slice_find_by_s_nssai+0xd2) [0x7f3b720a126e]
-./install/bin/open5gs-hssd(+0xd12e) [0x55a57bb6f12e]
-/home/open5gs/install/lib/x86_64-linux-gnu/libfdproto.so.7(fd_disp_call_cb_int+0x270) [0x7f3b7135acb3]
-/home/open5gs/install/lib/x86_64-linux-gnu/libfdproto.so.7(fd_msg_dispatch+0xdca) [0x7f3b7137442f]
-home/open5gs/install/lib/x86_64-linux-gnu/libfdcore.so.7(+0x67c3c) [0x7f3b715f9c3c]
-/home/open5gs/install/lib/x86_64-linux-gnu/libfdcore.so.7(+0x6ca99) [0x7f3b715fea99]
-/open5gs/install/lib/x86_64-linux-gnu/libfdcore.so.7(+0x6cd06) [0x7f3b715fed06]
+/home/xcn/install/lib/x86_64-linux-gnu/libogscore.so.2(ogs_slice_find_by_s_nssai+0xd2) [0x7f3b720a126e]
+./install/bin/xcn-hssd(+0xd12e) [0x55a57bb6f12e]
+/home/xcn/install/lib/x86_64-linux-gnu/libfdproto.so.7(fd_disp_call_cb_int+0x270) [0x7f3b7135acb3]
+/home/xcn/install/lib/x86_64-linux-gnu/libfdproto.so.7(fd_msg_dispatch+0xdca) [0x7f3b7137442f]
+home/xcn/install/lib/x86_64-linux-gnu/libfdcore.so.7(+0x67c3c) [0x7f3b715f9c3c]
+/home/xcn/install/lib/x86_64-linux-gnu/libfdcore.so.7(+0x6ca99) [0x7f3b715fea99]
+/xcn/install/lib/x86_64-linux-gnu/libfdcore.so.7(+0x6cd06) [0x7f3b715fed06]
 /lib/x86_64-linux-gnu/libpthread.so.0(+0x76db) [0x7f3b70d016db]
 /lib/x86_64-linux-gnu/libc.so.6(clone+0x3f) [0x7f3b70a2a71f]
 ```
@@ -262,7 +262,7 @@ At this time, you need to check the DB schema is in the form below by using the 
 
 ```
 $ mongosh
-> use open5gs
+> use xcn
 > db.subscribers.find().pretty()
 {
     "_id" : ObjectId("60969fe79459f8b40d8d3f68"),
@@ -329,7 +329,7 @@ If you see below, you are using the old format DB schema.
 
 ```
 $ mongosh
-> use open5gs
+> use xcn
 > db.subscribers.find().pretty()
 {
     "_id" : ObjectId("609715fda08851a0744e6ae7"),
@@ -377,21 +377,21 @@ If you are using old format DB schema, please perform the following step.
 1. First of all, it is recommended to use the following command to remove all existing subscription DB.
 ```
 $ mongosh
-> use open5gs
-switched to db open5gs
+> use xcn
+switched to db xcn
 > db.subscribers.drop()
 true
 ```
 2. Then, if you are using a version of WebUI prior to v2.1.7, you need to do a WebUI logout from your web browser.
 3. Finally, install the latest version of WebUI with the following command.
 ```
-$ curl -fsSL https://open5gs.org/open5gs/assets/webui/install | sudo -E bash -
+$ sudo -E bash docs/assets/webui/install
 ```
 4. Log in to the new WebUI and add new subscriber information using your web browser.
 5. Make sure it is a new DB schema as below:
 ```
 $ mongosh
-> use open5gs
+> use xcn
 > db.subscribers.find().pretty()
 {
 ...
@@ -405,7 +405,7 @@ $ mongosh
 }
 ```
 
-If the above problem still occurs, we recommend that you delete all Open5GS and start from scratch.
+If the above problem still occurs, we recommend that you delete all xcn and start from scratch.
 
 #### 5G Core test failed (e.g. `./build/tests/registration/registration`)
 
@@ -426,8 +426,8 @@ This is a test program bug and has not yet been resolved.
 To restart the test program, first remove all subscriber information using MongoDB Client
 ```
 $ mongosh
-> use open5gs
-switched to db open5gs
+> use xcn
+switched to db xcn
 > db.subscribers.find()  ### Check the test subscriber
 > db.subscribers.drop()  ### Remove all subscriber
 > db.subscribers.find()  ### Check that all subscribers are empty
@@ -435,24 +435,24 @@ switched to db open5gs
 
 Kill all processes.
 ```bash
-$ ps -ef | grep open5gs
-$ sudo pkill -9 open5gs-mmed
-$ sudo pkill -9 open5gs-sgwcd
-$ sudo pkill -9 open5gs-smfd
-$ sudo pkill -9 open5gs-amfd
-$ sudo pkill -9 open5gs-sgwud
-$ sudo pkill -9 open5gs-upfd
-$ sudo pkill -9 open5gs-hssd
-$ sudo pkill -9 open5gs-pcrfd
-$ sudo pkill -9 open5gs-nrfd
-$ sudo pkill -9 open5gs-scpd
-$ sudo pkill -9 open5gs-seppd
-$ sudo pkill -9 open5gs-ausfd
-$ sudo pkill -9 open5gs-udmd
-$ sudo pkill -9 open5gs-pcfd
-$ sudo pkill -9 open5gs-nssfd
-$ sudo pkill -9 open5gs-bsfd
-$ sudo pkill -9 open5gs-udrd
+$ ps -ef | grep xcn
+$ sudo pkill -9 xcn-mmed
+$ sudo pkill -9 xcn-sgwcd
+$ sudo pkill -9 xcn-smfd
+$ sudo pkill -9 xcn-amfd
+$ sudo pkill -9 xcn-sgwud
+$ sudo pkill -9 xcn-upfd
+$ sudo pkill -9 xcn-hssd
+$ sudo pkill -9 xcn-pcrfd
+$ sudo pkill -9 xcn-nrfd
+$ sudo pkill -9 xcn-scpd
+$ sudo pkill -9 xcn-seppd
+$ sudo pkill -9 xcn-ausfd
+$ sudo pkill -9 xcn-udmd
+$ sudo pkill -9 xcn-pcfd
+$ sudo pkill -9 xcn-nssfd
+$ sudo pkill -9 xcn-bsfd
+$ sudo pkill -9 xcn-udrd
 ```
 
 Run `./build/tests/registration/registration` again
@@ -479,14 +479,14 @@ To add a slice with SST of 1 and SD of 000080, you need to update the configurat
 ```diff
 ### amf.yaml
 
-$ diff --git a/configs/open5gs/amf.yaml.in b/configs/open5gs/amf.yaml.in
+$ diff --git a/configs/xcn/amf.yaml.in b/configs/xcn/amf.yaml.in
 index a70143f08..e0dba560c 100644
---- a/configs/open5gs/amf.yaml.in
-+++ b/configs/open5gs/amf.yaml.in
+--- a/configs/xcn/amf.yaml.in
++++ b/configs/xcn/amf.yaml.in
 @@ -1,6 +1,6 @@
  logger:
      file:
-       path: @localstatedir@/log/open5gs/amf.log
+       path: @localstatedir@/log/xcn/amf.log
 -#    level: info   # fatal|error|warn|info(default)|debug|trace
 +    level: debug
 
@@ -496,13 +496,13 @@ index a70143f08..e0dba560c 100644
 
 ### FIRST smf.yaml
 
-$ diff --git a/configs/open5gs/smf.yaml.in b/configs/open5gs/smf.yaml.in
+$ diff --git a/configs/xcn/smf.yaml.in b/configs/xcn/smf.yaml.in
 index 758ca9cb9..6800eeeec 100644
---- a/configs/open5gs/smf.yaml.in
-+++ b/configs/open5gs/smf.yaml.in
+--- a/configs/xcn/smf.yaml.in
++++ b/configs/xcn/smf.yaml.in
 @@ -7,6 +7,11 @@ max:
  #    peer: 64
- 
+
  smf:
 +    info:
 +      - s_nssai:
@@ -516,13 +516,13 @@ index 758ca9cb9..6800eeeec 100644
 
 ### SECOND smf.yaml
 
-$ diff --git a/configs/open5gs/smf.yaml.in b/configs/open5gs/smf.yaml.in
+$ diff --git a/configs/xcn/smf.yaml.in b/configs/xcn/smf.yaml.in
 index 758ca9cb9..c3879fc70 100644
---- a/configs/open5gs/smf.yaml.in
-+++ b/configs/open5gs/smf.yaml.in
+--- a/configs/xcn/smf.yaml.in
++++ b/configs/xcn/smf.yaml.in
 @@ -7,6 +7,12 @@ max:
  #    peer: 64
- 
+
  smf:
 +    info:
 +      - s_nssai:
@@ -537,10 +537,10 @@ index 758ca9cb9..c3879fc70 100644
 
 ### nssf.yaml
 
-$ diff --git a/configs/open5gs/nssf.yaml.in b/configs/open5gs/nssf.yaml.in
+$ diff --git a/configs/xcn/nssf.yaml.in b/configs/xcn/nssf.yaml.in
 index d01645b2c..48ed3f8ee 100644
---- a/configs/open5gs/nssf.yaml.in
-+++ b/configs/open5gs/nssf.yaml.in
+--- a/configs/xcn/nssf.yaml.in
++++ b/configs/xcn/nssf.yaml.in
 @@ -20,6 +20,11 @@ nssf:
            - uri: http://127.0.0.10:7777
              s_nssai:
@@ -572,28 +572,28 @@ From v2.0.x, SGW was divided into SGW-C and SGW-U, and PGW function was seperate
 
 In order to use 4G only, you need to run the process below.
 ```bash
-$ open5gs-mmed
-$ open5gs-sgwcd
-$ open5gs-smfd
-$ open5gs-sgwud
-$ open5gs-upfd
-$ open5gs-hssd
-$ open5gs-pcrfd
+$ xcn-mmed
+$ xcn-sgwcd
+$ xcn-smfd
+$ xcn-sgwud
+$ xcn-upfd
+$ xcn-hssd
+$ xcn-pcrfd
 ```
 
 And the process below is only used in 5G, so there is no need to run it.
 
 ```bash
-$ open5gs-nrfd
-$ open5gs-scpd
-$ open5gs-seppd
-$ open5gs-amfd
-$ open5gs-ausfd
-$ open5gs-udmd
-$ open5gs-pcfd
-$ open5gs-nssfd
-$ open5gs-bsfd
-$ open5gs-udrd
+$ xcn-nrfd
+$ xcn-scpd
+$ xcn-seppd
+$ xcn-amfd
+$ xcn-ausfd
+$ xcn-udmd
+$ xcn-pcfd
+$ xcn-nssfd
+$ xcn-bsfd
+$ xcn-udrd
 ```
 
 However, among these, SMF and UPF are used by both 4G EPC and 5G Core. And SMF has a protocol stack to interact with 5G NRF. Therefore, if you run SMF without running 5G NRF, the following WARNING occurs in SMF.
@@ -609,13 +609,13 @@ However, among these, SMF and UPF are used by both 4G EPC and 5G Core. And SMF h
 To prevent SMF from attempting to access the 5G NRF, you need to modify the SMF configuration file as below.
 
 ```diff
-$ diff --git a/configs/open5gs/smf.yaml.in b/configs/open5gs/smf.yaml.in
+$ diff --git a/configs/xcn/smf.yaml.in b/configs/xcn/smf.yaml.in
 index 758ca9cb9..a9004ba9a 100644
---- a/configs/open5gs/smf.yaml.in
-+++ b/configs/open5gs/smf.yaml.in
+--- a/configs/xcn/smf.yaml.in
++++ b/configs/xcn/smf.yaml.in
 @@ -7,15 +7,15 @@ max:
  #    peer: 64
- 
+
  smf:
 -    sbi:
 -      server:
@@ -642,12 +642,12 @@ If you set as above and run SMF, you do not need to run NRF. Seven daemons opera
 
 #### How to change UE IP Pool
 
-The Open5GS package contains a systemd-networkd configuration file for `ogstun`. Therefore, you must first modify the configuration file as follows.
+The xcn package contains a systemd-networkd configuration file for `ogstun`. Therefore, you must first modify the configuration file as follows.
 
 ```diff
-$ diff -u /etc/systemd/network/99-open5gs.network /etc/systemd/network/99-open5gs.network.new
---- /etc/systemd/network/99-open5gs.network    2020-09-17 09:29:09.137392040 -0400
-+++ /etc/systemd/network/99-open5gs.network.new    2020-09-17 09:29:03.375719620 -0400
+$ diff -u /etc/systemd/network/99-xcn.network /etc/systemd/network/99-xcn.network.new
+--- /etc/systemd/network/99-xcn.network    2020-09-17 09:29:09.137392040 -0400
++++ /etc/systemd/network/99-xcn.network.new    2020-09-17 09:29:03.375719620 -0400
 @@ -2,5 +2,5 @@
  Name=ogstun
 
@@ -667,13 +667,13 @@ And then, you need to chanage NAT table as below.
 $ sudo iptables -t nat -A POSTROUTING -s 10.46.0.0/16 ! -o ogstun -j MASQUERADE
 ```
 
-Now, you need to modify the configuration file of Open5GS to adjust the UE IP Pool. UE IP Pool can be allocated by SMF or UPF, but in this tutorial, we will modify both configuration files.
+Now, you need to modify the configuration file of xcn to adjust the UE IP Pool. UE IP Pool can be allocated by SMF or UPF, but in this tutorial, we will modify both configuration files.
 
 ```diff
-$ diff --git a/configs/open5gs/smf.yaml.in b/configs/open5gs/smf.yaml.in
+$ diff --git a/configs/xcn/smf.yaml.in b/configs/xcn/smf.yaml.in
 index 758ca9cb9..5c9b97cd0 100644
---- a/configs/open5gs/smf.yaml.in
-+++ b/configs/open5gs/smf.yaml.in
+--- a/configs/xcn/smf.yaml.in
++++ b/configs/xcn/smf.yaml.in
 @@ -33,7 +33,7 @@ smf:
          - address: 127.0.0.4
            port: 9090
@@ -683,10 +683,10 @@ index 758ca9cb9..5c9b97cd0 100644
        - subnet: 2001:db8:cafe::1/48
      dns:
        - 8.8.8.8
-$ diff --git a/configs/open5gs/upf.yaml.in b/configs/open5gs/upf.yaml.in
+$ diff --git a/configs/xcn/upf.yaml.in b/configs/xcn/upf.yaml.in
 index e78b018f1..23cb273f8 100644
---- a/configs/open5gs/upf.yaml.in
-+++ b/configs/open5gs/upf.yaml.in
+--- a/configs/xcn/upf.yaml.in
++++ b/configs/xcn/upf.yaml.in
 @@ -17,7 +17,7 @@ upf:
        server:
          - address: 127.0.0.7
@@ -700,8 +700,8 @@ index e78b018f1..23cb273f8 100644
 
 Restart SMF/UPF
 ```
-$ sudo systemctl restart open5gs-smfd.service
-$ sudo systemctl restart open5gs-upfd.service
+$ sudo systemctl restart xcn-smfd.service
+$ sudo systemctl restart xcn-upfd.service
 ```
 
 #### Wireshark cannot decode NAS-5GS
@@ -726,37 +726,37 @@ If MongoDB server is not started, you may get a message like this:
 $ meson test -v
 
 ...
-4/10 open5gs:unit / unit OK 0.06 s
+4/10 xcn:unit / unit OK 0.06 s
 09/30 01:12:37.829: [core] FATAL: test_5gc_init: Assertion ogs_dbi_init(ogs_app()->db_uri) == OGS_OK' failed. (../tests/app/5gc-init.c:100)
 09/30 01:12:37.830: [core] FATAL: backtrace() returned 8 addresses (../lib/core/ogs-abort.c:37)
-/home/open5gs/build/tests/registration/registration(+0x1bfd0) [0x55af96a05fd0]
-/home/open5gs/build/tests/registration/registration(+0x3c2e) [0x55af969edc2e]
-/home/open5gs/build/tests/registration/registration(+0x25151) [0x55af96a0f151]
-/home/open5gs/build/tests/registration/registration(+0x251a5) [0x55af96a0f1a5]
-/home/open5gs/build/tests/registration/registration(+0x3cde) [0x55af969edcde]
+/home/xcn/build/tests/registration/registration(+0x1bfd0) [0x55af96a05fd0]
+/home/xcn/build/tests/registration/registration(+0x3c2e) [0x55af969edc2e]
+/home/xcn/build/tests/registration/registration(+0x25151) [0x55af96a0f151]
+/home/xcn/build/tests/registration/registration(+0x251a5) [0x55af96a0f1a5]
+/home/xcn/build/tests/registration/registration(+0x3cde) [0x55af969edcde]
 /lib/x86_64-linux-gnu/libc.so.6(__libc_start_main+0xe7) [0x7f3c2bb97b97]
-/home/open5gs/build/tests/registration/registration(+0x39aa) [0x55af969ed9aa]
-5/10 open5gs:5gc / registration FAIL 0.27 s
+/home/xcn/build/tests/registration/registration(+0x39aa) [0x55af969ed9aa]
+5/10 xcn:5gc / registration FAIL 0.27 s
 09/30 01:12:38.073: [core] FATAL: test_epc_init: Assertion ogs_dbi_init(ogs_app()->db_uri) == OGS_OK' failed. (../tests/app/epc-init.c:105)
 09/30 01:12:38.073: [core] FATAL: backtrace() returned 8 addresses (../lib/core/ogs-abort.c:37)
-/home/open5gs/build/tests/attach/attach(+0x12362) [0x55ef42081362]
-/home/open5gs/build/tests/attach/attach(+0x367e) [0x55ef4207267e]
-/home/open5gs/build/tests/attach/attach(+0x1b4e3) [0x55ef4208a4e3]
-/home/open5gs/build/tests/attach/attach(+0x1b537) [0x55ef4208a537]
-/home/open5gs/build/tests/attach/attach(+0x372e) [0x55ef4207272e]
+/home/xcn/build/tests/attach/attach(+0x12362) [0x55ef42081362]
+/home/xcn/build/tests/attach/attach(+0x367e) [0x55ef4207267e]
+/home/xcn/build/tests/attach/attach(+0x1b4e3) [0x55ef4208a4e3]
+/home/xcn/build/tests/attach/attach(+0x1b537) [0x55ef4208a537]
+/home/xcn/build/tests/attach/attach(+0x372e) [0x55ef4207272e]
 /lib/x86_64-linux-gnu/libc.so.6(__libc_start_main+0xe7) [0x7f10b2e30b97]
-/home/open5gs/build/tests/attach/attach(+0x33fa) [0x55ef420723fa]
-6/10 open5gs:epc / attach FAIL 0.17 s
+/home/xcn/build/tests/attach/attach(+0x33fa) [0x55ef420723fa]
+6/10 xcn:epc / attach FAIL 0.17 s
 09/30 01:12:38.239: [core] FATAL: test_epc_init: Assertion `ogs_dbi_init(ogs_app()->db_uri) == OGS_OK' failed. (../tests/app/epc-init.c:105)
 09/30 01:12:38.239: [core] FATAL: backtrace() returned 8 addresses (../lib/core/ogs-abort.c:37)
-/home/open5gs/build/tests/volte/volte(+0x22272) [0x555df9643272]
-/home/open5gs/build/tests/volte/volte(+0x1210a) [0x555df963310a]
-/home/open5gs/build/tests/volte/volte(+0x2b3f3) [0x555df964c3f3]
-/home/open5gs/build/tests/volte/volte(+0x2b447) [0x555df964c447]
-/home/open5gs/build/tests/volte/volte(+0x12221) [0x555df9633221]
+/home/xcn/build/tests/volte/volte(+0x22272) [0x555df9643272]
+/home/xcn/build/tests/volte/volte(+0x1210a) [0x555df963310a]
+/home/xcn/build/tests/volte/volte(+0x2b3f3) [0x555df964c3f3]
+/home/xcn/build/tests/volte/volte(+0x2b447) [0x555df964c447]
+/home/xcn/build/tests/volte/volte(+0x12221) [0x555df9633221]
 /lib/x86_64-linux-gnu/libc.so.6(__libc_start_main+0xe7) [0x7fd1df6b6b97]
-/home/open5gs/build/tests/volte/volte(+0x4daa) [0x555df9625daa]
-7/10 open5gs:epc / volte FAIL 0.17 s
+/home/xcn/build/tests/volte/volte(+0x4daa) [0x555df9625daa]
+7/10 xcn:epc / volte FAIL 0.17 s
 ...
 ```
 
@@ -766,8 +766,8 @@ Please make sure that MongoDB server daemon is running.
 Then, remove all subscriber information using MongoDB Client
 ```
 $ mongosh
-> use open5gs
-switched to db open5gs
+> use xcn
+switched to db xcn
 > db.subscribers.find()  ### Check the test subscriber
 > db.subscribers.drop()  ### Remove all subscriber
 > db.subscribers.find()  ### Check that all subscribers are empty
@@ -775,30 +775,30 @@ switched to db open5gs
 
 Kill all processes.
 ```bash
-$ ps -ef | grep open5gs
-$ sudo pkill -9 open5gs-mmed
-$ sudo pkill -9 open5gs-sgwcd
-$ sudo pkill -9 open5gs-smfd
-$ sudo pkill -9 open5gs-amfd
-$ sudo pkill -9 open5gs-sgwud
-$ sudo pkill -9 open5gs-upfd
-$ sudo pkill -9 open5gs-hssd
-$ sudo pkill -9 open5gs-pcrfd
-$ sudo pkill -9 open5gs-nrfd
-$ sudo pkill -9 open5gs-scpd
-$ sudo pkill -9 open5gs-seppd
-$ sudo pkill -9 open5gs-ausfd
-$ sudo pkill -9 open5gs-udmd
-$ sudo pkill -9 open5gs-pcfd
-$ sudo pkill -9 open5gs-nssfd
-$ sudo pkill -9 open5gs-bsfd
-$ sudo pkill -9 open5gs-udrd
+$ ps -ef | grep xcn
+$ sudo pkill -9 xcn-mmed
+$ sudo pkill -9 xcn-sgwcd
+$ sudo pkill -9 xcn-smfd
+$ sudo pkill -9 xcn-amfd
+$ sudo pkill -9 xcn-sgwud
+$ sudo pkill -9 xcn-upfd
+$ sudo pkill -9 xcn-hssd
+$ sudo pkill -9 xcn-pcrfd
+$ sudo pkill -9 xcn-nrfd
+$ sudo pkill -9 xcn-scpd
+$ sudo pkill -9 xcn-seppd
+$ sudo pkill -9 xcn-ausfd
+$ sudo pkill -9 xcn-udmd
+$ sudo pkill -9 xcn-pcfd
+$ sudo pkill -9 xcn-nssfd
+$ sudo pkill -9 xcn-bsfd
+$ sudo pkill -9 xcn-udrd
 ```
 
 Run `meson test -v` again
 ```
 $ meson test -v
-ninja: Entering directory `/home/acetcom/Documents/git/open5gs/build'
+ninja: Entering directory `/home/acetcom/Documents/git/xcn/build'
 ninja: no work to do.
 list-test           : SUCCESS
 pool-test           : SUCCESS
@@ -819,15 +819,15 @@ fsm-test            : SUCCESS
 hash-test           : SUCCESS
 uuid-test           : SUCCESS
 All tests passed.
- 1/10 open5gs:unit / core                     OK       6.89 s
+ 1/10 xcn:unit / core                     OK       6.89 s
 aes-test            : SUCCESS
 sha-test            : SUCCESS
 base64-test         : SUCCESS
 All tests passed.
- 2/10 open5gs:unit / crypt                    OK       0.12 s
+ 2/10 xcn:unit / crypt                    OK       0.12 s
 sctp-test           : SUCCESS
 All tests passed.
- 3/10 open5gs:app / sctp                      OK       0.02 s
+ 3/10 xcn:app / sctp                      OK       0.02 s
 s1ap-message-test   : SUCCESS
 nas-message-test    : SUCCESS
 gtp-message-test    : SUCCESS
@@ -835,7 +835,7 @@ sbi-message-test    : SUCCESS
 security-test       : SUCCESS
 crash-test          : SUCCESS
 All tests passed.
- 4/10 open5gs:unit / unit                     OK       0.03 s
+ 4/10 xcn:unit / unit                     OK       0.03 s
 guti-test           : SUCCESS
 auth-test           : SUCCESS
 idle-test           : SUCCESS
@@ -844,7 +844,7 @@ identity-test       : SUCCESS
 gmm-status-test     : SUCCESS
 ue-context-test     : SUCCESS
 All tests passed.
- 5/10 open5gs:5gc / registration              OK       4.98 s
+ 5/10 xcn:5gc / registration              OK       4.98 s
 s1setup-test        : SUCCESS
 guti-test           : SUCCESS
 auth-test           : SUCCESS
@@ -853,12 +853,12 @@ emm-status-test     : SUCCESS
 reset-test          : SUCCESS
 ue-context-test     : SUCCESS
 All tests passed.
- 6/10 open5gs:epc / attach                    OK       4.68 s
+ 6/10 xcn:epc / attach                    OK       4.68 s
 bearer-test         : SUCCESS
 session-test        : SUCCESS
 rx-test             : SUCCESS
 All tests passed.
- 7/10 open5gs:epc / volte                     OK       4.33 s
+ 7/10 xcn:epc / volte                     OK       4.33 s
 mo-idle-test        : SUCCESS
 mt-idle-test        : SUCCESS
 mo-active-test      : SUCCESS
@@ -867,14 +867,14 @@ mo-sms-test         : SUCCESS
 mt-sms-test         : SUCCESS
 crash-test          : SUCCESS
 All tests passed.
- 8/10 open5gs:epc / csfb                      OK       4.08 s
+ 8/10 xcn:epc / csfb                      OK       4.08 s
 epc-test            : SUCCESS
 All tests passed.
- 9/10 open5gs:app / 310014                    OK       2.37 s
+ 9/10 xcn:app / 310014                    OK       2.37 s
 epc-x2-test         : SUCCESS
 epc-s1-test         : SUCCESS
 All tests passed.
-10/10 open5gs:app / handover                  OK       4.78 s
+10/10 xcn:app / handover                  OK       4.78 s
 
 Ok:                   10
 Expected Fail:         0
@@ -1133,13 +1133,13 @@ The IP address of the UE can also use a different UE pool depending on the DNN/A
 #
 ```
 
-#### Failing to run `./open5gs-mmed`
+#### Failing to run `./xcn-mmed`
 
-You might be getting the following error after running `./open5gs-mmed`.
+You might be getting the following error after running `./xcn-mmed`.
 ```bash
-$ ./build/src/mme/open5gs-mmed
-10/27 16:45:41.912: [app] FATAL: cannot open file `/Users/acetcom/Documents/git/open5gs/install/etc/open5gs/mme.yaml` (../lib/app/ogs-config.c:67)
-10/27 16:45:41.912: [app] FATAL: Open5GS initialization failed. Aborted (../src/main.c:211)
+$ ./build/src/mme/xcn-mmed
+10/27 16:45:41.912: [app] FATAL: cannot open file `/Users/acetcom/Documents/git/xcn/install/etc/xcn/mme.yaml` (../lib/app/ogs-config.c:67)
+10/27 16:45:41.912: [app] FATAL: xcn initialization failed. Aborted (../src/main.c:211)
 ```
 
 You should perform **the installation process**.
@@ -1153,12 +1153,12 @@ $ ninja -C build install
 If you do not start MongoDB, you will get the following error:
 
 ```bash
-$ ./install/bin/open5gs-hssd
-Open5GS daemon v1.0.0
+$ ./install/bin/xcn-hssd
+xcn daemon v1.0.0
 
-10/27 16:45:00.371: [app] INFO: Configuration: '/Users/acetcom/Documents/git/open5gs/install/etc/open5gs/hss.yaml' (../src/main.c:54)
-10/27 16:45:00.372: [app] INFO: File Logging: '/Users/acetcom/Documents/git/open5gs/install/var/log/open5gs/hss.log' (../src/main.c:57)
-10/27 16:45:00.377: [dbi] ERROR: Failed to connect to server [mongodb://localhost/open5gs] (../lib/dbi/ogs-mongoc.c:91)
+10/27 16:45:00.371: [app] INFO: Configuration: '/Users/acetcom/Documents/git/xcn/install/etc/xcn/hss.yaml' (../src/main.c:54)
+10/27 16:45:00.372: [app] INFO: File Logging: '/Users/acetcom/Documents/git/xcn/install/var/log/xcn/hss.log' (../src/main.c:57)
+10/27 16:45:00.377: [dbi] ERROR: Failed to connect to server [mongodb://localhost/xcn] (../lib/dbi/ogs-mongoc.c:91)
 10/27 16:45:00.377: [app] ERROR: Failed to intialize HSS (../src/hss/app-init.c:28)
 ```
 
@@ -1172,12 +1172,12 @@ $ sudo systemctl start mongodb
 Did you see the following error after executing `./build/tests/attach/attach`?
 ```bash
 $ ./build/tests/attach/attach
-s1setup_test        : SUCCESS  
-attach_test         : -Line 134: Condition is false, but expected true  
-\04/09 15:49:09.285: [esm] FATAL: esm_handle_pdn_connectivity_request: Assertion `SECURITY_CONTEXT_IS_VALID(mme_ue)' failed. (esm_handler.c:29)  
-/home/acetcom/Documents/git/open5gs/open5gs/lib/ogslib/src/core/.libs/libogscore-1.0.so.0(ogs_abort+0x2b)[0x7f608518271b]  
-/home/acetcom/Documents/git/open5gs/open5gs/test/.libs/simple(+0x92121)[0x55dc9e274121]
-/home/acetcom/Documents/git/open5gs/open5gs/test/.libs/simple(+0x4f5b9)[0x55dc9e2315b9]
+s1setup_test        : SUCCESS
+attach_test         : -Line 134: Condition is false, but expected true
+\04/09 15:49:09.285: [esm] FATAL: esm_handle_pdn_connectivity_request: Assertion `SECURITY_CONTEXT_IS_VALID(mme_ue)' failed. (esm_handler.c:29)
+/home/acetcom/Documents/git/xcn/xcn/lib/ogslib/src/core/.libs/libogscore-1.0.so.0(ogs_abort+0x2b)[0x7f608518271b]
+/home/acetcom/Documents/git/xcn/xcn/test/.libs/simple(+0x92121)[0x55dc9e274121]
+/home/acetcom/Documents/git/xcn/xcn/test/.libs/simple(+0x4f5b9)[0x55dc9e2315b9]
 ```
 
 
@@ -1192,9 +1192,9 @@ $ mongosh
 Kill all processes.
 ```bash
 $ ps -ef | grep attach
-$ ps -ef | grep open5gs
+$ ps -ef | grep xcn
 $ sudo pkill -9 attach
-$ sudo pkill -9 open5gs-mmed ...
+$ sudo pkill -9 xcn-mmed ...
 ```
 
 Execute `./build/tests/attach/attach`
@@ -1213,10 +1213,10 @@ parameter:
     no_ipv6: true
 ```
 
-**Note:** This parameter `no_ipv6` is only applied to NFs such as AMF, MME, SGW-C, and so on. The parameter `no_ipv6` does not affect to UE. So, IPv6-enabled UE can connect to Open5GS LTE network.
+**Note:** This parameter `no_ipv6` is only applied to NFs such as AMF, MME, SGW-C, and so on. The parameter `no_ipv6` does not affect to UE. So, IPv6-enabled UE can connect to xcn LTE network.
 {: .notice--warning}
 
-#### Unable to add new user by WebUI 
+#### Unable to add new user by WebUI
 
 It might be a CSRF token mismatch error.
 Please, delete corresponding cookies, cache, session data etc.
@@ -1225,9 +1225,9 @@ Please, delete corresponding cookies, cache, session data etc.
 
 You should configure the domain name on your computer. Otherwise, freeDiameter raise an error.
 
-#### How many of UEs can Open5GS support?
+#### How many of UEs can xcn support?
 
-See the [lib/core/ogs-3gpp-types.h](https://github.com/{{ site.github_username }}/open5gs/blob/main/lib/core/ogs-3gpp-types.h).
+See the [lib/core/ogs-3gpp-types.h](https://github.com/{{ site.github_username }}/{{ site.github_repository }}/blob/open5gs-basev277-develop/lib/core/ogs-3gpp-types.h).
 
 ```
 #define MAX_NUM_OF_ENB              128
@@ -1321,7 +1321,7 @@ Currently, the number of UE is limited to `128*128`.
 
 ```
 * IPv4
-  Primary : 8.8.8.8 
+  Primary : 8.8.8.8
   Secondary : 8.8.4.4
 
 * IPv6
@@ -1331,7 +1331,7 @@ Currently, the number of UE is limited to `128*128`.
 
 #### The parsing errors are caused by tab spaces in the configuration files.
 
-YAML forbids tabs. You should use space instead of tab in Open5GS configuration file.
+YAML forbids tabs. You should use space instead of tab in xcn configuration file.
 
 ```markdown
 YAML FAQ: Why does YAML forbid tabs?
@@ -1341,13 +1341,13 @@ Tabs have been outlawed since they are treated differently by different editors 
 
 #### Cross compilation setup
 
-By default, Open5GS is designed to support the Embedding System. To do so, we introduced pool-based memory management. Unfortunately, we have not tested Open5GS in an embedded environment. I tried to compile on the ARM architecture using Docker and run it with QEMU for your reference.
+By default, xcn is designed to support the Embedding System. To do so, we introduced pool-based memory management. Unfortunately, we have not tested xcn in an embedded environment. I tried to compile on the ARM architecture using Docker and run it with QEMU for your reference.
 
 - We'll use Debian Docker Environment.
 
 ```bash
-$ git clone https://github.com/{{ site.github_username }}/open5gs
-$ cd open5gs/docker
+$ git clone --branch open5gs-basev277-develop https://github.com/{{ site.github_username }}/{{ site.github_repository }}.git xcn
+$ cd xcn/docker
 $ DIST=debian TAG=stretch docker-compose run dev
 ```
 
@@ -1359,8 +1359,8 @@ $ sudo apt update
 $ sudo apt install libsctp-dev:armel libyaml-dev:armel libgnutls28-dev:armel libgcrypt-dev:armel libidn-dev:armel libssl-dev:armel libmongoc-dev:armel libbson-dev:armel
 $ sudo apt install crossbuild-essential-armel
 $ sudo apt install qemu
-$ git clone https://github.com/{{ site.github_username }}/open5gs
-$ cd open5gs/
+$ git clone --branch open5gs-basev277-develop https://github.com/{{ site.github_username }}/{{ site.github_repository }}.git xcn
+$ cd xcn/
 
 $ cat << EOF > cross_file.txt
 [host_machine]
@@ -1381,11 +1381,11 @@ EOF
 
 $ meson build --prefix=`pwd`/install --cross-file cross_file.txt
 $ ninja -C build
-$ qemu-arm ./install/bin/open5gs-sgwd
-Open5GS daemon v1.0.0
+$ qemu-arm ./install/bin/xcn-sgwd
+xcn daemon v1.0.0
 
-10/28 06:47:36.649: [app] INFO: Configuration: '/home/acetcom/git/open5gs/install/etc/open5gs/sgw.yaml' (../src/main.c:54)
-10/28 06:47:36.652: [app] INFO: File Logging: '/home/acetcom/git/open5gs/install/var/log/open5gs/sgw.log' (../src/main.c:57)
+10/28 06:47:36.649: [app] INFO: Configuration: '/home/acetcom/git/xcn/install/etc/xcn/sgw.yaml' (../src/main.c:54)
+10/28 06:47:36.652: [app] INFO: File Logging: '/home/acetcom/git/xcn/install/var/log/xcn/sgw.log' (../src/main.c:57)
 Unknown host QEMU_IFLA type: 50
 Unknown host QEMU_IFLA type: 51
 Unknown host QEMU_IFLA type: 40
@@ -1412,14 +1412,14 @@ Unknown host QEMU_IFLA type: 43
 10/28 06:47:36.696: [gtp] INFO: gtp_server() [127.0.0.2]:2123 (../lib/gtp/path.c:32)
 10/28 06:47:36.697: [gtp] INFO: gtp_server() [172.18.0.2]:2152 (../lib/gtp/path.c:32)
 ^C10/28 06:47:37.324: [app] INFO: SIGINT received (../src/main.c:73)
-10/28 06:47:37.325: [app] INFO: Open5GS daemon terminating... (../src/main.c:229)
+10/28 06:47:37.325: [app] INFO: xcn daemon terminating... (../src/main.c:229)
 10/28 06:47:37.337: [app] INFO: SGW terminate...done (../src/sgw/app-init.c:39)
 
-$ qemu-arm ./install/bin/open5gs-hssd
-Open5GS daemon v1.0.0
+$ qemu-arm ./install/bin/xcn-hssd
+xcn daemon v1.0.0
 
-10/28 06:47:39.021: [app] INFO: Configuration: '/home/acetcom/git/open5gs/install/etc/open5gs/hss.yaml' (../src/main.c:54)
-10/28 06:47:39.024: [app] INFO: File Logging: '/home/acetcom/git/open5gs/install/var/log/open5gs/hss.log' (../src/main.c:57)
+10/28 06:47:39.021: [app] INFO: Configuration: '/home/acetcom/git/xcn/install/etc/xcn/hss.yaml' (../src/main.c:54)
+10/28 06:47:39.024: [app] INFO: File Logging: '/home/acetcom/git/xcn/install/var/log/xcn/hss.log' (../src/main.c:57)
 qemu: Unsupported syscall: 345
 qemu: Unsupported syscall: 345
 qemu: Unsupported syscall: 345
@@ -1428,7 +1428,7 @@ qemu: Unsupported syscall: 345
 qemu: Unsupported syscall: 345
 qemu: Unsupported syscall: 345
 qemu: Unsupported syscall: 345
-10/28 06:47:39.044: [dbi] INFO: MongoDB URI: 'mongodb://mongodb/open5gs' (../lib/dbi/ogs-mongoc.c:99)
+10/28 06:47:39.044: [dbi] INFO: MongoDB URI: 'mongodb://mongodb/xcn' (../lib/dbi/ogs-mongoc.c:99)
 
 
 getsockopt level=132 optname=0 not yet supported
@@ -1450,27 +1450,27 @@ The SCTP module is not included in the QEMU kernel. I believe that if the Linux 
 An error occurred when running as follows.
 
 ```
-$ ./install/bin/open5gs-nrfd
-./install/bin/open5gs-nrfd: error while loading shared libraries: libogscrypt.so.2: cannot open shared object file: No such file or directory
+$ ./install/bin/xcn-nrfd
+./install/bin/xcn-nrfd: error while loading shared libraries: libogscrypt.so.2: cannot open shared object file: No such file or directory
 ```
 
 You need to specify the absolute path to the shared library as follows.
 
 ```bash
 $ echo $(cd $(dirname ./install/lib/x86_64-linux-gnu/) && pwd -P)/$(basename ./install/lib/x86_64-linux-gnu/)
-/home/acetcom/Documents/git/open5gs/install/lib/x86_64-linux-gnu
-$ export LD_LIBRARY_PATH=/home/acetcom/Documents/git/open5gs/install/lib/x86_64-linux-gnu
-$ ldd ./install/bin/open5gs-amfd
+/home/acetcom/Documents/git/xcn/install/lib/x86_64-linux-gnu
+$ export LD_LIBRARY_PATH=/home/acetcom/Documents/git/xcn/install/lib/x86_64-linux-gnu
+$ ldd ./install/bin/xcn-amfd
 ...
-    libogsapp.so.1 => /home/acetcom/Documents/git/open5gs/install/lib/x86_64-linux-gnu/libogsapp.so.1 (0x00007f161ab51000)
-    libogscore.so.1 => /home/acetcom/Documents/git/open5gs/install/lib/x86_64-linux-gnu/libogscore.so.1 (0x00007f161a922000)
-    libogssctp.so.1 => /home/acetcom/Documents/git/open5gs/install/lib/x86_64-linux-gnu/libogssctp.so.1 (0x00007f161a71d000)
-    libogss1ap.so.1 => /home/acetcom/Documents/git/open5gs/install/lib/x86_64-linux-gnu/libogss1ap.so.1 (0x00007f161a519000)
+    libogsapp.so.1 => /home/acetcom/Documents/git/xcn/install/lib/x86_64-linux-gnu/libogsapp.so.1 (0x00007f161ab51000)
+    libogscore.so.1 => /home/acetcom/Documents/git/xcn/install/lib/x86_64-linux-gnu/libogscore.so.1 (0x00007f161a922000)
+    libogssctp.so.1 => /home/acetcom/Documents/git/xcn/install/lib/x86_64-linux-gnu/libogssctp.so.1 (0x00007f161a71d000)
+    libogss1ap.so.1 => /home/acetcom/Documents/git/xcn/install/lib/x86_64-linux-gnu/libogss1ap.so.1 (0x00007f161a519000)
 ...
 ```
 
 If you want to set the shared library path permanently, you can use ldconfig.
 ```bash
-$ sudo sh -c "echo /home/acetcom/Documents/git/open5gs/install/lib/x86_64-linux-gnu > /etc/ld.so.conf.d/open5gs.conf"
+$ sudo sh -c "echo /home/acetcom/Documents/git/xcn/install/lib/x86_64-linux-gnu > /etc/ld.so.conf.d/xcn.conf"
 $ sudo ldconfig
 ```

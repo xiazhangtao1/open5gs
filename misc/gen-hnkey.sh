@@ -2,7 +2,7 @@
 
 if [ $# -lt 1 -o $# -gt 2 ]
 then
-    echo You must specify output directory : ./gen-hnkey.sh ../config/open5gs/hnet [numberOfKey]
+    echo You must specify output directory : ./gen-hnkey.sh ../config/xcn/hnet [numberOfKey]
     exit;
 fi
 

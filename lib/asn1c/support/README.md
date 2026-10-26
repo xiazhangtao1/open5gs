@@ -37,23 +37,23 @@ user@host Documents/git/my/asn1c$ \
 
 Modify 36413-h30.txt to 36413-h30.asn
 ===========================================
-user@host ~/documents/git/open5gs/lib/asn1c/support/s1ap-r17.3.0$ \
+user@host ~/documents/git/xcn/lib/asn1c/support/s1ap-r17.3.0$ \
     diff 36413-h30.txt 36413-h30.asn
 
 Modify 38413-h30.txt to 38413-h30.asn
 ===========================================
-user@host ~/documents/git/open5gs/lib/asn1c/support/ngap-r17.3.0$ \
+user@host ~/documents/git/xcn/lib/asn1c/support/ngap-r17.3.0$ \
     diff 38413-h30.txt 38413-h30.asn
 
 ASN.1 encoder/decoder
 ===========================================
-user@host ~/documents/git/open5gs/lib/asn1c/s1ap$ \
+user@host ~/documents/git/xcn/lib/asn1c/s1ap$ \
     ASN1C_PREFIX=S1AP_ ../../../../my/asn1c/asn1c/asn1c -pdu=all \
     -fcompound-names -findirect-choice -fno-include-deps \
     -no-gen-BER -no-gen-XER -no-gen-OER -no-gen-UPER -no-gen-JER \
     ../support/s1ap-r17.3.0/36413-h30.asn
 
-user@host ~/Documents/git/open5gs/lib/asn1c/ngap$ \
+user@host ~/Documents/git/xcn/lib/asn1c/ngap$ \
     ASN1C_PREFIX=NGAP_ ../../../../my/asn1c/asn1c/asn1c -pdu=all \
     -fcompound-names -findirect-choice -fno-include-deps \
     -no-gen-BER -no-gen-XER -no-gen-OER -no-gen-UPER -no-gen-JER \
@@ -122,7 +122,7 @@ index 9554be276..051cb6e8a 100644
 
 Check common file
 ===========================================
-user@host ~/Documents/git/open5gs/lib/asn1c/common$ \
+user@host ~/Documents/git/xcn/lib/asn1c/common$ \
     git diff asn_internal.h
 diff --git a/lib/asn1c/common/asn_internal.h b/lib/asn1c/common/asn_internal.h
 diff -u asn_internal.h ~/asn_internal.h
@@ -185,26 +185,26 @@ diff -u asn_internal.h ~/asn_internal.h
 
 Check meson.build
 ===========================================
-user@host ~/Documents/git/open5gs/lib/asn1c/s1ap$ \
-user@host ~/Documents/git/open5gs/lib/asn1c/ngap$ \
+user@host ~/Documents/git/xcn/lib/asn1c/s1ap$ \
+user@host ~/Documents/git/xcn/lib/asn1c/ngap$ \
     cat Makefile.am.libasncodec
 
 Remove unnecessary files
 ===========================================
-user@host ~/Documents/git/open5gs/lib/asn1c/s1ap$ \
+user@host ~/Documents/git/xcn/lib/asn1c/s1ap$ \
     rm -f S1AP_E-RAB-IE-ContainerPairList.c \
     S1AP_ProtocolError-IE-ContainerList.c \
     S1AP_ProtocolIE-ContainerPair.c S1AP_ProtocolIE-FieldPair.c \
     S1AP_ProtocolIE-ContainerPairList.c
 
-user@host ~/Documents/git/open5gs/lib/asn1c/ngap$ \
+user@host ~/Documents/git/xcn/lib/asn1c/ngap$ \
     rm -f NGAP_ProtocolIE-ContainerPair.c NGAP_ProtocolIE-FieldPair.c \
     NGAP_ProtocolIE-ContainerPairList.c \
     NGAP_ProtocolIE-ContainerPair.h NGAP_ProtocolIE-ContainerPairList.h \
     NGAP_ProtocolIE-FieldPair.h
 
-user@host ~/Documents/git/open5gs/lib/asn1c/s1ap$ \
+user@host ~/Documents/git/xcn/lib/asn1c/s1ap$ \
     rm -f Makefile.am.asn1convert Makefile.am.libasncodec
 
-user@host ~/Documents/git/open5gs/lib/asn1c/s1ap$ \
+user@host ~/Documents/git/xcn/lib/asn1c/s1ap$ \
     rm -f converter-example.mk converter-example.c pdu_collection.c

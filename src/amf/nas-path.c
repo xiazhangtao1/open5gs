@@ -1,7 +1,7 @@
 /*
  * Copyright (C) 2019,2020 by Sukchan Lee <acetcom@gmail.com>
  *
- * This file is part of Open5GS.
+ * This file is part of xcn.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
@@ -134,7 +134,7 @@ int nas_5gs_send_registration_accept(amf_ue_t *amf_ue)
      * This is because gNB requires the kgNB security context
      * for data connection.
      *
-     * So, in this case, Open5GS-AMF decided to send
+     * So, in this case, xcn-AMF decided to send
      * an InitialContexSetupRequest regardless of
      * whether it received UE Context Request IE of InitialUEMessage.
      */
@@ -267,7 +267,7 @@ int nas_5gs_send_service_accept(amf_ue_t *amf_ue)
      * This is because gNB requires the kgNB security context
      * for data connection.
      *
-     * So, in this case, Open5GS-AMF decided to send
+     * So, in this case, xcn-AMF decided to send
      * an InitialContexSetupRequest regardless of
      * whether it received UE Context Request IE of InitialUEMessage.
      */

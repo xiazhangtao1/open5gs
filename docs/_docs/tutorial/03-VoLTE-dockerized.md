@@ -3,6 +3,8 @@ title: Dockerized VoLTE Setup
 head_inline: "<style> .blue { color: blue; } </style>"
 ---
 
+> This historical tutorial runs a third-party Open5GS/Kamailio stack. Its repository, image and network identifiers remain unchanged; it does not build this checkout's xcn images.
+
 Setup description:
 - MCC: 001, MNC: 01
 - Docker + Docker Compose
@@ -14,7 +16,7 @@ Setup description:
 
 #### 0. Introduction
 
-This tutorial introduces an install-and-run setup for Open5GS + Kamailio IMS VoLTE study.
+This tutorial introduces an install-and-run setup for xcn + Kamailio IMS VoLTE study.
 
 The main purpose is to save researchers' and students' time to debug for a minimum-viable environment before actual study can be proceeded.
 
@@ -29,17 +31,17 @@ If VoLTE is not enabled on your Android phone then please refer to the instructi
 2. Use MCC = 001, MNC = 01 for a test network, unless you know your MCC/MNC is supported by Android Carrier Privileges.
 {: .notice--warning}
 
-#### 2. Build Open5GS, Kamailio docker images
+#### 2. Build xcn, Kamailio docker images
 
 * Mandatory requirements:
 	* [docker-ce](https://docs.docker.com/install/linux/docker-ce/ubuntu) - Version 22.0.5 or above
 	* [docker compose](https://docs.docker.com/compose) - Version 2.14 or above
 
-Clone repository and build base docker image of open5gs and kamailio:
+Clone repository and build base docker image of xcn and kamailio:
 
 ```
-# Build docker images for open5gs EPC/5GC components
-git clone https://github.com/herlesupreeth/docker_open5gs
+# Build docker images for xcn EPC/5GC components
+git clone https://github.com/herlesupreeth/docker_open5gs docker_open5gs
 cd docker_open5gs/base
 docker build --no-cache --force-rm -t docker_open5gs .
 
@@ -145,9 +147,9 @@ docker compose -f srsenb.yaml up -d && docker container attach srsenb
 If there is a need to change the Core Network component configuration, then corresponding configuration files can be found under their respective folders.
 {: .notice--warning}
 
-- Provision SIM details in open5gs HSS
+- Provision SIM details in xcn HSS
 
-Open (http://<DOCKER_HOST_IP>:9999) in a web browser, where <DOCKER_HOST_IP> is the IP of the machine/VM running the open5gs containers. Login with following credentials
+Open (http://<DOCKER_HOST_IP>:9999) in a web browser, where <DOCKER_HOST_IP> is the IP of the machine/VM running the xcn containers. Login with following credentials
 
 ```
 Username : admin
@@ -179,9 +181,9 @@ APN Configuration:
 
 #### 7. Debugging with Wireshark
 
-Thanks to Open5GS, the topology is super similar to [SAE on Wikipedia](https://en.wikipedia.org/wiki/System_Architecture_Evolution#/media/File:Evolved_Packet_Core.svg).
+Thanks to xcn, the topology is super similar to [SAE on Wikipedia](https://en.wikipedia.org/wiki/System_Architecture_Evolution#/media/File:Evolved_Packet_Core.svg).
 
-![Network topology of Open5GS + IMS](https://raw.githubusercontent.com/miaoski/docker_open5gs/master/network-topology.png)
+![Network topology of xcn + IMS](https://raw.githubusercontent.com/miaoski/docker_open5gs/master/network-topology.png)
 
 **APN**
 

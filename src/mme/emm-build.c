@@ -1,7 +1,7 @@
 /*
  * Copyright (C) 2019-2024 by Sukchan Lee <acetcom@gmail.com>
  *
- * This file is part of Open5GS.
+ * This file is part of xcn.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
@@ -145,7 +145,7 @@ ogs_pkbuf_t *emm_build_attach_accept(
         }
     }
 
-    /* Set T3412 : Mandatory in Open5GS */
+    /* Set T3412 : Mandatory in xcn */
     ogs_assert(mme_self()->time.t3412.value);
     rv = ogs_nas_gprs_timer_from_sec(
             t3412_value, mme_self()->time.t3412.value);

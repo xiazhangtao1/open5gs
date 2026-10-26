@@ -1,0 +1,18 @@
+[Unit]
+Description=xcn MME Daemon
+After=network-online.target
+
+[Service]
+Type=simple
+
+User=xcn
+Group=xcn
+
+Restart=always
+ExecStart=@bindir@/xcn-mmed -c @sysconfdir@/xcn/mme.yaml
+RestartSec=2
+RestartPreventExitStatus=1
+ExecReload=/bin/kill -HUP $MAINPID
+
+[Install]
+WantedBy=multi-user.target

@@ -1,4 +1,4 @@
-process.env.DB_URI = process.env.DB_URI || 'mongodb://127.0.0.1/open5gs';
+process.env.DB_URI = process.env.DB_URI || 'mongodb://127.0.0.1/xcn';
 
 const hostIp = process.env.HOST_IP;
 const _hostname =

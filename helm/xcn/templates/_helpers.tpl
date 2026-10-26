@@ -250,7 +250,7 @@ CPUs to Session Workers.
 {{/*
 Resolve one N3/N6 memif queue count. "auto" follows the Session Worker count.
 When Session Workers are enabled, reject an explicit queue count that would
-violate Open5GS' worker-to-TX-qid ownership requirement.
+violate xcn' worker-to-TX-qid ownership requirement.
 */}}
 {{- define "xcn.upfMemifQueueCount" -}}
 {{- $root := .root -}}
@@ -278,11 +278,11 @@ violate Open5GS' worker-to-TX-qid ownership requirement.
 {{- if and $events.enabled (or (lt (int $events.capacity) 1) (gt (int $events.capacity) 262144) (lt (int $events.perUe) 1) (gt (int $events.perUe) (int $events.capacity))) -}}
 {{- fail "diagnostics.ueEvents requires 1 <= perUe <= capacity <= 262144" -}}
 {{- end -}}
-- name: OPEN5GS_UE_EVENTS_ENABLED
+- name: XCN_UE_EVENTS_ENABLED
   value: {{ $events.enabled | quote }}
-- name: OPEN5GS_UE_EVENTS_CAPACITY
+- name: XCN_UE_EVENTS_CAPACITY
   value: {{ $events.capacity | quote }}
-- name: OPEN5GS_UE_EVENTS_PER_UE
+- name: XCN_UE_EVENTS_PER_UE
   value: {{ $events.perUe | quote }}
 {{- if dig "trace" "enabled" false .Values.monitor }}
 {{- if or (not .Values.monitor.enabled) (not $events.enabled) }}

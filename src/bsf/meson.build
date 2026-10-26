@@ -1,6 +1,6 @@
 # Copyright (C) 2019-2022 by Sukchan Lee <acetcom@gmail.com>
 
-# This file is part of Open5GS.
+# This file is part of xcn.
 
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published by
@@ -44,9 +44,9 @@ bsf_sources = files('''
     ../main.c
 '''.split())
 
-executable('open5gs-bsfd',
+executable('xcn-bsfd',
     sources : bsf_sources,
-    c_args : '-DDEFAULT_CONFIG_FILENAME="@0@/bsf.yaml"'.format(open5gs_sysconfdir),
+    c_args : '-DDEFAULT_CONFIG_FILENAME="@0@/bsf.yaml"'.format(xcn_sysconfdir),
     include_directories : srcinc,
     dependencies : libbsf_dep,
     install_rpath : libdir,

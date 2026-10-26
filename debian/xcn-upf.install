@@ -1,0 +1,4 @@
+usr/bin/xcn-upfd
+configs/xcn/upf.yaml etc/xcn
+configs/systemd/99-xcn.net* etc/systemd/network
+configs/systemd/xcn-upfd.service lib/systemd/system

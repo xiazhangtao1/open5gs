@@ -1,7 +1,7 @@
 /*
  * Copyright (C) 2019-2023 by Sukchan Lee <acetcom@gmail.com>
  *
- * This file is part of Open5GS.
+ * This file is part of xcn.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
@@ -958,7 +958,7 @@ static void upf_gtp_handle_n3_packet(
     /*
      * Discussion #1776 was raised,
      * but we decided not to allow unspecified addresses
-     * because Open5GS has already sent interface identifiers
+     * because xcn has already sent interface identifiers
      * in the registgration/attach process.
      *
      *
@@ -1435,10 +1435,10 @@ int upf_gtp_open(void)
 
     /*
      * On Linux, it is possible to create a persistent tun/tap
-     * interface which will continue to exist even if open5gs quit,
+     * interface which will continue to exist even if xcn quit,
      * although this is normally not required.
      * It can be useful to set up a tun/tap interface owned
-     * by a non-root user, so open5gs can be started without
+     * by a non-root user, so xcn can be started without
      * needing any root privileges at all.
      */
 

@@ -1,7 +1,7 @@
 /*
  * Copyright (C) 2019-2024 by Sukchan Lee <acetcom@gmail.com>
  *
- * This file is part of Open5GS.
+ * This file is part of xcn.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
@@ -490,7 +490,7 @@ ogs_sbi_request_t *ogs_sbi_build_request(ogs_sbi_message_t *message)
             if (v) {
             /*
              * In http.params, the CURL library automatically encodes the URL.
-             * http.headers implements open5gs to directly encode URLs.
+             * http.headers implements xcn to directly encode URLs.
              *
              * Since it is http.params, the result is sent as is.
              */

@@ -43,8 +43,8 @@ Use SSH to log into the FreeBSD 14 VM:
 vagrant ssh
 ```
 
-Note that the Open5GS source is *not* copied into the VM.  The instructions
-below provide the step by step instructions for setting up Open5GS for
+Note that the xcn source is *not* copied into the VM.  The instructions
+below provide the step by step instructions for setting up xcn for
 either a bare metal or virtual FreeBSD 14 system.
 
 The rest of the commands below are performed inside the FreeBSD VM as the
@@ -108,7 +108,7 @@ $ sudo sysctl -w net.inet.ip.forwarding=1
 $ sudo sysctl -w net.inet6.ip6.forwarding=1
 ```
 
-**Tip:** The script provided in [$GIT_REPO/misc/netconf.sh](https://github.com/{{ site.github_username }}/open5gs/blob/main/misc/netconf.sh) makes it easy to configure the TUN device as follows:
+**Tip:** The script provided in [$GIT_REPO/misc/netconf.sh](https://github.com/{{ site.github_username }}/{{ site.github_repository }}/blob/open5gs-basev277-develop/misc/netconf.sh) makes it easy to configure the TUN device as follows:
 `$ sudo ./misc/netconf.sh`
 {: .notice--info}
 
@@ -137,7 +137,7 @@ This is important that you must reboot as shown below.
 [host] $ vagrant ssh
 ```
 
-### Building Open5GS
+### Building xcn
 ---
 
 Install the depedencies for building the source code.
@@ -160,13 +160,13 @@ $ export C_INCLUDE_PATH=/usr/local/include
 Git clone.
 
 ```bash
-$ git clone https://github.com/{{ site.github_username }}/open5gs
+$ git clone --branch open5gs-basev277-develop https://github.com/{{ site.github_username }}/{{ site.github_repository }}.git xcn
 ```
 
 To compile with meson:
 
 ```bash
-$ cd open5gs
+$ cd xcn
 $ meson build --prefix=`pwd`/install
 $ ninja -C build
 ```
@@ -175,7 +175,7 @@ $ ninja -C build
 {: .blue}
 
 ```diff
-$ cd open5gs/subprojects/freeDiameter
+$ cd xcn/subprojects/freeDiameter
 
 $ diff --git a/include/freeDiameter/libfdproto.h b/include/freeDiameter/libfdproto.h
 index 52c11ef..cd7f383 100644
@@ -195,7 +195,7 @@ Now, compile again:
 {: .blue}
 
 ```bash
-$ cd open5gs
+$ cd xcn
 $ ninja -C build
 ```
 
@@ -229,10 +229,10 @@ $ ninja install
 $ cd ../
 ```
 
-### Building WebUI of Open5GS
+### Building WebUI of xcn
 ---
 
-[Node.js](https://nodejs.org/) is required to build WebUI of Open5GS
+[Node.js](https://nodejs.org/) is required to build WebUI of xcn
 
 ```bash
 $ sudo pkg install npm

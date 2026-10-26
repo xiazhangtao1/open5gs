@@ -377,8 +377,8 @@ int xcnctl_ue_events_main(int argc, char **argv)
     int result = 2, option;
     if (!sources) return 1;
     sources[0].nf = "AMF"; sources[1].nf = "SMF";
-    sources[0].url = getenv("OPEN5GS_AMF_UE_EVENTS_URL");
-    sources[1].url = getenv("OPEN5GS_SMF_UE_EVENTS_URL");
+    sources[0].url = getenv("XCN_AMF_UE_EVENTS_URL");
+    sources[1].url = getenv("XCN_SMF_UE_EVENTS_URL");
     if (!sources[0].url) sources[0].url = "http://127.0.0.1:9091/ue-events";
     if (!sources[1].url) sources[1].url = "http://127.0.0.1:9092/ue-events";
     optind = 3;

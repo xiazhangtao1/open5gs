@@ -1,7 +1,7 @@
 /*
  * Copyright (C) 2019,2024 by Sukchan Lee <acetcom@gmail.com>
  *
- * This file is part of Open5GS.
+ * This file is part of xcn.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
@@ -669,7 +669,7 @@ static bool server_send_rspmem_persistent(
     add_header(&nva[i++], ":status", status_string[response->status]);
 
     ogs_snprintf(srv_version, sizeof(srv_version),
-            "Open5GS %s", ogs_app()->version ? ogs_app()->version : "TEST");
+            "xcn %s", ogs_app()->version ? ogs_app()->version : "TEST");
     add_header(&nva[i++], "server", srv_version);
     add_header(&nva[i++], "date", get_date_string(datebuf));
 
@@ -1022,7 +1022,7 @@ static void recv_handler(short when, ogs_socket_t fd, void *data)
              * this is according to http2 RFC, all settings must be
              * ACK or connection will be dropped.
              *
-             * Open5GS is not ACKing pure settings packets,
+             * xcn is not ACKing pure settings packets,
              * looks like it is waiting for a header
              * like POST/GET first to trigger
              * sending settings ACK and then headers reply.

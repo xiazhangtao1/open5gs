@@ -181,8 +181,8 @@ limit is an error rather than a silently incomplete result.
 
 Defaults are AMF `http://127.0.0.1:9091/ue-info` and `/gnb-info`, and SMF
 `http://127.0.0.1:9092/pdu-info`. Override them with `--amf-ue-info`,
-`--amf-gnb-info`, `--smf-pdu-info`, or `OPEN5GS_AMF_UE_INFO_URL`,
-`OPEN5GS_AMF_GNB_INFO_URL`, `OPEN5GS_SMF_PDU_INFO_URL`, respectively. Supply
+`--amf-gnb-info`, `--smf-pdu-info`, or `XCN_AMF_UE_INFO_URL`,
+`XCN_AMF_GNB_INFO_URL`, `XCN_SMF_PDU_INFO_URL`, respectively. Supply
 endpoint URLs without pagination parameters. All four rate levels show
 `GNB-PEER` after `CM-STATE` by default, before `UE-IP` when present. This is the
 current gNB's NGAP/SCTP peer IP and port, for example `[10.2.0.119]:34910`;
@@ -283,12 +283,12 @@ The CLI preserves NF-local sequence ordering using monotonic clock based
 ordering timestamps; wall timestamps remain the actual observed times.
 Cross-NF ordering is a time-based view, not proof of distributed causality.
 Override endpoints using `--amf-ue-events`, `--smf-ue-events`, or
-`OPEN5GS_AMF_UE_EVENTS_URL` / `OPEN5GS_SMF_UE_EVENTS_URL`.
+`XCN_AMF_UE_EVENTS_URL` / `XCN_SMF_UE_EVENTS_URL`.
 
 Helm defaults are `diagnostics.ueEvents.enabled=true`, `capacity=65536` and
 `perUe=512`, per NF. The equivalent process environment variables are
-`OPEN5GS_UE_EVENTS_ENABLED`, `OPEN5GS_UE_EVENTS_CAPACITY` and
-`OPEN5GS_UE_EVENTS_PER_UE`. Require `1 <= perUe <= capacity <= 262144` when
+`XCN_UE_EVENTS_ENABLED`, `XCN_UE_EVENTS_CAPACITY` and
+`XCN_UE_EVENTS_PER_UE`. Require `1 <= perUe <= capacity <= 262144` when
 enabled. Fixed-size records and bounded indexes cap memory; oldest records are
 overwritten at either limit. This is a recent-event window, not a promised
 retention duration. Recording stores metadata, not packet payloads or keys.
@@ -349,8 +349,8 @@ registration lifetime.
 
 The Helm deployment uses `http://127.0.0.1:9092/pdu-info` and
 `http://127.0.0.1:9091/ue-info` by default. For a standalone deployment,
-override them with `--smf-pdu-info URL`/`OPEN5GS_SMF_PDU_INFO_URL` and
-`--amf-ue-info URL`/`OPEN5GS_AMF_UE_INFO_URL`. JSON output adds `psi` and
+override them with `--smf-pdu-info URL`/`XCN_SMF_PDU_INFO_URL` and
+`--amf-ue-info URL`/`XCN_AMF_UE_INFO_URL`. JSON output adds `psi` and
 `cm_state`, and retains `seid` for compatibility, but no longer adds
 `upf_seid`.
 
@@ -362,7 +362,7 @@ networking:
     rateStats:
       enabled: true
       intervalMs: 1000
-      socket: /run/open5gs/upf-stats.sock
+      socket: /run/xcn/upf-stats.sock
 ```
 
 Disabling `rateStats.enabled` removes both the sampler/control thread and all
@@ -500,7 +500,7 @@ VFs. With `hostNetwork=true`, replace `10.2.0.119` with the node address
 reachable by the gNB:
 
 ```bash
-helm upgrade --install xcn /home/xiazhangtao/code/open5gs/helm/xcn \
+helm upgrade --install xcn /path/to/xcn/helm/xcn \
   -n xcn --create-namespace \
   --set fivegc.hostNetwork.enabled=true \
   --set networking.amf.ngap.serverAddress=10.2.0.119 \
@@ -509,7 +509,7 @@ helm upgrade --install xcn /home/xiazhangtao/code/open5gs/helm/xcn \
 ```
 
 This renders no VPP container or SR-IOV resource request. The UPF container
-mounts `/dev/net/tun`; `open5gs-k8s-setup` creates `ogstun`, enables IP
+mounts `/dev/net/tun`; `xcn-k8s-setup` creates `ogstun`, enables IP
 forwarding, and installs IPv4 MASQUERADE/FORWARD rules. When Pod networking is
 used instead of `hostNetwork`, omit the two explicit AMF and UPF N3 addresses;
 the UPF GTP-U address defaults to the Pod IP.
@@ -526,20 +526,20 @@ kubectl -n xcn exec deploy/xcn-5gc -c upf -- \
 ```
 
 Expected results are eight 5GC containers with no `vpp`, an UP `ogstun`
-interface, and `open5gs-upfd` listening on the configured N3 address at
+interface, and `xcn-upfd` listening on the configured N3 address at
 UDP/2152. Restart or re-register the UE after changing modes because an UPF
 restart cannot recover the old PFCP Session state from the UE's existing TUN.
 
 ### Accelerated VPP/memif mode with two VFs
 
 Use the command in the next section. For a `hostNetwork` deployment, the
-chart automatically binds the Open5GS compatibility GTP socket to `127.0.0.8`.
-`networking.upf.n3.address` is both the advertised N3 address and the Open5GS
+chart automatically binds the xcn compatibility GTP socket to `127.0.0.8`.
+`networking.upf.n3.address` is both the advertised N3 address and the xcn
 raw-IP memif local address exposed through VPP.
 
 ## VPP memif N3/N6 with two SR-IOV VFs
 
-The first-stage accelerated topology keeps Open5GS UPF responsible for PFCP,
+The first-stage accelerated topology keeps xcn UPF responsible for PFCP,
 PDR/FAR/QER/URR and GTP-U semantics. N3 and N6 packet I/O use separate raw-IP
 memif links to a VPP 26.06 sidecar. VPP owns two SR-IOV VFs through DPDK: one
 VF and FIB table for N3, and one VF for N6/NAT44. The resource is configurable;
@@ -554,7 +554,7 @@ defaults from `values.yaml`:
 docker build --network host -f docker/runtime/Dockerfile \
   -t xcn-runtime:latest .
 
-helm upgrade --install xcn /home/xiazhangtao/code/open5gs/helm/xcn \
+helm upgrade --install xcn /path/to/xcn/helm/xcn \
   -n xcn --create-namespace \
   --set fivegc.hostNetwork.enabled=true \
   --set networking.amf.ngap.serverAddress=10.2.0.119 \
@@ -591,7 +591,7 @@ Session Workers = UPF logical CPUs - reservedCpus
 The default `reservedCpus: 3` reserves one logical CPU for each of the N3 and
 N6 dispatchers and one shared control CPU for the rate sampler and UPF main
 event thread. For example, an 8-CPU UPF creates 5 Session Workers and five
-N3/N6 memif queues on both Open5GS and VPP:
+N3/N6 memif queues on both xcn and VPP:
 
 ```yaml
 networking:
@@ -624,7 +624,7 @@ counts that do not match the Worker count.
 The calculation deliberately uses the Helm CPU limit rather than the process
 affinity mask. CPUManager can temporarily expose the node cpuset during Pod
 startup; deriving the Worker count from that transient mask would create too
-many threads. After CPUManager assigns the exclusive cpuset, Open5GS pins the
+many threads. After CPUManager assigns the exclusive cpuset, xcn pins the
 Workers, the N3/N6 dispatchers, and the shared rate/main control threads to the
 resolved `N+3` CPUs.
 
@@ -729,12 +729,12 @@ kubectl -n xcn exec deploy/xcn-5gc -c vpp -- \
 kubectl -n xcn logs deploy/xcn-5gc -c upf | grep -E 'N[36] memif'
 ```
 
-The expected uplink path is `dpdk-n3 -> memif2/0 -> Open5GS -> memif1/0 ->
+The expected uplink path is `dpdk-n3 -> memif2/0 -> xcn -> memif1/0 ->
 dpdk-n6`. The default pins NAT44 to worker 2 because `memif1/0` RX is assigned
 to that worker in this 8-worker layout. If interface placement changes, update
 `vpp.n6.nat44.workers` after checking `show hardware-interfaces`. Each current
 libmemif backend uses one ring, so extra VPP CPUs do not by themselves
-parallelize a single Open5GS UPF instance.
+parallelize a single xcn UPF instance.
 
 ### Capture VPP/DPDK and memif traffic
 
@@ -744,8 +744,8 @@ traffic. Use VPP `pcap trace` instead. The capture points are:
 | Interface | Capture point | Uplink direction | Downlink direction |
 |---|---|---|---|
 | `dpdk-n3` | Physical N3 VF | RX from gNB | TX to gNB |
-| `memif2/0` | VPP/Open5GS N3 | TX to Open5GS | RX from Open5GS |
-| `memif1/0` | VPP/Open5GS N6 | RX from Open5GS | TX to Open5GS |
+| `memif2/0` | VPP/xcn N3 | TX to xcn | RX from xcn |
+| `memif1/0` | VPP/xcn N6 | RX from xcn | TX to xcn |
 | `dpdk-n6` | Physical N6 VF | TX to data network | RX from data network |
 
 Select one interface, start a bounded capture, generate a small amount of UE
@@ -827,12 +827,12 @@ Both modes were deployed on the same node from this chart:
   CPUs under the then-current two-reserved-CPU layout. The current layout
   reserves a third control CPU and therefore creates five Workers with the
   same eight-UPF-CPU allocation. Six PFCP Sessions were recreated. A
-  six-Session N6 injection sent 1,750 packets through `memif1/0`; Open5GS
-  emitted all 1,750 through `memif2/0`, with zero loss in the Open5GS memif
+  six-Session N6 injection sent 1,750 packets through `memif1/0`; xcn
+  emitted all 1,750 through `memif2/0`, with zero loss in the xcn memif
   segment.
 
 The fabric physical ports were not cabled during the memif validation, so the
-second result proves the VPP/Open5GS core path but does not claim an external
+second result proves the VPP/xcn core path but does not claim an external
 physical end-to-end return path.
 
 ## External PCF APIs

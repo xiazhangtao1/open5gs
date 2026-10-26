@@ -41,7 +41,7 @@
 /*
  * Copyright (C) 2019-2020 by Sukchan Lee <acetcom@gmail.com>
  *
- * This file is part of Open5GS.
+ * This file is part of xcn.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -168,7 +168,7 @@ int ogs_time_from_gmt(ogs_time_t *t, struct tm *tm, int tm_usec)
 }
 
 /* RFC 5905 A.1.1, A.4
- * PFCP entity uses NTP timestamp(1900), but Open5GS uses UNIX(1970).
+ * PFCP entity uses NTP timestamp(1900), but xcn uses UNIX(1970).
  *
  * One is the offset between the two epochs.
  * Unix uses an epoch located at 1/1/1970-00:00h (UTC) and

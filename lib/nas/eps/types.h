@@ -1,7 +1,7 @@
 /*
  * Copyright (C) 2019-2023 by Sukchan Lee <acetcom@gmail.com>
  *
- * This file is part of Open5GS.
+ * This file is part of xcn.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
@@ -232,7 +232,7 @@ ED3(uint8_t cn_specific_drx_cycle_length_coefficient_and_drx_value_for_s1_mode:4
 /* 9.9.3.9 EMM cause
  * O TV 2 */
 
-/* REQUEST_ACCEPTED(16) cause is defined by Open5GS */
+/* REQUEST_ACCEPTED(16) cause is defined by xcn */
 #define OGS_NAS_EMM_CAUSE_REQUEST_ACCEPTED 16
 
 /* Annex A (informative) Cause values for EPS mobility management

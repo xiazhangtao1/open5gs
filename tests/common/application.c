@@ -1,7 +1,7 @@
 /*
  * Copyright (C) 2019,2020 by Sukchan Lee <acetcom@gmail.com>
  *
- * This file is part of Open5GS.
+ * This file is part of xcn.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
@@ -51,9 +51,9 @@ static void run(int argc, const char *const argv[],
         argv_out[argc_out] = NULL;
     }
 
-    /* buildroot/src/open5gs-main */
+    /* buildroot/src/xcn-main */
     argv_out[0] = MESON_BUILD_ROOT OGS_DIR_SEPARATOR_S 
-            "src" OGS_DIR_SEPARATOR_S "open5gs-main";
+            "src" OGS_DIR_SEPARATOR_S "xcn-main";
 
     rv = abts_main(argc_out, argv_out, new_argv);
     ogs_assert(rv == OGS_OK);
@@ -140,10 +140,10 @@ ogs_thread_t *test_child_create(const char *name, int index, const char *const a
     }
     commandLine[i] = NULL;
 
-    /* buildroot/src/mme/open5gs-mmed */
+    /* buildroot/src/mme/xcn-mmed */
     ogs_snprintf(command, sizeof command, "%s%s%s%sd",
             MESON_BUILD_ROOT OGS_DIR_SEPARATOR_S "src" OGS_DIR_SEPARATOR_S,
-            name, OGS_DIR_SEPARATOR_S "open5gs-", name);
+            name, OGS_DIR_SEPARATOR_S "xcn-", name);
     commandLine[0] = command;
 
     thread_data.commandLine = commandLine;

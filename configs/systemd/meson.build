@@ -1,6 +1,6 @@
 # Copyright (C) 2019 by Sukchan Lee <acetcom@gmail.com>
 
-# This file is part of Open5GS.
+# This file is part of xcn.
 
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published by
@@ -16,23 +16,23 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 systemd_conf_in = '''
-    open5gs-mmed.service
-    open5gs-sgwcd.service
-    open5gs-smfd.service
-    open5gs-amfd.service
-    open5gs-sgwud.service
-    open5gs-upfd.service
-    open5gs-hssd.service
-    open5gs-pcrfd.service
-    open5gs-nrfd.service
-    open5gs-scpd.service
-    open5gs-seppd.service
-    open5gs-ausfd.service
-    open5gs-udmd.service
-    open5gs-pcfd.service
-    open5gs-nssfd.service
-    open5gs-bsfd.service
-    open5gs-udrd.service
+    xcn-mmed.service
+    xcn-sgwcd.service
+    xcn-smfd.service
+    xcn-amfd.service
+    xcn-sgwud.service
+    xcn-upfd.service
+    xcn-hssd.service
+    xcn-pcrfd.service
+    xcn-nrfd.service
+    xcn-scpd.service
+    xcn-seppd.service
+    xcn-ausfd.service
+    xcn-udmd.service
+    xcn-pcfd.service
+    xcn-nssfd.service
+    xcn-bsfd.service
+    xcn-udrd.service
 '''.split()
 
 foreach file : systemd_conf_in
@@ -43,8 +43,8 @@ foreach file : systemd_conf_in
 endforeach
 
 systemd_conf = '''
-    99-open5gs.netdev
-    99-open5gs.network        
+    99-xcn.netdev
+    99-xcn.network
 '''.split()
 
 foreach file : systemd_conf

@@ -1,7 +1,7 @@
 /*
  * Copyright (C) 2019-2023 by Sukchan Lee <acetcom@gmail.com>
  *
- * This file is part of Open5GS.
+ * This file is part of xcn.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
@@ -130,7 +130,7 @@ ogs_pkbuf_t *gmm_build_registration_accept(amf_ue_t *amf_ue)
     network_feature_support->
         ims_voice_over_ps_session_over_3gpp_access_indicator = 1;
 
-    /* Set T3512 : Mandatory in Open5GS */
+    /* Set T3512 : Mandatory in xcn */
     ogs_assert(amf_self()->time.t3512.value);
     rv = ogs_nas_gprs_timer_3_from_sec(
             &t3512_value->t, amf_self()->time.t3512.value);

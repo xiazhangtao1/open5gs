@@ -19,7 +19,7 @@ $ pip3 install --user meson
 
 Write a configuration file for the TUN deivce.
 ```bash
-$ sudo sh -c "cat << EOF > /etc/systemd/network/99-open5gs.netdev
+$ sudo sh -c "cat << EOF > /etc/systemd/network/99-xcn.netdev
 [NetDev]
 Name=ogstun
 Kind=tun
@@ -48,8 +48,8 @@ Then, to support IPv6-enabled UEs, you must configure your TUN device to support
 $ sysctl -n net.ipv6.conf.ogstun.disable_ipv6
 1
 
-$ sudo sh -c "echo 'net.ipv6.conf.ogstun.disable_ipv6=0' > /etc/sysctl.d/30-open5gs.conf"
-$ sudo sysctl -p /etc/sysctl.d/30-open5gs.conf
+$ sudo sh -c "echo 'net.ipv6.conf.ogstun.disable_ipv6=0' > /etc/sysctl.d/30-xcn.conf"
+$ sudo sysctl -p /etc/sysctl.d/30-xcn.conf
 
 $ sysctl -n net.ipv6.conf.ogstun.disable_ipv6
 0
@@ -62,7 +62,7 @@ $ sysctl -n net.ipv6.conf.ogstun.disable_ipv6
 You are now ready to set the IP address on TUN device. 
 
 ```bash
-$ sudo sh -c "cat << EOF > /etc/systemd/network/99-open5gs.network
+$ sudo sh -c "cat << EOF > /etc/systemd/network/99-xcn.network
 [Match]
 Name=ogstun
 [Network]
@@ -93,6 +93,6 @@ ogstun: flags=4305<UP,POINTOPOINT,RUNNING,NOARP,MULTICAST>  mtu 1500
         TX errors 0  dropped 0 overruns 0  carrier 0  collisions 0
 ```
 
-**Note:** On *Linux*, you should run `open5gs-pgwd` first to correctly verify the IP address of TUN device. Otherwise, the TUN device's IP address is not displayed by the [ifconfig](http://net-tools.sourceforge.net/man/ifconfig.8.html) command.
+**Note:** On *Linux*, you should run `xcn-pgwd` first to correctly verify the IP address of TUN device. Otherwise, the TUN device's IP address is not displayed by the [ifconfig](http://net-tools.sourceforge.net/man/ifconfig.8.html) command.
 {: .notice--warning}
 

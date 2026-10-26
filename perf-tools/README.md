@@ -1,4 +1,4 @@
-# Open5GS UPF performance tools
+# xcn UPF performance tools
 
 ## 实时用户/Session/承载速率
 
@@ -32,7 +32,7 @@ JSON显示`null`，`UPF-SEID`/`seid`仍可用于区分UPF行。`--active-only`�
 `networking.upf.rateStats.enabled=false`完全关闭。
 
 Helm部署默认使用`http://127.0.0.1:9092/pdu-info`。独立部署可通过
-`--smf-pdu-info URL`或`OPEN5GS_SMF_PDU_INFO_URL`指定SMF地址。JSON模式新增
+`--smf-pdu-info URL`或`XCN_SMF_PDU_INFO_URL`指定SMF地址。JSON模式新增
 `psi`，并保留原`seid`字段兼容已有脚本；不再额外输出`upf_seid`。
 
 文本模式会根据当前数据动态计算列宽：标识字段左对齐、速率和计数字段右
@@ -99,7 +99,7 @@ dispatch drop、queue high-water 和 memif TX ring-full 外，还包含
 `in-flight-max` 达到 memif ring 大小时，表示 descriptor 有序回收已成为入口
 反压点；不能把这种情况简单归因于 Worker 睡眠。
 
-这些工具用于绕过 OAI UE/gNB 的空口性能限制，直接压测 Open5GS UPF 的 N6/TUN 和 N3/GTP-U 数据面。
+这些工具用于绕过 OAI UE/gNB 的空口性能限制，直接压测 xcn UPF 的 N6/TUN 和 N3/GTP-U 数据面。
 
 ## 工具
 
@@ -115,8 +115,8 @@ dispatch drop、queue high-water 和 memif TX ring-full 外，还包含
 - `scripts/run_pg_ul_multi.sh`: VPP packet-generator 多 Session 上行发生器，
   将总速率平均分配到 `1..16` 个当前 Session GTP-U pcap。
 - `scripts/run_dl_qid_diag.sh`: 固定Pod、Session和qid的下行诊断脚本，同时采集
-  Open5GS/VPP线程`schedstat`、CPU/NUMA/超线程拓扑、VPP memif ring快照、
-  VPP runtime以及Open5GS各N3 TX qid计数。
+  xcn/VPP线程`schedstat`、CPU/NUMA/超线程拓扑、VPP memif ring快照、
+  VPP runtime以及xcn各N3 TX qid计数。
 - `scripts/run_vpp_affinity_ab.sh`: 在同一Pod、PFCP Session和VPP进程内按
   `dense(A1) -> isolated(B) -> dense(A2)`热切换VPP线程绑核，逐阶段采集
   实际affinity、`SCHED_OTHER`策略、`schedstat`、RX placement和吞吐计数。
@@ -149,7 +149,7 @@ PACING_10US=0 perf-tools/scripts/run_pg_ul_multi.sh \
 ```bash
 POD=xcn-5gc-xxxxxxxxxx-xxxxx
 VPP_MEMIF_SAMPLE_MS=500 perf-tools/scripts/run_dl_qid_diag.sh \
-  "$POD" 1200 20 10.45.0.2 /tmp/open5gs-dl-qid-diag.log
+  "$POD" 1200 20 10.45.0.2 /tmp/xcn-dl-qid-diag.log
 ```
 
 进行VPP超线程共享/物理核隔离的严格A/B：
@@ -157,7 +157,7 @@ VPP_MEMIF_SAMPLE_MS=500 perf-tools/scripts/run_dl_qid_diag.sh \
 ```bash
 POD=xcn-5gc-xxxxxxxxxx-xxxxx
 RUNS_PER_MODE=3 perf-tools/scripts/run_vpp_affinity_ab.sh \
-  "$POD" 1200 20 10.45.0.2 /tmp/open5gs-vpp-affinity-ab.log
+  "$POD" 1200 20 10.45.0.2 /tmp/xcn-vpp-affinity-ab.log
 ```
 
 `dense`故意依次使用同一物理核的两个超线程，`isolated`则让VPP main和六个
@@ -172,11 +172,11 @@ Pod、UPF进程或Session的情况下热切换：
 ```bash
 # 开启；最多等待一个UPF统计周期（当前约11秒）生效。
 kubectl -n xcn exec "$POD" -c upf -- \
-  touch /tmp/open5gs-n3-tx-timing
+  touch /tmp/xcn-n3-tx-timing
 
 # 关闭。
 kubectl -n xcn exec "$POD" -c upf -- \
-  rm -f /tmp/open5gs-n3-tx-timing
+  rm -f /tmp/xcn-n3-tx-timing
 ```
 
 日志出现`N3 memif TX timing diagnostics enabled/disabled`后再开始A/B。必须
@@ -256,8 +256,8 @@ VF由DPDK接管，Linux `tcpdump -i any`看不到N3/N6 VF或共享内存memif流
 | 接口 | 抓包点 | 下行方向 |
 |---|---|---|
 | `dpdk-n6` | 物理N6 VF，NAT前后取决于方向 | RX |
-| `memif1/0` | VPP与Open5GS N6之间 | VPP TX到Open5GS |
-| `memif2/0` | VPP与Open5GS N3之间 | Open5GS到VPP RX |
+| `memif1/0` | VPP与xcn N6之间 | VPP TX到xcn |
+| `memif2/0` | VPP与xcn N3之间 | xcn到VPP RX |
 | `dpdk-n3` | 物理N3 VF | TX到gNB |
 
 选择一个接口开始抓收发包；同一VPP实例一次只运行一个pcap trace：
@@ -385,12 +385,12 @@ kubectl -n xcn exec "$POD" -c upf -- env \
 
 ### 方式二：VPP packet-generator注入逻辑N6
 
-该方式从VPP `ip4-input`合成UE内层IPv4包，经`memif1/0 -> Open5GS ->
-memif2/0 -> dpdk-n3 -> gNB -> UE`。它完整执行Open5GS用户面语义，但绕过
+该方式从VPP `ip4-input`合成UE内层IPv4包，经`memif1/0 -> xcn ->
+memif2/0 -> dpdk-n3 -> gNB -> UE`。它完整执行xcn用户面语义，但绕过
 物理`dpdk-n6`，适合核心段吞吐和多Session测试：
 
 ```bash
-cd /home/xiazhangtao/code/open5gs
+cd /path/to/xcn
 
 PACING_10US=1 perf-tools/scripts/run_pg_dl_multi.sh \
   "$POD" 100 10 "$UE_IP"
@@ -485,7 +485,7 @@ kubectl -n xcn exec "$POD" -c vpp -- \
 UE网段路由。修改模式会重启UPF/VPP，测试前需让UE重新注册：
 
 ```bash
-helm upgrade xcn /home/xiazhangtao/code/open5gs/helm/xcn \
+helm upgrade xcn /path/to/xcn/helm/xcn \
   -n xcn --reuse-values \
   --set networking.upf.mode=memif \
   --set vpp.n6.nat44.enabled=false
@@ -517,7 +517,7 @@ iperf3 -c "$UE_IP" -p 5201 \
 测试结束后如需恢复默认NAT：
 
 ```bash
-helm upgrade xcn /home/xiazhangtao/code/open5gs/helm/xcn \
+helm upgrade xcn /path/to/xcn/helm/xcn \
   -n xcn --reuse-values \
   --set networking.upf.mode=memif \
   --set vpp.n6.nat44.enabled=true
@@ -525,7 +525,7 @@ helm upgrade xcn /home/xiazhangtao/code/open5gs/helm/xcn \
 
 四种方式的口径：
 
-| 方式 | 经过物理N6 VF | 经过完整Open5GS语义 | 到达gNB/UE |
+| 方式 | 经过物理N6 VF | 经过完整xcn语义 | 到达gNB/UE |
 |---|---|---|---|
 | TUN `udp_gen` | 否 | 是 | 是，N3/空口正常时 |
 | VPP packet-generator | 否 | 是 | 是，N3/空口正常时 |
@@ -580,8 +580,8 @@ gtpu_gen sent_pkts - dpdk-n3 rx-miss ≈ memif2/0 tx packets
 memif2/0 tx packets >= memif1/0 rx packets = dpdk-n6 tx packets
 ```
 
-`memif2/0` 是 VPP 到 Open5GS 的 N3，`memif1/0` 是 Open5GS 到 VPP 的 N6。
-两者差值表示 Open5GS 处理或 memif ring 压力；`memif1/0` 与 `dpdk-n6` 的差值
+`memif2/0` 是 VPP 到 xcn 的 N3，`memif1/0` 是 xcn 到 VPP 的 N6。
+两者差值表示 xcn 处理或 memif ring 压力；`memif1/0` 与 `dpdk-n6` 的差值
 表示 VPP NAT/转发压力。检查 `show errors` 中的 `no free tx slots`、NAT handoff
 congestion 和 VF `rx-miss`。每次 UE/UPF 重建后都必须重新抓取 UL TEID。
 使用 VPP packet-generator 在上下行测试之间切换时，必须先删除前一方向的所有
@@ -606,5 +606,5 @@ env POD="$POD" GNB_POD="$GNB_POD" GNB_IP="$GNB_IP" VETH="$VETH" \
 
 - 脚本会临时插入 `iptables` 计数规则，结束时删除同一规则。
 - 每次 gNB/UPF Pod 重建后，`GNB_IP`、`VETH` 和 `UL_TEID` 都可能变化，必须重新获取。
-- `AMBR` 当前会被 SMF 下发到 PFCP QER MBR，但 Open5GS UPF 数据面未实际基于 `qer->mbr` 做限速。
+- `AMBR` 当前会被 SMF 下发到 PFCP QER MBR，但 xcn UPF 数据面未实际基于 `qer->mbr` 做限速。
 - VPP memif 模式下，UE IPv4 数据面已验证；当前模板不提供 IPv6 N6 路由/NAT。

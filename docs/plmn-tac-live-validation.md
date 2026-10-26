@@ -15,7 +15,7 @@
 保留原镜像、VPP/memif、SR-IOV、CPU、N3/N6 地址、用户意图功能及地址池参数。
 
 ```bash
-helm upgrade xcn /home/xiazhangtao/code/open5gs/helm/xcn -n xcn \
+helm upgrade xcn /path/to/xcn/helm/xcn -n xcn \
   --reuse-values --atomic --wait --timeout 10m
 kubectl rollout restart deployment/xcn-core -n xcn
 ```
@@ -105,4 +105,4 @@ OAI 测试覆盖 RFsim 终端的实际接入；受控测试覆盖六组 PLMN/TAC
 实际联调，不能把受控协议结果等同于所有终端的互通保证。
 
 原始配置备份、测试脚本、逐组状态和日志保存在本机私有目录
-`/tmp/open5gs-live-plmn-miiqs2jv/`，鉴权资料和大日志没有提交到 Git。
+`/tmp/xcn-live-plmn-miiqs2jv/`，鉴权资料和大日志没有提交到 Git。

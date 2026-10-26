@@ -20,7 +20,7 @@ data:
   nrf.yaml: |
     logger:
       file:
-        path: /var/log/open5gs/nrf.log
+        path: /var/log/xcn/nrf.log
     global:
       max:
         ue: 1024
@@ -43,7 +43,7 @@ data:
   scp.yaml: |
     logger:
       file:
-        path: /var/log/open5gs/scp.log
+        path: /var/log/xcn/scp.log
     global:
       max:
         ue: 1024
@@ -59,7 +59,7 @@ data:
   amf.yaml.tmpl: |
     logger:
       file:
-        path: /var/log/open5gs/amf.log
+        path: /var/log/xcn/amf.log
     global:
       max:
         ue: 1024
@@ -134,16 +134,16 @@ data:
         integrity_order: [ NIA2, NIA1, NIA0 ]
         ciphering_order: [ NEA0, NEA1, NEA2 ]
       network_name:
-        full: Open5GS
+        full: xcn
         short: Next
-      amf_name: open5gs-amf0
+      amf_name: xcn-amf0
       time:
         t3512:
           value: 540
   smf.yaml: |
     logger:
       file:
-        path: /var/log/open5gs/smf.log
+        path: /var/log/xcn/smf.log
     global:
       max:
         ue: 1024
@@ -229,7 +229,7 @@ data:
   upf.yaml.tmpl: |
     logger:
       file:
-        path: /var/log/open5gs/upf.log
+        path: /var/log/xcn/upf.log
     global:
       max:
         ue: 1024
@@ -237,7 +237,7 @@ data:
       rate_stats:
         enabled: {{ if hasKey $upfRateStats "enabled" }}{{ get $upfRateStats "enabled" }}{{ else }}true{{ end }}
         interval_ms: {{ default 1000 (get $upfRateStats "intervalMs") }}
-        socket: {{ default "/run/open5gs/upf-stats.sock" (get $upfRateStats "socket") | quote }}
+        socket: {{ default "/run/xcn/upf-stats.sock" (get $upfRateStats "socket") | quote }}
       dataplane:
         io_packet_budget: {{ default 1024 .Values.networking.upf.dataplane.ioPacketBudget }}
         io_time_budget_us: {{ default 50 .Values.networking.upf.dataplane.ioTimeBudgetUs }}
@@ -365,7 +365,7 @@ data:
   ausf.yaml: |
     logger:
       file:
-        path: /var/log/open5gs/ausf.log
+        path: /var/log/xcn/ausf.log
     global:
       max:
         ue: 1024
@@ -381,7 +381,7 @@ data:
   udm.yaml: |
     logger:
       file:
-        path: /var/log/open5gs/udm.log
+        path: /var/log/xcn/udm.log
     global:
       max:
         ue: 1024
@@ -389,22 +389,22 @@ data:
       hnet:
         - id: 1
           scheme: 1
-          key: /etc/open5gs/hnet/curve25519-1.key
+          key: /etc/xcn/hnet/curve25519-1.key
         - id: 2
           scheme: 2
-          key: /etc/open5gs/hnet/secp256r1-2.key
+          key: /etc/xcn/hnet/secp256r1-2.key
         - id: 3
           scheme: 1
-          key: /etc/open5gs/hnet/curve25519-3.key
+          key: /etc/xcn/hnet/curve25519-3.key
         - id: 4
           scheme: 2
-          key: /etc/open5gs/hnet/secp256r1-4.key
+          key: /etc/xcn/hnet/secp256r1-4.key
         - id: 5
           scheme: 1
-          key: /etc/open5gs/hnet/curve25519-5.key
+          key: /etc/xcn/hnet/curve25519-5.key
         - id: 6
           scheme: 2
-          key: /etc/open5gs/hnet/secp256r1-6.key
+          key: /etc/xcn/hnet/secp256r1-6.key
       sbi:
         server:
           - address: 0.0.0.0
@@ -414,10 +414,10 @@ data:
           scp:
             - uri: {{ printf "http://%s:7777" (include "xcn.componentName" (dict "root" . "component" "scp")) | quote }}
   udr.yaml: |
-    db_uri: {{ printf "mongodb://%s/open5gs" (include "xcn.componentName" (dict "root" . "component" "mongodb")) | quote }}
+    db_uri: {{ printf "mongodb://%s/xcn" (include "xcn.componentName" (dict "root" . "component" "mongodb")) | quote }}
     logger:
       file:
-        path: /var/log/open5gs/udr.log
+        path: /var/log/xcn/udr.log
     global:
       max:
         ue: 1024
@@ -433,7 +433,7 @@ data:
   nssf.yaml: |
     logger:
       file:
-        path: /var/log/open5gs/nssf.log
+        path: /var/log/xcn/nssf.log
     global:
       max:
         ue: 1024
@@ -452,10 +452,10 @@ data:
                 sst: 1
                 sd: 010101
   pcf.yaml: |
-    db_uri: {{ printf "mongodb://%s/open5gs" (include "xcn.componentName" (dict "root" . "component" "mongodb")) | quote }}
+    db_uri: {{ printf "mongodb://%s/xcn" (include "xcn.componentName" (dict "root" . "component" "mongodb")) | quote }}
     logger:
       file:
-        path: /var/log/open5gs/pcf.log
+        path: /var/log/xcn/pcf.log
     global:
       max:
         ue: 1024
@@ -502,7 +502,7 @@ metadata:
     {{- include "xcn.labels" . | nindent 4 }}
 data:
   mongo-init.js: |
-    db = db.getSiblingDB('open5gs');
+    db = db.getSiblingDB('xcn');
     if (db.accounts.countDocuments({}) === 0 ) {
         db.accounts.insertOne({
             salt: 'f5c15fa72622d62b6b790aa8569b9339729801ab8bda5d13997b5db6bfc1d997',

@@ -1,0 +1,7 @@
+usr/bin/xcn-udmd
+configs/xcn/udm.yaml etc/xcn
+configs/xcn/tls/udm.key etc/xcn/tls
+configs/xcn/tls/udm.crt etc/xcn/tls
+configs/xcn/hnet/curve25519-*.key /etc/xcn/hnet
+configs/xcn/hnet/secp256r1-*.key /etc/xcn/hnet
+configs/systemd/xcn-udmd.service lib/systemd/system

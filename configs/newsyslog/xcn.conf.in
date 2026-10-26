@@ -1,0 +1,17 @@
+# truncate rails logs every day at midnight, keep 14 previous logs, compress previous logs
+#
+# logfilename                         [owner:group] mode count size  when  flags [/pid_file]        [sig_num]
+@localstatedir@/log/xcn/nrf.log               644  14    *     $D0   GZ    @localstatedir@/run/xcn-nrfd/pid`
+@localstatedir@/log/xcn/scp.log               644  14    *     $D0   GZ    @localstatedir@/run/xcn-scpd/pid`
+@localstatedir@/log/xcn/sepp.log               644  14    *     $D0   GZ    @localstatedir@/run/xcn-seppd/pid`
+@localstatedir@/log/xcn/pcrf.log               644  14    *     $D0   GZ    @localstatedir@/run/xcn-pcrfd/pid`
+@localstatedir@/log/xcn/hss.log               644  14    *     $D0   GZ    @localstatedir@/run/xcn-hssd/pid`
+@localstatedir@/log/xcn/ausf.log               644  14    *     $D0   GZ    @localstatedir@/run/xcn-ausfd/pid`
+@localstatedir@/log/xcn/udm.log               644  14    *     $D0   GZ    @localstatedir@/run/xcn-udmd/pid`
+@localstatedir@/log/xcn/udr.log               644  14    *     $D0   GZ    @localstatedir@/run/xcn-udrd/pid`
+@localstatedir@/log/xcn/upf.log               644  14    *     $D0   GZ    @localstatedir@/run/xcn-upfd/pid`
+@localstatedir@/log/xcn/sgwc.log               644  14    *     $D0   GZ    @localstatedir@/run/xcn-sgwcd/pid`
+@localstatedir@/log/xcn/sgwu.log               644  14    *     $D0   GZ    @localstatedir@/run/xcn-sgwud/pid`
+@localstatedir@/log/xcn/smf.log               644  14    *     $D0   GZ    @localstatedir@/run/xcn-smfd/pid`
+@localstatedir@/log/xcn/mme.log               644  14    *     $D0   GZ    @localstatedir@/run/xcn-mmed/pid`
+@localstatedir@/log/xcn/amf.log               644  14    *     $D0   GZ    @localstatedir@/run/xcn-amfd/pid`

@@ -1,12 +1,12 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: open5gs-config
+  name: xcn-config
 data:
   nrf.yaml: |
     logger:
       file:
-        path: /var/log/open5gs/nrf.log
+        path: /var/log/xcn/nrf.log
     global:
       max:
         ue: 1024
@@ -19,11 +19,11 @@ data:
         server:
           - address: 0.0.0.0
             port: 7777
-            advertise: open5gs-nrf
+            advertise: xcn-nrf
   scp.yaml: |
     logger:
       file:
-        path: /var/log/open5gs/scp.log
+        path: /var/log/xcn/scp.log
     global:
       max:
         ue: 1024
@@ -32,14 +32,14 @@ data:
         server:
           - address: 0.0.0.0
             port: 7778
-            advertise: open5gs-scp:7777
+            advertise: xcn-scp:7777
         client:
           nrf:
             - uri: http://127.0.0.1:7777
   amf.yaml.tmpl: |
     logger:
       file:
-        path: /var/log/open5gs/amf.log
+        path: /var/log/xcn/amf.log
     global:
       max:
         ue: 1024
@@ -48,10 +48,10 @@ data:
         server:
           - address: 0.0.0.0
             port: 7779
-            advertise: open5gs-amf:7777
+            advertise: xcn-amf:7777
         client:
           scp:
-            - uri: http://open5gs-scp:7777
+            - uri: http://xcn-scp:7777
       ngap:
         server:
           - address: __AMF_NGAP_SERVER_ADDRESS__
@@ -81,16 +81,16 @@ data:
         integrity_order: [ NIA2, NIA1, NIA0 ]
         ciphering_order: [ NEA0, NEA1, NEA2 ]
       network_name:
-        full: Open5GS
+        full: xcn
         short: Next
-      amf_name: open5gs-amf0
+      amf_name: xcn-amf0
       time:
         t3512:
           value: 540
   smf.yaml: |
     logger:
       file:
-        path: /var/log/open5gs/smf.log
+        path: /var/log/xcn/smf.log
     global:
       max:
         ue: 1024
@@ -99,10 +99,10 @@ data:
         server:
           - address: 0.0.0.0
             port: 7780
-            advertise: open5gs-smf:7777
+            advertise: xcn-smf:7777
         client:
           scp:
-            - uri: http://open5gs-scp:7777
+            - uri: http://xcn-scp:7777
       pfcp:
         server:
           - address: 0.0.0.0
@@ -137,7 +137,7 @@ data:
   upf.yaml.tmpl: |
     logger:
       file:
-        path: /var/log/open5gs/upf.log
+        path: /var/log/xcn/upf.log
     global:
       max:
         ue: 1024
@@ -145,7 +145,7 @@ data:
       pfcp:
         server:
           - address: 0.0.0.0
-            advertise: open5gs-upf
+            advertise: xcn-upf
       gtpu:
         server:
           - address: __UPF_GTPU_SERVER_ADDRESS__
@@ -162,7 +162,7 @@ data:
   ausf.yaml: |
     logger:
       file:
-        path: /var/log/open5gs/ausf.log
+        path: /var/log/xcn/ausf.log
     global:
       max:
         ue: 1024
@@ -171,14 +171,14 @@ data:
         server:
           - address: 0.0.0.0
             port: 7781
-            advertise: open5gs-ausf:7777
+            advertise: xcn-ausf:7777
         client:
           scp:
-            - uri: http://open5gs-scp:7777
+            - uri: http://xcn-scp:7777
   udm.yaml: |
     logger:
       file:
-        path: /var/log/open5gs/udm.log
+        path: /var/log/xcn/udm.log
     global:
       max:
         ue: 1024
@@ -186,35 +186,35 @@ data:
       hnet:
         - id: 1
           scheme: 1
-          key: /etc/open5gs/hnet/curve25519-1.key
+          key: /etc/xcn/hnet/curve25519-1.key
         - id: 2
           scheme: 2
-          key: /etc/open5gs/hnet/secp256r1-2.key
+          key: /etc/xcn/hnet/secp256r1-2.key
         - id: 3
           scheme: 1
-          key: /etc/open5gs/hnet/curve25519-3.key
+          key: /etc/xcn/hnet/curve25519-3.key
         - id: 4
           scheme: 2
-          key: /etc/open5gs/hnet/secp256r1-4.key
+          key: /etc/xcn/hnet/secp256r1-4.key
         - id: 5
           scheme: 1
-          key: /etc/open5gs/hnet/curve25519-5.key
+          key: /etc/xcn/hnet/curve25519-5.key
         - id: 6
           scheme: 2
-          key: /etc/open5gs/hnet/secp256r1-6.key
+          key: /etc/xcn/hnet/secp256r1-6.key
       sbi:
         server:
           - address: 0.0.0.0
             port: 7782
-            advertise: open5gs-udm:7777
+            advertise: xcn-udm:7777
         client:
           scp:
-            - uri: http://open5gs-scp:7777
+            - uri: http://xcn-scp:7777
   udr.yaml: |
-    db_uri: mongodb://open5gs-mongodb/open5gs
+    db_uri: mongodb://xcn-mongodb/xcn
     logger:
       file:
-        path: /var/log/open5gs/udr.log
+        path: /var/log/xcn/udr.log
     global:
       max:
         ue: 1024
@@ -223,14 +223,14 @@ data:
         server:
           - address: 0.0.0.0
             port: 7783
-            advertise: open5gs-udr:7777
+            advertise: xcn-udr:7777
         client:
           scp:
-            - uri: http://open5gs-scp:7777
+            - uri: http://xcn-scp:7777
   nssf.yaml: |
     logger:
       file:
-        path: /var/log/open5gs/nssf.log
+        path: /var/log/xcn/nssf.log
     global:
       max:
         ue: 1024
@@ -239,19 +239,19 @@ data:
         server:
           - address: 0.0.0.0
             port: 7784
-            advertise: open5gs-nssf:7777
+            advertise: xcn-nssf:7777
         client:
           scp:
-            - uri: http://open5gs-scp:7777
+            - uri: http://xcn-scp:7777
           nsi:
-            - uri: http://open5gs-nrf:7777
+            - uri: http://xcn-nrf:7777
               s_nssai:
                 sst: 1
   pcf.yaml: |
-    db_uri: mongodb://open5gs-mongodb/open5gs
+    db_uri: mongodb://xcn-mongodb/xcn
     logger:
       file:
-        path: /var/log/open5gs/pcf.log
+        path: /var/log/xcn/pcf.log
     global:
       max:
         ue: 1024
@@ -260,10 +260,10 @@ data:
         server:
           - address: 0.0.0.0
             port: 7785
-            advertise: open5gs-pcf:7777
+            advertise: xcn-pcf:7777
         client:
           scp:
-            - uri: http://open5gs-scp:7777
+            - uri: http://xcn-scp:7777
       metrics:
         server:
           - address: 0.0.0.0
@@ -272,7 +272,7 @@ data:
 apiVersion: v1
 kind: Secret
 metadata:
-  name: open5gs-udm-hnet
+  name: xcn-udm-hnet
 type: Opaque
 stringData:
   curve25519-1.key: |
@@ -318,10 +318,10 @@ stringData:
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: open5gs-mongo-init
+  name: xcn-mongo-init
 data:
   mongo-init.js: |
-    db = db.getSiblingDB('open5gs')
+    db = db.getSiblingDB('xcn')
     cursor = db.accounts.find()
     if (cursor.count() == 0) {
         db.accounts.insertOne({
@@ -336,9 +336,9 @@ data:
 apiVersion: v1
 kind: Secret
 metadata:
-  name: open5gs-webui-env
+  name: xcn-webui-env
 type: Opaque
 stringData:
   .env: |
-    SECRET_KEY=change-this-open5gs-webui-secret
-    JWT_SECRET_KEY=change-this-open5gs-webui-jwt-secret
+    SECRET_KEY=change-this-xcn-webui-secret
+    JWT_SECRET_KEY=change-this-xcn-webui-jwt-secret

@@ -1,6 +1,6 @@
 # Copyright (C) 2019-2023 by Sukchan Lee <acetcom@gmail.com>
 
-# This file is part of Open5GS.
+# This file is part of xcn.
 
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published by
@@ -15,7 +15,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-project('open5gs', 'c', 'cpp',
+project('xcn', 'c', 'cpp',
     version : '2.7.7',
     license : 'AGPL-3.0-or-later',
     meson_version : '>= 0.43.0',
@@ -33,7 +33,7 @@ libdir = join_paths(prefix, get_option('libdir'))
 sysconfdir = join_paths(prefix, get_option('sysconfdir'))
 localstatedir = join_paths(prefix, get_option('localstatedir'))
 
-open5gs_build_dir = meson.current_build_dir()
+xcn_build_dir = meson.current_build_dir()
 
 cc = meson.get_compiler('c')
 host_system = host_machine.system()
@@ -57,7 +57,7 @@ if clangtidy.found() != true
 endif
 
 meson.add_install_script(python3_exe, '-c',
-        mkdir_p.format(join_paths(localstatedir, 'log', 'open5gs', 'tls')))
+        mkdir_p.format(join_paths(localstatedir, 'log', 'xcn', 'tls')))
 
 # Compiler flags
 if cc.get_id() == 'gcc' or cc.get_id() == 'clang'

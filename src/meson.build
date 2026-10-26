@@ -1,6 +1,6 @@
 # Copyright (C) 2019 by Sukchan Lee <acetcom@gmail.com>
 
-# This file is part of Open5GS.
+# This file is part of xcn.
 
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published by
@@ -30,7 +30,7 @@ if git.found()
 endif
 
 version_conf = configuration_data()
-version_conf.set_quoted('OPEN5GS_VERSION', package_version)
+version_conf.set_quoted('XCN_VERSION', package_version)
 configure_file(output : 'version.h', configuration : version_conf)
 
 subdir('mme')

@@ -1,10 +1,10 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: open5gs-webui
+  name: xcn-webui
 spec:
   selector:
-    app: open5gs-webui
+    app: xcn-webui
   ports:
     - name: http
       port: 9999
@@ -14,31 +14,31 @@ spec:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: open5gs-webui
+  name: xcn-webui
 spec:
   strategy:
     type: Recreate
   replicas: 1
   selector:
     matchLabels:
-      app: open5gs-webui
+      app: xcn-webui
   template:
     metadata:
       labels:
-        app: open5gs-webui
+        app: xcn-webui
     spec:
       initContainers:
         - name: wait-for-mongodb
-          image: open5gs-runtime:latest
+          image: xcn-runtime:latest
           imagePullPolicy: IfNotPresent
-          command: ["/usr/local/bin/wait-for-tcp.sh", "open5gs-mongodb:27017"]
+          command: ["/usr/local/bin/wait-for-tcp.sh", "xcn-mongodb:27017"]
       containers:
         - name: webui
-          image: open5gs-webui:latest
+          image: xcn-webui:latest
           imagePullPolicy: IfNotPresent
           env:
             - name: DB_URI
-              value: mongodb://open5gs-mongodb/open5gs
+              value: mongodb://xcn-mongodb/xcn
             - name: HOST_IP
               valueFrom:
                 fieldRef:
@@ -46,12 +46,12 @@ spec:
             - name: WEBUI_HOSTNAME
               valueFrom:
                 configMapKeyRef:
-                  name: open5gs-runtime-config
+                  name: xcn-runtime-config
                   key: WEBUI_HOSTNAME
             - name: WEBUI_PORT
               valueFrom:
                 configMapKeyRef:
-                  name: open5gs-runtime-config
+                  name: xcn-runtime-config
                   key: WEBUI_PORT
           ports:
             - name: http
@@ -73,9 +73,9 @@ spec:
             periodSeconds: 10
           volumeMounts:
             - name: webui-env
-              mountPath: /usr/src/open5gs/webui/.env
+              mountPath: /usr/src/xcn/webui/.env
               subPath: .env
       volumes:
         - name: webui-env
           secret:
-            secretName: open5gs-webui-env
+            secretName: xcn-webui-env

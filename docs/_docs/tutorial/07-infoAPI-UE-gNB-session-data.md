@@ -1,10 +1,10 @@
 ---
-title: Open5GS JSON infoAPI for accessing UE, gNB/eNB, and session data
+title: xcn JSON infoAPI for accessing UE, gNB/eNB, and session data
 ---
 
 ## How it works
 
-Open5GS has a lightweight HTTP server (already used for `/metrics`) embedded in some NFs.  
+xcn has a lightweight HTTP server (already used for `/metrics`) embedded in some NFs.
 New optional JSON endpoints were added:
 
 | NF  | Endpoint | Content |
@@ -31,11 +31,11 @@ page in the range 0-n (0 is default),
 
 ## How to enable
 
-You need to build Open5GS from the latest `main` branch:
+You need to build xcn from the latest `main` branch:
 
 ```
-git clone https://github.com/open5gs/open5gs.git
-cd open5gsgit checkout mainmeson build --prefix=`pwd`/installninja -C build install
+git clone --branch open5gs-basev277-develop https://github.com/xiazhangtao1/open5gs.git xcn
+cd xcngit checkout mainmeson build --prefix=`pwd`/installninja -C build install
 ```
 
 ## How to use
@@ -45,7 +45,7 @@ cd open5gsgit checkout mainmeson build --prefix=`pwd`/installninja -C build inst
 contains session info as APN/DNN, IP addresses, slice info, QoS info, PDU/PDN_state and UE_activity status
 
 ```
-curl -s "http://127.0.0.4:9090/pdu-info" |jq . 
+curl -s "http://127.0.0.4:9090/pdu-info" |jq .
 ```
 
 ##### Example response
@@ -89,7 +89,7 @@ curl -s "http://127.0.0.4:9090/pdu-info" |jq .
 contains the UE_ID as SUPI, SUCI, PEI, GUTI, TMSI, GNB_ID to which the UE is connected, AMBR, slices ..
 
 ```
-curl -s "http://127.0.0.5:9090/ue-info" |jq . 
+curl -s "http://127.0.0.5:9090/ue-info" |jq .
 ```
 
 ##### Example response
@@ -177,7 +177,7 @@ curl -s "http://127.0.0.5:9090/ue-info" |jq .
 contains the ENB_ID to which the UE is connected
 
 ```
-curl -s "http://127.0.0.2:9090/ue-info?" |jq . 
+curl -s "http://127.0.0.2:9090/ue-info?" |jq .
 ```
 
 ##### Example response
@@ -238,7 +238,7 @@ curl -s "http://127.0.0.2:9090/ue-info?" |jq .
 contains gNB info and number of RRC connected UEs
 
 ```
-curl -s "http://127.0.0.5:9090/gnb-info?" |jq . 
+curl -s "http://127.0.0.5:9090/gnb-info?" |jq .
 ```
 
 ##### Example response
@@ -302,7 +302,7 @@ curl -s "http://127.0.0.5:9090/gnb-info?" |jq .
 contains eNB info and number of connected UEs
 
 ```
-curl -s "http://127.0.0.2:9090/enb-info?" |jq . 
+curl -s "http://127.0.0.2:9090/enb-info?" |jq .
 ```
 
 ##### Example response
@@ -346,7 +346,7 @@ Using a suitable filter in jq, the output can be simplified and adapted to the d
 AMF/ue-info sorted on supi ( page=-1 to avoid paging and show all UEs )
 
 ```
-./amf_ue_sort.sh 
+./amf_ue_sort.sh
 supi                  cm-state   gnb_id  dnn
 imsi-001010000056492  connected  100     internet
 imsi-231510000114763  connected  100     internet
@@ -385,7 +385,7 @@ curl -s "http://127.0.0.5:9090/ue-info?page=-1" \
 AMF/gnb-info
 
 ```
-./amf_gnb_sort.sh 
+./amf_gnb_sort.sh
 gnb_id  peer                     plmn   num_connected_ues
 100     [192.168.168.100]:60110  99970  1
 411     [192.168.168.99]:34349   99970  0
@@ -411,7 +411,7 @@ curl -s "http://127.0.0.5:9090/gnb-info" \
 MME/enb-info
 
 ```
-./mme_enb_sort.sh 
+./mme_enb_sort.sh
 enb_id  peer                     plmn   num_connected_ues
 264040  [192.168.168.254]:36412  99970  1
 ```
@@ -436,7 +436,7 @@ curl -s "http://127.0.0.2:9090/enb-info" \
 MME/ue-info
 
 ```
-./mme_ue_sort.sh 
+./mme_ue_sort.sh
 supi             cm-state   enb_id  apn
 001010000056492  connected  264040  internet
 999700000021632  connected  264040  internet
@@ -456,7 +456,7 @@ curl -s "http://127.0.0.2:9090/ue-info?page=-1" \
 SMF/pdu-info
 
 ```
-./smf_pdu_sort.sh 
+./smf_pdu_sort.sh
 supi                  ue_activity  dnn       ipv4/ipv6      pdu_state
 imsi-001010000056492  active       internet  10.45.0.59     active
 imsi-231510000114763  idle         internet  10.45.0.52     inactive

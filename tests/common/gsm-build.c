@@ -1,7 +1,7 @@
 /*
  * Copyright (C) 2019,2020 by Sukchan Lee <acetcom@gmail.com>
  *
- * This file is part of Open5GS.
+ * This file is part of xcn.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
@@ -150,7 +150,7 @@ ogs_pkbuf_t *testgsm_build_pdu_session_modification_request(
             OGS_NAS_5GS_PDU_SESSION_MODIFICATION_REQUEST_REQUESTED_QOS_RULES_PRESENT;
 
         memset(qos_rule, 0, sizeof(qos_rule));
-        qos_rule[0].identifier = qos_flow->qfi; /* Use QFI in Open5GS */
+        qos_rule[0].identifier = qos_flow->qfi; /* Use QFI in xcn */
         qos_rule[0].code = qos_rule_code;
 
         if (qos_rule_code ==

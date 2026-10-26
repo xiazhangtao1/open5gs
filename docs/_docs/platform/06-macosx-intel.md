@@ -44,7 +44,7 @@ $ mongod --config /usr/local/etc/mongod.conf
 ### Setting up network (No persistent after rebooting)
 ---
 
-Note that Open5GS uses built-in "utun" device driver. So, You don't have to install external TUN/TAP driver.
+Note that xcn uses built-in "utun" device driver. So, You don't have to install external TUN/TAP driver.
 {: .blue}
 
 Configure the loopback interface.
@@ -86,16 +86,16 @@ Enable IP forwarding & Masquerading
 ```bash
 $ sudo sysctl -w net.inet.ip.forwarding=1
 $ sudo sysctl -w net.inet6.ip6.forwarding=1
-$ sudo sh -c "echo 'nat on {en0} from 10.45.0.0/16 to any -> {en0}' > /etc/pf.anchors/org.open5gs"
-$ sudo sh -c "echo 'nat on {en0} from 2001:db8:cafe::1/48 to any -> {en0}' > /etc/pf.anchors/org.open5gs"
-$ sudo pfctl -e -f /etc/pf.anchors/org.open5gs
+$ sudo sh -c "echo 'nat on {en0} from 10.45.0.0/16 to any -> {en0}' > /etc/pf.anchors/org.xcn"
+$ sudo sh -c "echo 'nat on {en0} from 2001:db8:cafe::1/48 to any -> {en0}' > /etc/pf.anchors/org.xcn"
+$ sudo pfctl -e -f /etc/pf.anchors/org.xcn
 ```
 
-**Tip:** The script provided in [$GIT_REPO/misc/netconf.sh](https://github.com/{{ site.github_username }}/open5gs/blob/main/misc/netconf.sh) makes it easy to configure the TUN device as follows:
+**Tip:** The script provided in [$GIT_REPO/misc/netconf.sh](https://github.com/{{ site.github_username }}/{{ site.github_repository }}/blob/open5gs-basev277-develop/misc/netconf.sh) makes it easy to configure the TUN device as follows:
 `$ sudo ./misc/netconf.sh`
 {: .notice--info}
 
-### Building Open5GS
+### Building xcn
 ---
 
 Install the depedencies for building the source code.
@@ -122,13 +122,13 @@ $ brew install meson
 Git clone.
 
 ```bash
-$ git clone https://github.com/{{ site.github_username }}/open5gs
+$ git clone --branch open5gs-basev277-develop https://github.com/{{ site.github_username }}/{{ site.github_repository }}.git xcn
 ```
 
 To compile with meson:
 
 ```bash
-$ cd open5gs
+$ cd xcn
 $ meson build --prefix=`pwd`/install
 $ ninja -C build
 ```
@@ -164,10 +164,10 @@ $ cd ../
 ```
 
 
-### Building WebUI of Open5GS
+### Building WebUI of xcn
 ---
 
-[Node.js](https://nodejs.org/) is required to build WebUI of Open5GS
+[Node.js](https://nodejs.org/) is required to build WebUI of xcn
 
 ```bash
 $ brew install node

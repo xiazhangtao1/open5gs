@@ -1,7 +1,7 @@
 /*
  * Copyright (C) 2019-2025 by Sukchan Lee <acetcom@gmail.com>
  *
- * This file is part of Open5GS.
+ * This file is part of xcn.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
@@ -137,7 +137,7 @@ int smf_sbi_discover_and_send(
     /*
      * Use ogs_sbi_supi_in_vplmn() instead of ogs_sbi_plmn_id_in_vplmn().
      * This is because some vendors might not use the full DNN in LBO and
-     * Open5GS cannot derive the home PLMN ID without the full DNN.
+     * xcn cannot derive the home PLMN ID without the full DNN.
      *
      * TS29.502
      * 6.1 Nsmf_PDUSession Service API

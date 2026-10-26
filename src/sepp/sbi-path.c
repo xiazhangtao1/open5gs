@@ -1,7 +1,7 @@
 /*
  * Copyright (C) 2023-2024 by Sukchan Lee <acetcom@gmail.com>
  *
- * This file is part of Open5GS.
+ * This file is part of xcn.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
@@ -481,7 +481,7 @@ static void copy_request(
      *
      * To remove the followings,
      *   Scheme - https
-     *   Authority - sepp.open5gs.org
+     *   Authority - sepp.xcn.org
      */
     target->http.headers = ogs_hash_make();
     ogs_assert(target->http.headers);

@@ -1,0 +1,18 @@
+[Unit]
+Description=xcn NRF Daemon
+Wants=mongodb.service mongod.service
+
+[Service]
+Type=simple
+
+User=xcn
+Group=xcn
+
+Restart=always
+ExecStart=@bindir@/xcn-nrfd -c @sysconfdir@/xcn/nrf.yaml
+RestartSec=2
+RestartPreventExitStatus=1
+ExecReload=/bin/kill -HUP $MAINPID
+
+[Install]
+WantedBy=multi-user.target

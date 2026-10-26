@@ -1,7 +1,7 @@
 /*
  * Copyright (C) 2019-2023 by Sukchan Lee <acetcom@gmail.com>
  *
- * This file is part of Open5GS.
+ * This file is part of xcn.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
@@ -120,7 +120,7 @@ static int upf_context_prepare(void)
 
     upf_self()->rate_stats.enabled = true;
     upf_self()->rate_stats.interval_ms = 1000;
-    upf_self()->rate_stats.socket_path = "/run/open5gs/upf-stats.sock";
+    upf_self()->rate_stats.socket_path = "/run/xcn/upf-stats.sock";
 
     upf_self()->n3.socket_path = "/run/vpp/memif-n3.sock";
     upf_self()->n3.interface_id = 0;

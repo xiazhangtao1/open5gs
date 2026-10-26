@@ -1,6 +1,6 @@
 # Copyright (C) 2019 by Sukchan Lee <acetcom@gmail.com>
 
-# This file is part of Open5GS.
+# This file is part of xcn.
 
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published by
@@ -15,5 +15,5 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-file = 'open5gs.conf'
+file = 'xcn.conf'
 configure_file(input : file + '.in', output : file, configuration : conf_data)

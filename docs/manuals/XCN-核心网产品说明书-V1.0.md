@@ -2,11 +2,11 @@
 
 **纯软件部署说明｜V1.0（修订版）｜2026-10-23**
 
-适用版本：Open5GS 2.7.7，XCN Helm Chart 0.1.0。实际交付内容为相关容器镜像及 Helm Chart 包 `xcn.tgz`，部署参数以交付包中的配置为准，包版本可通过 `helm show chart ./xcn.tgz` 查看。
+适用版本：xcn 2.7.7，XCN Helm Chart 0.1.0。实际交付内容为相关容器镜像及 Helm Chart 包 `xcn.tgz`，部署参数以交付包中的配置为准，包版本可通过 `helm show chart ./xcn.tgz` 查看。
 
 ## 1. 软件概述
 
-XCN 是基于 Open5GS 的 5G SA 核心网软件，通过 Kubernetes 和 Helm 部署，提供用户注册与鉴权、PDU 会话管理、用户面转发、策略控制及订阅管理。gNB 通过 N2、N3 接入核心网，用户数据经 N6 进入数据网络（DN）。
+XCN 是基于 xcn 的 5G SA 核心网软件，通过 Kubernetes 和 Helm 部署，提供用户注册与鉴权、PDU 会话管理、用户面转发、策略控制及订阅管理。gNB 通过 N2、N3 接入核心网，用户数据经 N6 进入数据网络（DN）。
 
 ### 1.1 软件组成
 
@@ -341,7 +341,7 @@ kubectl -n xcn describe pod POD_NAME
 kubectl -n xcn get events --sort-by=.metadata.creationTimestamp
 kubectl -n xcn logs deploy/xcn-5gc -c smf --tail=100
 kubectl -n xcn exec deploy/xcn-5gc -c upf -- \
-  tail -n 100 /var/log/open5gs/amf.log
+  tail -n 100 /var/log/xcn/amf.log
 ```
 
 DPDK 的 VF 流量可能绕过 Linux 抓包路径，memif 模式还应结合 VPP 接口计数、错误、FIB 与邻居状态判断。
@@ -357,9 +357,9 @@ install -d -m 700 "$XCN_BACKUP_DIR"
 cp ./xcn.tgz "$XCN_BACKUP_DIR/xcn.tgz"
 helm get values xcn -n xcn --all > "$XCN_BACKUP_DIR/values.yaml"
 kubectl -n xcn exec statefulset/xcn-mongodb -- \
-  mongodump --db open5gs --archive --gzip \
-  > "$XCN_BACKUP_DIR/open5gs.archive.gz"
-test -s "$XCN_BACKUP_DIR/open5gs.archive.gz"
+  mongodump --db xcn --archive --gzip \
+  > "$XCN_BACKUP_DIR/xcn.archive.gz"
+test -s "$XCN_BACKUP_DIR/xcn.archive.gz"
 ```
 
 需要一致性备份时，先停止相关数据库写入。完成备份后导入新版交付镜像，并用新版 `xcn.tgz` 替换部署目录中的 Chart 包。在已保存的 values 基础上修改形成 `/tmp/xcn-approved-values.yaml`，保持现场密钥、地址、存储和用户面参数，按新版镜像更新 repository、tag，再执行：

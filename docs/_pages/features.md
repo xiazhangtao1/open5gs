@@ -5,7 +5,7 @@ subject: Features
 permalink: /features/
 ---
 
-Open5GS is a C-language Open Source implementation of 5GC and EPC, i.e. the core network of NR/LTE network.
+xcn is a C-language Open Source implementation of 5GC and EPC, i.e. the core network of NR/LTE network.
 
 #### Supported Features
 ---

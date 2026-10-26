@@ -4,9 +4,9 @@ title: Roaming
 
 ## 0. Introduction
 
-This document explains how to install and test 5G Core Roaming using Open5GS. Since roaming cannot be tested with UERANSIM, we use Open5GS's built-in test environment.
+This document explains how to install and test 5G Core Roaming using xcn. Since roaming cannot be tested with UERANSIM, we use xcn's built-in test environment.
 
-Open5GS supports both LBO (Local Breakout) and HR (Home Routed) roaming methods. The 5G roaming implementation follows the specifications outlined in the document below:
+xcn supports both LBO (Local Breakout) and HR (Home Routed) roaming methods. The 5G roaming implementation follows the specifications outlined in the document below:
 ```
 TS29.500
 6 General Functionalities in Service Based Architecture
@@ -22,8 +22,8 @@ This explanation assumes that you have already completed the UE connection test 
 
 Git clone, compile and install:
 ```
-$ git clone https://github.com/open5gs/open5gs
-$ cd open5gs
+$ git clone --branch open5gs-basev277-develop https://github.com/xiazhangtao1/open5gs.git xcn
+$ cd xcn
 $ meson build --prefix=`pwd`/install
 $ ninja -C build install
 ```
@@ -37,7 +37,7 @@ For routing to the Home PLMN, the NRF, AUSF, and UDM addresses in H-PLMN must us
 +++ /etc/hosts	2025-07-15 08:46:53.727356793 +0900
 @@ -1,6 +1,27 @@
  127.0.0.1	localhost
- 127.0.1.1	open5gs
+ 127.0.1.1	xcn
 
 +127.0.1.10	nrf.5gc.mnc070.mcc999.3gppnetwork.org
 +127.0.1.11	ausf.5gc.mnc070.mcc999.3gppnetwork.org
@@ -92,12 +92,12 @@ You can see the sample traffic for both roaming types:
 
 ## 2. Roaming Test on a Single Host
 
-Open5GS now supports both roaming architectures:
+xcn now supports both roaming architectures:
 
 1. **LBO (Local Breakout)**: User plane traffic is routed locally through the visited network's UPF
 2. **HR (Home Routed)**: User plane traffic is routed back to the home network's UPF through the visited network
 
-The choice between LBO and HR is determined by subscriber configuration and roaming agreements. In Open5GS WebUI, you can configure the roaming type for each subscriber session using the `lbo_roaming_allowed` parameter:
+The choice between LBO and HR is determined by subscriber configuration and roaming agreements. In xcn WebUI, you can configure the roaming type for each subscriber session using the `lbo_roaming_allowed` parameter:
 
 - **LBO Roaming**: Set `Subscriber.slice.session.lbo_roaming_allowed` to `true`
 - **HR Roaming**: Set `Subscriber.slice.session.lbo_roaming_allowed` to `false` or leave it unset (default behavior)
@@ -111,10 +111,10 @@ The NRF must include PLMN information when serving in a 5G roaming environment. 
 **Create h-nrf.yaml:**
 
 ```bash
-$ sh -c 'cat << EOF > ./install/etc/open5gs/h-nrf.yaml
+$ sh -c 'cat << EOF > ./install/etc/xcn/h-nrf.yaml
 logger:
   file:
-    path: /home/acetcom/Documents/git/open5gs/install/var/log/open5gs/h-nrf.log
+    path: /home/acetcom/Documents/git/xcn/install/var/log/xcn/h-nrf.log
 #  level: info   # fatal|error|warn|info(default)|debug|trace
 
 global:
@@ -138,10 +138,10 @@ The SCP acts as a communication proxy between different network functions, enabl
 **Create h-scp.yaml:**
 
 ```bash
-$ sh -c 'cat << EOF > ./install/etc/open5gs/h-scp.yaml
+$ sh -c 'cat << EOF > ./install/etc/xcn/h-scp.yaml
 logger:
   file:
-    path: /home/acetcom/Documents/git/open5gs/install/var/log/open5gs/h-scp.log
+    path: /home/acetcom/Documents/git/xcn/install/var/log/xcn/h-scp.log
 #  level: info   # fatal|error|warn|info(default)|debug|trace
 
 global:
@@ -165,9 +165,9 @@ AUSF handles authentication procedures for UE access. It must use FQDN in the Ho
 **Update ausf.yaml:**
 
 ```diff
-diff -u ./install/etc/open5gs/ausf.yaml.old ./install/etc/open5gs/ausf.yaml
---- ./install/etc/open5gs/ausf.yaml.old	2023-11-19 17:50:12.469116283 +0900
-+++ ./install/etc/open5gs/ausf.yaml	2023-11-19 17:52:35.201116202 +0900
+diff -u ./install/etc/xcn/ausf.yaml.old ./install/etc/xcn/ausf.yaml
+--- ./install/etc/xcn/ausf.yaml.old	2023-11-19 17:50:12.469116283 +0900
++++ ./install/etc/xcn/ausf.yaml	2023-11-19 17:52:35.201116202 +0900
 @@ -10,13 +10,12 @@
  ausf:
    sbi:
@@ -191,11 +191,11 @@ UDM handles user data management and subscription information. It must also use 
 **Update udm.yaml:**
 
 ```diff
-$ diff -u ./install/etc/open5gs/udm.yaml.old ./install/etc/open5gs/udm.yaml
---- ./install/etc/open5gs/udm.yaml.old	2023-11-19 17:50:17.713116280 +0900
-+++ ./install/etc/open5gs/udm.yaml	2023-11-19 17:52:40.701116199 +0900
+$ diff -u ./install/etc/xcn/udm.yaml.old ./install/etc/xcn/udm.yaml
+--- ./install/etc/xcn/udm.yaml.old	2023-11-19 17:50:17.713116280 +0900
++++ ./install/etc/xcn/udm.yaml	2023-11-19 17:52:40.701116199 +0900
 @@ -29,13 +29,12 @@
-       key: /home/acetcom/Documents/git/open5gs/install/etc/open5gs/hnet/secp256r1-6.key
+       key: /home/acetcom/Documents/git/xcn/install/etc/xcn/hnet/secp256r1-6.key
    sbi:
      server:
 -      - address: 127.0.0.12
@@ -217,9 +217,9 @@ UDR stores subscription data and user profiles. It needs updated SCP client conf
 **Update udr.yaml:**
 
 ```diff
-$ diff -u ./install/etc/open5gs/udr.yaml.old ./install/etc/open5gs/udr.yaml
---- ./install/etc/open5gs/udr.yaml.old	2023-11-19 18:00:27.049115935 +0900
-+++ ./install/etc/open5gs/udr.yaml	2023-11-19 18:00:31.713115932 +0900
+$ diff -u ./install/etc/xcn/udr.yaml.old ./install/etc/xcn/udr.yaml
+--- ./install/etc/xcn/udr.yaml.old	2023-11-19 18:00:27.049115935 +0900
++++ ./install/etc/xcn/udr.yaml	2023-11-19 18:00:31.713115932 +0900
 @@ -17,7 +17,7 @@
  #      nrf:
  #        - uri: http://127.0.0.10:7777
@@ -236,10 +236,10 @@ SMF manages PDU sessions and requires comprehensive configuration for data plane
 **Create h-smf.yaml:**
 
 ```bash
-$ sh -c 'cat << EOF > ./install/etc/open5gs/h-smf.yaml
+$ sh -c 'cat << EOF > ./install/etc/xcn/h-smf.yaml
 logger:
   file:
-    path: /home/acetcom/Documents/git/open5gs/install/var/log/open5gs/smf.log
+    path: /home/acetcom/Documents/git/xcn/install/var/log/xcn/smf.log
 #  level: info   # fatal|error|warn|info(default)|debug|trace
 
 global:
@@ -291,10 +291,10 @@ UPF handles user data forwarding and requires coordination with SMF. It manages 
 **Create h-upf.yaml:**
 
 ```bash
-$ sh -c 'cat << EOF > ./install/etc/open5gs/h-upf.yaml
+$ sh -c 'cat << EOF > ./install/etc/xcn/h-upf.yaml
 logger:
   file:
-    path: /home/acetcom/Documents/git/open5gs/install/var/log/open5gs/upf.log
+    path: /home/acetcom/Documents/git/xcn/install/var/log/xcn/upf.log
 #  level: info   # fatal|error|warn|info(default)|debug|trace
 
 global:
@@ -331,11 +331,11 @@ PCF provides policy control and charging rules for subscriber sessions. It deter
 **Create h-pcf.yaml:**
 
 ```bash
-$ sh -c 'cat << EOF > ./install/etc/open5gs/h-pcf.yaml
-db_uri: mongodb://localhost/open5gs
+$ sh -c 'cat << EOF > ./install/etc/xcn/h-pcf.yaml
+db_uri: mongodb://localhost/xcn
 logger:
   file:
-    path: /home/acetcom/Documents/git/open5gs/install/var/log/open5gs/pcf.log
+    path: /home/acetcom/Documents/git/xcn/install/var/log/xcn/pcf.log
 #  level: info   # fatal|error|warn|info(default)|debug|trace
 
 global:
@@ -365,10 +365,10 @@ BSF manages binding information for network functions. It maintains bindings bet
 **Create h-bsf.yaml:**
 
 ```bash
-$ sh -c 'cat << EOF > ./install/etc/open5gs/h-bsf.yaml
+$ sh -c 'cat << EOF > ./install/etc/xcn/h-bsf.yaml
 logger:
   file:
-    path: /home/acetcom/Documents/git/open5gs/install/var/log/open5gs/bsf.log
+    path: /home/acetcom/Documents/git/xcn/install/var/log/xcn/bsf.log
 #  level: info   # fatal|error|warn|info(default)|debug|trace
 
 global:
@@ -394,10 +394,10 @@ NSSF handles network slice selection and must use FQDN for proper slice identifi
 **Create h-nssf.yaml:**
 
 ```bash
-$ sh -c 'cat << EOF > ./install/etc/open5gs/h-nssf.yaml
+$ sh -c 'cat << EOF > ./install/etc/xcn/h-nssf.yaml
 logger:
   file:
-    path: /home/acetcom/Documents/git/open5gs/install/var/log/open5gs/nssf.log
+    path: /home/acetcom/Documents/git/xcn/install/var/log/xcn/nssf.log
 #  level: info   # fatal|error|warn|info(default)|debug|trace
 
 global:
@@ -427,9 +427,9 @@ SEPP handles security for inter-PLMN communication and requires SCP client updat
 **Update sepp1.yaml:**
 
 ```diff
-$ diff -u ./install/etc/open5gs/sepp1.yaml.old ./install/etc/open5gs/sepp1.yaml
---- ./install/etc/open5gs/sepp1.yaml.old	2023-11-19 19:11:02.293113538 +0900
-+++ ./install/etc/open5gs/sepp1.yaml	2023-11-19 19:11:22.429113526 +0900
+$ diff -u ./install/etc/xcn/sepp1.yaml.old ./install/etc/xcn/sepp1.yaml
+--- ./install/etc/xcn/sepp1.yaml.old	2023-11-19 19:11:02.293113538 +0900
++++ ./install/etc/xcn/sepp1.yaml	2023-11-19 19:11:22.429113526 +0900
 @@ -23,7 +23,7 @@
  #      nrf:
  #        - uri: http://127.0.0.10:7777
@@ -448,9 +448,9 @@ The visited network NRF must be configured with the visited PLMN ID and use appr
 **Update nrf.yaml:**
 
 ```diff
-$ diff -u ./install/etc/open5gs/nrf.yaml ./install.new/etc/open5gs/nrf.yaml
---- ./install/etc/open5gs/nrf.yaml	2025-07-18 21:57:51.244553083 +0900
-+++ ./install.new/etc/open5gs/nrf.yaml	2025-07-18 21:32:57.596880880 +0900
+$ diff -u ./install/etc/xcn/nrf.yaml ./install.new/etc/xcn/nrf.yaml
+--- ./install/etc/xcn/nrf.yaml	2025-07-18 21:57:51.244553083 +0900
++++ ./install.new/etc/xcn/nrf.yaml	2025-07-18 21:32:57.596880880 +0900
 @@ -11,12 +11,11 @@
  nrf:
    serving:  # 5G roaming requires PLMN in NRF
@@ -474,9 +474,9 @@ The visited network SCP must be updated to reference the visited network NRF for
 **Update scp.yaml:**
 
 ```diff
-$ diff -u ./install/etc/open5gs/scp.yaml ./install.new/etc/open5gs/scp.yaml
---- ./install/etc/open5gs/scp.yaml	2025-07-18 21:57:51.262552520 +0900
-+++ ./install.new/etc/open5gs/scp.yaml	2025-07-18 21:33:54.670492255 +0900
+$ diff -u ./install/etc/xcn/scp.yaml ./install.new/etc/xcn/scp.yaml
+--- ./install/etc/xcn/scp.yaml	2025-07-18 21:57:51.262552520 +0900
++++ ./install.new/etc/xcn/scp.yaml	2025-07-18 21:33:54.670492255 +0900
 @@ -15,7 +15,7 @@
          port: 7777
      client:
@@ -493,9 +493,9 @@ AMF handles access and mobility management for UEs. The visited network AMF must
 **Update amf.yaml:**
 
 ```diff
-$ diff -u ./install/etc/open5gs/amf.yaml ./install.new/etc/open5gs/amf.yaml
---- ./install/etc/open5gs/amf.yaml	2025-07-18 21:57:51.173555303 +0900
-+++ ./install.new/etc/open5gs/amf.yaml	2025-07-18 21:05:05.396288769 +0900
+$ diff -u ./install/etc/xcn/amf.yaml ./install.new/etc/xcn/amf.yaml
+--- ./install/etc/xcn/amf.yaml	2025-07-18 21:57:51.173555303 +0900
++++ ./install.new/etc/xcn/amf.yaml	2025-07-18 21:05:05.396288769 +0900
 @@ -20,27 +20,34 @@
          - uri: http://127.0.0.200:7777
    ngap:
@@ -544,9 +544,9 @@ The visited network SMF must use the visited PLMN FQDN for proper session manage
 **Update smf.yaml:**
 
 ```diff
-$ diff -u ./install/etc/open5gs/smf.yaml ./install.new/etc/open5gs/smf.yaml
---- ./install/etc/open5gs/smf.yaml	2025-07-18 21:57:51.154555897 +0900
-+++ ./install.new/etc/open5gs/smf.yaml	2025-07-18 21:28:29.423632460 +0900
+$ diff -u ./install/etc/xcn/smf.yaml ./install.new/etc/xcn/smf.yaml
+--- ./install/etc/xcn/smf.yaml	2025-07-18 21:57:51.154555897 +0900
++++ ./install.new/etc/xcn/smf.yaml	2025-07-18 21:28:29.423632460 +0900
 @@ -11,8 +11,7 @@
  smf:
    sbi:
@@ -565,10 +565,10 @@ Due to the absence of UDR in the visiting network, V-PCF uses locally configured
 **Update pcf.yaml:**
 
 ```diff
-$ diff --git a/configs/open5gs/pcf.yaml.in b/configs/open5gs/pcf.yaml.in
+$ diff --git a/configs/xcn/pcf.yaml.in b/configs/xcn/pcf.yaml.in
 index 4c5d103f9..d16e85728 100644
---- a/configs/open5gs/pcf.yaml.in
-+++ b/configs/open5gs/pcf.yaml.in
+--- a/configs/xcn/pcf.yaml.in
++++ b/configs/xcn/pcf.yaml.in
 @@ -23,6 +23,84 @@ pcf:
      server:
        - address: 127.0.0.13
@@ -661,9 +661,9 @@ The visited network BSF requires updated addresses to align with the visited net
 **Update bsf.yaml:**
 
 ```diff
-$ diff -u ./install/etc/open5gs/bsf.yaml ./install.new/etc/open5gs/bsf.yaml
---- ./install/etc/open5gs/bsf.yaml	2025-12-23 15:08:00.929141999 +0900
-+++ ./install.new/etc/open5gs/bsf.yaml	2025-12-23 15:08:31.540143864 +0900
+$ diff -u ./install/etc/xcn/bsf.yaml ./install.new/etc/xcn/bsf.yaml
+--- ./install/etc/xcn/bsf.yaml	2025-12-23 15:08:00.929141999 +0900
++++ ./install.new/etc/xcn/bsf.yaml	2025-12-23 15:08:31.540143864 +0900
 @@ -11,7 +11,7 @@
  bsf:
    sbi:
@@ -679,9 +679,9 @@ The visited network NSSF must use the visited PLMN FQDN and reference the approp
 **Update nssf.yaml:**
 
 ```diff
-diff -u ./install/etc/open5gs/nssf.yaml ./install.new/etc/open5gs/nssf.yaml
---- ./install/etc/open5gs/nssf.yaml	2025-07-18 21:57:51.387548612 +0900
-+++ ./install.new/etc/open5gs/nssf.yaml	2025-07-18 21:21:33.415221920 +0900
+diff -u ./install/etc/xcn/nssf.yaml ./install.new/etc/xcn/nssf.yaml
+--- ./install/etc/xcn/nssf.yaml	2025-07-18 21:57:51.387548612 +0900
++++ ./install.new/etc/xcn/nssf.yaml	2025-07-18 21:21:33.415221920 +0900
 @@ -11,15 +11,14 @@
  nssf:
    sbi:
@@ -709,30 +709,30 @@ diff -u ./install/etc/open5gs/nssf.yaml ./install.new/etc/open5gs/nssf.yaml
 5G Core requires root privileges as it uses reserved ports such as http(80) or https(443).
 
 ```
-$ sudo ./install/bin/open5gs-nrfd -c ./install/etc/open5gs/h-nrf.yaml
-$ ./install/bin/open5gs-scpd -c ./install/etc/open5gs/h-scp.yaml
-$ sudo ./install/bin/open5gs-ausfd
-$ sudo ./install/bin/open5gs-udmd
-$ ./install/bin/open5gs-udrd
-$ sudo ./install/bin/open5gs-smfd -c ./install/etc/open5gs/h-smf.yaml
-$ ./install/bin/open5gs-upfd -c ./install/etc/open5gs/h-upf.yaml
-$ ./install/bin/open5gs-pcfd -c ./install/etc/open5gs/h-pcf.yaml
-$ ./install/bin/open5gs-bsfd -c ./install/etc/open5gs/h-bsf.yaml
-$ sudo ./install/bin/open5gs-nssfd -c ./install/etc/open5gs/h-nssf.yaml
-$ ./install/bin/open5gs-seppd -c ./install/etc/open5gs/sepp1.yaml
+$ sudo ./install/bin/xcn-nrfd -c ./install/etc/xcn/h-nrf.yaml
+$ ./install/bin/xcn-scpd -c ./install/etc/xcn/h-scp.yaml
+$ sudo ./install/bin/xcn-ausfd
+$ sudo ./install/bin/xcn-udmd
+$ ./install/bin/xcn-udrd
+$ sudo ./install/bin/xcn-smfd -c ./install/etc/xcn/h-smf.yaml
+$ ./install/bin/xcn-upfd -c ./install/etc/xcn/h-upf.yaml
+$ ./install/bin/xcn-pcfd -c ./install/etc/xcn/h-pcf.yaml
+$ ./install/bin/xcn-bsfd -c ./install/etc/xcn/h-bsf.yaml
+$ sudo ./install/bin/xcn-nssfd -c ./install/etc/xcn/h-nssf.yaml
+$ ./install/bin/xcn-seppd -c ./install/etc/xcn/sepp1.yaml
 ```
 
 #### Visited Network
 ```
-$ sudo ./install/bin/open5gs-nrfd
-$ ./install/bin/open5gs-scpd
-$ ./install/bin/open5gs-amfd
-$ sudo ./install/bin/open5gs-smfd
-$ ./install/bin/open5gs-upfd
-$ ./install/bin/open5gs-pcfd
-$ ./install/bin/open5gs-bsfd
-$ sudo ./install/bin/open5gs-nssfd
-$ ./install/bin/open5gs-seppd -c ./install/etc/open5gs/sepp2.yaml
+$ sudo ./install/bin/xcn-nrfd
+$ ./install/bin/xcn-scpd
+$ ./install/bin/xcn-amfd
+$ sudo ./install/bin/xcn-smfd
+$ ./install/bin/xcn-upfd
+$ ./install/bin/xcn-pcfd
+$ ./install/bin/xcn-bsfd
+$ sudo ./install/bin/xcn-nssfd
+$ ./install/bin/xcn-seppd -c ./install/etc/xcn/sepp2.yaml
 ```
 
 ### Performs a test of UE access while roaming subscribed to H-PLMN.
@@ -790,7 +790,7 @@ $ diff -u hosts.old hosts.new
 +++ hosts.new	2025-07-19 07:02:51.019489167 +0900
 @@ -1,6 +1,13 @@
  127.0.0.1	localhost
- 127.0.1.1	open5gs
+ 127.0.1.1	xcn
 
 +127.0.1.10	nrf.5gc.mnc070.mcc999.3gppnetwork.org
 +127.0.1.11	ausf.5gc.mnc070.mcc999.3gppnetwork.org
@@ -809,10 +809,10 @@ NRF shall follow TS23.003(28.3.2.3.2 Format of NRF FQDN) for routing.
 - Update nrf.yaml
 
 ```diff
-$ diff --git a/configs/open5gs/nrf.yaml.in b/configs/open5gs/nrf.yaml.in
+$ diff --git a/configs/xcn/nrf.yaml.in b/configs/xcn/nrf.yaml.in
 index 3996b2bd9..e57f286b7 100644
---- a/configs/open5gs/nrf.yaml.in
-+++ b/configs/open5gs/nrf.yaml.in
+--- a/configs/xcn/nrf.yaml.in
++++ b/configs/xcn/nrf.yaml.in
 @@ -13,8 +13,7 @@ nrf:
            mnc: 70
      sbi:
@@ -828,10 +828,10 @@ index 3996b2bd9..e57f286b7 100644
 - Update scp.yaml
 
 ```diff
-$ diff --git a/configs/open5gs/scp.yaml.in b/configs/open5gs/scp.yaml.in
+$ diff --git a/configs/xcn/scp.yaml.in b/configs/xcn/scp.yaml.in
 index 9be6cdc93..eee7d3e3f 100644
---- a/configs/open5gs/scp.yaml.in
-+++ b/configs/open5gs/scp.yaml.in
+--- a/configs/xcn/scp.yaml.in
++++ b/configs/xcn/scp.yaml.in
 @@ -13,7 +13,7 @@ scp:
            port: 7777
        client:
@@ -846,10 +846,10 @@ index 9be6cdc93..eee7d3e3f 100644
 - Update nssf.yaml
 
 ```diff
-$ diff --git a/configs/open5gs/nssf.yaml.in b/configs/open5gs/nssf.yaml.in
+$ diff --git a/configs/xcn/nssf.yaml.in b/configs/xcn/nssf.yaml.in
 index 015085f56..92ceb63b5 100644
---- a/configs/open5gs/nssf.yaml.in
-+++ b/configs/open5gs/nssf.yaml.in
+--- a/configs/xcn/nssf.yaml.in
++++ b/configs/xcn/nssf.yaml.in
 @@ -11,15 +11,14 @@ global:
  nssf:
    sbi:
@@ -875,10 +875,10 @@ AUSF, UDM and SMF shall use FQDN in the Home PLMN.
 - Update ausf.yaml
 
 ```diff
-$ diff --git a/configs/open5gs/ausf.yaml.in b/configs/open5gs/ausf.yaml.in
+$ diff --git a/configs/xcn/ausf.yaml.in b/configs/xcn/ausf.yaml.in
 index cd272cd3f..3e1cb67eb 100644
---- a/configs/open5gs/ausf.yaml.in
-+++ b/configs/open5gs/ausf.yaml.in
+--- a/configs/xcn/ausf.yaml.in
++++ b/configs/xcn/ausf.yaml.in
 @@ -9,8 +9,7 @@ max:
  ausf:
      sbi:
@@ -894,12 +894,12 @@ index cd272cd3f..3e1cb67eb 100644
 - Update udm.yaml
 
 ```diff
-$ diff --git a/configs/open5gs/udm.yaml.in b/configs/open5gs/udm.yaml.in
+$ diff --git a/configs/xcn/udm.yaml.in b/configs/xcn/udm.yaml.in
 index ce650d5c2..ed756fc28 100644
---- a/configs/open5gs/udm.yaml.in
-+++ b/configs/open5gs/udm.yaml.in
+--- a/configs/xcn/udm.yaml.in
++++ b/configs/xcn/udm.yaml.in
 @@ -28,8 +28,7 @@ udm:
-         key: @sysconfdir@/open5gs/hnet/secp256r1-6.key
+         key: @sysconfdir@/xcn/hnet/secp256r1-6.key
      sbi:
        server:
 -        - address: 127.0.0.12
@@ -912,10 +912,10 @@ index ce650d5c2..ed756fc28 100644
 
 - Update smf.yaml
 ```diff
-$ diff --git a/configs/open5gs/smf.yaml.in b/configs/open5gs/smf.yaml.in
+$ diff --git a/configs/xcn/smf.yaml.in b/configs/xcn/smf.yaml.in
 index e47752393..b6cee9ff8 100644
---- a/configs/open5gs/smf.yaml.in
-+++ b/configs/open5gs/smf.yaml.in
+--- a/configs/xcn/smf.yaml.in
++++ b/configs/xcn/smf.yaml.in
 @@ -11,8 +11,7 @@ global:
  smf:
    sbi:
@@ -934,10 +934,10 @@ AMF and UPF must use external IP addresses such as 10.10.1.x for communication b
 - Update amf.yaml
 
 ```diff
-$ diff --git a/configs/open5gs/amf.yaml.in b/configs/open5gs/amf.yaml.in
+$ diff --git a/configs/xcn/amf.yaml.in b/configs/xcn/amf.yaml.in
 index 938917e32..11a19c808 100644
---- a/configs/open5gs/amf.yaml.in
-+++ b/configs/open5gs/amf.yaml.in
+--- a/configs/xcn/amf.yaml.in
++++ b/configs/xcn/amf.yaml.in
 @@ -18,11 +18,21 @@ amf:
            - uri: http://127.0.0.200:7777
      ngap:
@@ -966,10 +966,10 @@ index 938917e32..11a19c808 100644
 - Update upf.yaml
 
 ```diff
-$ diff --git a/configs/open5gs/upf.yaml.in b/configs/open5gs/upf.yaml.in
+$ diff --git a/configs/xcn/upf.yaml.in b/configs/xcn/upf.yaml.in
 index e78b018f1..3032a06c6 100644
---- a/configs/open5gs/upf.yaml.in
-+++ b/configs/open5gs/upf.yaml.in
+--- a/configs/xcn/upf.yaml.in
++++ b/configs/xcn/upf.yaml.in
 @@ -15,7 +15,7 @@ upf:
  #          - address: 127.0.0.4
      gtpu:
@@ -986,10 +986,10 @@ Due to the absence of UDR in the visiting network, V-PCF uses locally configured
 - Update pcf.yaml
 
 ```diff
-$ diff --git a/configs/open5gs/pcf.yaml.in b/configs/open5gs/pcf.yaml.in
+$ diff --git a/configs/xcn/pcf.yaml.in b/configs/xcn/pcf.yaml.in
 index 4c5d103f9..c1526ff3a 100644
---- a/configs/open5gs/pcf.yaml.in
-+++ b/configs/open5gs/pcf.yaml.in
+--- a/configs/xcn/pcf.yaml.in
++++ b/configs/xcn/pcf.yaml.in
 @@ -23,6 +23,85 @@ pcf:
      server:
        - address: 127.0.0.13
@@ -1083,10 +1083,10 @@ For now we will set up SEPP without using TLS.
 - Create sepp.yaml
 
 ```bash
-$ sh -c 'cat << EOF > ./install/etc/open5gs/sepp.yaml
+$ sh -c 'cat << EOF > ./install/etc/xcn/sepp.yaml
 logger:
     file:
-      path: /home/acetcom/Documents/git/open5gs/install/var/log/open5gs/sepp.log
+      path: /home/acetcom/Documents/git/xcn/install/var/log/xcn/sepp.log
 #    level: info   # fatal|error|warn|info(default)|debug|trace
 
 max:
@@ -1127,18 +1127,18 @@ NFs requires root privileges as it uses reserved ports such as http (80) or http
 - Run NFs in VM1
 
 ```bash
-$ sudo ./install/bin/open5gs-nrfd
-$ sudo ./install/bin/open5gs-scpd
-$ sudo ./install/bin/open5gs-seppd
-$ sudo ./install/bin/open5gs-amfd
-$ sudo ./install/bin/open5gs-smfd
-$ sudo ./install/bin/open5gs-upfd
-$ sudo ./install/bin/open5gs-ausfd
-$ sudo ./install/bin/open5gs-udmd
-$ sudo ./install/bin/open5gs-pcfd
-$ sudo ./install/bin/open5gs-nssfd
-$ sudo ./install/bin/open5gs-bsfd
-$ sudo ./install/bin/open5gs-udrd
+$ sudo ./install/bin/xcn-nrfd
+$ sudo ./install/bin/xcn-scpd
+$ sudo ./install/bin/xcn-seppd
+$ sudo ./install/bin/xcn-amfd
+$ sudo ./install/bin/xcn-smfd
+$ sudo ./install/bin/xcn-upfd
+$ sudo ./install/bin/xcn-ausfd
+$ sudo ./install/bin/xcn-udmd
+$ sudo ./install/bin/xcn-pcfd
+$ sudo ./install/bin/xcn-nssfd
+$ sudo ./install/bin/xcn-bsfd
+$ sudo ./install/bin/xcn-udrd
 ```
 
 
@@ -1152,7 +1152,7 @@ $ diff -u hosts.old hosts.new
 +++ hosts.new	2025-07-19 07:03:40.466147375 +0900
 @@ -1,6 +1,13 @@
  127.0.0.1	localhost
- 127.0.1.1	open5gs
+ 127.0.1.1	xcn
 
 +127.0.2.10	nrf.5gc.mnc001.mcc001.3gppnetwork.org
 +127.0.2.11	ausf.5gc.mnc001.mcc001.3gppnetwork.org
@@ -1171,10 +1171,10 @@ NRF shall follow TS23.003(28.3.2.3.2 Format of NRF FQDN) for routing.
 - Update nrf.yaml
 
 ```diff
-$ diff --git a/configs/open5gs/nrf.yaml.in b/configs/open5gs/nrf.yaml.in
+$ diff --git a/configs/xcn/nrf.yaml.in b/configs/xcn/nrf.yaml.in
 index 3996b2bd9..ab708abd8 100644
---- a/configs/open5gs/nrf.yaml.in
-+++ b/configs/open5gs/nrf.yaml.in
+--- a/configs/xcn/nrf.yaml.in
++++ b/configs/xcn/nrf.yaml.in
 @@ -9,12 +9,11 @@ max:
  nrf:
      serving:  # 5G roaming requires PLMN in NRF
@@ -1196,10 +1196,10 @@ index 3996b2bd9..ab708abd8 100644
 - Update scp.yaml
 
 ```diff
-$ diff --git a/configs/open5gs/scp.yaml.in b/configs/open5gs/scp.yaml.in
+$ diff --git a/configs/xcn/scp.yaml.in b/configs/xcn/scp.yaml.in
 index 9be6cdc93..eee7d3e3f 100644
---- a/configs/open5gs/scp.yaml.in
-+++ b/configs/open5gs/scp.yaml.in
+--- a/configs/xcn/scp.yaml.in
++++ b/configs/xcn/scp.yaml.in
 @@ -13,7 +13,7 @@ scp:
            port: 7777
        client:
@@ -1214,10 +1214,10 @@ index 9be6cdc93..eee7d3e3f 100644
 - Update nssf.yaml
 
 ```diff
-$ diff --git a/configs/open5gs/nssf.yaml.in b/configs/open5gs/nssf.yaml.in
+$ diff --git a/configs/xcn/nssf.yaml.in b/configs/xcn/nssf.yaml.in
 index 015085f56..92ceb63b5 100644
---- a/configs/open5gs/nssf.yaml.in
-+++ b/configs/open5gs/nssf.yaml.in
+--- a/configs/xcn/nssf.yaml.in
++++ b/configs/xcn/nssf.yaml.in
 @@ -11,15 +11,14 @@ global:
  nssf:
    sbi:
@@ -1243,10 +1243,10 @@ AUSF, UDM and SMF shall use FQDN in the Home PLMN.
 - Update ausf.yaml
 
 ```diff
-$ diff --git a/configs/open5gs/ausf.yaml.in b/configs/open5gs/ausf.yaml.in
+$ diff --git a/configs/xcn/ausf.yaml.in b/configs/xcn/ausf.yaml.in
 index cd272cd3f..3e1cb67eb 100644
---- a/configs/open5gs/ausf.yaml.in
-+++ b/configs/open5gs/ausf.yaml.in
+--- a/configs/xcn/ausf.yaml.in
++++ b/configs/xcn/ausf.yaml.in
 @@ -9,8 +9,7 @@ max:
  ausf:
      sbi:
@@ -1262,12 +1262,12 @@ index cd272cd3f..3e1cb67eb 100644
 - Update udm.yaml
 
 ```diff
-$ diff --git a/configs/open5gs/udm.yaml.in b/configs/open5gs/udm.yaml.in
+$ diff --git a/configs/xcn/udm.yaml.in b/configs/xcn/udm.yaml.in
 index ce650d5c2..ed756fc28 100644
---- a/configs/open5gs/udm.yaml.in
-+++ b/configs/open5gs/udm.yaml.in
+--- a/configs/xcn/udm.yaml.in
++++ b/configs/xcn/udm.yaml.in
 @@ -28,8 +28,7 @@ udm:
-         key: @sysconfdir@/open5gs/hnet/secp256r1-6.key
+         key: @sysconfdir@/xcn/hnet/secp256r1-6.key
      sbi:
        server:
 -        - address: 127.0.0.12
@@ -1280,10 +1280,10 @@ index ce650d5c2..ed756fc28 100644
 
 - Update smf.yaml
 ```diff
-$ diff --git a/configs/open5gs/smf.yaml.in b/configs/open5gs/smf.yaml.in
+$ diff --git a/configs/xcn/smf.yaml.in b/configs/xcn/smf.yaml.in
 index e47752393..b6cee9ff8 100644
---- a/configs/open5gs/smf.yaml.in
-+++ b/configs/open5gs/smf.yaml.in
+--- a/configs/xcn/smf.yaml.in
++++ b/configs/xcn/smf.yaml.in
 @@ -11,8 +11,7 @@ global:
  smf:
    sbi:
@@ -1302,10 +1302,10 @@ AMF and UPF must use external IP addresses such as 10.10.2.x for communication b
 - Update amf.yaml
 
 ```diff
-$ diff --git a/configs/open5gs/amf.yaml.in b/configs/open5gs/amf.yaml.in
+$ diff --git a/configs/xcn/amf.yaml.in b/configs/xcn/amf.yaml.in
 index 938917e32..2f7822b46 100644
---- a/configs/open5gs/amf.yaml.in
-+++ b/configs/open5gs/amf.yaml.in
+--- a/configs/xcn/amf.yaml.in
++++ b/configs/xcn/amf.yaml.in
 @@ -18,27 +18,37 @@ amf:
            - uri: http://127.0.0.200:7777
      ngap:
@@ -1355,10 +1355,10 @@ index 938917e32..2f7822b46 100644
 - Update upf.yaml
 
 ```diff
-$ diff --git a/configs/open5gs/upf.yaml.in b/configs/open5gs/upf.yaml.in
+$ diff --git a/configs/xcn/upf.yaml.in b/configs/xcn/upf.yaml.in
 index e78b018f1..3032a06c6 100644
---- a/configs/open5gs/upf.yaml.in
-+++ b/configs/open5gs/upf.yaml.in
+--- a/configs/xcn/upf.yaml.in
++++ b/configs/xcn/upf.yaml.in
 @@ -15,7 +15,7 @@ upf:
  #          - address: 127.0.0.4
      gtpu:
@@ -1375,10 +1375,10 @@ Due to the absence of UDR in the visiting network, V-PCF uses locally configured
 - Update pcf.yaml
 
 ```diff
-$ diff --git a/configs/open5gs/pcf.yaml.in b/configs/open5gs/pcf.yaml.in
+$ diff --git a/configs/xcn/pcf.yaml.in b/configs/xcn/pcf.yaml.in
 index 4c5d103f9..c1526ff3a 100644
---- a/configs/open5gs/pcf.yaml.in
-+++ b/configs/open5gs/pcf.yaml.in
+--- a/configs/xcn/pcf.yaml.in
++++ b/configs/xcn/pcf.yaml.in
 @@ -23,6 +23,85 @@ pcf:
      server:
        - address: 127.0.0.13
@@ -1472,10 +1472,10 @@ For now we will set up SEPP without using TLS.
 - Create sepp.yaml
 
 ```bash
-$ sh -c 'cat << EOF > ./install/etc/open5gs/sepp.yaml
+$ sh -c 'cat << EOF > ./install/etc/xcn/sepp.yaml
 logger:
     file:
-      path: /home/acetcom/Documents/git/open5gs/install/var/log/open5gs/sepp.log
+      path: /home/acetcom/Documents/git/xcn/install/var/log/xcn/sepp.log
 #    level: info   # fatal|error|warn|info(default)|debug|trace
 
 max:
@@ -1516,18 +1516,18 @@ NFs requires root privileges as it uses reserved ports such as http (80) or http
 - Run NFs in VM2
 
 ```bash
-$ sudo ./install/bin/open5gs-nrfd
-$ sudo ./install/bin/open5gs-scpd
-$ sudo ./install/bin/open5gs-seppd
-$ sudo ./install/bin/open5gs-amfd
-$ sudo ./install/bin/open5gs-smfd
-$ sudo ./install/bin/open5gs-upfd
-$ sudo ./install/bin/open5gs-ausfd
-$ sudo ./install/bin/open5gs-udmd
-$ sudo ./install/bin/open5gs-pcfd
-$ sudo ./install/bin/open5gs-nssfd
-$ sudo ./install/bin/open5gs-bsfd
-$ sudo ./install/bin/open5gs-udrd
+$ sudo ./install/bin/xcn-nrfd
+$ sudo ./install/bin/xcn-scpd
+$ sudo ./install/bin/xcn-seppd
+$ sudo ./install/bin/xcn-amfd
+$ sudo ./install/bin/xcn-smfd
+$ sudo ./install/bin/xcn-upfd
+$ sudo ./install/bin/xcn-ausfd
+$ sudo ./install/bin/xcn-udmd
+$ sudo ./install/bin/xcn-pcfd
+$ sudo ./install/bin/xcn-nssfd
+$ sudo ./install/bin/xcn-bsfd
+$ sudo ./install/bin/xcn-udrd
 ```
 
 
@@ -1541,7 +1541,7 @@ $ sudo ./install/bin/open5gs-udrd
 +++ hosts.new	2025-07-19 07:04:14.598284689 +0900
 @@ -1,6 +1,13 @@
  127.0.0.1	localhost
- 127.0.1.1	open5gs
+ 127.0.1.1	xcn
 
 +127.0.3.10	nrf.5gc.mnc010.mcc315.3gppnetwork.org
 +127.0.3.11	ausf.5gc.mnc010.mcc315.3gppnetwork.org
@@ -1560,10 +1560,10 @@ NRF shall follow TS23.003(28.3.2.3.2 Format of NRF FQDN) for routing.
 - Update nrf.yaml
 
 ```diff
-$ diff --git a/configs/open5gs/nrf.yaml.in b/configs/open5gs/nrf.yaml.in
+$ diff --git a/configs/xcn/nrf.yaml.in b/configs/xcn/nrf.yaml.in
 index 3996b2bd9..ab708abd8 100644
---- a/configs/open5gs/nrf.yaml.in
-+++ b/configs/open5gs/nrf.yaml.in
+--- a/configs/xcn/nrf.yaml.in
++++ b/configs/xcn/nrf.yaml.in
 @@ -9,12 +9,11 @@ max:
  nrf:
      serving:  # 5G roaming requires PLMN in NRF
@@ -1585,10 +1585,10 @@ index 3996b2bd9..ab708abd8 100644
 - Update scp.yaml
 
 ```diff
-$ diff --git a/configs/open5gs/scp.yaml.in b/configs/open5gs/scp.yaml.in
+$ diff --git a/configs/xcn/scp.yaml.in b/configs/xcn/scp.yaml.in
 index 9be6cdc93..eee7d3e3f 100644
---- a/configs/open5gs/scp.yaml.in
-+++ b/configs/open5gs/scp.yaml.in
+--- a/configs/xcn/scp.yaml.in
++++ b/configs/xcn/scp.yaml.in
 @@ -13,7 +13,7 @@ scp:
            port: 7777
        client:
@@ -1603,10 +1603,10 @@ index 9be6cdc93..eee7d3e3f 100644
 - Update nssf.yaml
 
 ```diff
-$ diff --git a/configs/open5gs/nssf.yaml.in b/configs/open5gs/nssf.yaml.in
+$ diff --git a/configs/xcn/nssf.yaml.in b/configs/xcn/nssf.yaml.in
 index 015085f56..92ceb63b5 100644
---- a/configs/open5gs/nssf.yaml.in
-+++ b/configs/open5gs/nssf.yaml.in
+--- a/configs/xcn/nssf.yaml.in
++++ b/configs/xcn/nssf.yaml.in
 @@ -11,15 +11,14 @@ global:
  nssf:
    sbi:
@@ -1632,10 +1632,10 @@ AUSF, UDM and SMF shall use FQDN in the Home PLMN.
 - Update ausf.yaml
 
 ```diff
-$ diff --git a/configs/open5gs/ausf.yaml.in b/configs/open5gs/ausf.yaml.in
+$ diff --git a/configs/xcn/ausf.yaml.in b/configs/xcn/ausf.yaml.in
 index cd272cd3f..3e1cb67eb 100644
---- a/configs/open5gs/ausf.yaml.in
-+++ b/configs/open5gs/ausf.yaml.in
+--- a/configs/xcn/ausf.yaml.in
++++ b/configs/xcn/ausf.yaml.in
 @@ -9,8 +9,7 @@ max:
  ausf:
      sbi:
@@ -1651,12 +1651,12 @@ index cd272cd3f..3e1cb67eb 100644
 - Update udm.yaml
 
 ```diff
-$ diff --git a/configs/open5gs/udm.yaml.in b/configs/open5gs/udm.yaml.in
+$ diff --git a/configs/xcn/udm.yaml.in b/configs/xcn/udm.yaml.in
 index ce650d5c2..ed756fc28 100644
---- a/configs/open5gs/udm.yaml.in
-+++ b/configs/open5gs/udm.yaml.in
+--- a/configs/xcn/udm.yaml.in
++++ b/configs/xcn/udm.yaml.in
 @@ -28,8 +28,7 @@ udm:
-         key: @sysconfdir@/open5gs/hnet/secp256r1-6.key
+         key: @sysconfdir@/xcn/hnet/secp256r1-6.key
      sbi:
        server:
 -        - address: 127.0.0.12
@@ -1669,10 +1669,10 @@ index ce650d5c2..ed756fc28 100644
 
 - Update smf.yaml
 ```diff
-$ diff --git a/configs/open5gs/smf.yaml.in b/configs/open5gs/smf.yaml.in
+$ diff --git a/configs/xcn/smf.yaml.in b/configs/xcn/smf.yaml.in
 index e47752393..b6cee9ff8 100644
---- a/configs/open5gs/smf.yaml.in
-+++ b/configs/open5gs/smf.yaml.in
+--- a/configs/xcn/smf.yaml.in
++++ b/configs/xcn/smf.yaml.in
 @@ -11,8 +11,7 @@ global:
  smf:
    sbi:
@@ -1690,10 +1690,10 @@ AMF and UPF must use external IP addresses such as 10.10.3.x for communication b
 - Update amf.yaml
 
 ```diff
-$ diff --git a/configs/open5gs/amf.yaml.in b/configs/open5gs/amf.yaml.in
+$ diff --git a/configs/xcn/amf.yaml.in b/configs/xcn/amf.yaml.in
 index 938917e32..383489d13 100644
---- a/configs/open5gs/amf.yaml.in
-+++ b/configs/open5gs/amf.yaml.in
+--- a/configs/xcn/amf.yaml.in
++++ b/configs/xcn/amf.yaml.in
 @@ -18,27 +18,37 @@ amf:
            - uri: http://127.0.0.200:7777
      ngap:
@@ -1743,10 +1743,10 @@ index 938917e32..383489d13 100644
 - Update upf.yaml
 
 ```diff
-$ diff --git a/configs/open5gs/upf.yaml.in b/configs/open5gs/upf.yaml.in
+$ diff --git a/configs/xcn/upf.yaml.in b/configs/xcn/upf.yaml.in
 index e78b018f1..3032a06c6 100644
---- a/configs/open5gs/upf.yaml.in
-+++ b/configs/open5gs/upf.yaml.in
+--- a/configs/xcn/upf.yaml.in
++++ b/configs/xcn/upf.yaml.in
 @@ -15,7 +15,7 @@ upf:
  #          - address: 127.0.0.4
      gtpu:
@@ -1763,10 +1763,10 @@ Due to the absence of UDR in the visiting network, V-PCF uses locally configured
 - Update pcf.yaml
 
 ```diff
-$ diff --git a/configs/open5gs/pcf.yaml.in b/configs/open5gs/pcf.yaml.in
+$ diff --git a/configs/xcn/pcf.yaml.in b/configs/xcn/pcf.yaml.in
 index 4c5d103f9..c1526ff3a 100644
---- a/configs/open5gs/pcf.yaml.in
-+++ b/configs/open5gs/pcf.yaml.in
+--- a/configs/xcn/pcf.yaml.in
++++ b/configs/xcn/pcf.yaml.in
 @@ -23,6 +23,85 @@ pcf:
      server:
        - address: 127.0.0.13
@@ -1860,18 +1860,18 @@ NFs requires root privileges as it uses reserved ports such as http (80) or http
 - Run NFs in VM3
 
 ```bash
-$ sudo ./install/bin/open5gs-nrfd
-$ sudo ./install/bin/open5gs-scpd
-$ sudo ./install/bin/open5gs-seppd
-$ sudo ./install/bin/open5gs-amfd
-$ sudo ./install/bin/open5gs-smfd
-$ sudo ./install/bin/open5gs-upfd
-$ sudo ./install/bin/open5gs-ausfd
-$ sudo ./install/bin/open5gs-udmd
-$ sudo ./install/bin/open5gs-pcfd
-$ sudo ./install/bin/open5gs-nssfd
-$ sudo ./install/bin/open5gs-bsfd
-$ sudo ./install/bin/open5gs-udrd
+$ sudo ./install/bin/xcn-nrfd
+$ sudo ./install/bin/xcn-scpd
+$ sudo ./install/bin/xcn-seppd
+$ sudo ./install/bin/xcn-amfd
+$ sudo ./install/bin/xcn-smfd
+$ sudo ./install/bin/xcn-upfd
+$ sudo ./install/bin/xcn-ausfd
+$ sudo ./install/bin/xcn-udmd
+$ sudo ./install/bin/xcn-pcfd
+$ sudo ./install/bin/xcn-nssfd
+$ sudo ./install/bin/xcn-bsfd
+$ sudo ./install/bin/xcn-udrd
 ```
 
 ## 3. Setting SEPP on VM1 to HTTPS scheme with TLS
@@ -1889,10 +1889,10 @@ $ diff -u sepp.yaml.old sepp.yaml
 +    default:
 +      tls:
 +        server:
-+          private_key: /home/acetcom/Documents/git/my/open5gs/build/configs/open5gs/tls/sepp1.key
-+          cert: /home/acetcom/Documents/git/my/open5gs/build/configs/open5gs/tls/sepp1.crt
++          private_key: /home/acetcom/Documents/git/my/xcn/build/configs/xcn/tls/sepp1.key
++          cert: /home/acetcom/Documents/git/my/xcn/build/configs/xcn/tls/sepp1.crt
 +        client:
-+          cacert: /home/acetcom/Documents/git/my/open5gs/build/configs/open5gs/tls/ca.crt
++          cacert: /home/acetcom/Documents/git/my/xcn/build/configs/xcn/tls/ca.crt
      sbi:
        server:
          - address: 127.0.0.250
@@ -1935,14 +1935,14 @@ $ diff -u sepp.yaml.old sepp.yaml
 +++ sepp.yaml	2023-10-02 18:45:48.884662145 +0900
 @@ -12,8 +12,12 @@
          server:
-           private_key: /home/acetcom/Documents/git/my/open5gs/build/configs/open5gs/tls/sepp1.key
-           cert: /home/acetcom/Documents/git/my/open5gs/build/configs/open5gs/tls/sepp1.crt
+           private_key: /home/acetcom/Documents/git/my/xcn/build/configs/xcn/tls/sepp1.key
+           cert: /home/acetcom/Documents/git/my/xcn/build/configs/xcn/tls/sepp1.crt
 +          verify_client: true
-+          verify_client_cacert: /home/acetcom/Documents/git/my/open5gs/build/configs/open5gs/tls/ca.crt
++          verify_client_cacert: /home/acetcom/Documents/git/my/xcn/build/configs/xcn/tls/ca.crt
          client:
-           cacert: /home/acetcom/Documents/git/my/open5gs/build/configs/open5gs/tls/ca.crt
-+          client_private_key: /home/acetcom/Documents/git/my/open5gs/build/configs/open5gs/tls/sepp1.key
-+          client_cert: /home/acetcom/Documents/git/my/open5gs/build/configs/open5gs/tls/sepp1.crt
+           cacert: /home/acetcom/Documents/git/my/xcn/build/configs/xcn/tls/ca.crt
++          client_private_key: /home/acetcom/Documents/git/my/xcn/build/configs/xcn/tls/sepp1.key
++          client_cert: /home/acetcom/Documents/git/my/xcn/build/configs/xcn/tls/sepp1.crt
      sbi:
        server:
          - address: 127.0.0.250

@@ -1,11 +1,11 @@
 ---
-title: eNodeBs / gNodeBs tested on Open5GS
+title: eNodeBs / gNodeBs tested on xcn
 head_inline: "<style> .blue { color: blue; } .bold { font-weight: bold; } </style>"
 ---
 
-This page lists Radio hardware that has been tested by members of the Open5GS community,
+This page lists Radio hardware that has been tested by members of the xcn community,
 
-If you have tested radio hardware from a vendor not listed with Open5GS, please add it to this page [by creating a PR on GitHub.](https://github.com/open5gs/open5gs)
+If you have tested radio hardware from a vendor not listed with xcn, please add it to this page [by creating a PR on GitHub.](https://github.com/open5gs/open5gs)
 
 ### Commercial 5G
 ---

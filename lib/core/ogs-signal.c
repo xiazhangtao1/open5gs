@@ -17,7 +17,7 @@
 /*
  * Copyright (C) 2019-2025 by Sukchan Lee <acetcom@gmail.com>
  *
- * This file is part of Open5GS.
+ * This file is part of xcn.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -281,7 +281,7 @@ static void remove_sync_sigs(sigset_t *sig_mask)
 /*
  * SIGPIPE can occur if write() is called when the peer connection is closed.
  *
- * Therefore, Open5GS ignore SIGPIE signal
+ * Therefore, xcn ignore SIGPIE signal
  *
  * See also #2411 and #2312
  */

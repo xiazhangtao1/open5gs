@@ -54,7 +54,7 @@ N2 测试包含直连/间接、仅 DL、仅 UL、双向、多会话、32 DRB 边
 另一个隔离命名空间中仅启动 UPF，执行标准 PFCP 故障测试：
 
 ```bash
-build/src/upf/open5gs-upfd -c /tmp/forwarding-sample.yaml
+build/src/upf/xcn-upfd -c /tmp/forwarding-sample.yaml
 XCN_FORWARDING_ISOLATED=1 python3 tests/handover/pfcp-forwarding-fault-test.py
 ```
 

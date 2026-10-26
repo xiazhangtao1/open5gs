@@ -1,7 +1,7 @@
 /*
  * Copyright (C) 2019-2024 by Sukchan Lee <acetcom@gmail.com>
  *
- * This file is part of Open5GS.
+ * This file is part of xcn.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
@@ -1182,7 +1182,7 @@ bool nrf_nnrf_handle_nf_discover(
 
             /*
              * NRFs in Home PLMN are categorized into those with and without
-             * hnrf-uri. Since Open5GS includes hnrf-uri in the Discovery
+             * hnrf-uri. Since xcn includes hnrf-uri in the Discovery
              * message, NRFs must be differentiated based on the presence or
              * absence of hnrf-uri, so the following match routine is used.
              */

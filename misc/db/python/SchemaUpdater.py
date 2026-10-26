@@ -1,5 +1,5 @@
-#Open5GS MongoDB Schema Update Script
-#Updates existing subscribers configured prior to the database change to the new format to work with more recent version of Open5GS
+#xcn MongoDB Schema Update Script
+#Updates existing subscribers configured prior to the database change to the new format to work with more recent version of xcn
 #Additional functionlality like PCC rules, static assignment etc, not tested. If it's not listed below it's probably not migrated by this script.
 #Written by @nickvsnetworking 30/03/2021
 
@@ -104,6 +104,6 @@ def _create_session_from_pdn(pdn):
 
 if __name__ == "__main__":
     myclient = pymongo.MongoClient("mongodb://localhost:27017/")
-    mydb = myclient["open5gs"]
+    mydb = myclient["xcn"]
 
     migrate_all_subscribers(mycol=mydb["subscribers"])

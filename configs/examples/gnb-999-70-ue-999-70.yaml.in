@@ -1,4 +1,4 @@
-db_uri: mongodb://localhost/open5gs
+db_uri: mongodb://localhost/xcn
 
 logger:
 
@@ -78,7 +78,7 @@ mme:
       ciphering_order : [ EEA0, EEA1, EEA2 ]
 
   network_name:
-      full: Open5GS
+      full: xcn
 
 sgwc:
   gtpc:
@@ -181,8 +181,8 @@ amf:
       integrity_order : [ NIA2, NIA1, NIA0 ]
       ciphering_order : [ NEA0, NEA1, NEA2 ]
   network_name:
-      full: Open5GS
-  amf_name: open5gs-amf0
+      full: xcn
+  amf_name: xcn-amf0
 
 sgwu:
   pfcp:
@@ -274,10 +274,10 @@ udm:
   hnet:
     - id: 1
       scheme: 1
-      key: @build_configs_dir@/open5gs/hnet/curve25519-1.key
+      key: @build_configs_dir@/xcn/hnet/curve25519-1.key
     - id: 2
       scheme: 2
-      key: @build_configs_dir@/open5gs/hnet/secp256r1-2.key
+      key: @build_configs_dir@/xcn/hnet/secp256r1-2.key
   sbi:
     server:
       - address: 127.0.0.12

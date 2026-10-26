@@ -1,6 +1,6 @@
 
 * Install python-docx
-user@host ~/Documents/git/open5gs/lib/pfcp/support$ \
+user@host ~/Documents/git/xcn/lib/pfcp/support$ \
     sudo pip3 install python-docx
 
 * Change the format of standard specification 
@@ -14,5 +14,5 @@ user@host ~/Documents/git/open5gs/lib/pfcp/support$ \
 * Add User Plane IP Resource Information to 29244-h71-modified.docx
 
 * Generate TLV support files
-user@host ~/Documents/git/open5gs/lib/pfcp/support$ \
+user@host ~/Documents/git/xcn/lib/pfcp/support$ \
     python3 pfcp-tlv.py -f 29244-h71-modified.docx -o ..

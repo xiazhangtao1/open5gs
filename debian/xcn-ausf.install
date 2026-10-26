@@ -1,0 +1,5 @@
+usr/bin/xcn-ausfd
+configs/xcn/ausf.yaml etc/xcn
+configs/xcn/tls/ausf.key etc/xcn/tls
+configs/xcn/tls/ausf.crt etc/xcn/tls
+configs/systemd/xcn-ausfd.service lib/systemd/system

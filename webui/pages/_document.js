@@ -11,13 +11,13 @@ export default class MyDocument extends Document {
     return (
       <html lang="zh-CN">
         <Head>
-          <title>Open5GS</title>
+          <title>xcn</title>
 
           <meta charSet="utf-8" />
           <meta httpEquiv="X-UA-Compatible" content="IE=edge,chrome=1" />
           <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-          <meta name="author" content="Open5GS" />
+          <meta name="author" content="xcn" />
           <meta name="description" content={description} />
 
           <link rel='icon' href='/static/favicon.ico'/>

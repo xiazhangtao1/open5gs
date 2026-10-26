@@ -1,7 +1,7 @@
 /*
  * Copyright (C) 2019-2025 by Sukchan Lee <acetcom@gmail.com>
  *
- * This file is part of Open5GS.
+ * This file is part of xcn.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
@@ -66,7 +66,7 @@ ogs_nas_5gmm_cause_t gmm_handle_registration_request(amf_ue_t *amf_ue,
      * TS33.501
      * Ch 6.4.6. Protection of initial NAS message
      *
-     * If non-cleartext IEs is received, Open5GS will send Registration reject.
+     * If non-cleartext IEs is received, xcn will send Registration reject.
      *
      * Step 1: The UE shall send the initial NAS message to the AMF.
      * If the UE has no NAS security context, the initial NAS message
@@ -1084,7 +1084,7 @@ ogs_nas_5gmm_cause_t gmm_handle_security_mode_complete(amf_ue_t *amf_ue,
      * Ch 6.4.6. Protection of initial NAS message
      *
      * UE should send NAS Container in Security mode complete message.
-     * Otherwise, Open5GS will send Registration reject message.
+     * Otherwise, xcn will send Registration reject message.
      *
      * Step 4: The UE shall send the NAS Security Mode Complete message
      * to the network in response to a NAS Security Mode Command message.

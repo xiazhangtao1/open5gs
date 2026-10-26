@@ -2,12 +2,12 @@
 title: Quickstart
 ---
 
-## 1. Introduction to Open5GS
+## 1. Introduction to xcn
 ---
 
-Welcome! If you want to set up your first Open5GS core you have come to the right place. Before we get started, we'll spend a moment to understand the basic architecture of the software.
+Welcome! If you want to set up your first xcn core you have come to the right place. Before we get started, we'll spend a moment to understand the basic architecture of the software.
 
-**TL;DR:** Open5GS contains a series of software components and network functions that implement the 4G/ 5G NSA and 5G SA core functions. If you know what each of these do already and how they interface with each other, skip to section 2.
+**TL;DR:** xcn contains a series of software components and network functions that implement the 4G/ 5G NSA and 5G SA core functions. If you know what each of these do already and how they interface with each other, skip to section 2.
 {: .notice--info}
 
 <style>
@@ -17,33 +17,33 @@ Welcome! If you want to set up your first Open5GS core you have come to the righ
   }
 </style>
 
-![Open5GS Diagram]({{ site.url }}{{ site.baseurl }}/assets/images/Open5GS_CUPS-01.jpg)
+![xcn Diagram]({{ site.url }}{{ site.baseurl }}/assets/images/xcn_CUPS-01.jpg)
 
-[[Higher quality PDF diagram available HERE]]({{ site.url }}{{ site.baseurl }}/assets/images/Open5GS_CUPS-01.pdf)
+[[Higher quality PDF diagram available HERE]]({{ site.url }}{{ site.baseurl }}/assets/images/xcn_CUPS-01.pdf)
 
 #### 4G/ 5G NSA Core
 
-The Open5GS 4G/ 5G NSA Core contains the following components:
+The xcn 4G/ 5G NSA Core contains the following components:
 * MME - Mobility Management Entity
 * HSS - Home Subscriber Server
 * PCRF - Policy and Charging Rules Function
 * SGWC - Serving Gateway Control Plane
 * SGWU - Serving Gateway User Plane
-* PGWC/SMF - Packet Gateway Control Plane / (component contained in Open5GS SMF)
-* PGWU/UPF - Packet Gateway User Plane / (component contained in Open5GS UPF)
+* PGWC/SMF - Packet Gateway Control Plane / (component contained in xcn SMF)
+* PGWU/UPF - Packet Gateway User Plane / (component contained in xcn UPF)
 
-The core has two main planes: the control plane and the user plane. These are physically separated in Open5GS as CUPS (control/ user plane separation) is implemented.
+The core has two main planes: the control plane and the user plane. These are physically separated in xcn as CUPS (control/ user plane separation) is implemented.
 
 The MME is the main **control plane** hub of the core. It primarily manages sessions, mobility, paging and bearers. It links to the HSS, which generates SIM authentication vectors and holds the subscriber profile; and also to the SGWC and PGWC/SMF, which are the control planes of the gateway servers. All the eNBs in the mobile network (4G basestations) connect to the MME. The final element of the control plane is the PCRF, which sits in-between the PGWC/SMF and the HSS, and handles charging and enforces subscriber policies.
 
 The **user plane** carries user data packets between the eNB/ NSA gNB (5G NSA basestations) and the external WAN. The two user plane core components are the SGWU and PGWU/UPF. Each of these connect back to their control plane counterparts. eNBs/ NSA gNBs connect to the SGWU, which connects to the PGWU/UPF, and on to the WAN.  *By having the control and user planes physically separated like this, it means you can deploy multiple user plane servers in the field (eg somewhere with a high speed Internet connection), whilst keeping control functionality centralised. This enables support of MEC use cases, for example.*
 
-All of these Open5GS components have config files. Each config file contains the component's IP bind addresses/ local Interface names **and** the IP addresses/ DNS names of the other components it needs to connect to. We'll come back to this in Section 3.
+All of these xcn components have config files. Each config file contains the component's IP bind addresses/ local Interface names **and** the IP addresses/ DNS names of the other components it needs to connect to. We'll come back to this in Section 3.
 
 
 #### 5G SA Core
 
-The Open5GS 5G SA Core contains the following functions:
+The xcn 5G SA Core contains the following functions:
 * NRF - NF Repository Function
 * SCP - Service Communication Proxy
 * SEPP - Security Edge Protection Proxy
@@ -64,127 +64,25 @@ The 5G SA core **user plane** is much simpler, as it only contains a single func
 With the exception of the SMF and UPF, all config files for the 5G SA core functions only contain the function's IP bind addresses/ local Interface names and the IP address/ DNS name of the NRF.
 
 
-## 2. Install Open5GS with a Package Manager
+## 2. Install xcn
+
+Build this checkout using the [source build guide]({{ site.baseurl }}/docs/guide/02-building-xcn-from-sources/), or deploy the repository's [Helm chart](https://github.com/xiazhangtao1/open5gs/tree/open5gs-basev277-develop/helm/xcn).
+
+For locally built Debian packages, install the package set from its output directory:
+
+```bash
+sudo apt install ./xcn-*.deb ./xcn_*.deb
+```
+
+Upstream package feeds distribute Open5GS packages. They do not provide this checkout's renamed xcn programs or configurations. For existing installations, first read the [migration guide](https://github.com/xiazhangtao1/open5gs/blob/open5gs-basev277-develop/docs/xcn-migration.md).
+
+## 3. Install the  WebUI of xcn
 ---
 
-**Note:** Package managers can be used to install Open5GS in *Debian/Ubuntu and openSUSE* environments (for major and minor builds). *CentOS, Fedora, and Mac OSX* require you to [build with source code]({{ site.url }}{{ site.baseurl }}/docs/guide/02-building-open5gs-from-sources).
-{: .notice--warning}
-**Note:** Nighly builds are offered by [Osmocom](https://osmocom.org) on [OBS](https://obs.osmocom.org/package/show/osmocom:nightly/open5gs). Scroll down to use a nightly build package.
-{: .notice--warning}
-
-#### Getting MongoDB
----
-
-Import the public key used by the package management system.
-
-```bash
-$ sudo apt update
-$ sudo apt install gnupg
-$ curl -fsSL https://pgp.mongodb.com/server-8.0.asc | sudo gpg -o /usr/share/keyrings/mongodb-server-8.0.gpg --dearmor
-```
-
-Create the list file /etc/apt/sources.list.d/mongodb-org-8.0.list for your version of Ubuntu.
-
-On ubuntu 22.04 (Jammy)
-```bash
-$ echo "deb [ arch=amd64,arm64 signed-by=/usr/share/keyrings/mongodb-server-8.0.gpg] https://repo.mongodb.org/apt/ubuntu jammy/mongodb-org/8.0 multiverse" | sudo tee /etc/apt/sources.list.d/mongodb-org-8.0.list
-```
-
-Install the MongoDB packages.
-```bash
-$ sudo apt update
-$ sudo apt install -y mongodb-org
-$ sudo systemctl start mongod (if '/usr/bin/mongod' is not running)
-$ sudo systemctl enable mongod (ensure to automatically start it on system boot)
-```
-
-#### Ubuntu
-
-*Ubuntu* makes it easy to install Open5GS as shown below.
-
-```bash
-$ sudo add-apt-repository ppa:open5gs/latest
-$ sudo apt update
-$ sudo apt install open5gs
-```
-
-#### Debian
-
-The Open5GS packages for Debian are available on [OBS](https://build.opensuse.org/project/show/home:acetcom:open5gs). If you want to use the latest Debian version like *Debian* 10(Buster), you need to install MongoDB first.
+The WebUI allows you to interactively edit subscriber data. While it is not essential to use this, it makes things easier when you are just starting out on your xcn adventure. (A [command line tool](https://github.com/{{ site.github_username }}/{{ site.github_repository }}/blob/open5gs-basev277-develop/misc/db/xcn-dbctl) is available for advanced users).
 
 
-```bash
-$ sudo apt update
-$ wget -qO - https://build.opensuse.org/projects/home:acetcom/signing_keys/download\?kind\=gpg | sudo apt-key add -
-$ sudo sh -c "echo 'deb http://download.opensuse.org/repositories/home:/acetcom:/open5gs:/latest/Debian_10/ ./' > /etc/apt/sources.list.d/open5gs.list"
-$ sudo apt update
-$ sudo apt install open5gs
-```
-
-Other distributions can be installed by changing the path.
-
-```
-https://download.opensuse.org/repositories/home:/acetcom:/open5gs:/latest/Debian_10/
-https://download.opensuse.org/repositories/home:/acetcom:/open5gs:/latest/Debian_11/
-https://download.opensuse.org/repositories/home:/acetcom:/open5gs:/latest/Debian_Testing/
-https://download.opensuse.org/repositories/home:/acetcom:/open5gs:/latest/Debian_Unstable/
-https://download.opensuse.org/repositories/home:/acetcom:/open5gs:/latest/Raspbian_10/
-https://download.opensuse.org/repositories/home:/acetcom:/open5gs:/latest/Raspbian_11/
-https://download.opensuse.org/repositories/home:/acetcom:/open5gs:/latest/xUbuntu_18.04/
-https://download.opensuse.org/repositories/home:/acetcom:/open5gs:/latest/xUbuntu_20.04/
-https://download.opensuse.org/repositories/home:/acetcom:/open5gs:/latest/xUbuntu_20.10/
-https://download.opensuse.org/repositories/home:/acetcom:/open5gs:/latest/xUbuntu_21.04/
-https://download.opensuse.org/repositories/home:/acetcom:/open5gs:/latest/xUbuntu_21.10/
-https://download.opensuse.org/repositories/home:/acetcom:/open5gs:/latest/xUbuntu_22.04/
-```
-
-#### Nightly Builds
-
-Nightly bulit package are provided by [Osmocom](https://osmocom.org) on [OBS](https://obs.osmocom.org/package/show/osmocom:nightly/open5gs). On *Ubuntu 20.04* you can install it like this:
-
-```bash
-$ sudo apt update
-$ sudo apt install wget gnupg
-$ wget -qO - https://obs.osmocom.org/projects/osmocom/public_key | sudo apt-key add -
-$ sudo sh -c "echo 'deb https://downloads.osmocom.org/packages/osmocom:/nightly/xUbuntu_20.04/ ./' > /etc/apt/sources.list.d/open5gs.list"
-$ sudo apt update
-$ sudo apt install open5gs
-```
-
-Other distributions can be installed by changing the path.
-
-```
-https://downloads.osmocom.org/packages/osmocom:/nightly/Debian_10/
-https://downloads.osmocom.org/packages/osmocom:/nightly/Debian_11/
-https://downloads.osmocom.org/packages/osmocom:/nightly/Debian_Testing/
-https://downloads.osmocom.org/packages/osmocom:/nightly/Debian_Unstable/
-https://downloads.osmocom.org/packages/osmocom:/nightly/Raspbian_10/
-https://downloads.osmocom.org/packages/osmocom:/nightly/Raspbian_11/
-https://downloads.osmocom.org/packages/osmocom:/nightly/xUbuntu_18.04/
-https://downloads.osmocom.org/packages/osmocom:/nightly/xUbuntu_20.04/
-https://downloads.osmocom.org/packages/osmocom:/nightly/xUbuntu_20.10/
-https://downloads.osmocom.org/packages/osmocom:/nightly/xUbuntu_21.04/
-https://downloads.osmocom.org/packages/osmocom:/nightly/xUbuntu_21.10/
-https://downloads.osmocom.org/packages/osmocom:/nightly/xUbuntu_22.04/
-```
-
-#### openSUSE
-
-[Martin Hauke](https://build.opensuse.org/user/show/mnhauke) packaged Open5GS for *openSUSE* on [OBS](https://build.opensuse.org/package/show/home:mnhauke:open5gs/open5gs).
-
-```bash
-$ sudo zypper addrepo -f obs://home:mnhauke:open5gs home:mnhauke:open5gs
-$ sudo zypper install mongodb-server mongodb-shell
-$ sudo zypper install open5gs
-```
-
-## 3. Install the  WebUI of Open5GS
----
-
-The WebUI allows you to interactively edit subscriber data. While it is not essential to use this, it makes things easier when you are just starting out on your Open5GS adventure. (A [command line tool](https://github.com/{{ site.github_username }}/open5gs/blob/main/misc/db/open5gs-dbctl) is available for advanced users).
-
-
-[Node.js](https://nodejs.org/) is required to install the WebUI of Open5GS
+[Node.js](https://nodejs.org/) is required to install the WebUI of xcn
 
 1. *Debian and Ubuntu* based Linux distributions can install [Node.js](https://nodejs.org/) as follows:
 
@@ -210,18 +108,18 @@ The WebUI allows you to interactively edit subscriber data. While it is not esse
     $ sudo zypper install nodejs8
     ```
 
-You can now install WebUI of Open5GS.
+You can now install WebUI of xcn.
 
 ```bash
-$ curl -fsSL {{ site.url }}{{ site.baseurl }}/assets/webui/install | sudo -E bash -
+$ sudo -E bash docs/assets/webui/install
 ```
 
-## 4. Configure Open5GS
+## 4. Configure xcn
 ---
 
 Okay - you have installed the software, now what to do with it? Well, there are some tweaks you will need to make to the config files, and you will need to enter subscriber data into your HSS/ UDR. You will also need to set some IP Table rules to bridge the PGWU/UPF to the WAN.
 
-Out of the box, the default configurations see all of the Open5GS components fully configured for use on a single computer. They are set to communicate with each other using the local loopback address space (`127.0.0.X`). The default addresses for each of the bind interfaces for these components and functions are as follows:
+Out of the box, the default configurations see all of the xcn components fully configured for use on a single computer. They are set to communicate with each other using the local loopback address space (`127.0.0.X`). The default addresses for each of the bind interfaces for these components and functions are as follows:
 
 ```
 MongoDB   = 127.0.0.1 (subscriber data) - http://localhost:9999
@@ -272,13 +170,13 @@ You will need to modify your 4G MME config to support your PLMN and TAC. The int
 If you are aiming to connect an external eNB to your core, you will also need to change the S1AP bind address of the MME **and** the GTP-U bind address of the SGWU. If you are running an eNB stack locally, you will not need to make these changes.
 
 
-Modify [/etc/open5gs/mme.yaml](https://github.com/{{ site.github_username }}/open5gs/blob/main/configs/open5gs/mme.yaml.in) to set the S1AP IP address, PLMN ID, and TAC.
+Modify [/etc/xcn/mme.yaml](https://github.com/{{ site.github_username }}/{{ site.github_repository }}/blob/open5gs-basev277-develop/configs/xcn/mme.yaml.in) to set the S1AP IP address, PLMN ID, and TAC.
 
 ```diff
-$ diff --git a/configs/open5gs/mme.yaml.in b/configs/open5gs/mme.yaml.in
+$ diff --git a/configs/xcn/mme.yaml.in b/configs/xcn/mme.yaml.in
 index db2cdaef1..2010f6691 100644
---- a/configs/open5gs/mme.yaml.in
-+++ b/configs/open5gs/mme.yaml.in
+--- a/configs/xcn/mme.yaml.in
++++ b/configs/xcn/mme.yaml.in
 @@ -10,7 +10,7 @@ mme:
      freeDiameter: @sysconfdir@/freeDiameter/mme.conf
      s1ap:
@@ -309,12 +207,12 @@ index db2cdaef1..2010f6691 100644
          integrity_order : [ EIA2, EIA1, EIA0 ]
 ```
 
-Modify [/etc/open5gs/sgwu.yaml](https://github.com/{{ site.github_username }}/open5gs/blob/main/configs/open5gs/sgwu.yaml.in) to set the GTP-U IP address.
+Modify [/etc/xcn/sgwu.yaml](https://github.com/{{ site.github_username }}/{{ site.github_repository }}/blob/open5gs-basev277-develop/configs/xcn/sgwu.yaml.in) to set the GTP-U IP address.
 ```diff
-$ diff --git a/configs/open5gs/sgwu.yaml.in b/configs/open5gs/sgwu.yaml.in
+$ diff --git a/configs/xcn/sgwu.yaml.in b/configs/xcn/sgwu.yaml.in
 index 7266e47fb..d640f0357 100644
---- a/configs/open5gs/sgwu.yaml.in
-+++ b/configs/open5gs/sgwu.yaml.in
+--- a/configs/xcn/sgwu.yaml.in
++++ b/configs/xcn/sgwu.yaml.in
 @@ -15,7 +15,7 @@ sgwu:
  #          - address: 127.0.0.3
      gtpu:
@@ -326,11 +224,11 @@ index 7266e47fb..d640f0357 100644
  # PFCP Server
 ```
 
-After changing config files, please restart Open5GS daemons.
+After changing config files, please restart xcn daemons.
 
 ```bash
-$ sudo systemctl restart open5gs-mmed
-$ sudo systemctl restart open5gs-sgwud
+$ sudo systemctl restart xcn-mmed
+$ sudo systemctl restart xcn-sgwud
 ```
 
 #### Setup a 5G Core
@@ -339,13 +237,13 @@ You will need to modify the PLMN in your NRF and AMF config, and in case of AMF,
 
 If you are aiming to connect an external gNB to your core, you will also need to change the NGAP bind address of the AMF **and** the GTPU bind address of the UPF. If you are running an gNB stack locally, you will not need to make these changes.
 
-Modify [/etc/open5gs/nrf.yaml](https://github.com/{{ site.github_username }}/open5gs/blob/main/configs/open5gs/nrf.yaml.in) to set the Serving PLMN ID.
+Modify [/etc/xcn/nrf.yaml](https://github.com/{{ site.github_username }}/{{ site.github_repository }}/blob/open5gs-basev277-develop/configs/xcn/nrf.yaml.in) to set the Serving PLMN ID.
 
 ```diff
-$ diff --git a/configs/open5gs/nrf.yaml.in b/configs/open5gs/nrf.yaml.in
+$ diff --git a/configs/xcn/nrf.yaml.in b/configs/xcn/nrf.yaml.in
 index cd9e45feb..58e8cbbce 100644
---- a/configs/open5gs/nrf.yaml.in
-+++ b/configs/open5gs/nrf.yaml.in
+--- a/configs/xcn/nrf.yaml.in
++++ b/configs/xcn/nrf.yaml.in
 @@ -10,8 +10,8 @@ global:
  nrf:
    serving:  # 5G roaming requires PLMN in NRF
@@ -359,13 +257,13 @@ index cd9e45feb..58e8cbbce 100644
        - address: 127.0.0.10
 ```
 
-Modify [/etc/open5gs/amf.yaml](https://github.com/{{ site.github_username }}/open5gs/blob/main/configs/open5gs/amf.yaml.in) to set the NGAP IP address, PLMN ID, TAC and NSSAI.
+Modify [/etc/xcn/amf.yaml](https://github.com/{{ site.github_username }}/{{ site.github_repository }}/blob/open5gs-basev277-develop/configs/xcn/amf.yaml.in) to set the NGAP IP address, PLMN ID, TAC and NSSAI.
 
 ```diff
-$ diff --git a/configs/open5gs/amf.yaml.in b/configs/open5gs/amf.yaml.in
+$ diff --git a/configs/xcn/amf.yaml.in b/configs/xcn/amf.yaml.in
 index 938917e32..35d0ab5aa 100644
---- a/configs/open5gs/amf.yaml.in
-+++ b/configs/open5gs/amf.yaml.in
+--- a/configs/xcn/amf.yaml.in
++++ b/configs/xcn/amf.yaml.in
 @@ -18,27 +18,27 @@ amf:
            - uri: http://127.0.0.200:7777
      ngap:
@@ -403,12 +301,12 @@ index 938917e32..35d0ab5aa 100644
      security:
 ```
 
-Modify [/etc/open5gs/upf.yaml](https://github.com/{{ site.github_username }}/open5gs/blob/main/configs/open5gs/upf.yaml.in) to set the GTP-U address.
+Modify [/etc/xcn/upf.yaml](https://github.com/{{ site.github_username }}/{{ site.github_repository }}/blob/open5gs-basev277-develop/configs/xcn/upf.yaml.in) to set the GTP-U address.
 ```diff
-$ diff --git a/configs/open5gs/upf.yaml.in b/configs/open5gs/upf.yaml.in
+$ diff --git a/configs/xcn/upf.yaml.in b/configs/xcn/upf.yaml.in
 index e78b018f1..35a54419e 100644
---- a/configs/open5gs/upf.yaml.in
-+++ b/configs/open5gs/upf.yaml.in
+--- a/configs/xcn/upf.yaml.in
++++ b/configs/xcn/upf.yaml.in
 @@ -15,7 +15,7 @@ upf:
  #          - address: 127.0.0.4
      gtpu:
@@ -420,37 +318,37 @@ index e78b018f1..35a54419e 100644
        - subnet: 2001:db8:cafe::1/48
 ```
 
-After changing config files, please restart Open5GS daemons.
+After changing config files, please restart xcn daemons.
 
 ```bash
-$ sudo systemctl restart open5gs-nrfd
-$ sudo systemctl restart open5gs-amfd
-$ sudo systemctl restart open5gs-upfd
+$ sudo systemctl restart xcn-nrfd
+$ sudo systemctl restart xcn-amfd
+$ sudo systemctl restart xcn-upfd
 ```
 
 #### Configure logging
 
-The Open5GS components log to `/var/log/open5gs/*.log` and to `stderr` by
+The xcn components log to `/var/log/xcn/*.log` and to `stderr` by
 default.
 
 ##### Avoid duplicate timestamps in journalctl
 
-Open5GS adds timestamps to each log line in the log file, and on `stderr`. If
-you run Open5GS with systemd and prefer looking at the logs with `journalctl`,
+xcn adds timestamps to each log line in the log file, and on `stderr`. If
+you run xcn with systemd and prefer looking at the logs with `journalctl`,
 then each line will have two timestamps. To fix this, disable the timestamp for
 `stderr` with the following configuration change:
 
 ```diff
-diff --git a/configs/open5gs/mme.yaml.in b/configs/open5gs/mme.yaml.in
+diff --git a/configs/xcn/mme.yaml.in b/configs/xcn/mme.yaml.in
 index 87c251b9d..599032b8a 100644
---- a/configs/open5gs/mme.yaml.in
-+++ b/configs/open5gs/mme.yaml.in
+--- a/configs/xcn/mme.yaml.in
++++ b/configs/xcn/mme.yaml.in
 @@ -1,6 +1,9 @@
  logger:
 +  default:
 +    timestamp: false
    file:
-     path: /var/log/open5gs/mme.log
+     path: /var/log/xcn/mme.log
 +    timestamp: true
  #  level: info   # fatal|error|warn|info(default)|debug|trace
 
@@ -477,7 +375,7 @@ To add subscriber information, you can do WebUI operations in the following orde
 
 Enter the subscriber details of your SIM cards using this tool, to save the subscriber profile in the HSS and UDR MongoDB database backend. If you are using test SIMs, the details are normally printed on the card.
 
-**Note:** Subscribers added with this tool immediately register in the Open5GS HSS/UDR without the need to restart any daemon. However, if you use the WebUI to change subscriber profile, you must restart the Open5GS AMF/MME daemon for the changes to take effect.
+**Note:** Subscribers added with this tool immediately register in the xcn HSS/UDR without the need to restart any daemon. However, if you use the WebUI to change subscriber profile, you must restart the xcn AMF/MME daemon for the changes to take effect.
 {: .notice--warning}
 
 
@@ -526,97 +424,97 @@ $ sudo iptables -I FORWARD -s 10.45.0.0/16 -d x.x.x.x/y -j DROP
 ## 5. Turn on your eNB/gNB and UE
 ---
 
-First, connect your eNB/gNB to the Open5GS core:
+First, connect your eNB/gNB to the xcn core:
 * Make sure the PLMN and TAC of the eNB/gNB matches the settings in your MME/AMF
 * Connect your eNB/gNB to the IP of your server via the standard S1AP/NGAP SCTP port 36412/38412 (for MME/AMF)
 * Your eNB/gNB should report a successful S1/NG connection - congrats, your core is fully working!
 * You can see actual traffic through wireshark -- [[srsenb.pcapng]]({{ site.url }}{{ site.baseurl }}/assets/pcapng/srsenb.pcapng).
-* You can view the log at `/var/log/open5gs/*.log`, eg:
+* You can view the log at `/var/log/xcn/*.log`, eg:
 ```bash
 ### Watch the live MME log
-tail -f /var/log/open5gs/mme.log
+tail -f /var/log/xcn/mme.log
 ```
 
 Next, try to attach a UE to the basestation:
 * Insert your SIM card to the UE
-* Set the UE's APN to match the APN you configured in the Open5GS WebUI
+* Set the UE's APN to match the APN you configured in the xcn WebUI
 * Toggle the UE in and out of flight mode
 * If it doesn't automatically connect, try manually searching for a network
 * If the PLMN set on the SIM card does not match the PLMN being used by the radio, you will need to ensure 'data roaming' on the UE is switched on
 
-## 6. Starting and Stopping Open5GS
+## 6. Starting and Stopping xcn
 ---
 
 When you install the software using the package manager, it is setup to run as a systemd service. You can stop and restart the components and network functions as follows:
 
 ```bash
-$ sudo systemctl stop open5gs-mmed
-$ sudo systemctl stop open5gs-sgwcd
-$ sudo systemctl stop open5gs-smfd
-$ sudo systemctl stop open5gs-amfd
-$ sudo systemctl stop open5gs-sgwud
-$ sudo systemctl stop open5gs-upfd
-$ sudo systemctl stop open5gs-hssd
-$ sudo systemctl stop open5gs-pcrfd
-$ sudo systemctl stop open5gs-nrfd
-$ sudo systemctl stop open5gs-scpd
-$ sudo systemctl stop open5gs-seppd
-$ sudo systemctl stop open5gs-ausfd
-$ sudo systemctl stop open5gs-udmd
-$ sudo systemctl stop open5gs-pcfd
-$ sudo systemctl stop open5gs-nssfd
-$ sudo systemctl stop open5gs-bsfd
-$ sudo systemctl stop open5gs-udrd
-$ sudo systemctl stop open5gs-webui
+$ sudo systemctl stop xcn-mmed
+$ sudo systemctl stop xcn-sgwcd
+$ sudo systemctl stop xcn-smfd
+$ sudo systemctl stop xcn-amfd
+$ sudo systemctl stop xcn-sgwud
+$ sudo systemctl stop xcn-upfd
+$ sudo systemctl stop xcn-hssd
+$ sudo systemctl stop xcn-pcrfd
+$ sudo systemctl stop xcn-nrfd
+$ sudo systemctl stop xcn-scpd
+$ sudo systemctl stop xcn-seppd
+$ sudo systemctl stop xcn-ausfd
+$ sudo systemctl stop xcn-udmd
+$ sudo systemctl stop xcn-pcfd
+$ sudo systemctl stop xcn-nssfd
+$ sudo systemctl stop xcn-bsfd
+$ sudo systemctl stop xcn-udrd
+$ sudo systemctl stop xcn-webui
 ```
 
 ```bash
-$ sudo systemctl restart open5gs-mmed
-$ sudo systemctl restart open5gs-sgwcd
-$ sudo systemctl restart open5gs-smfd
-$ sudo systemctl restart open5gs-amfd
-$ sudo systemctl restart open5gs-sgwud
-$ sudo systemctl restart open5gs-upfd
-$ sudo systemctl restart open5gs-hssd
-$ sudo systemctl restart open5gs-pcrfd
-$ sudo systemctl restart open5gs-nrfd
-$ sudo systemctl restart open5gs-scpd
-$ sudo systemctl restart open5gs-seppd
-$ sudo systemctl restart open5gs-ausfd
-$ sudo systemctl restart open5gs-udmd
-$ sudo systemctl restart open5gs-pcfd
-$ sudo systemctl restart open5gs-nssfd
-$ sudo systemctl restart open5gs-bsfd
-$ sudo systemctl restart open5gs-udrd
-$ sudo systemctl restart open5gs-webui
+$ sudo systemctl restart xcn-mmed
+$ sudo systemctl restart xcn-sgwcd
+$ sudo systemctl restart xcn-smfd
+$ sudo systemctl restart xcn-amfd
+$ sudo systemctl restart xcn-sgwud
+$ sudo systemctl restart xcn-upfd
+$ sudo systemctl restart xcn-hssd
+$ sudo systemctl restart xcn-pcrfd
+$ sudo systemctl restart xcn-nrfd
+$ sudo systemctl restart xcn-scpd
+$ sudo systemctl restart xcn-seppd
+$ sudo systemctl restart xcn-ausfd
+$ sudo systemctl restart xcn-udmd
+$ sudo systemctl restart xcn-pcfd
+$ sudo systemctl restart xcn-nssfd
+$ sudo systemctl restart xcn-bsfd
+$ sudo systemctl restart xcn-udrd
+$ sudo systemctl restart xcn-webui
 ```
 
 
-## 7. Uninstall Open5GS and WebUI
+## 7. Uninstall xcn and WebUI
 
-To remove the Open5GS packages:
+To remove the xcn packages:
 
 1. On *Ubuntu/Debian*:
 
     ```bash
-    $ sudo apt purge open5gs
+    $ sudo apt purge xcn
     $ sudo apt autoremove
     ```
 
 2. On *openSUSE*:
 
     ```bash
-    $ sudo zypper rm open5gs
+    $ sudo zypper rm xcn
     ```
 
-You may need to remove manually `/var/log/open5gs` unless it is empty.
+You may need to remove manually `/var/log/xcn` unless it is empty.
 
 ```bash
-$ sudo rm -Rf /var/log/open5gs
+$ sudo rm -Rf /var/log/xcn
 ```
 
-The WebUI of Open5GS can be removed as follows:
+The WebUI of xcn can be removed as follows:
 
 ```bash
-curl -fsSL {{ site.url }}{{ site.baseurl }}/assets/webui/uninstall | sudo -E bash -
+sudo -E bash docs/assets/webui/uninstall
 ```

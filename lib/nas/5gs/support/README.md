@@ -1,6 +1,6 @@
 
 * Install python-docx
-user@host ~/Documents/git/open5gs/lib/nas/5gs/support$ \
+user@host ~/Documents/git/xcn/lib/nas/5gs/support$ \
     sudo pip3 install python-docx
 
 * Change the format of standard specification 
@@ -10,7 +10,7 @@ user@host ~/Documents/git/open5gs/lib/nas/5gs/support$ \
 * Adjust table cell in 24301-h90.docx
 
 * Generate Message support files
-user@host ~/Documents/git/open5gs/lib/nas/5gs/support$ \
+user@host ~/Documents/git/xcn/lib/nas/5gs/support$ \
     python3 nas-message.py -f 24501-h90.docx -o ..
 
 * Check lib/nas/5gs/decoder.c

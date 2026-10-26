@@ -7,8 +7,8 @@ if [ "$SYSTEM" = "Linux" ]; then
         ip tuntap add name ogstun mode tun
     fi
     if test "x`sysctl -n net.ipv6.conf.ogstun.disable_ipv6`" = x1; then
-        echo "net.ipv6.conf.ogstun.disable_ipv6=0" > /etc/sysctl.d/30-open5gs.conf
-        sysctl -p /etc/sysctl.d/30-open5gs.conf
+        echo "net.ipv6.conf.ogstun.disable_ipv6=0" > /etc/sysctl.d/30-xcn.conf
+        sysctl -p /etc/sysctl.d/30-xcn.conf
     fi
     ip addr del 10.45.0.1/16 dev ogstun 2> /dev/null
     ip addr add 10.45.0.1/16 dev ogstun
@@ -131,14 +131,14 @@ else
     ifconfig lo0 alias 127.0.3.251 netmask 255.255.255.255
     ifconfig lo0 alias 127.0.3.252 netmask 255.255.255.255
     if [ "$SYSTEM" = "Darwin" ]; then
-        if ! test -f /etc/pf.anchors/org.open5gs; then
-            sudo sh -c "echo 'nat on {en0} from 10.45.0.0/16 to any -> {en0}' > /etc/pf.anchors/org.open5gs"
-            sudo sh -c "echo 'nat on {en0} from 2001:db8:cafe::1/48 to any -> {en0}' > /etc/pf.anchors/org.open5gs"
-            sudo sh -c "echo 'nat on {en0} from 10.46.0.0/16 to any -> {en0}' > /etc/pf.anchors/org.open5gs"
-            sudo sh -c "echo 'nat on {en0} from 2001:db8:babe::1/48 to any -> {en0}' > /etc/pf.anchors/org.open5gs"
-            sudo sh -c "echo 'nat on {en0} from 10.47.0.0/16 to any -> {en0}' > /etc/pf.anchors/org.open5gs"
-            sudo sh -c "echo 'nat on {en0} from 2001:db8:face::1/48 to any -> {en0}' > /etc/pf.anchors/org.open5gs"
+        if ! test -f /etc/pf.anchors/org.xcn; then
+            sudo sh -c "echo 'nat on {en0} from 10.45.0.0/16 to any -> {en0}' > /etc/pf.anchors/org.xcn"
+            sudo sh -c "echo 'nat on {en0} from 2001:db8:cafe::1/48 to any -> {en0}' > /etc/pf.anchors/org.xcn"
+            sudo sh -c "echo 'nat on {en0} from 10.46.0.0/16 to any -> {en0}' > /etc/pf.anchors/org.xcn"
+            sudo sh -c "echo 'nat on {en0} from 2001:db8:babe::1/48 to any -> {en0}' > /etc/pf.anchors/org.xcn"
+            sudo sh -c "echo 'nat on {en0} from 10.47.0.0/16 to any -> {en0}' > /etc/pf.anchors/org.xcn"
+            sudo sh -c "echo 'nat on {en0} from 2001:db8:face::1/48 to any -> {en0}' > /etc/pf.anchors/org.xcn"
         fi
-        pfctl -e -f /etc/pf.anchors/org.open5gs
+        pfctl -e -f /etc/pf.anchors/org.xcn
     fi
 fi

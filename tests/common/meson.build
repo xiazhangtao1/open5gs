@@ -1,6 +1,6 @@
 # Copyright (C) 2019,2020 by Sukchan Lee <acetcom@gmail.com>
 
-# This file is part of Open5GS.
+# This file is part of xcn.
 
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published by
@@ -16,7 +16,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 libtestcommon_conf = configuration_data()
-libtestcommon_conf.set_quoted('MESON_BUILD_ROOT', open5gs_build_dir)
+libtestcommon_conf.set_quoted('MESON_BUILD_ROOT', xcn_build_dir)
 configure_file(output : 'test-config-private.h',
                configuration : libtestcommon_conf)
 

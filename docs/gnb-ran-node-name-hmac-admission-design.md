@@ -1,6 +1,6 @@
 # RANNodeName 动态 HMAC 基站准入开发设计
 
-版本：2.0；日期：2026-10-09；适用对象：本仓库 Open5GS AMF、xcn Chart、自研或 OAI 衍生 gNB。
+版本：2.0；日期：2026-10-09；适用对象：本仓库 xcn AMF、xcn Chart、自研或 OAI 衍生 gNB。
 
 当前选定方案为“每台基站独立密钥 + 时间戳 + 随机数 + HMAC-SHA256 + AMF 防重放缓存”，通过现有 NGAP `RANNodeName` 携带动态凭据。本文规定首版协议、配置、代码修改范围和验收条件，尚未实现核心网或基站功能，也不执行现网部署。
 
@@ -363,7 +363,7 @@ gNB 上下文保存批准的设备编号或稳定表索引、key_id、PLMN、gNB
 | `src/amf/context.c`、`context.h` | 配置解析入口、模块初始化/释放、gNB 已批准身份 |
 | `src/amf/ngap-handler.c` | NG Setup 调用认证、配置更新身份检查、重复 Setup 处理 |
 | 按需 `src/amf/amf-sm.c`、`ngap-path.c` | 有序失败关闭、业务释放、保护期维护事件 |
-| `configs/open5gs/amf.yaml.in` | 新配置项文档和默认关闭配置 |
+| `configs/xcn/amf.yaml.in` | 新配置项文档和默认关闭配置 |
 | `helm/xcn/values.yaml`、`templates/config.yaml` | 拟新增 `fivegc.ranAuth`，输出 AMF 配置及密钥路径 |
 | `helm/xcn/templates/5gc.yaml` | 将外部 Secret 只读挂载到 AMF 所在容器，不将密钥渲染到 ConfigMap |
 
@@ -486,7 +486,7 @@ PY
 
 实际检查：127 字节凭据的字段偏移及格式、两端配置绑定、32 字节密钥生成及 0600 权限、71 字节固定输入、9 类认证输入篡改，以及 59 项独立模型断言。模型覆盖时间窗口边界、已使用 nonce、密钥轮换、容量满时不淘汰、延迟回收、进程重启、时间回拨和并发重复消费。
 
-固定向量由 Python 标准库、OpenSSL 命令行和现有 Open5GS SHA2/HMAC 源码的隔离编译互相核对。隔离构建仅提供最小类型头文件，不构建完整 AMF 或 OAI；现有库的有符号/无符号比较告警未作为该隔离构建的错误。C 运行使用 AddressSanitizer 和 UndefinedBehaviorSanitizer，因沙箱跟踪限制关闭 LeakSanitizer，不据此宣称完整连接生命周期没有泄漏。
+固定向量由 Python 标准库、OpenSSL 命令行和现有 xcn SHA2/HMAC 源码的隔离编译互相核对。隔离构建仅提供最小类型头文件，不构建完整 AMF 或 OAI；现有库的有符号/无符号比较告警未作为该隔离构建的错误。C 运行使用 AddressSanitizer 和 UndefinedBehaviorSanitizer，因沙箱跟踪限制关闭 LeakSanitizer，不据此宣称完整连接生命周期没有泄漏。
 
 没有修改 AMF、OAI、ASN.1 或 Chart 实现，没有部署、重启核心网或基站。第 13 节仍是后续开发验收要求。
 

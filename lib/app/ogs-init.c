@@ -1,7 +1,7 @@
 /*
  * Copyright (C) 2019-2023 by Sukchan Lee <acetcom@gmail.com>
  *
- * This file is part of Open5GS.
+ * This file is part of xcn.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
@@ -139,7 +139,7 @@ int ogs_app_initialize(
      */
     if (ogs_app()->version) {
         ogs_log_print(OGS_LOG_INFO,
-                "Open5GS daemon %s\n\n", ogs_app()->version);
+                "xcn daemon %s\n\n", ogs_app()->version);
 
         ogs_info("Configuration: '%s'", ogs_app()->file);
 
@@ -280,7 +280,7 @@ static void parse_config_logger_file(ogs_yaml_iter_t *logger_iter,
 
     /* Legacy format:
      *   logger:
-     *     file: /var/log/open5gs/mme.log */
+     *     file: /var/log/xcn/mme.log */
     if (!strcmp(logger_key, "file") && ogs_yaml_iter_has_value(logger_iter)) {
         ogs_app()->logger.file = ogs_yaml_iter_value(logger_iter);
 
@@ -301,7 +301,7 @@ static void parse_config_logger_file(ogs_yaml_iter_t *logger_iter,
      *     default:
      *       timestamp: false
      *     file:
-     *       path: /var/log/open5gs/mme.log
+     *       path: /var/log/xcn/mme.log
      *       timestamp: true */
     ogs_yaml_iter_recurse(logger_iter, &iter);
     while (ogs_yaml_iter_next(&iter)) {

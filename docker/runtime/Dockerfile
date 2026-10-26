@@ -39,10 +39,10 @@ RUN apt-get update && \
     fi && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
-WORKDIR /open5gs
+WORKDIR /xcn
 COPY --from=vpp-libs /usr/local/include/libmemif.h /usr/local/include/libmemif.h
 COPY --from=vpp-libs /usr/local/lib/libmemif.so /usr/local/lib/libmemif.so
-COPY ./ /open5gs
+COPY ./ /xcn
 RUN meson setup build --prefix=/usr --buildtype=debugoptimized \
         -Dupf_memif=true && \
     ninja -C build install
@@ -83,11 +83,11 @@ RUN apt-get update && \
 
 COPY --from=build /usr /usr
 COPY --from=vpp-libs /usr/local/lib/libmemif.so /usr/local/lib/libmemif.so
-COPY docker/runtime/setup.sh /usr/local/bin/open5gs-k8s-setup
+COPY docker/runtime/setup.sh /usr/local/bin/xcn-k8s-setup
 COPY docker/runtime/wait-for-tcp.sh /usr/local/bin/wait-for-tcp.sh
 
-RUN chmod +x /usr/local/bin/open5gs-k8s-setup /usr/local/bin/wait-for-tcp.sh && \
-    mkdir -p /etc/open5gs /var/log/open5gs && \
+RUN chmod +x /usr/local/bin/xcn-k8s-setup /usr/local/bin/wait-for-tcp.sh && \
+    mkdir -p /etc/xcn /var/log/xcn && \
     ldconfig
 
 WORKDIR /root

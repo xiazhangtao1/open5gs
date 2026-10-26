@@ -1,7 +1,7 @@
 /*
  * Copyright (C) 2019 by Sukchan Lee <acetcom@gmail.com>
  *
- * This file is part of Open5GS.
+ * This file is part of xcn.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
@@ -27,7 +27,7 @@ extern "C" {
 #endif
 
 /* HSS Sends Cancel Location Request to MME */
-void hss_s6a_send_clr(char *imsi_bcd, char *mme_host, char *mme_realm, 
+void hss_s6a_send_clr(char *imsi_bcd, char *mme_host, char *mme_realm,
     uint32_t cancellation_type);
 
 /* HSS Sends Insert Subscriber Data Request to MME */

@@ -1,7 +1,7 @@
 /*
  * Copyright (C) 2026 by Open5GS contributors
  *
- * This file is part of Open5GS.
+ * This file is part of xcn.
  */
 
 #include "context.h"
@@ -404,7 +404,7 @@ int upf_n6_memif_open(void)
     memset(&socket_args, 0, sizeof(socket_args));
     ogs_cpystrn(socket_args.path, upf_self()->n6.socket_path,
             sizeof(socket_args.path));
-    ogs_cpystrn(socket_args.app_name, "open5gs-upf",
+    ogs_cpystrn(socket_args.app_name, "xcn-upf",
             sizeof(socket_args.app_name));
     socket_args.connection_request_timer.it_value.tv_sec = 1;
     socket_args.connection_request_timer.it_interval.tv_sec = 1;
@@ -424,9 +424,9 @@ int upf_n6_memif_open(void)
     connection_args.log2_ring_size = upf_self()->n6.log2_ring_size;
     connection_args.num_s2m_rings = upf_self()->n6.queues;
     connection_args.num_m2s_rings = upf_self()->n6.queues;
-    connection_args.is_master = 0; /* Open5GS is the memif slave/client. */
+    connection_args.is_master = 0; /* xcn is the memif slave/client. */
     connection_args.mode = MEMIF_INTERFACE_MODE_IP;
-    ogs_cpystrn((char *)connection_args.interface_name, "open5gs-n6",
+    ogs_cpystrn((char *)connection_args.interface_name, "xcn-n6",
             sizeof(connection_args.interface_name));
 
     rv = memif_create(&self.connection, &connection_args,
@@ -662,7 +662,7 @@ int upf_n6_memif_send(const ogs_pkbuf_t *pkbuf,
 
 int upf_n6_memif_open(void)
 {
-    ogs_error("N6 memif backend requested, but Open5GS lacks libmemif");
+    ogs_error("N6 memif backend requested, but xcn lacks libmemif");
     return OGS_ERROR;
 }
 

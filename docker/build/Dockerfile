@@ -1,13 +1,13 @@
 ARG dist=ubuntu
 ARG tag=latest
 ARG username=acetcom
-FROM ${username}/${dist}-${tag}-open5gs-base
+FROM ${username}/${dist}-${tag}-xcn-base
 
 LABEL org.opencontainers.image.authors="Sukchan Lee <acetcom@gmail.com>"
 
-WORKDIR /open5gs
+WORKDIR /xcn
 COPY docker/build/setup.sh /root
-COPY ./ /open5gs
+COPY ./ /xcn
 
 ADD https://github.com/ufoscout/docker-compose-wait/releases/download/2.9.0/wait /wait
 RUN chmod +x /wait

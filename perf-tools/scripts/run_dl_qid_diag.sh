@@ -5,7 +5,7 @@ pod=${1:?usage: run_dl_qid_diag.sh POD MBPS DURATION UE_IP [OUTPUT]}
 mbps=${2:?total Mbps}
 duration=${3:?duration seconds}
 ue_ip=${4:?UE IPv4 address}
-output=${5:-/tmp/open5gs-dl-qid-diag-$(date +%Y%m%d-%H%M%S).log}
+output=${5:-/tmp/xcn-dl-qid-diag-$(date +%Y%m%d-%H%M%S).log}
 script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 sample_ms=${VPP_MEMIF_SAMPLE_MS:-500}
 sample_sleep=$((sample_ms / 1000)).$(printf '%03d' "$((sample_ms % 1000))")
@@ -67,7 +67,7 @@ sample_vpp_memif() {
 }
 
 {
-    echo "OPEN5GS_DL_QID_DIAG pod=$pod mbps=$mbps duration=$duration ue_ip=$ue_ip sample_ms=$sample_ms"
+    echo "XCN_DL_QID_DIAG pod=$pod mbps=$mbps duration=$duration ue_ip=$ue_ip sample_ms=$sample_ms"
     echo "=== topology ==="
     lscpu -e=CPU,CORE,SOCKET,NODE,ONLINE
     echo "=== host cpu stat before ==="

@@ -4,7 +4,7 @@
 {{- fail "monitor.cpuSet must be a CPU list such as 36-37 or 36,108" }}
 {{- end }}
 {{- if has (dir .Values.networking.upf.rateStats.socket) (list "/" "/run" "/var/run" "/tmp" "/etc" "/var") }}
-{{- fail "monitor UPF socket must use a dedicated directory, for example /run/open5gs/upf-stats.sock" }}
+{{- fail "monitor UPF socket must use a dedicated directory, for example /run/xcn/upf-stats.sock" }}
 {{- end }}
 {{- if not .Values.networking.upf.rateStats.enabled }}
 {{- fail "monitor.enabled requires networking.upf.rateStats.enabled=true" }}

@@ -62,7 +62,7 @@ spec:
             - /bin/sh
             - -ec
             - |
-              mongosh "mongodb://{{ include "xcn.componentName" (dict "root" . "component" "mongodb") }}/open5gs" /bootstrap/mongo-init.js
+              mongosh "mongodb://{{ include "xcn.componentName" (dict "root" . "component" "mongodb") }}/xcn" /bootstrap/mongo-init.js
           resources:
 {{ toYaml .Values.resources.webui.mongoAdmin | indent 12 }}
           volumeMounts:
@@ -95,7 +95,7 @@ spec:
             - name: CORE_CONTROL_AMF_URL
               value: {{ printf "http://%s:7777" (include "xcn.componentName" (dict "root" . "component" "amf")) | quote }}
             - name: DB_URI
-              value: {{ printf "mongodb://%s/open5gs" (include "xcn.componentName" (dict "root" . "component" "mongodb")) | quote }}
+              value: {{ printf "mongodb://%s/xcn" (include "xcn.componentName" (dict "root" . "component" "mongodb")) | quote }}
             - name: HOST_IP
               valueFrom:
                 fieldRef:
@@ -132,7 +132,7 @@ spec:
 {{- end }}
           volumeMounts:
             - name: webui-env
-              mountPath: /usr/src/open5gs/webui/.env
+              mountPath: /usr/src/xcn/webui/.env
               subPath: .env
 {{- include "xcn.localtimeVolumeMount" . | nindent 12 }}
       volumes:

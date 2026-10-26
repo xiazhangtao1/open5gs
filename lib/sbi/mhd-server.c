@@ -1,7 +1,7 @@
 /*
  * Copyright (C) 2019,2024 by Sukchan Lee <acetcom@gmail.com>
  *
- * This file is part of Open5GS.
+ * This file is part of xcn.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
@@ -151,7 +151,7 @@ static ogs_sbi_session_t *session_add(ogs_sbi_server_t *server,
     }
 
     /* If User does not send HTTP response within deadline,
-     * Open5GS will assert this program. */
+     * xcn will assert this program. */
     ogs_timer_start(sbi_sess->timer,
             ogs_local_conf()->time.message.sbi.connection_deadline);
 

@@ -1,0 +1,18 @@
+[Unit]
+Description=xcn PCF Daemon
+Wants=mongodb.service mongod.service
+
+[Service]
+Type=simple
+
+User=xcn
+Group=xcn
+
+Restart=always
+ExecStart=@bindir@/xcn-pcfd -c @sysconfdir@/xcn/pcf.yaml
+RestartSec=2
+RestartPreventExitStatus=1
+ExecReload=/bin/kill -HUP $MAINPID
+
+[Install]
+WantedBy=multi-user.target

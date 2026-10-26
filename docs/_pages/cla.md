@@ -5,6 +5,8 @@ subject : Copyright License Agreement
 permalink: /cla/
 ---
 
+> Historical upstream reference: the agreements and contact information below belong to Open5GS. The original PDF contents are preserved.
+
 ### 1. What is a Copyright License Agreement (CLA) and why do I need one?
 
 A Copyright License Agreement is a legal document in which you state you are entitled to contribute the code/documentation/translation to the project you’re contributing to and are willing to have it used in distributions and derivative works. This means that should there be any kind of legal issue in the future as to the origins and ownership of any particular piece of code, then that project has the necessary forms on file from the contributor(s) saying they were permitted to make this contribution.
@@ -17,8 +19,8 @@ The agreements used by the Open5GS project are standard documents provided by Pr
 ### 2. How do I complete and submit the CLA?
 
 The Open5GS CLAs can be found as below.
-- [I am an individual]({{ site.url }}{{ site.baseurl }}/assets/cla/Open5GS-Individual.pdf)...(revision 2020-05-23)
-- [I am a legal entity (corporation)]({{ site.url }}{{ site.baseurl }}/assets/cla//Open5GS-Entity.pdf)...(revision 2020-05-23)
+- [I am an individual]({{ site.url }}{{ site.baseurl }}/assets/cla/xcn-Individual.pdf)...(revision 2020-05-23)
+- [I am a legal entity (corporation)]({{ site.url }}{{ site.baseurl }}/assets/cla/xcn-Entity.pdf)...(revision 2020-05-23)
 
 **(Email)** Download the appropriate CLA, then print, sign and scan the document before sending by email to [acetcom@gmail.com](mailto:acetcom@gmail.com).
 

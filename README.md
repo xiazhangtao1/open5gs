@@ -1,8 +1,6 @@
-<p align="center"><a href="https://open5gs.org" target="_blank" rel="noopener noreferrer"><img width="100" src="https://open5gs.org/assets/img/open5gs-logo-only.png" alt="Open5GS logo"></a></p>
+# xcn
 
-## Getting Started
-
-Please follow the [documentation](https://open5gs.org/open5gs/docs/) at [open5gs.org](https://open5gs.org/)!
+xcn 提供 5G Core / EPC 核心网及 VPP/memif UPF 集成。部署见 [Helm 文档](helm/xcn/README.md)，源码构建见 [构建指南](docs/_docs/guide/02-building-xcn-from-sources.md)，名称和数据迁移见 [迁移说明](docs/xcn-migration.md)。
 
 ## 本分支 UPF 性能优化状态
 
@@ -10,7 +8,7 @@ Please follow the [documentation](https://open5gs.org/open5gs/docs/) at [open5gs
 原始命令、逐轮计数和更完整的数据见
 [perf-tools/results.md](perf-tools/results.md)。除非特别说明，当前测试使用
 VPP 26.06、N3/N6 memif、1428-byte inner IPv4 UDP、两个真实 PDU/PFCP
-Session，并完整执行 Open5GS 的 PDR/FAR/QER/URR 和 GTP-U 语义；未引入
+Session，并完整执行 xcn 的 PDR/FAR/QER/URR 和 GTP-U 语义；未引入
 UPG-VPP 或绕过 UPF 语义的 fast path。
 
 ### UPF部署模式
@@ -50,7 +48,7 @@ Linux/VPP抓包以及TUN、VPP packet-generator、真实DN下行灌包命令见
 ### 最新1/6 Session性能A/B（2026-07-30）
 
 固定6 Worker、10us节奏、1428-byte inner IPv4、每档5秒，所有发生器均实际
-送满目标。这里只统计Open5GS N3/N6 memif段，不包含未插线fabric VF之后的
+送满目标。这里只统计xcn N3/N6 memif段，不包含未插线fabric VF之后的
 ARP/NAT/物理链路：
 
 | 实际灌入Session | 方向 | 可重复零丢包边界 | 10G档实际输出 | 10G档段丢包 |
@@ -88,10 +86,10 @@ memif qid 0/1/5，但都归属同一个Session Worker。第二次核心段134,96
 
 该阶段配置为两个 Session Worker、N3/N6专用dispatcher、descriptor lease、
 两个 memif qid、8192-entry ring和20us混合轮询。每档
-目标持续 10 秒；“输入”是实际进入 Open5GS 输入 memif 的包，“丢包”只计算
-Open5GS N3/N6 memif 段，不包含未插网线的 fabric VF 后续 ARP/NAT 丢包。
+目标持续 10 秒；“输入”是实际进入 xcn 输入 memif 的包，“丢包”只计算
+xcn N3/N6 memif 段，不包含未插网线的 fabric VF 后续 ARP/NAT 丢包。
 
-| 方向 | 发包节奏 | 目标 | 输入包 | 输出包 | Open5GS 段丢包 | 实际输出 |
+| 方向 | 发包节奏 | 目标 | 输入包 | 输出包 | xcn 段丢包 | 实际输出 |
 |---|---|---:|---:|---:|---:|---:|
 | 下行 | 10us | 1.2G | 1,050,420 | 1,050,420 | 0 | 1.200G |
 | 下行 | 10us | 2.0G | 1,750,700 | 1,725,778 | 1.424% | 1.972G |
@@ -108,7 +106,7 @@ Open5GS N3/N6 memif 段，不包含未插网线的 fabric VF 后续 ARP/NAT 丢�
 
 这些数字说明当前下行过载输出可达约3.9G，但不能据此宣称稳定支持4G或10G。
 当前严格零丢包仍只确认到下行1.2G。上行发生器本轮未发满目标，表中的零丢包
-只能代表实际1.772G输入下的Open5GS段结果，不能写成“2G零丢包”。后续必须
+只能代表实际1.772G输入下的xcn段结果，不能写成“2G零丢包”。后续必须
 同时报告目标速率、实际提交速率、实际输出和丢包率。
 
 ### 已确认的瓶颈与排除项
@@ -119,7 +117,7 @@ Open5GS N3/N6 memif 段，不包含未插网线的 fabric VF 后续 ARP/NAT 丢�
   201.195G。该结果是共享内存能力，不代表物理网卡吞吐，但足以排除
   “memif 只能跑 3～4G”。
 - 完整路径压力下 `tx-sent == tx-request`；差值发生在
-  `alloc-request - alloc-granted`。因此包在 Open5GS 申请 TX buffer 时丢弃，
+  `alloc-request - alloc-granted`。因此包在 xcn 申请 TX buffer 时丢弃，
   不是提交给 `memif_tx_burst()` 后由 VPP 继续丢弃。
 - 两个 Session 已固定归属两个 Worker，但 N3、N6 的 RX 流量实际上都只进入
   qid 1，qid 0 为零。Session 多 Worker 已实现，入口多队列分流尚未实现；
@@ -169,19 +167,19 @@ Open5GS N3/N6 memif 段，不包含未插网线的 fabric VF 后续 ARP/NAT 丢�
 | 日期 | 修改或隔离实验 | 重要结论 |
 |---|---|---|
 | 2026-07-08 | 原 UDP/TUN 路径基线 | 2 CPU 下行低丢包边界约 1.25～1.3G，上行约 1.7G；不是 CFS quota throttling。 |
-| 2026-07-18 | N6 VPP/memif | 功能可行；包进入 Open5GS 后 memif/VPP 未继续丢，单 UDP 接收/逐包路径约 1.0～1.15G。 |
+| 2026-07-18 | N6 VPP/memif | 功能可行；包进入 xcn 后 memif/VPP 未继续丢，单 UDP 接收/逐包路径约 1.0～1.15G。 |
 | 2026-07-18 | N3/N6 双 memif | external VF 当时实际协商为 1Gbps，不能用于判断 10G 上限；fabric 内部路径证明能够超过 1G。 |
 | 2026-07-21 | Release 优化与 perf | 修正 `-O0` 后过载峰值显著提高；曾观测到约 67% CPU 位于零超时轮询，促成统一 epoll 改造。过载峰值不是稳定吞吐。 |
 | 2026-07-25 | N3 TX 批量 buffer 申请 | 下行 1.2G 从有丢包改善为零丢包，1.25G 丢包约 0.0457%，证明真正的批量申请有效。 |
 | 2026-07-25 | Session 多 Worker、批量分类与投递 | 两个真实 Session 可固定归属两个 Worker，完整 UPF 语义不变；消除了逐包任务池热点，但单 RX qid 和小 burst 唤醒仍限制扩展。 |
 | 2026-07-26 | 统一 epoll 与运行时计数 | dispatcher、Worker queue、RX/refill 和 epoll 均无丢包；压力差值定位到 TX allocation/ring 可用性。 |
 | 2026-07-26 | ring 8192/16384、10us/burst256 A/B | 8192 明显更适合当前单有效 qid；均匀 10us 在部分档位更好，但发包节奏不是唯一瓶颈。 |
-| 2026-07-26 | 裸 memif、VPP placement、drop route 隔离 | 排除 VPP/memif 裸带宽、VPP queue placement 和无网线 ARP 为主要瓶颈，责任收敛到 Open5GS 生产/消费节奏。 |
+| 2026-07-26 | 裸 memif、VPP placement、drop route 隔离 | 排除 VPP/memif 裸带宽、VPP queue placement 和无网线 ARP 为主要瓶颈，责任收敛到 xcn 生产/消费节奏。 |
 | 2026-07-26 | SPSC ring、0/20/50us busy-poll A/B（已回退） | 20us 下行/上行仅输出1.185G/1.181G，段丢包1.262%/1.571%，低于原基线；持续流量时20us已近似全忙轮询，说明单纯去锁和无限忙轮询不能解决TX小批次问题。 |
 | 2026-07-27 | N3/N6专用dispatcher、descriptor lease、0/20/-1 A/B | 消除了dispatcher payload copy且100M功能零丢包；1.2G下行仍是零丢包边界。持续忙轮询收益不稳定，压力转移到单入口qid的有序completion/refill和输出TX allocation。 |
 | 2026-07-27 | 六Session/六Worker全局最少连接分配 | 六个Session实际均分到六个Worker；下行2G、上行4G零丢包，4G下行约0.247%、6G上行约0.643%。六Worker内部无drop，N3/N6单有效RX qid均触及8192 in-flight上限。 |
 | 2026-07-30 | Helm按UPF CPU自动推导Worker与memif队列 | `worker = UPF逻辑CPU - reservedCpus`，默认保留2核给N3/N6 dispatcher；8核实机自动生成6 Worker和双侧6队列，并正确绑定8个CPUManager独占逻辑核。 |
-| 2026-07-30 | UDP/TUN与双memif模式切换实测 | UDP/TUN模式无VPP/VF，6个PFCP Session重建，3个OAI业务TUN各5次ping零丢包；恢复双memif后N3/N6各6 ring connected，N6注入1750包、Open5GS从N3输出1750包，核心memif段零丢包。fabric物理口未插线，因此后者不代表物理端到端回包。 |
+| 2026-07-30 | UDP/TUN与双memif模式切换实测 | UDP/TUN模式无VPP/VF，6个PFCP Session重建，3个OAI业务TUN各5次ping零丢包；恢复双memif后N3/N6各6 ring connected，N6注入1750包、xcn从N3输出1750包，核心memif段零丢包。fabric物理口未插线，因此后者不代表物理端到端回包。 |
 | 2026-07-30 | 独立VCL/VF发生器隔离 | 1 Session、1.2G、20秒下，内置PG输出1.1954G/丢0.3816%；独立VCL两次只输出1.0918G/1.0571G，核心段丢4.0611%/6.7967%。排除PG抢占为主因，定位到外部VF rx-miss、N6 input ring、单owner Worker队列及N3 TX四段反压。 |
 | 2026-07-30 | 直接路径、聚合、反压、TX重试A/B | 直接路径证明dispatcher→Worker架构贡献部分回退，但仍非零丢包；64包/8us聚合、未触发的队列重投和3次/10us N3 TX重试均无收益或明显变差，已全部回退。基线恢复后1.2G/20秒输出约1.198～1.200G、丢包0.205%和0.0367%。 |
 | 2026-07-30 | 当前下行perf | Session worker的时间读取约占15%以上、mutex unlock 13.91%、queue pop 6.03%；N6 dispatcher的mutex lock 28.80%。VPP侧主要为正常DPDK/memif节点。下一步优先减少高频计时和completion/dispatcher锁竞争。 |
@@ -196,7 +194,7 @@ Open5GS N3/N6 memif 段，不包含未插网线的 fabric VF 后续 ARP/NAT 丢�
    `alloc-short/alloc-fail`、VPP memif input调度间隔和TX burst分布。不要让
    唯一owner Worker原地重试，也不要把已有RX batch合并成更大的集中突发。
 3. 实现真实入口多 qid：N3 按 TEID、N6 按 UE IP 分流，并使
-   `qid -> Session owner -> Worker -> TX qid` 一一对应。优先通过 Open5GS
+   `qid -> Session owner -> Worker -> TX qid` 一一对应。优先通过 xcn
    和 VPP 现有配置/API 完成，不修改 VPP 源码。
 4. descriptor lease已完成，不再重做payload内存池复制；继续保留控制/异常
    报文复制回退和完整UPF语义。completion也已是无锁原子完成标记，不再替换
@@ -210,38 +208,17 @@ Open5GS N3/N6 memif 段，不包含未插网线的 fabric VF 后续 ARP/NAT 丢�
 - 日期、代码 commit/镜像、拓扑和物理链路速率；
 - Session、Worker、RX/TX qid、ring、CPU/cpuset 配置；
 - 包长、方向、发包节奏、目标速率、实际提交速率和持续时间；
-- 输入包、输出包、Open5GS 段丢包率及精确丢包点；
+- 输入包、输出包、xcn 段丢包率及精确丢包点；
 - 是否经过物理网卡，是否包含 ARP/NAT/VF 等下游丢包；
 - 本轮能证明什么、不能证明什么，以及下一项实验。
 
 性能结论必须区分“零/低丢包稳定吞吐”和“高丢包过载峰值”，不得用目标速率代替
 实际提交速率，也不得用共享内存内部吞吐代替 X710/E810 物理口吞吐。
 
-## Sponsors
+## Community and contributing
 
-If you find Open5GS useful for work, please consider supporting this Open Source project by [Becoming a sponsor](https://github.com/sponsors/acetcom). To manage the funding transactions transparently, you can donate through [OpenCollective](https://opencollective.com/open5gs).
+Report issues and submit pull requests in [this repository](https://github.com/xiazhangtao1/open5gs).
 
-<p align="center">
-  <a target="_blank" href="https://open5gs.org/#sponsors">
-      <img alt="sponsors" src="https://open5gs.org/assets/img/sponsors.svg">
-  </a>
-</p>
+## License and upstream attribution
 
-## Community
-
-- Problem with Open5GS can be filed as [issues](https://github.com/open5gs/open5gs/issues) in this repository.
-- Other topics related to this project are happening on the [discussions](https://github.com/open5gs/open5gs/discussions).
-- Voice and text chat are available in Open5GS's [Discord](https://discordapp.com/) workspace. Use [this link](https://discord.gg/GreNkuc) to get started.
-
-## Contributing
-
-If you're contributing through a pull request to Open5GS project on GitHub, please read the [Contributor License Agreement](https://open5gs.org/open5gs/cla/) in advance.
-
-## License
-
-- Open5GS Open Source files are made available under the terms of the GNU Affero General Public License ([GNU AGPL v3.0](https://www.gnu.org/licenses/agpl-3.0.html)).
-- [Commercial licenses](https://open5gs.org/open5gs/support/) are also available from [NewPlane](https://newplane.io/) at [sales@newplane.io](mailto:sales@newplane.io).
-
-## Support
-
-Technical support and customized services for Open5GS are provided by [NewPlane](https://newplane.io/) at [support@newplane.io](mailto:support@newplane.io).
+xcn is derived from [Open5GS](https://github.com/open5gs/open5gs) and is distributed under the [GNU AGPL v3.0](LICENSE). Original copyright notices and third-party licenses are preserved. Historical upstream documentation, issue links, contribution agreements and diagrams remain available for reference.

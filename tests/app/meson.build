@@ -1,6 +1,6 @@
 # Copyright (C) 2019,2020 by Sukchan Lee <acetcom@gmail.com>
 
-# This file is part of Open5GS.
+# This file is part of xcn.
 
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published by
@@ -18,7 +18,7 @@
 
 libtestapp_inc = include_directories('.')
 
-libtestepc_cc_args = '-DDEFAULT_CONFIG_FILENAME="@0@/configs/sample.yaml"'.format(open5gs_build_dir)
+libtestepc_cc_args = '-DDEFAULT_CONFIG_FILENAME="@0@/configs/sample.yaml"'.format(xcn_build_dir)
 
 libtestepc_sources = files('''
     epc-init.c
@@ -46,7 +46,7 @@ executable('epc',
     include_directories : srcinc,
     dependencies : libtestepc_dep)
 
-libtest5gc_cc_args = '-DDEFAULT_CONFIG_FILENAME="@0@/configs/sample.yaml"'.format(open5gs_build_dir)
+libtest5gc_cc_args = '-DDEFAULT_CONFIG_FILENAME="@0@/configs/sample.yaml"'.format(xcn_build_dir)
 
 libtest5gc_sources = files('''
     5gc-init.c
@@ -74,7 +74,7 @@ executable('5gc',
     include_directories : srcinc,
     dependencies : libtest5gc_dep)
 
-libtestapp_cc_args = '-DDEFAULT_CONFIG_FILENAME="@0@/configs/sample.yaml"'.format(open5gs_build_dir)
+libtestapp_cc_args = '-DDEFAULT_CONFIG_FILENAME="@0@/configs/sample.yaml"'.format(xcn_build_dir)
 
 libtestapp_sources = files('''
     app-init.c

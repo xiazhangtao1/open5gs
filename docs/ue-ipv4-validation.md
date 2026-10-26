@@ -107,7 +107,7 @@ docker exec \
   -e XCN_QOS_TEST_MSIN=0000000905 -e XCN_QOS_CYCLES=100 \
   -e XCN_QOS_PING_IP=10.66.12.254 \
   -e XCN_FORWARDING_GNB1_ADDR=10.2.0.233 \
-  xcn-ue-ipv4-test /open5gs/build/tests/vonr/vonr \
+  xcn-ue-ipv4-test /xcn/build/tests/vonr/vonr \
   -q -c /results/qos-live.yaml dedicated-bearer-test
 ```
 
@@ -181,7 +181,7 @@ UPF 为 30，VPP 为 53，AMF 随测试连接为 36–37，PCF 建立连接后�
 内层 IPv4 源/目的地址及 ICMP Echo Reply，同时检查承载创建、优先级修改、
 取消覆盖、access 恢复、并发双会话和删除。
 
-测试程序应在 `/open5gs/build/tests/vonr/vonr` 运行，保持构建目录的 RPATH
+测试程序应在 `/xcn/build/tests/vonr/vonr` 运行，保持构建目录的 RPATH
 及同一构建的动态库。首次搬到 `/results` 后误加载系统旧库，导致 TUN QFI
 解析断言失败；抓包确认实际回包 QFI 正确，放回构建目录后两组完整重跑通过。
 一次提前启动的第二测试进程因共享 AF 端口冲突退出，也未计为通过。

@@ -1,0 +1,3 @@
+usr/bin/xcn-sgwcd
+configs/xcn/sgwc.yaml etc/xcn
+configs/systemd/xcn-sgwcd.service lib/systemd/system

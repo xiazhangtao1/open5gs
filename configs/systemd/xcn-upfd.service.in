@@ -1,0 +1,19 @@
+[Unit]
+Description=xcn UPF Daemon
+After=network-online.target systemd-networkd.service
+Wants=systemd-networkd.service
+
+[Service]
+Type=simple
+
+User=xcn
+Group=xcn
+
+Restart=always
+ExecStart=@bindir@/xcn-upfd -c @sysconfdir@/xcn/upf.yaml
+RestartSec=2
+RestartPreventExitStatus=1
+ExecReload=/bin/kill -HUP $MAINPID
+
+[Install]
+WantedBy=multi-user.target

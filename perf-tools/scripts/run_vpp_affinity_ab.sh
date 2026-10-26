@@ -5,11 +5,11 @@ pod=${1:?usage: run_vpp_affinity_ab.sh POD MBPS DURATION UE_IP [OUTPUT]}
 mbps=${2:?total Mbps}
 duration=${3:?duration seconds}
 ue_ip=${4:?UE IPv4 address}
-output=${5:-/tmp/open5gs-vpp-affinity-ab-$(date +%Y%m%d-%H%M%S).log}
+output=${5:-/tmp/xcn-vpp-affinity-ab-$(date +%Y%m%d-%H%M%S).log}
 runs=${RUNS_PER_MODE:-3}
 script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 lock_name=${pod//[^a-zA-Z0-9_.-]/_}
-lock_file=${VPP_AFFINITY_AB_LOCK_FILE:-/tmp/open5gs-vpp-affinity-ab-"$lock_name".lock}
+lock_file=${VPP_AFFINITY_AB_LOCK_FILE:-/tmp/xcn-vpp-affinity-ab-"$lock_name".lock}
 
 exec 8>"$lock_file"
 if ! flock -n 8; then
@@ -79,7 +79,7 @@ restore_isolated() {
 trap restore_isolated EXIT
 
 {
-    echo "OPEN5GS_VPP_AFFINITY_AB pod=$pod mbps=$mbps duration=$duration ue_ip=$ue_ip runs=$runs"
+    echo "XCN_VPP_AFFINITY_AB pod=$pod mbps=$mbps duration=$duration ue_ip=$ue_ip runs=$runs"
     for phase in dense:A1 isolated:B dense:A2; do
         mode=${phase%%:*}
         label=${phase##*:}

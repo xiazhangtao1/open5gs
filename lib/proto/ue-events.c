@@ -158,9 +158,9 @@ static bool unsigned_value(const char *s, uint64_t *value)
 
 void ogs_ue_events_open(const char *nf)
 {
-    const char *enabled = getenv("OPEN5GS_UE_EVENTS_ENABLED");
-    const char *cap = getenv("OPEN5GS_UE_EVENTS_CAPACITY");
-    const char *per = getenv("OPEN5GS_UE_EVENTS_PER_UE");
+    const char *enabled = getenv("XCN_UE_EVENTS_ENABLED");
+    const char *cap = getenv("XCN_UE_EVENTS_CAPACITY");
+    const char *per = getenv("XCN_UE_EVENTS_PER_UE");
     uint64_t capacity = 65536, per_ue = 512;
     bool valid = (!cap || unsigned_value(cap, &capacity)) &&
         (!per || unsigned_value(per, &per_ue));

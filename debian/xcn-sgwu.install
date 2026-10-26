@@ -1,0 +1,3 @@
+usr/bin/xcn-sgwud
+configs/xcn/sgwu.yaml etc/xcn
+configs/systemd/xcn-sgwud.service lib/systemd/system

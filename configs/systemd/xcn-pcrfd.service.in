@@ -1,0 +1,18 @@
+[Unit]
+Description=xcn PCRF Daemon
+Wants=mongodb.service mongod.service
+
+[Service]
+Type=simple
+
+User=xcn
+Group=xcn
+
+Restart=always
+ExecStart=@bindir@/xcn-pcrfd -c @sysconfdir@/xcn/pcrf.yaml
+RestartSec=2
+RestartPreventExitStatus=1
+ExecReload=/bin/kill -HUP $MAINPID
+
+[Install]
+WantedBy=multi-user.target

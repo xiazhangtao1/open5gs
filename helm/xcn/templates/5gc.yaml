@@ -410,7 +410,7 @@ spec:
               sed \
                 -e "s|__UPF_GTPU_SERVER_ADDRESS__|${UPF_GTPU_SERVER_ADDRESS}|g" \
                 -e "s|__UPF_GTPU_ADVERTISE_ADDRESS__|${UPF_GTPU_ADVERTISE_ADDRESS}|g" \
-                /etc/open5gs/upf.yaml.tmpl > /tmp/upf.yaml
+                /etc/xcn/upf.yaml.tmpl > /tmp/upf.yaml
               echo "=== rendered /tmp/upf.yaml ==="
               cat /tmp/upf.yaml
               echo "=== ip addr ==="
@@ -441,8 +441,8 @@ spec:
                 echo "ERROR: TCP port 9093 is already in use before UPF start" >&2
                 exit 1
               fi
-              /usr/local/bin/open5gs-k8s-setup
-              exec open5gs-upfd -c /tmp/upf.yaml
+              /usr/local/bin/xcn-k8s-setup
+              exec xcn-upfd -c /tmp/upf.yaml
           securityContext:
             privileged: true
             capabilities:
@@ -479,9 +479,9 @@ spec:
 {{ toYaml .Values.resources.fivegc.upf | indent 12 }}
           volumeMounts:
             - name: config
-              mountPath: /etc/open5gs
+              mountPath: /etc/xcn
             - name: logs
-              mountPath: /var/log/open5gs
+              mountPath: /var/log/xcn
 {{- if .Values.monitor.enabled }}
             - name: upf-stats
               mountPath: {{ dir .Values.networking.upf.rateStats.socket }}
@@ -642,7 +642,7 @@ spec:
             - -ec
             - |
               /usr/local/bin/wait-for-tcp.sh {{ include "xcn.componentName" (dict "root" . "component" "scp") }}:7777 127.0.0.1:9093
-              exec open5gs-smfd -c /etc/open5gs/smf.yaml
+              exec xcn-smfd -c /etc/xcn/smf.yaml
 {{- if not .Values.fivegc.hostNetwork.enabled }}
           ports:
             - name: smf-sbi
@@ -676,9 +676,9 @@ spec:
               mountPath: /run/xcn-trace
 {{- end }}
             - name: config
-              mountPath: /etc/open5gs
+              mountPath: /etc/xcn
             - name: logs
-              mountPath: /var/log/open5gs
+              mountPath: /var/log/xcn
 {{- include "xcn.localtimeVolumeMount" . | nindent 12 }}
         - name: amf
           image: {{ printf "%s:%s" .Values.images.runtime.repository .Values.images.runtime.tag }}
@@ -701,8 +701,8 @@ spec:
             - |
               /usr/local/bin/wait-for-tcp.sh {{ include "xcn.componentName" (dict "root" . "component" "scp") }}:7777
               AMF_NGAP_SERVER_ADDRESS="${AMF_NGAP_SERVER_ADDRESS:-$HOST_IP}"
-              sed "s|__AMF_NGAP_SERVER_ADDRESS__|${AMF_NGAP_SERVER_ADDRESS}|g" /etc/open5gs/amf.yaml.tmpl > /tmp/amf.yaml
-              exec open5gs-amfd -c /tmp/amf.yaml
+              sed "s|__AMF_NGAP_SERVER_ADDRESS__|${AMF_NGAP_SERVER_ADDRESS}|g" /etc/xcn/amf.yaml.tmpl > /tmp/amf.yaml
+              exec xcn-amfd -c /tmp/amf.yaml
 {{- if not .Values.fivegc.hostNetwork.enabled }}
           ports:
             - name: amf-sbi
@@ -742,9 +742,9 @@ spec:
               mountPath: /run/xcn-trace
 {{- end }}
             - name: config
-              mountPath: /etc/open5gs
+              mountPath: /etc/xcn
             - name: logs
-              mountPath: /var/log/open5gs
+              mountPath: /var/log/xcn
 {{- include "xcn.localtimeVolumeMount" . | nindent 12 }}
         - name: ausf
           image: {{ printf "%s:%s" .Values.images.runtime.repository .Values.images.runtime.tag }}
@@ -759,7 +759,7 @@ spec:
             - -ec
             - |
               /usr/local/bin/wait-for-tcp.sh {{ include "xcn.componentName" (dict "root" . "component" "scp") }}:7777
-              exec open5gs-ausfd -c /etc/open5gs/ausf.yaml
+              exec xcn-ausfd -c /etc/xcn/ausf.yaml
 {{- if not .Values.fivegc.hostNetwork.enabled }}
           ports:
             - name: ausf-sbi
@@ -786,9 +786,9 @@ spec:
 {{ toYaml .Values.resources.fivegc.ausf | indent 12 }}
           volumeMounts:
             - name: config
-              mountPath: /etc/open5gs
+              mountPath: /etc/xcn
             - name: logs
-              mountPath: /var/log/open5gs
+              mountPath: /var/log/xcn
 {{- include "xcn.localtimeVolumeMount" . | nindent 12 }}
         - name: udm
           image: {{ printf "%s:%s" .Values.images.runtime.repository .Values.images.runtime.tag }}
@@ -803,7 +803,7 @@ spec:
             - -ec
             - |
               /usr/local/bin/wait-for-tcp.sh {{ include "xcn.componentName" (dict "root" . "component" "scp") }}:7777
-              exec open5gs-udmd -c /etc/open5gs/udm.yaml
+              exec xcn-udmd -c /etc/xcn/udm.yaml
 {{- if not .Values.fivegc.hostNetwork.enabled }}
           ports:
             - name: udm-sbi
@@ -830,11 +830,11 @@ spec:
 {{ toYaml .Values.resources.fivegc.udm | indent 12 }}
           volumeMounts:
             - name: config
-              mountPath: /etc/open5gs
+              mountPath: /etc/xcn
             - name: logs
-              mountPath: /var/log/open5gs
+              mountPath: /var/log/xcn
             - name: hnet
-              mountPath: /etc/open5gs/hnet
+              mountPath: /etc/xcn/hnet
 {{- include "xcn.localtimeVolumeMount" . | nindent 12 }}
         - name: udr
           image: {{ printf "%s:%s" .Values.images.runtime.repository .Values.images.runtime.tag }}
@@ -849,7 +849,7 @@ spec:
             - -ec
             - |
               /usr/local/bin/wait-for-tcp.sh {{ include "xcn.componentName" (dict "root" . "component" "mongodb") }}:27017 {{ include "xcn.componentName" (dict "root" . "component" "scp") }}:7777
-              exec open5gs-udrd -c /etc/open5gs/udr.yaml
+              exec xcn-udrd -c /etc/xcn/udr.yaml
 {{- if not .Values.fivegc.hostNetwork.enabled }}
           ports:
             - name: udr-sbi
@@ -876,9 +876,9 @@ spec:
 {{ toYaml .Values.resources.fivegc.udr | indent 12 }}
           volumeMounts:
             - name: config
-              mountPath: /etc/open5gs
+              mountPath: /etc/xcn
             - name: logs
-              mountPath: /var/log/open5gs
+              mountPath: /var/log/xcn
 {{- include "xcn.localtimeVolumeMount" . | nindent 12 }}
         - name: nssf
           image: {{ printf "%s:%s" .Values.images.runtime.repository .Values.images.runtime.tag }}
@@ -893,7 +893,7 @@ spec:
             - -ec
             - |
               /usr/local/bin/wait-for-tcp.sh {{ include "xcn.componentName" (dict "root" . "component" "scp") }}:7777 {{ include "xcn.componentName" (dict "root" . "component" "nrf") }}:7777
-              exec open5gs-nssfd -c /etc/open5gs/nssf.yaml
+              exec xcn-nssfd -c /etc/xcn/nssf.yaml
 {{- if not .Values.fivegc.hostNetwork.enabled }}
           ports:
             - name: nssf-sbi
@@ -920,9 +920,9 @@ spec:
 {{ toYaml .Values.resources.fivegc.nssf | indent 12 }}
           volumeMounts:
             - name: config
-              mountPath: /etc/open5gs
+              mountPath: /etc/xcn
             - name: logs
-              mountPath: /var/log/open5gs
+              mountPath: /var/log/xcn
 {{- include "xcn.localtimeVolumeMount" . | nindent 12 }}
         - name: pcf
           image: {{ printf "%s:%s" .Values.images.runtime.repository .Values.images.runtime.tag }}
@@ -932,7 +932,7 @@ spec:
             - -ec
             - |
               /usr/local/bin/wait-for-tcp.sh {{ include "xcn.componentName" (dict "root" . "component" "mongodb") }}:27017 {{ include "xcn.componentName" (dict "root" . "component" "scp") }}:7777
-              exec open5gs-pcfd -c /etc/open5gs/pcf.yaml
+              exec xcn-pcfd -c /etc/xcn/pcf.yaml
 {{- if not .Values.fivegc.hostNetwork.enabled }}
           ports:
             - name: pcf-sbi
@@ -962,9 +962,9 @@ spec:
 {{ toYaml .Values.resources.fivegc.pcf | indent 12 }}
           volumeMounts:
             - name: config
-              mountPath: /etc/open5gs
+              mountPath: /etc/xcn
             - name: logs
-              mountPath: /var/log/open5gs
+              mountPath: /var/log/xcn
 {{- include "xcn.localtimeVolumeMount" . | nindent 12 }}
       volumes:
 {{- if dig "trace" "enabled" false .Values.monitor }}

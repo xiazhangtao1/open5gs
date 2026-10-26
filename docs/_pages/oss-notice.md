@@ -5,6 +5,8 @@ subject: OSS Notice
 permalink: /oss-notice/
 ---
 
+xcn is derived from [Open5GS](https://github.com/open5gs/open5gs). Original author notices and upstream license documents are preserved.
+
 The following sets forth attribution notices for third party software that may be contained in this repository.
 
 If you have any questions or concerns, please contact us at <a href="mailto:acetcom@gmail.com">acetcom@gmail.com</a>

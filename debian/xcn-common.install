@@ -1,0 +1,6 @@
+usr/lib/*/libogs*.so*
+usr/lib/*/libfd*.so*
+usr/lib/*/freeDiameter/*.fdx
+usr/lib/*/lib*prom*.so*
+configs/xcn/tls/ca.crt /etc/xcn/tls
+configs/logrotate/xcn /etc/logrotate.d

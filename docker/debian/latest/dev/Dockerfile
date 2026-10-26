@@ -1,7 +1,7 @@
 ARG dist=ubuntu
 ARG tag=latest
 ARG username=acetcom
-FROM ${username}/${dist}-${tag}-open5gs-base
+FROM ${username}/${dist}-${tag}-xcn-base
 
 LABEL org.opencontainers.image.authors="Sukchan Lee <acetcom@gmail.com>"
 

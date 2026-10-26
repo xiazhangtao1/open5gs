@@ -386,7 +386,7 @@ static void test_nas_trace(void)
     uint8_t bytes[OGS_TRACE_MAX_PDU + OGS_TRACE_WIRE_HEADER];
     ogs_assert(mkdtemp(directory));
     setenv("XCN_TRACE_DIR", directory, 1); setenv("XCN_TRACE_ENABLED", "1", 1);
-    setenv("OPEN5GS_UE_EVENTS_CAPACITY", "64", 1); setenv("OPEN5GS_UE_EVENTS_PER_UE", "8", 1);
+    setenv("XCN_UE_EVENTS_CAPACITY", "64", 1); setenv("XCN_UE_EVENTS_PER_UE", "8", 1);
     ogs_ue_events_open("AMF");
     snprintf(path, sizeof(path), "%s/AMF.ring", directory);
     void *reader = xcn_trace_reader_open(path); ogs_assert(reader);
@@ -435,7 +435,7 @@ static void test_nas_trace(void)
     xcn_trace_reader_close(reader); ogs_ue_events_final();
     unlink(path); rmdir(directory);
     unsetenv("XCN_TRACE_DIR"); unsetenv("XCN_TRACE_ENABLED");
-    unsetenv("OPEN5GS_UE_EVENTS_CAPACITY"); unsetenv("OPEN5GS_UE_EVENTS_PER_UE");
+    unsetenv("XCN_UE_EVENTS_CAPACITY"); unsetenv("XCN_UE_EVENTS_PER_UE");
 }
 
 int main(void)

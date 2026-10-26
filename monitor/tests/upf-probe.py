@@ -6,7 +6,7 @@ import socket
 import time
 
 parser = argparse.ArgumentParser(description=__doc__)
-parser.add_argument('--socket', default='/run/open5gs/upf-stats.sock')
+parser.add_argument('--socket', default='/run/xcn/upf-stats.sock')
 parser.add_argument('--seconds', type=int, default=150)
 parser.add_argument('--output', type=Path, required=True)
 args = parser.parse_args()

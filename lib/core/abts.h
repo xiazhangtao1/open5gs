@@ -18,7 +18,7 @@
  * abts.h
  *
  * This code is taken from the APR library.
- * Modified by Sukchan Lee to fit Open5GS coding style.
+ * Modified by Sukchan Lee to fit xcn coding style.
  */
 #ifdef __cplusplus
 extern "C" {

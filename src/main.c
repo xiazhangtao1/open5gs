@@ -1,7 +1,7 @@
 /*
  * Copyright (C) 2019-2025 by Sukchan Lee <acetcom@gmail.com>
  *
- * This file is part of Open5GS.
+ * This file is part of xcn.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
@@ -26,7 +26,7 @@
 
 static void show_version(void)
 {
-    printf("Open5GS %s\n\n", OPEN5GS_VERSION);
+    printf("xcn %s\n\n", XCN_VERSION);
 }
 
 static void show_help(const char *name)
@@ -207,12 +207,12 @@ int main(int argc, const char *const argv[])
     ogs_signal_init();
     ogs_setup_signal_thread();
 
-    rv = ogs_app_initialize(OPEN5GS_VERSION, DEFAULT_CONFIG_FILENAME, argv_out);
+    rv = ogs_app_initialize(XCN_VERSION, DEFAULT_CONFIG_FILENAME, argv_out);
     if (rv != OGS_OK) {
         if (rv == OGS_RETRY)
             return EXIT_SUCCESS;
 
-        ogs_fatal("Open5GS initialization failed. Aborted");
+        ogs_fatal("xcn initialization failed. Aborted");
         return OGS_ERROR;
     }
 
@@ -221,14 +221,14 @@ int main(int argc, const char *const argv[])
         if (rv == OGS_RETRY)
             return EXIT_SUCCESS;
 
-        ogs_fatal("Open5GS initialization failed. Aborted");
+        ogs_fatal("xcn initialization failed. Aborted");
         return OGS_ERROR;
     }
 
     atexit(terminate);
     ogs_signal_thread(check_signal);
 
-    ogs_info("Open5GS daemon terminating...");
+    ogs_info("xcn daemon terminating...");
 
     return OGS_OK;
 }

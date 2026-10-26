@@ -1,6 +1,6 @@
 # Copyright (C) 2022 by sysmocom - s.f.m.c. GmbH <info@sysmocom.de>
 
-# This file is part of Open5GS.
+# This file is part of xcn.
 
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published by
@@ -57,7 +57,7 @@ if meson.version().version_compare('>=0.51.0')
 #
 # @pepsin
 # generated cmake subproject seems to include
-# open5gs/subprojects/prometheus-client-c/__CMake_build as include, which
+# xcn/subprojects/prometheus-client-c/__CMake_build as include, which
 # doesn't exist and fail:
 #
 #    missing_include_dir = join_paths(meson.current_source_dir(), '../../subprojects/prometheus-client-c/__CMake_build')

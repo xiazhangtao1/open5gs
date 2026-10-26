@@ -1,0 +1,18 @@
+[Unit]
+Description=xcn UDM Daemon
+After=network-online.target
+
+[Service]
+Type=simple
+
+User=xcn
+Group=xcn
+
+Restart=always
+ExecStart=@bindir@/xcn-udmd -c @sysconfdir@/xcn/udm.yaml
+RestartSec=2
+RestartPreventExitStatus=1
+ExecReload=/bin/kill -HUP $MAINPID
+
+[Install]
+WantedBy=multi-user.target

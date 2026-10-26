@@ -43,14 +43,14 @@ Use SSH to log into the CentOS Stream 8 VM:
 vagrant ssh
 ```
 
-Note that the Open5GS source is *not* copied into the VM.  The instructions
-below provide the step by step instructions for setting up Open5GS for
+Note that the xcn source is *not* copied into the VM.  The instructions
+below provide the step by step instructions for setting up xcn for
 either a bare metal or virtual CentOS Stream 8 system.
 
 The rest of the commands below are performed inside the CentOS VM as the
 user 'vagrant', or on your bare metal CentOS Stream 8 system as any normal user.
 
-## Install prerequisite packages to build and run Open5GS
+## Install prerequisite packages to build and run xcn
 ---
 
 ### Enable CentOS Stream 8 PowerTools repository
@@ -104,7 +104,7 @@ $ sudo dnf -y install mongodb-org
 
 ### Install the dependencies for building the source code.
 ---
-Open5GS requires several packages which are not installed by default in
+xcn requires several packages which are not installed by default in
 a base CentOS Stream 8 installation.
 
 
@@ -151,7 +151,7 @@ This is important when you try to load the SCTP kernel module later.
 
 ### Check the SCTP kernel module
 ---
-Open5GS requires the Linux SCTP kernel module to be loaded in the kernel.
+xcn requires the Linux SCTP kernel module to be loaded in the kernel.
 In the CentOS Stream 8 Vagrant box SCTP is not loaded into the kernel automatically
 so must be installed as follows:
 
@@ -164,32 +164,32 @@ $ sudo dmesg | grep sctp
 [  639.971360] sctp: Hash tables configured (bind 256/256)
 ```
 
-## Build Open5GS from Source
+## Build xcn from Source
 ---
 
-### Git clone the Open5GS source code.
+### Git clone the xcn source code.
 ---
 
-Clone a copy of the open5GS source code from github:
+Clone a copy of the xcn source code from github:
 
 ```bash
 $ cd ~
-$ git clone https://github.com/{{ site.github_username }}/open5gs
+$ git clone --branch open5gs-basev277-develop https://github.com/{{ site.github_username }}/{{ site.github_repository }}.git xcn
 ```
 
-### Compile the Open5GS source.
+### Compile the xcn source.
 ---
 
 Compile the source using `meson`.  Note that this sets the installation prefix
-to `~/open5gs/install`:
+to `~/xcn/install`:
 
 ```bash
-$ cd ~/open5gs
+$ cd ~/xcn
 $ meson build --prefix=`pwd`/install
 $ ninja -C build
 ```
 
-## Run and Test Open5GS
+## Run and Test xcn
 ---
 
 ### Start MongoDB
@@ -270,20 +270,20 @@ $ ip link show
 
 **Notice:** This configuration is not persistent after rebooting. The
 script provided in [$GIT_REPO/misc/netconf.sh](https://github.com/{{
-site.github_username }}/open5gs/blob/main/misc/netconf.sh) makes it easy
+site.github_username }}/{{ site.github_repository }}/blob/open5gs-basev277-develop/misc/netconf.sh) makes it easy
 to configure the TUN device as follows:
 `$ sudo ./misc/netconf.sh`
 {: .notice--info}
 
-## Testing Open5GS
+## Testing xcn
 ---
 
-### Run Individual Open5GS tests.
+### Run Individual xcn tests.
 ----
-Open5GS test applications are created in the `~/open5gs/build/tests` directory.
+xcn test applications are created in the `~/xcn/build/tests` directory.
 
 ```bash
-$ cd ~/open5gs
+$ cd ~/xcn
 
 $ ./build/tests/attach/attach ## EPC Only
 s1setup-test        : SUCCESS
@@ -307,12 +307,12 @@ All tests passed.
 
 ```
 
-### Run all Open5GS tests.
+### Run all xcn tests.
 ----
 
-Run all Open5GS test programs:
+Run all xcn test programs:
 ```bash
-$ cd ~/open5gs
+$ cd ~/xcn
 $ cd build
 $ meson test -v
 ```
@@ -321,28 +321,28 @@ $ meson test -v
 {: .notice--info}
 
 
-### Installing Open5GS.
+### Installing xcn.
 ----
 
-Open5GS can be installed using meson as well.  This will install the
-product to `$(HOME)/open5gs/install` if the `prefix` was set as shown above.
+xcn can be installed using meson as well.  This will install the
+product to `$(HOME)/xcn/install` if the `prefix` was set as shown above.
 
 ```bash
-$ cd ~/open5gs
+$ cd ~/xcn
 $ cd build
 $ ninja install
 $ cd ../
 $ ls install/bin
-open5gs-amfd   open5gs-mmed   open5gs-pcrfd  open5gs-sgwud  open5gs-upfd
-open5gs-ausfd  open5gs-nrfd   open5gs-scpd   open5gs-smfd
-open5gs-bsfd   open5gs-nssfd  open5gs-seppd  open5gs-udmd
-open5gs-hssd   open5gs-pcfd   open5gs-sgwcd  open5gs-udrd
+xcn-amfd   xcn-mmed   xcn-pcrfd  xcn-sgwud  xcn-upfd
+xcn-ausfd  xcn-nrfd   xcn-scpd   xcn-smfd
+xcn-bsfd   xcn-nssfd  xcn-seppd  xcn-udmd
+xcn-hssd   xcn-pcfd   xcn-sgwcd  xcn-udrd
 ```
 
-## Building WebUI of Open5GS
+## Building WebUI of xcn
 ---
 
-[Node.js](https://nodejs.org/) is required to build WebUI of Open5GS
+[Node.js](https://nodejs.org/) is required to build WebUI of xcn
 
 Install Node.js:
 ```bash
@@ -352,7 +352,7 @@ $ sudo dnf install nodejs
 
 Install the dependencies to run WebUI
 ```bash
-$ cd ~/open5gs
+$ cd ~/xcn
 $ cd webui
 $ npm ci
 ```
@@ -360,5 +360,5 @@ $ npm ci
 The WebUI runs as an [npm](https://www.npmjs.com/) script.
 
 ```bash
-$ DB_URI=mongodb://127.0.0.1/open5gs HOSTNAME=0.0.0.0 npm run dev
+$ DB_URI=mongodb://127.0.0.1/xcn HOSTNAME=0.0.0.0 npm run dev
 ```

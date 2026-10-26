@@ -52,7 +52,7 @@ spec:
         - name: nrf
           image: {{ printf "%s:%s" .Values.images.runtime.repository .Values.images.runtime.tag }}
           imagePullPolicy: {{ .Values.images.runtime.pullPolicy }}
-          command: ["open5gs-nrfd", "-c", "/etc/open5gs/nrf.yaml"]
+          command: ["xcn-nrfd", "-c", "/etc/xcn/nrf.yaml"]
           ports:
             - name: nrf-sbi
               containerPort: 7777
@@ -77,9 +77,9 @@ spec:
 {{ toYaml .Values.resources.core.nrf | indent 12 }}
           volumeMounts:
             - name: config
-              mountPath: /etc/open5gs
+              mountPath: /etc/xcn
             - name: logs
-              mountPath: /var/log/open5gs
+              mountPath: /var/log/xcn
 {{- include "xcn.localtimeVolumeMount" . | nindent 12 }}
         - name: scp
           image: {{ printf "%s:%s" .Values.images.runtime.repository .Values.images.runtime.tag }}
@@ -94,7 +94,7 @@ spec:
             - -ec
             - |
               /usr/local/bin/wait-for-tcp.sh 127.0.0.1:7777
-              exec open5gs-scpd -c /etc/open5gs/scp.yaml
+              exec xcn-scpd -c /etc/xcn/scp.yaml
           ports:
             - name: scp-sbi
               containerPort: 7778
@@ -119,9 +119,9 @@ spec:
 {{ toYaml .Values.resources.core.scp | indent 12 }}
           volumeMounts:
             - name: config
-              mountPath: /etc/open5gs
+              mountPath: /etc/xcn
             - name: logs
-              mountPath: /var/log/open5gs
+              mountPath: /var/log/xcn
 {{- include "xcn.localtimeVolumeMount" . | nindent 12 }}
       volumes:
         - name: config

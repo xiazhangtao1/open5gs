@@ -25,7 +25,7 @@
 #include "inspect.h"
 #include "ue-events-cli.h"
 
-#define DEFAULT_SOCKET "/run/open5gs/upf-stats.sock"
+#define DEFAULT_SOCKET "/run/xcn/upf-stats.sock"
 #define REQUEST_SIZE 512
 #define RESPONSE_SIZE (4 * 1024 * 1024)
 #define MAX_COLUMNS 24
@@ -962,9 +962,9 @@ int main(int argc, char *argv[])
         { NULL, 0, NULL, 0 }
     };
     const char *socket_path = DEFAULT_SOCKET;
-    const char *smf_pdu_info_url = getenv("OPEN5GS_SMF_PDU_INFO_URL");
-    const char *amf_ue_info_url = getenv("OPEN5GS_AMF_UE_INFO_URL");
-    const char *amf_gnb_info_url = getenv("OPEN5GS_AMF_GNB_INFO_URL");
+    const char *smf_pdu_info_url = getenv("XCN_SMF_PDU_INFO_URL");
+    const char *amf_ue_info_url = getenv("XCN_AMF_UE_INFO_URL");
+    const char *amf_gnb_info_url = getenv("XCN_AMF_GNB_INFO_URL");
     xcnctl_inspect_options_t inspect = {0};
     bool is_rate;
     bool rate_options = false;

@@ -1,7 +1,7 @@
 /*
  * Copyright (C) 2019 by Sukchan Lee <acetcom@gmail.com>
  *
- * This file is part of Open5GS.
+ * This file is part of xcn.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
@@ -141,7 +141,7 @@ static void diam_log_func(int printlevel, const char *format, va_list ap)
         if (!strcmp(buffer, " - The certificate is expired.")) {
             ogs_error("You can renew CERT as follows:");
             ogs_error("./support/freeDiameter/make_certs.sh "
-                    "./install/etc/open5gs/freeDiameter");
+                    "./install/etc/xcn/freeDiameter");
         }
         break;
     case FD_LOG_FATAL:

@@ -1,6 +1,6 @@
-## Open5GS Python Library
+## xcn Python Library
 
-Basic Python library to interface with MongoDB subscriber DB in Open5GS HSS / PCRF. Requires Python 3+, pymongo and bson. (All available through PIP)
+Basic Python library to interface with MongoDB subscriber DB in xcn HSS / PCRF. Requires Python 3+, pymongo and bson. (All available through PIP)
 
 If you are planning to run this on a different machine other than localhost (the machine hosting the MongoDB service) you will need to enable remote access to MongoDB by binding it's IP to 0.0.0.0:
 
@@ -14,8 +14,8 @@ Restart MongoDB for changes to take effect.
 
 Basic Example:
 ```
-import Open5GS
-Open5GS_1 = Open5GS("10.0.1.118", 27017)
+import xcn
+xcn_1 = xcn("10.0.1.118", 27017)
 
 slice_data = [
     {
@@ -53,15 +53,15 @@ sub_data = {
   "__v": 0
 }
 
-print(Open5GS_1.AddSubscriber(sub_data))                        #Add Subscriber using dict of sub_data
+print(xcn_1.AddSubscriber(sub_data))                        #Add Subscriber using dict of sub_data
 
-print(Open5GS_1.GetSubscriber('891012222222300'))               #Get added Subscriber's details
+print(xcn_1.GetSubscriber('891012222222300'))               #Get added Subscriber's details
 
-print(Open5GS_1.UpdateSubscriber('891012222222300', sub_data))  #Update subscriber
+print(xcn_1.UpdateSubscriber('891012222222300', sub_data))  #Update subscriber
 
-print(Open5GS_1.DeleteSubscriber('891012222222300'))            #Delete Subscriber
+print(xcn_1.DeleteSubscriber('891012222222300'))            #Delete Subscriber
 
-Subscriber_List = Open5GS_1.GetSubscribers()
+Subscriber_List = xcn_1.GetSubscribers()
 for subscribers in Subscriber_List:
   print(subscribers['imsi'])
 

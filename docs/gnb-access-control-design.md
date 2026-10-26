@@ -1,6 +1,6 @@
 # 自有基站接入核心网的可行性方案与开发设计
 
-版本：1.0；日期：2026-10-09；适用对象：本仓库 Open5GS 5GC、xcn Helm Chart、自研或 OAI 衍生 gNB。
+版本：1.0；日期：2026-10-09；适用对象：本仓库 xcn 5GC、xcn Helm Chart、自研或 OAI 衍生 gNB。
 
 本文交付范围是可行性方案、后续开发设计和备选实验操作说明，不实施核心网功能或现网部署。当前仓库尚未实现本文提出的设备授权控制器和 AMF 授权模块。文中的新增配置字段、接口和文件以“拟新增”标明，不能直接当作已有功能使用。第 8～11 节给出 Ubuntu 双机 UDP/TUN 实验方案；验证范围见第 17 节。
 
@@ -133,7 +133,7 @@ SR-IOV/VPP 收包可能绕过 Linux XFRM 和 Netfilter。此时不能把首版�
 
 ### 5.1 建议的数据结构
 
-以下是授权控制器的输入示例，是拟新增文件格式，当前 Open5GS 不会解析它：
+以下是授权控制器的输入示例，是拟新增文件格式，当前 xcn 不会解析它：
 
 ```yaml
 schema_version: 1
@@ -865,7 +865,7 @@ IPsec、UDP 封装、GTP-U 会叠加额外开销，不能统一断言“MTU 1400
 | `src/amf/ngap-handler.c` | NG Setup、RAN Configuration Update、切换端点相关校验 |
 | `src/amf/ngap-sm.c` | 非授权状态的消息门禁和撤销事件 |
 | `src/amf/meson.build` | 编译新增小模块 |
-| `configs/open5gs/amf.yaml.in` | 示例授权配置（拟新增） |
+| `configs/xcn/amf.yaml.in` | 示例授权配置（拟新增） |
 | `helm/xcn/values.yaml`、`templates/config.yaml`、`templates/5gc.yaml` | 安全开关、授权文件挂载、取消直连暴露 |
 | `src/smf/ngap-handler.c` 等实际 N2 Transfer 解析入口 | 校验 N3 端点及前传地址，必要时传递可信设备上下文 |
 | 独立接入策略控制器（拟新增） | 将管理策略发布到 strongSwan、防火墙和 AMF |
@@ -880,12 +880,12 @@ amf:
   gnb_admission:
     enabled: true
     core_id: "xcn-site-a"
-    policy_file: "/etc/open5gs/gnb-admission.yaml"
+    policy_file: "/etc/xcn/gnb-admission.yaml"
     fail_closed: true
     max_policy_age_seconds: 86400
 ```
 
-这些字段是设计提议，当前 Open5GS 不支持。安全模式开启而策略不存在、签名错误、字段越界、地址重复或版本回退时，AMF 不能进入对外接入就绪状态。上线后刷新失败可保留上一份仍有效的策略；不得把错误解释为“名单为空所以全部允许”。
+这些字段是设计提议，当前 xcn 不支持。安全模式开启而策略不存在、签名错误、字段越界、地址重复或版本回退时，AMF 不能进入对外接入就绪状态。上线后刷新失败可保留上一份仍有效的策略；不得把错误解释为“名单为空所以全部允许”。
 
 本地受保护快照可通过文件权限和管理通道保证来源；离线分发或跨信任域分发时增加独立策略签名。签名验证公钥由可信安装渠道内置，策略必须带 `core_id`、递增版本、发布时间和截止时间，防止别的站点策略或旧策略被重放。
 

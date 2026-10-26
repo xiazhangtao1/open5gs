@@ -4,13 +4,15 @@
 #
 # Run as root or insert `sudo -E` before `bash`:
 #
-# curl -fsSL https://open5gs.org/open5gs/assets/webui/install | sudo -E bash -
-#   or
-# wget -qO- https://open5gs.org/open5gs/assets/webui/install | sudo -E bash -
+# sudo -E bash docs/assets/webui/install
 #
 
-PACKAGE="open5gs"
-VERSION="2.7.7"
+PACKAGE="xcn"
+SOURCE_DIR="${XCN_SOURCE_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)}"
+if [ ! -f "${SOURCE_DIR}/webui/package.json" ]; then
+    echo "Set XCN_SOURCE_DIR to the xcn source checkout."
+    exit 1
+fi
 
 print_status() {
     echo
@@ -69,14 +71,14 @@ exec_cmd() {
 
 uninstall() {
 if [ -f /lib/systemd/system/${PACKAGE}-webui.service ]; then
-    STATUS="$(systemctl is-active open5gs-webui.service)"
+    STATUS="$(systemctl is-active xcn-webui.service)"
     if [ "${STATUS}" = "active" ]; then
-        exec_cmd_nobail "deb-systemd-invoke stop open5gs-webui"
+        exec_cmd_nobail "deb-systemd-invoke stop xcn-webui"
     fi
 
-    STATUS="$(systemctl is-enabled open5gs-webui.service)"
+    STATUS="$(systemctl is-enabled xcn-webui.service)"
     if [ "${STATUS}" = "enabled" ]; then
-        exec_cmd_nobail "systemctl disable open5gs-webui"
+        exec_cmd_nobail "systemctl disable xcn-webui"
     fi
 
     exec_cmd_nobail "rm -f /lib/systemd/system/${PACKAGE}-webui.service"
@@ -235,37 +237,23 @@ fi
 }
 
 install() {
-print_status "Download the Open5GS Source Code (v${VERSION})..."
-if [ -x /usr/bin/curl ]; then
-    exec_cmd "curl -sLf 'https://github.com/open5gs/${PACKAGE}/archive/v${VERSION}.tar.gz' | tar zxf -"
-    RC=$?
-else
-    exec_cmd "wget -qO - 'https://github.com/open5gs/${PACKAGE}/archive/v${VERSION}.tar.gz' | tar zxf -"
-    RC=$?
-fi
+print_status "Build the xcn WebUI..."
+exec_cmd "cd '${SOURCE_DIR}/webui' && npm clean-install && npm run build"
 
-if [[ $RC != 0 ]]; then
-    print_status "Failed to download: https://github.com/open5gs/${PACKAGE}/archive/v${VERSION}.tar.gz"
-    exit 1
-fi
-
-print_status "Build the Open5GS WebUI..."
-exec_cmd "cd ./${PACKAGE}-${VERSION}/webui && npm clean-install && npm run build"
-
-print_status "Install the Open5GS WebUI..."
+print_status "Install the xcn WebUI..."
 exec_cmd "mkdir -p /usr/lib/node_modules"
-exec_cmd "mv ./${PACKAGE}-${VERSION}/webui /usr/lib/node_modules/${PACKAGE}"
-exec_cmd_nobail "chown -R open5gs:open5gs /usr/lib/node_modules/${PACKAGE}"
+exec_cmd "cp -a '${SOURCE_DIR}/webui' /usr/lib/node_modules/${PACKAGE}"
+exec_cmd_nobail "chown -R xcn:xcn /usr/lib/node_modules/${PACKAGE}"
 
-exec_cmd "cat << EOF > /lib/systemd/system/open5gs-webui.service
+exec_cmd "cat << EOF > /lib/systemd/system/xcn-webui.service
 [Unit]
-Description=Open5GS WebUI
+Description=xcn WebUI
 Wants=mongodb.service mongod.service
 
 [Service]
 Type=simple
 
-WorkingDirectory=/usr/lib/node_modules/open5gs
+WorkingDirectory=/usr/lib/node_modules/xcn
 Environment=NODE_ENV=production
 ExecStart=/usr/bin/node server/index.js
 Restart=always
@@ -276,8 +264,8 @@ WantedBy=multi-user.target
 EOF"
 
 exec_cmd_nobail "systemctl daemon-reload"
-exec_cmd_nobail "systemctl enable open5gs-webui"
-exec_cmd_nobail "deb-systemd-invoke start open5gs-webui"
+exec_cmd_nobail "systemctl enable xcn-webui"
+exec_cmd_nobail "deb-systemd-invoke start xcn-webui"
 }
 
 postinstall() {
@@ -285,15 +273,14 @@ postinstall() {
 print_status "Default Administrator Account [Username:admin, Password:1423]..."
 if [ -x /usr/bin/mongo ];
 then
-    exec_cmd "mongo open5gs ./${PACKAGE}-${VERSION}/docs/assets/webui/mongo-init.js"
+    exec_cmd "mongo xcn '${SOURCE_DIR}/docs/assets/webui/mongo-init.js'"
 elif [ -x /usr/bin/mongosh ];
 then
-    exec_cmd "mongosh open5gs ./${PACKAGE}-${VERSION}/docs/assets/webui/mongo-init.js"
+    exec_cmd "mongosh xcn '${SOURCE_DIR}/docs/assets/webui/mongo-init.js'"
 else
     echo "Failed to execute mongo-init.js"
 fi
 
-exec_cmd "rm -rf ./${PACKAGE}-${VERSION}"
 }
 
 ## Defer setup until we have the complete script

@@ -1,6 +1,6 @@
 # Copyright (C) 2019 by Sukchan Lee <acetcom@gmail.com>
 
-# This file is part of Open5GS.
+# This file is part of xcn.
 
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published by
@@ -35,7 +35,7 @@ libdiameter_common_sources = files('''
 
 libdiameter_common_inc = include_directories('.')
 
-# At this point, Open5GS always use the subproject of freeDiameter
+# At this point, xcn always use the subproject of freeDiameter
 freeDiameter_proj = subproject('freeDiameter')
 libfdcore_dep = freeDiameter_proj.get_variable('libfdcore_dep')
 

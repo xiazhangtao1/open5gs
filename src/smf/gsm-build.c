@@ -1,7 +1,7 @@
 /*
  * Copyright (C) 2019-2023 by Sukchan Lee <acetcom@gmail.com>
  *
- * This file is part of Open5GS.
+ * This file is part of xcn.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
@@ -658,7 +658,7 @@ void gsm_encode_default_qos_rule(
      * should not be applied for the QoS Flow which the default QoS rule is
      * associated with and the RQA should not be sent for this QoS Flow.
      */
-    qos_rule->identifier = qos_flow->qfi; /* Use QFI in Open5GS */
+    qos_rule->identifier = qos_flow->qfi; /* Use QFI in xcn */
     qos_rule->code = OGS_NAS_QOS_CODE_CREATE_NEW_QOS_RULE;
     qos_rule->DQR_bit = 1;
     qos_rule->num_of_packet_filter = 1;

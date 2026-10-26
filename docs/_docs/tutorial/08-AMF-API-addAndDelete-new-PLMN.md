@@ -1,6 +1,6 @@
 # Tutorial: Dynamically Adding and Removing PLMNs in the AMF
 
-This tutorial describes the different OAM (Operations, Administration and Maintenance) management API calls for the AMF (Access and Mobility Management Function) in Open5GS. The goal is to dynamically add and remove PLMNs without restarting the AMF.  
+This tutorial describes the different OAM (Operations, Administration and Maintenance) management API calls for the AMF (Access and Mobility Management Function) in xcn. The goal is to dynamically add and remove PLMNs without restarting the AMF.
 The feature is implemented by extending the SBI, so the API uses HTTP/2.0.
 
 ## Objective

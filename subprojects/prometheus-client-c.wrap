@@ -1,6 +1,7 @@
 [wrap-git]
 directory = prometheus-client-c
 url = https://github.com/open5gs/prometheus-client-c.git
+# Upstream branch name; keep it unchanged when renaming xcn.
 revision = open5gs
 
 [provide]

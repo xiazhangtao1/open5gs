@@ -1,6 +1,6 @@
 # Copyright (C) 2019 by Sukchan Lee <acetcom@gmail.com>
 
-# This file is part of Open5GS.
+# This file is part of xcn.
 
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published by
@@ -22,11 +22,11 @@ conf_data.set('sysconfdir', sysconfdir)
 conf_data.set('libdir', libdir)
 conf_data.set('localstatedir', localstatedir)
 
-build_configs_dir = join_paths(open5gs_build_dir, 'configs')
+build_configs_dir = join_paths(xcn_build_dir, 'configs')
 conf_data.set('build_configs_dir', build_configs_dir)
 
 build_subprojects_freeDiameter_extensions_dir = join_paths(
-        open5gs_build_dir, 'subprojects', 'freeDiameter', 'extensions')
+        xcn_build_dir, 'subprojects', 'freeDiameter', 'extensions')
 conf_data.set('build_subprojects_freeDiameter_extensions_dir',
         build_subprojects_freeDiameter_extensions_dir)
 
@@ -51,7 +51,7 @@ foreach file : example_conf
             configuration : conf_data)
 endforeach
 
-subdir('open5gs')
+subdir('xcn')
 subdir('freeDiameter')
 subdir('systemd')
 subdir('logrotate')

@@ -93,12 +93,12 @@ SMSP: ffffffffffffffffffffffffffffffffffffffffffffffffe1ffffffffffffffffffffffff
 
 ###### Program your SIM card like the followings:
 ```
-./pySim-prog.py -p 0 -n Open5GS -a 62416296 -s 8988211000000213010 -i 310789012345301 -x 310 -y 789 -k 82E9053A1882085FF2C020359938DAE9 -o BFD5771AAF4F6728E9BC6EF2C2533BDB
+./pySim-prog.py -p 0 -n xcn -a 62416296 -s 8988211000000213010 -i 310789012345301 -x 310 -y 789 -k 82E9053A1882085FF2C020359938DAE9 -o BFD5771AAF4F6728E9BC6EF2C2533BDB
 Using PC/SC reader (dev=0) interface
 Insert card now (or CTRL-C to cancel)
 Autodetected card type: sysmoUSIM-SJS1
 Generated card parameters :
- > Name    : Open5GS
+ > Name    : xcn
  > SMSP    : e1ffffffffffffffffffffffff0581005155f5ffffffffffff000000
  > ICCID   : 8988211000000213010
  > MCC/MNC : 310/789
@@ -159,10 +159,10 @@ $ make
 $ make test
 ```
 
-#### 3. Open5GS
+#### 3. xcn
 
 
-The Open5GS package is available on the recent versions of *Ubuntu*.
+The xcn package is available on the recent versions of *Ubuntu*.
 ```bash
 # Install the MongoDB Packages
 $ curl -fsSL https://pgp.mongodb.com/server-8.0.asc | sudo gpg -o /usr/share/keyrings/mongodb-server-8.0.gpg --dearmor
@@ -170,13 +170,12 @@ $ echo "deb [ arch=amd64,arm64 signed-by=/usr/share/keyrings/mongodb-server-8.0.
 $ sudo apt update
 $ sudo apt install mongodb-org
 
-# Installing Open5GS
-$ sudo add-apt-repository ppa:open5gs/latest
-$ sudo apt update
-$ sudo apt install open5gs
+# Installing xcn
+$ # Install the local Debian packages built from this xcn checkout.
+$ sudo apt install ./xcn-*.deb ./xcn_*.deb
 ```
 
-The following shows how to install the Web UI of Open5GS.
+The following shows how to install the Web UI of xcn.
 
 ```bash
 # Download and import the Nodesource GPG key
@@ -193,14 +192,14 @@ $ echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.
 $ sudo apt update
 $ sudo apt install nodejs -y
 
-# Install the WebUI of Open5GS
-$ curl -fsSL https://open5gs.org/open5gs/assets/webui/install | sudo -E bash -
+# Install the WebUI of xcn
+$ sudo -E bash docs/assets/webui/install
 ```
 
 ### Configuration & Running
 ---
 
-#### 1. Open5GS
+#### 1. xcn
 
 When you purchase the sysmoUSIM, you will receive the following information via e-mail.
 
@@ -241,16 +240,16 @@ Then proceed as follows:
   3. Fill the IMSI, security context(K, OPc, AMF), and APN of the subscriber.
   4. Click `SAVE` Button
 
-**Note:** Subscribers added with this tool immediately register in the Open5GS HSS/UDR without the need to restart any daemon. However, if you use the WebUI to change subscriber profile, you must restart the Open5GS AMF/MME daemon for the changes to take effect.
+**Note:** Subscribers added with this tool immediately register in the xcn HSS/UDR without the need to restart any daemon. However, if you use the WebUI to change subscriber profile, you must restart the xcn AMF/MME daemon for the changes to take effect.
 {: .notice--warning}
 
-Modify [install/etc/open5gs/mme.yaml](https://github.com/{{ site.github_username }}/open5gs/blob/main/configs/open5gs/mme.yaml.in) to set the S1AP IP address, PLMN ID, and TAC.
+Modify [install/etc/xcn/mme.yaml](https://github.com/{{ site.github_username }}/{{ site.github_repository }}/blob/open5gs-basev277-develop/configs/xcn/mme.yaml.in) to set the S1AP IP address, PLMN ID, and TAC.
 
 ```diff
-$ diff --git a/configs/open5gs/mme.yaml.in b/configs/open5gs/mme.yaml.in
+$ diff --git a/configs/xcn/mme.yaml.in b/configs/xcn/mme.yaml.in
 index db2cdaef1..49bbeef76 100644
---- a/configs/open5gs/mme.yaml.in
-+++ b/configs/open5gs/mme.yaml.in
+--- a/configs/xcn/mme.yaml.in
++++ b/configs/xcn/mme.yaml.in
 @@ -10,7 +10,7 @@ mme:
      freeDiameter: @sysconfdir@/freeDiameter/mme.conf
      s1ap:
@@ -283,10 +282,10 @@ index db2cdaef1..49bbeef76 100644
          ciphering_order : [ EEA0, EEA1, EEA2 ]
 ```
 
-After changing conf files, please restart Open5GS daemons.
+After changing conf files, please restart xcn daemons.
 
 ```bash
-$ sudo systemctl restart open5gs-mmed.service
+$ sudo systemctl restart xcn-mmed.service
 ```
 
 In order to bridge between the PGWU/UPF and WAN (Internet), you must enable IP forwarding and add a NAT rule to your IP Tables.
@@ -468,4 +467,4 @@ Setting frequency: DL=1845.0 Mhz, UL=1750.0 MHz for cc_idx=0 nof_prb=50
 ---
 
 - You can see actual traffic through wireshark -- [[srsenb.pcapng]]({{ site.url }}{{ site.baseurl }}/assets/pcapng/srsenb.pcapng).
-- You can view the log at `/var/log/open5gs/*.log`.
+- You can view the log at `/var/log/xcn/*.log`.
