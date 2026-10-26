@@ -5,6 +5,7 @@ import SignalDetails from './SignalDetails';
 import {SessionControls, SessionPolicyStatus, UserRelease, BulkRelease} from './Controls';
 import Rules, {Purpose, ruleIdentifier} from './Rules';
 import {get} from './client';
+import {mergeTrend} from '../../../lib/trends';
 
 const titles = {overview: '概览', ues: '终端', gnbs: '基站', sessions: '会话', events: '信令', system: '状态'};
 const sourceNames = {amf_ues: '终端', smf_pdus: '会话', amf_gnbs: '基站', upf_rates: '用户面速率',
@@ -95,6 +96,7 @@ class Drawer extends Component {
 }
 
 export default class Monitor extends Component {
+  trendViews = new Map();
   state = {data: null, trend: null, error: null, loading: true, page: 0, q: '', search: '',
     cm_state: '', protocol: 'NGAP', level: 'session', rule_scope: 'business', seconds: 1800, selected: null, detail: null, identityFilters: {}};
   componentDidMount() {
@@ -105,6 +107,7 @@ export default class Monitor extends Component {
   componentWillReceiveProps(next) {
     if (next.view !== this.props.view) {
       this.stop();
+      this.trendViews.clear();
       const filters = this.navigateFilters || {};
       this.navigateFilters = null;
       this.setState({data: null, trend: null, error: null, page: 0, q: '', search: '', cm_state: '', protocol: 'NGAP',
@@ -126,6 +129,29 @@ export default class Monitor extends Component {
     clearTimeout(this.timer);
     if (this.active && !document.hidden) this.timer = setTimeout(this.poll, delay);
   };
+  loadTrend = async (key, seconds, token) => {
+    const name = key + '/' + seconds;
+    const old = this.trendViews.get(name);
+    if (old && old.nextAt > Date.now()) return old.data;
+    const generation = this.generation;
+    try {
+      const data = await get('trends', {key, seconds, ...(old && old.data.cursor ? {cursor: old.data.cursor} : {})}, token);
+      const merged = mergeTrend(old && old.data, data);
+      if (generation === this.generation) {
+        if (!this.trendViews.has(name) && this.trendViews.size >= 2) this.trendViews.delete(this.trendViews.keys().next().value);
+        this.trendViews.set(name, {data: merged, nextAt: seconds > 1800 ? Date.now() + 60000 : 0});
+      }
+      return merged;
+    } catch (error) {
+      if (axios.isCancel(error)) throw error;
+      const data = {...(old && old.data || {}), error: '速率历史暂时不可用，等待恢复'};
+      if (generation === this.generation) {
+        if (!this.trendViews.has(name) && this.trendViews.size >= 2) this.trendViews.delete(this.trendViews.keys().next().value);
+        this.trendViews.set(name, {data, nextAt: Date.now() + (seconds > 1800 ? 60000 : 2000)});
+      }
+      return data;
+    }
+  };
   poll = async () => {
     if (!this.active || document.hidden) return;
     const generation = this.generation;
@@ -141,13 +167,13 @@ export default class Monitor extends Component {
       if (view === 'sessions' && level === 'rule') params.rule_scope = this.state.rule_scope;
       const calls = [get(endpoint, params, token)];
       const trending = view === 'overview' || view === 'sessions';
-      if (trending) calls.push(get('trends', {seconds}, token));
+      if (trending) calls.push(this.loadTrend('global', seconds, token));
       const needsDetail = selected && selected.row.supi && selected.type !== 'events';
       if (needsDetail) {
         calls.push(Promise.all([get('sessions', {supi: selected.row.supi, limit: 100}, token),
           get('events', {supi: selected.row.supi, limit: 20}, token),
-          get('trends', {key: selected.type === 'sessions' && selected.row.seid ?
-            'session:' + selected.row.seid : 'user:' + selected.row.supi, seconds}, token),
+          this.loadTrend(selected.type === 'sessions' && selected.row.seid ?
+            'session:' + selected.row.seid : 'user:' + selected.row.supi, seconds, token),
           get('ues', {supi: selected.row.supi, limit: 1}, token)]));
       }
       const results = await Promise.all(calls);
@@ -162,7 +188,11 @@ export default class Monitor extends Component {
       if (this.active && generation === this.generation) this.schedule(2000 + Math.random() * 200);
     }
   };
-  change = change => { this.stop(); this.setState({...change, loading: true}, () => this.schedule(0)); };
+  change = change => {
+    this.stop();
+    if ('seconds' in change || 'selected' in change) this.trendViews.clear();
+    this.setState({...change, ...('seconds' in change ? {trend: null, detail: null} : {}), loading: true}, () => this.schedule(0));
+  };
   search = e => { e.preventDefault(); this.change({q: this.state.search.trim(), page: 0}); };
   select = (row, type) => this.change({selected: {row, type}, detail: null});
   close = () => this.change({selected: null, detail: null});
@@ -174,6 +204,7 @@ export default class Monitor extends Component {
     return <select aria-label="趋势时间范围" value={this.state.seconds}
       onChange={e => this.change({seconds: Number(e.target.value)})}>
       <option value={300}>最近 5 分钟</option><option value={900}>最近 15 分钟</option><option value={1800}>最近 30 分钟</option>
+      <option value={43200}>最近 12 小时</option><option value={86400}>最近 24 小时</option>
     </select>;
   }
   protocolPicker(data) {
@@ -203,7 +234,7 @@ export default class Monitor extends Component {
       <section className="xcn-panel xcn-traffic-panel"><div className="xcn-panel-heading"><h2>用户面流量</h2>{this.windowPicker()}</div>
         <div className="xcn-flow-totals"><div><span><i className="xcn-flow-dot ul"/>上行</span><strong>{rate(data.ul_bps)}</strong></div>
           <div><span><i className="xcn-flow-dot dl"/>下行</span><strong>{rate(data.dl_bps)}</strong></div></div>
-        <Chart theme={this.props.theme} points={(this.state.trend || {}).points}/>
+        <Chart theme={this.props.theme} trend={this.state.trend}/>
       </section>
       <section className="xcn-panel"><div className="xcn-panel-heading"><h2>近期信令</h2>
         <div className="xcn-panel-actions">{this.protocolPicker(data)}<Button onClick={() => this.navigate('events', {protocol: this.state.protocol})}>更多信令</Button></div></div>
@@ -322,7 +353,7 @@ export default class Monitor extends Component {
     return <Drawer title={(userScope ? '用户' : titles[type] || '详情') + ' · ' + value(id)} onClose={this.close}>
       {r.supi && type !== 'events' && <div><div className="xcn-detail-identity"><span className="xcn-mono">{r.supi}</span><Status state={r.cm_state}/></div>
         <div className="xcn-panel-heading"><h3>速率趋势</h3>{this.windowPicker()}</div>
-        <Chart theme={this.props.theme} points={detail && detail[2].points}/></div>}
+        <Chart theme={this.props.theme} trend={detail && detail[2]}/></div>}
       {type === 'ues' && r.supi && this.canControl() && <UserRelease key={r.supi} supi={r.supi}/>}
       {type === 'ues' && <div><h3>接入与位置</h3><dl className="xcn-fields"><dt>位置状态</dt><dd>{value((r.location || {}).status)}</dd>
         <dt>gNB / PLMN</dt><dd className="xcn-mono">{value((r.gnb || (r.location || {}).gnb || {}).gnb_id)} / {value((r.gnb || (r.location || {}).gnb || {}).plmn)}</dd>
@@ -381,7 +412,7 @@ export default class Monitor extends Component {
           <Button disabled={(page + 1) * 50 >= data.total} onClick={() => this.change({page: page + 1})}>下一页</Button></div></div>
       </section>}
       {data && view === 'sessions' && <section className="xcn-panel"><div className="xcn-panel-heading"><h2>全局流量趋势</h2>{this.windowPicker()}</div>
-        <Chart theme={this.props.theme} points={(this.state.trend || {}).points}/></section>}
+        <Chart theme={this.props.theme} trend={this.state.trend}/></section>}
       {this.detail()}
     </main>;
   }

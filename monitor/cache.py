@@ -3,10 +3,13 @@ import copy
 import hashlib
 import ipaddress
 import json
+import math
+import sys
 import time
-from array import array
+import uuid
 from collections import OrderedDict
 from memory import MemoryBudget, MemoryPressure, container_bytes, MIB
+from trends import Curve
 
 
 def encode(value):
@@ -69,35 +72,9 @@ def normalize_location(ue):
     ue["location"] = loc
 
 
-class Curve:
-    """Compact 30-minute circular buffer (2-second resolution, 21.6 KB/series)."""
-    capacity = 900
-
-    def __init__(self):
-        self.data = array("d", [0]) * (self.capacity * 3)
-        self.count = self.next = 0
-        self.last = 0
-
-    def append(self, stamp, ul, dl):
-        self.data[self.next * 3:self.next * 3 + 3] = array("d", [stamp, ul, dl])
-        self.next = (self.next + 1) % self.capacity
-        self.count = min(self.count + 1, self.capacity)
-        self.last = stamp
-
-    def points(self, since):
-        out = []
-        for i in range(self.count):
-            index = (self.next - self.count + i) % self.capacity * 3
-            t, ul, dl = self.data[index:index + 3]
-            if t >= since:
-                if out and t - out[-1][0] > 6:
-                    out.append([out[-1][0] + 0.001, None, None])
-                out.append([t, ul, dl])
-        return out
-
-
 class Cache:
-    trend_retention = 1800
+    trend_retention = 86400
+    max_trend_bytes = 64 * MIB
     max_events = 20000
     max_event_bytes = 16 * 1024 * 1024
     max_curves = 512
@@ -113,6 +90,11 @@ class Cache:
         self.event_evictions = 0
         self.curves = OrderedDict()
         self.curve_evictions = 0
+        self.curve_rejections = 0
+        self.trend_epoch = uuid.uuid4().hex
+        self.trend_stamp = 0
+        self.trend_boot = None
+        self.trend_interval = 2
         self.memo = OrderedDict()
         self.memo_bytes = 0
         self.request_count = 0
@@ -187,8 +169,10 @@ class Cache:
 
     def changed(self):
         self.version += 1
-        self.memo.clear()
-        self.memo_bytes = 0
+        # Trend entries have their own bounded curve/time versions. A signal or
+        # session-detail update must not discard the shared historical response.
+        self.memo = OrderedDict((k, v) for k, v in self.memo.items() if k[0] == 'trend')
+        self.memo_bytes = sum(len(v[0]) for v in self.memo.values())
 
     def source(self, name):
         return self.sources.setdefault(name, dict(data=[], updated_at=None, attempted_at=None,
@@ -248,8 +232,10 @@ class Cache:
                     trend_retention_seconds=self.trend_retention, event_coverage=self.event_coverage(),
                     events=len(self.events), event_bytes=self.event_bytes,
                     event_evictions=self.event_evictions, curves=len(self.curves),
-                    curve_evictions=self.curve_evictions, requests=self.request_count, affinity=self.affinity,
-                    coverage="事件不按时间过期；最多 2 万条、16 MiB 编码数据，达到容量或内存水位时淘汰最旧事件。速率曲线最多保留最近约 30 分钟；缓存不持久化")
+                    curve_evictions=self.curve_evictions, curve_rejections=self.curve_rejections,
+                    trend_bytes=self.trend_bytes(), trend_byte_limit=self.max_trend_bytes,
+                    requests=self.request_count, affinity=self.affinity,
+                    coverage="信令按容量保留；速率保留最近 30 分钟原始采样及 24 小时分钟汇总，最多 512 条曲线、64 MiB；缓存不持久化，内存压力下可能提前淘汰")
 
     def rebuild(self):
         ues = copy.deepcopy(self.source("amf_ues")["data"])
@@ -365,12 +351,28 @@ class Cache:
                 g["associated_ues"] = g["observed_cells"] = None
         self.ues, self.sessions, self.gnbs = ues, sessions, gnbs
 
-    def record_rates(self, stamp):
+    def trend_bytes(self):
+        return sys.getsizeof(self.curves) + 8192 + sum(c.budget_bytes(k) for k, c in self.curves.items())
+
+    def record_rates(self, stamp, boot_id=None, interval=2):
         self.admit(16 * MIB, "记录有界速率曲线")
+        if not math.isfinite(stamp) or stamp <= 0:
+            raise ValueError('invalid trend timestamp')
+        if stamp == self.trend_stamp and boot_id == self.trend_boot:
+            return
+        restarted = self.trend_boot is not None and boot_id != self.trend_boot
+        if stamp < self.trend_stamp:
+            # Wall-clock discontinuity: never mix overlapping time axes.
+            self.curves.clear()
+            self.trend_epoch = uuid.uuid4().hex
+        self.trend_stamp, self.trend_boot, self.trend_interval = stamp, boot_id, interval
         points = {"global": [0, 0]}
+        identities = {}
         for s in self.sessions:
             ul, dl = float(s["ul_bps"]), float(s["dl_bps"])
             points[f"session:{s['seid']}"] = [ul, dl]
+            identities[f"session:{s['seid']}"] = (
+                (boot_id, s.get('supi'), s.get('dnn'), s.get('ue_ip')), s.get('uptime_seconds'))
             u = points.setdefault(f"user:{s.get('supi', '')}", [0, 0])
             u[0] += ul
             u[1] += dl
@@ -379,16 +381,35 @@ class Cache:
         for key in list(self.curves):
             if self.curves[key].last < stamp - self.trend_retention:
                 del self.curves[key]
+            elif key not in points:
+                self.curves[key].active = False
+        used = self.trend_bytes()
         for key, (ul, dl) in points.items():
+            old = self.curves.get(key)
+            identity, uptime = identities.get(key, (None, None))
+            if old and key.startswith('session:') and (not old.active or old.identity != identity or
+                    (isinstance(uptime, (int, float)) and isinstance(old.uptime, (int, float)) and uptime < old.uptime)):
+                del self.curves[key]
+                used = self.trend_bytes()
             if key not in self.curves:
-                if len(self.curves) >= self.max_curves:
-                    if next(iter(self.curves)) == "global":
-                        self.curves.move_to_end("global")
-                    self.curves.popitem(last=False)
+                while len(self.curves) >= self.max_curves or used + Curve.allocation_bytes > self.max_trend_bytes:
+                    victim = next((k for k, c in self.curves.items() if k != 'global' and k not in points), None)
+                    if victim is None:
+                        break
+                    del self.curves[victim]
                     self.curve_evictions += 1
+                    used = self.trend_bytes()
+                if len(self.curves) >= self.max_curves or used + Curve.allocation_bytes > self.max_trend_bytes:
+                    self.curve_rejections += 1
+                    continue
+                self.admit(Curve.allocation_bytes + MIB, "分配速率曲线")
                 self.curves[key] = Curve()
-            self.curves[key].append(stamp, ul, dl)
+                used = self.trend_bytes()
+            curve = self.curves[key]
+            curve.append(stamp, ul, dl, discontinuity=restarted or not curve.active, interval=interval)
+            curve.active, curve.identity, curve.uptime = True, identity, uptime
             self.curves.move_to_end(key)
+        self.changed()
 
     def add_events(self, nf, payload):
         self.admit(max(8 * MIB, container_bytes(payload) * 3), "新增事件批次")
@@ -428,13 +449,22 @@ class Cache:
         self.request_count += 1
         # Include a 2s clock bucket so source age/staleness advances during outages.
         key = (self.version, int(time.time() / 2), endpoint, tuple(sorted(query.items())))
+        if endpoint == 'trends':
+            minute = min(86400, max(60, int(query.get('seconds', 1800)))) > 1800
+            curve = self.curves.get(query.get('key', 'global'))
+            key = ('trend', curve.epoch if curve else self.trend_epoch,
+                   (curve.minute_version if minute else curve.last) if curve else 0,
+                   int(time.time() / (60 if minute else 2)), tuple(sorted(query.items())))
         if key in self.memo:
             self.memo.move_to_end(key)
             return self.memo[key]
         if endpoint not in ("health", "overview", "system"):
             self.admit(max(16 * MIB, self.view_bytes), "生成查询结果")
         result = self.query(endpoint, query)
-        result.update(version=str(self.version), generated_at=time.time())
+        # Trend payloads contain only curve data and aligned bounds. Unrelated
+        # signals must not change their ETag or force retransmission.
+        if endpoint != 'trends':
+            result.update(version=str(self.version), generated_at=time.time())
         body = encode(result)
         etag = '"' + hashlib.sha256(body).hexdigest()[:24] + '"'
         if len(body) <= 1024 * 1024:
@@ -443,6 +473,52 @@ class Cache:
             self.memo[key] = (body, etag)
             self.memo_bytes += len(body)
         return body, etag
+
+    def query_trends(self, query):
+        key = query.get('key', 'global')
+        window = min(86400, max(60, int(query.get('seconds', 1800))))
+        minute = window > 1800
+        now = time.time()
+        end = math.floor(now / (60 if minute else 2)) * (60 if minute else 2)
+        # Raw samples newer than the aligned clock bucket must remain visible.
+        if not minute:
+            end = max(end, min(now, self.trend_stamp))
+        start = end - window
+        curve = self.curves.get(key)
+        epoch = curve.epoch if curve else self.trend_epoch
+        points, buckets = [], []
+        if curve:
+            if minute:
+                points, buckets = curve.minute_points(start, end)
+            else:
+                points = [p for p in curve.points(start) if p[0] <= end]
+        valid = [p[0] for p in points if p[1] is not None]
+        reset, replace_from = True, start
+        cursor = query.get('cursor')
+        if cursor:
+            try:
+                old_epoch, position = cursor.split('/')
+                position = float(position)
+                if not math.isfinite(position):
+                    raise ValueError('invalid cursor')
+            except (ValueError, AttributeError):
+                raise ValueError('invalid trend cursor')
+            if old_epoch == epoch and start <= position <= end:
+                reset = False
+                # Re-send the boundary: a just-completed minute can receive its
+                # last valid interval on the next upload. The client replaces,
+                # never adds, overlapping buckets.
+                replace_from = max(start, position - (120 if minute else 0))
+        position = end if minute or not valid else valid[-1]
+        return dict(key=key, points=[p for p in points if p[0] >= replace_from],
+                    buckets=[b for b in buckets if b[0] >= replace_from],
+                    resolution_seconds=60 if minute else self.trend_interval,
+                    aggregation='minute' if minute else 'raw',
+                    available_from=valid[0] if valid else None,
+                    available_to=(valid[-1] + 60 if minute else valid[-1]) if valid else None,
+                    window_start=start, window_end=end, replace_from=replace_from,
+                    cursor=epoch + '/' + str(position), epoch=epoch, reset=reset,
+                    started_at=self.started_at, window_seconds=window)
 
     def query(self, endpoint, query):
         if endpoint == "health":
@@ -457,11 +533,7 @@ class Cache:
                         dl_bps=str(sum(int(s["dl_bps"]) for s in self.sessions)),
                         events=events["items"], protocols=events["protocols"], health=self.health())
         if endpoint == "trends":
-            key = query.get("key", "global")
-            window = min(1800, max(60, int(query.get("seconds", 1800))))
-            curve = self.curves.get(key)
-            return dict(key=key, points=curve.points(time.time() - window) if curve else [],
-                        started_at=self.started_at, window_seconds=window)
+            return self.query_trends(query)
         if endpoint == "system":
             return dict(health=self.health(), pods=self.source("pods")["data"])
         rates = self.sessions

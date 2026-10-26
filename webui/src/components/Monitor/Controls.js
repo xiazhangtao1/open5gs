@@ -3,7 +3,7 @@ import axios from 'axios';
 import Session from 'modules/auth/session';
 import sessionConfig from '../../../lib/session-control';
 
-const labels = {'create-bearer': '新建专载', 'modify-bearer': '修改专载', 'delete-bearer': '删除专载', 'modify-session': '修改默认 QoS / Session-AMBR', 'release-session': '释放会话', 'release-ue': '释放用户'};
+const labels = {'create-bearer': '新建专载', 'modify-bearer': '修改专载', 'delete-bearer': '删除专载', 'modify-session': '修改默认承载', 'release-session': '释放会话', 'release-ue': '释放用户'};
 const states = {accepted: '已受理', pending: '信令处理中', confirmed: '信令流程完成', failed: '失败', unknown: '结果待确认', unchanged: '参数未变化', 'not-required': '无需修改'};
 const message = e => (e.response && e.response.data && e.response.data.error) || e.message || '请求未完成，请核对当前状态';
 const operationId = () => {
@@ -177,7 +177,7 @@ export class SessionControls extends Component {
       required={!optional} value={f[key]} disabled={busy || (key === 'precedence' && !!edit)}
       placeholder={optional ? '使用默认值' : ''} onChange={e => this.field(key, e.target.value)}/></label>;
     return <form className="xcn-control-editor" onSubmit={e => { e.preventDefault(); this.execute(edit ? 'patch' : 'post', '/bearers' + (edit ? '/' + edit : ''), ruleBody(f)); }}>
-      <h4>{edit ? '编辑专载 ' + edit : '新建专载'}</h4>
+      <h4>{edit ? '修改专载 ' + edit : '新建专载'}</h4>
       <div className="xcn-control-grid">
         {number('5QI', 'fiveQi', 1, 255)}{number('调度优先级（1–127）', 'priority', 1, 127, true)}
         {number('ARP 优先级（1–15）', 'arp', 1, 15)}{number('规则匹配顺序（0–254）', 'precedence', 0, 254, true)}
@@ -242,13 +242,13 @@ export class SessionControls extends Component {
       {loading && <p>正在读取当前策略…</p>}{error && <p className="xcn-control-error" role="alert">{error}</p>}
       {target && <div>
         <div className="xcn-control-actions"><Button primary disabled={busy || loading || !!form || !!confirm || target.releasing || policyBusy}
-          onClick={() => this.setState({form: freshForm(), edit: null, result: null})}>在此会话新建专载</Button>
+          onClick={() => this.setState({form: freshForm(), edit: null, result: null})}>新建专载</Button>
           <Button disabled={busy || loading || !!form || !!confirm || target.releasing || policyBusy || !target.sessionConfig || s.cm_state !== 'connected'}
-            onClick={this.editSession}>修改默认 QoS / Session-AMBR</Button>
+            onClick={this.editSession}>修改默认承载</Button>
           <Button danger disabled={busy || loading || !!form || !!confirm || target.releasing ||
               (nativeOperation && nativeOperation.state === 'pending') || (operation && operation.state === 'pending')}
             onClick={() => this.setState({confirm: {type: 'session'}, result: null})}>{target.releasing ? '会话释放中' : '释放会话'}</Button></div>
-        {s.cm_state !== 'connected' && <p className="xcn-control-hint">终端连接后可修改默认 QoS / Session-AMBR。</p>}
+        {s.cm_state !== 'connected' && <p className="xcn-control-hint">终端连接后可修改默认承载。</p>}
         {operation && policyBusy && <p className="xcn-control-hint">{nativeBusy && operation.state === 'confirmed' ? '管理侧尚未确认结果，请重新读取后核对' : states[operation.state]}，暂不能提交新的策略修改。</p>}
         <div className="xcn-control-rule-list">{(target.bearers || []).map(app => {
           const rule = (app.pccRules || [])[0] || {}, qos = rule.qos || {};
@@ -258,8 +258,8 @@ export class SessionControls extends Component {
             <div><strong>专载 {app.appSessionId}</strong><span>5QI {qos['5qi']} {observed ? '· QFI ' + observed.qfi : ''}</span>
               <small>{app.intentManaged ? '由终端意图管理' : app.deletePending ? '正在删除' : '规则顺序 ' + rule.precedence}</small></div>
             <div className="xcn-control-actions"><Button disabled={disabled || app.pccRules.length !== 1}
-              onClick={() => this.setState({form: appForm(app), edit: app.appSessionId, result: null})}>编辑</Button>
-              <Button danger disabled={disabled} onClick={() => this.setState({confirm: {type: 'bearer', app: app.appSessionId}, result: null})}>删除</Button></div>
+              onClick={() => this.setState({form: appForm(app), edit: app.appSessionId, result: null})}>修改专载</Button>
+              <Button danger disabled={disabled} onClick={() => this.setState({confirm: {type: 'bearer', app: app.appSessionId}, result: null})}>删除专载</Button></div>
           </div>;
         })}{!target.bearers.length && <p className="xcn-control-hint">此会话暂无可管理的专载，可在上方新建。</p>}</div>
         {this.editor()}
@@ -275,7 +275,7 @@ export class SessionControls extends Component {
           <h4>{confirm.type === 'session' ? '确认释放 PSI ' + s.psi : '确认删除专载 ' + confirm.app}</h4>
           <p>{confirm.type === 'session' ? '该会话的全部承载与数据连接将释放，终端注册和其他会话保留。' : '该专载的规则将移除，匹配业务可能回到默认流。'}</p>
           <div className="xcn-control-actions"><Button danger disabled={busy} onClick={() => this.execute('delete', confirm.type === 'session' ? '' : '/bearers/' + confirm.app)}>
-            {busy ? '正在提交…' : '确认'}</Button><Button disabled={busy} onClick={() => this.setState({confirm: null})}>取消</Button></div>
+            {busy ? '正在提交…' : confirm.type === 'session' ? '确认释放会话' : '确认删除专载'}</Button><Button disabled={busy} onClick={() => this.setState({confirm: null})}>取消</Button></div>
         </div>}
       </div>}
       <History supi={s.supi} revision={this.state.revision}/>

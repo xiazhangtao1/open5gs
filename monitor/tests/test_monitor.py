@@ -372,6 +372,44 @@ class AsyncTests(unittest.IsolatedAsyncioTestCase):
         await self.http.close()
         await self.runner.cleanup()
 
+    async def test_history_order_restart_and_clock_change(self):
+        doc = snapshot()
+        now = time.time()
+        async def push(offset, mono, boot='test-boot'):
+            doc.update(timestamp_us=str(int((now + offset) * 1e6)), monotonic_us=str(mono),
+                       boot_id=boot, version=str(mono))
+            async with self.http.post(self.base + '/internal/upf', json=doc) as response:
+                self.assertEqual(response.status, 200)
+                return await response.json()
+        await push(-4, 100)
+        await push(-3, 101)
+        cache = self.app['cache']
+        self.assertEqual(cache.curves['global'].count, 2)
+        self.assertEqual((await push(-4, 100))['ignored'], 'out-of-order')
+        self.assertEqual(cache.curves['global'].count, 2)
+        old = cache.curves['global'].epoch
+        await push(-2, 1, 'new-boot')
+        self.assertEqual(cache.curves['global'].epoch, old)
+        self.assertIsNone(cache.curves['global'].points(now - 10)[2][1])
+        # A newer monotonic observation with a backwards wall clock starts a
+        # fresh history generation, rather than appending an unsorted point.
+        await push(-4, 2, 'new-boot')
+        self.assertNotEqual(cache.curves['global'].epoch, old)
+        self.assertEqual(cache.curves['global'].count, 1)
+
+    async def test_history_window_api_and_invalid_cursor(self):
+        async with self.http.post(self.base + '/internal/upf', json=snapshot()) as response:
+            self.assertEqual(response.status, 200)
+        for seconds, aggregation in ((1800, 'raw'), (43200, 'minute'), (86400, 'minute')):
+            async with self.http.get(self.base + '/api/trends', params={'seconds': str(seconds)}) as response:
+                self.assertEqual(response.status, 200)
+                body = await response.json()
+                self.assertEqual(body['window_seconds'], seconds)
+                self.assertEqual(body['aggregation'], aggregation)
+                self.assertLessEqual(len(body['points']), 3000)
+        async with self.http.get(self.base + '/api/trends', params={'cursor': 'bad/NaN'}) as response:
+            self.assertEqual(response.status, 400)
+
     async def test_auth_etag_and_no_reader_io(self):
         async with ClientSession() as plain:
             async with plain.get(self.base + "/api/overview") as response:
@@ -510,7 +548,13 @@ class AsyncTests(unittest.IsolatedAsyncioTestCase):
             row = json.loads(out)['items'][0]
             ours = seeded().ues[0]
             for key in ('location', 'pdu_sessions', 'cm_state', 'gnb', 'security'):
-                self.assertEqual(ours[key], row[key], key)
+                value = copy.deepcopy(ours[key])
+                if key == 'pdu_sessions':
+                    # The WebUI's optional control snapshot is not a CLI field.
+                    # This fixture has none; do not silently ignore real data.
+                    for pdu in value:
+                        self.assertIsNone(pdu.pop('session_control', None))
+                self.assertEqual(value, row[key], key)
             process = await asyncio.create_subprocess_exec(os.environ['XCNCTL'], 'show', 'gnb', '--detail', '--json',
                 '--amf-ue-info', base + '/ue-info', '--amf-gnb-info', base + '/gnb-info', stdout=asyncio.subprocess.PIPE)
             out, _ = await process.communicate()

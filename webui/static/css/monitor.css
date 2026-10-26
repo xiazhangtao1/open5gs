@@ -100,6 +100,8 @@
 .xcn-chart-mode {position:absolute; top:0; right:18px; z-index:1;}
 .xcn-chart-mode select {border:1px solid var(--line); border-radius:5px; padding:4px 8px; color:var(--muted); background:var(--surface); font-size:11px; min-height:30px;}
 .xcn-chart {height:255px; width:100%;}
+.xcn-chart-caption {display:flex; flex-wrap:wrap; gap:4px 14px; padding:4px 8px 0; color:var(--muted); font-size:11px; line-height:1.6;}
+.xcn-chart-warning {color:var(--warning, #a16207);}
 .xcn-chart-empty {position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:var(--muted); pointer-events:none; font-size:12px; padding:35px; text-align:center;}
 .xcn-events-scroll {overflow:auto;}
 .xcn-events {list-style:none; padding:0; margin:0; min-width:940px;}

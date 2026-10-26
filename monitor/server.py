@@ -138,14 +138,25 @@ def application(token=None, collecting=True):
             stamp = validate_snapshot(doc)
             identity = (str(doc.get("boot_id", "")), str(doc.get("version", "")), str(doc["timestamp_us"]))
             if source.get("identity") != identity:
+                monotonic = doc.get('monotonic_us')
+                if monotonic is not None:
+                    if not str(monotonic).isdigit() or not 0 < int(monotonic) < 1 << 64:
+                        raise ValueError('invalid snapshot monotonic timestamp')
+                    monotonic = int(monotonic)
+                if source.get('identity') and source['identity'][0] == identity[0]:
+                    previous_mono = source.get('monotonic_us')
+                    if ((monotonic is not None and previous_mono is not None and monotonic <= previous_mono) or
+                            (monotonic is None and stamp <= source.get('sampled_at', 0))):
+                        return web.json_response({'ok': True, 'ignored': 'out-of-order'})
                 if source.get("identity") and source["identity"][0] != identity[0]:
                     source["reset_count"] = source.get("reset_count", 0) + 1
                     for key in list(cache.curves):
                         if key.startswith("session:"):
                             del cache.curves[key]
                 cache.replace("upf_rates", doc["sessions"], config()["rates_interval"])
-                cache.record_rates(stamp)
+                cache.record_rates(stamp, boot_id=identity[0], interval=config()['rates_interval'])
                 source.update(identity=identity, sampled_at=stamp, sample_us=doc.get("sample_us"),
+                              monotonic_us=monotonic,
                               lock_wait_us=doc.get("lock_wait_us"), lock_hold_us=doc.get("lock_hold_us"))
         except (MemoryPressure, MemoryError) as exc:
             cache.relieve_memory()
