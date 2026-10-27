@@ -1,3 +1,5 @@
+import DeploymentVersion from './DeploymentVersion';
+
 export default function Header({onSidebarToggle, onLogoutRequest, theme, onToggleTheme}) {
   return <header className="xcn-header">
     <button type="button" className="xcn-icon-button" aria-label="展开或收起导航" onClick={onSidebarToggle}>
@@ -5,6 +7,7 @@ export default function Header({onSidebarToggle, onLogoutRequest, theme, onToggl
     </button>
     <div className="xcn-brand"><b>X-CN</b><span>核心网控制台</span></div>
     <div className="xcn-header-actions">
+      <DeploymentVersion/>
       <button type="button" className="xcn-quiet-button" onClick={onToggleTheme}
         aria-label={theme === 'dark' ? '切换浅色主题' : '切换深色主题'}>{theme === 'dark' ? '浅色' : '深色'}</button>
       <button type="button" className="xcn-quiet-button" onClick={onLogoutRequest}>退出登录</button>

@@ -79,6 +79,10 @@ spec:
             - exec taskset -c "$MONITOR_CPUSET" npm run start
 {{- end }}
           env:
+            - name: XCN_CHART_VERSION
+              value: {{ .Chart.Version | quote }}
+            - name: XCN_APP_VERSION
+              value: {{ .Chart.AppVersion | quote }}
 {{- if .Values.monitor.enabled }}
             - name: MONITOR_CPUSET
               value: {{ required "monitor.cpuSet is required" .Values.monitor.cpuSet | quote }}

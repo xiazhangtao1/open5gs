@@ -7,6 +7,10 @@ const _hostname =
   process.env.HOSTNAME ||
   'localhost';
 const port = process.env.WEBUI_PORT || process.env.PORT || 9999;
+const deploymentVersion = {
+  version: process.env.XCN_CHART_VERSION || null,
+  appVersion: process.env.XCN_APP_VERSION || null
+};
 
 const co = require('co');
 const next = require('next');
@@ -74,6 +78,11 @@ co(function* () {
   }
 
   const server = express();
+
+  // Deployment metadata is fixed at startup and does not access sessions or NFs.
+  server.get('/api/version', (req, res) => {
+    res.set('Cache-Control', 'no-store').json(deploymentVersion);
+  });
 
   // Must precede session, CSRF and passport.session: polling never touches MongoDB.
   server.use('/api/monitor', require('./monitor')());

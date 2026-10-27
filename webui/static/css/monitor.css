@@ -23,7 +23,10 @@
 .xcn-brand {display:flex; align-items:center; gap:16px;}
 .xcn-brand b {font-size:22px; letter-spacing:-1px; color:var(--primary);}
 .xcn-brand span {font-size:13px; color:var(--muted); border-left:1px solid var(--line); padding-left:16px;}
-.xcn-header-actions {margin-left:auto; display:flex; gap:14px;}
+.xcn-header-actions {margin-left:auto; display:flex; align-items:center; gap:14px;}
+.xcn-deployment-version {display:flex; flex-direction:column; align-items:flex-end; max-width:150px;
+  color:var(--muted); font-size:11px; line-height:1.4; font-variant-numeric:tabular-nums;}
+.xcn-deployment-version span {max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
 .xcn-quiet-button {border:0; color:var(--muted); background:transparent; padding:7px 10px; border-radius:5px;}
 .xcn-quiet-button:hover {background:var(--soft); color:var(--ink);}
 .xcn-nav-group {color:var(--muted); font-size:12px; padding:28px 24px 12px; white-space:nowrap;}
