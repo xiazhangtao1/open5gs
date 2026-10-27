@@ -107,7 +107,7 @@ for p in json.load(sys.stdin)["items"]:
 
 ## 构建、启用和停止
 
-控制台右上角用小号文字显示部署版本：`Chart` 对应 `Chart.yaml` 的 `version`，
+“核心网控制台”标题下方以一行小号文字显示部署版本：`Chart` 对应 `Chart.yaml` 的 `version`，
 `App` 对应 `appVersion`。Helm 自动通过 `XCN_CHART_VERSION`、`XCN_APP_VERSION`
 传入 WebUI；修改 Chart 元数据并升级后，刷新页面即可看到新值，无需重新构建
 前端来更新版本号。`GET /api/version` 只返回这两个固定字段，不经过登录会话、
@@ -119,6 +119,10 @@ Playwright 21 项检查覆盖 11px 字体、深浅主题、320/390px 窄屏和�
 不重复请求。已部署为 revision 206，现场返回 Chart `0.1.0`、App `2.7.7`。
 只重建 WebUI，其他四个 Pod 的 UID、重启数及密钥保持不变，六个会话和
 十二路实际速率核验正常。
+
+后续布局调整将两个版本号移到“核心网控制台”下方，以一行 11px 灰字显示。
+18 项浏览器检查覆盖标题对齐、单行排版、深浅主题及 320/390/1440px 布局，
+通过后仅更新 WebUI 到 revision 207，其余 Pod、会话及灌包保持正常。
 
 镜像构建在开发/构建主机执行；不要在正在承载业务的转发 CPU 上构建。UPF 运行镜像构建流程沿用项目现有 `docker/runtime/Dockerfile`，需要包含本次 `rate-snapshot` 改动。WebUI 和采集镜像如下，标签使用实际提交版本：
 
