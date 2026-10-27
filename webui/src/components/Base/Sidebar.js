@@ -40,7 +40,7 @@ export default function Sidebar({isOpen, selectedView, onSelectView}) {
     </button>
   );
   return <Menu visible={isOpen} aria-label="主导航" aria-hidden={!isOpen}>
-    <div className="xcn-nav-group">核心网监控</div>{monitor.map(item)}
+    <div className="xcn-nav-group">运行管理</div>{monitor.map(item)}
     <div className="xcn-nav-group manage">配置管理</div>{manage.map(item)}
   </Menu>;
 }

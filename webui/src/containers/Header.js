@@ -70,6 +70,7 @@ class HeaderContainer extends Component {
           theme={this.props.theme}
           onToggleTheme={this.props.onToggleTheme}
           onSidebarToggle={handleSidebarToggle}
+          onOverviewRequest={() => this.props.SidebarActions.selectView('overview')}
           onLogoutRequest={logoutHandler.show}
         />
         <Logout 

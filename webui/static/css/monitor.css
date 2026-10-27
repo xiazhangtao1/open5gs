@@ -20,13 +20,13 @@
   background:var(--surface); border-bottom:1px solid var(--line); position:relative; z-index:5;}
 .xcn-icon-button {border:0; background:transparent; padding:6px; color:var(--muted); display:flex;}
 .xcn-icon-button svg {width:22px; height:22px; fill:none; stroke:currentColor; stroke-width:1.7;}
-.xcn-brand {display:flex; align-items:center; gap:16px;}
+.xcn-brand {display:flex; align-items:center; gap:16px; min-width:0; border:0; padding:0; background:transparent; text-align:left;}
 .xcn-brand b {font-size:22px; letter-spacing:-1px; color:var(--primary);}
 .xcn-brand-caption {display:flex; flex-direction:column; gap:1px; min-width:0; border-left:1px solid var(--line); padding-left:16px;}
-.xcn-brand-title {font-size:13px; color:var(--muted); white-space:nowrap;}
+.xcn-brand-title {font-size:16px; font-weight:600; color:var(--ink); white-space:nowrap;}
 .xcn-header-actions {margin-left:auto; display:flex; align-items:center; gap:14px;}
 .xcn-deployment-version {display:flex; align-items:baseline; gap:8px; max-width:100%; white-space:nowrap;
-  color:var(--muted); font-size:11px; line-height:1.4; font-variant-numeric:tabular-nums;}
+  color:var(--muted); font-size:10px; line-height:1.4; font-variant-numeric:tabular-nums;}
 .xcn-deployment-version span {max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
 .xcn-quiet-button {border:0; color:var(--muted); background:transparent; padding:7px 10px; border-radius:5px;}
 .xcn-quiet-button:hover {background:var(--soft); color:var(--ink);}
