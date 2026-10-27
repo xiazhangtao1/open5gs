@@ -3,11 +3,13 @@
 set -euo pipefail
 TASK_ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 TAG=
+IMAGE=all
 REGISTRY=192.168.10.35/xcn
 OFFLINE=0
 CPUSET=
 usage() {
-    printf '%s\n' 'Usage: docker/build-images.sh --tag TAG [--offline] [--registry PREFIX] [--cpuset CPUS]' \
+    printf '%s\n' 'Usage: docker/build-images.sh --tag TAG [--image runtime|webui|monitor|all] [--offline] [--registry PREFIX] [--cpuset CPUS]' \
+        'Images: all (default) builds runtime, webui and monitor; select one to build/push only that image.' \
         'Defaults: Ubuntu 192.168.10.35/xnet/ubuntu:22.04; VPP 192.168.10.35/xcn/vpp:26.06' \
         'Optional environment: UBUNTU_IMAGE, VPP_IMAGE, APT_MIRROR, BUILD_JOBS (2),' \
         'BUILD_MEMORY (4g), BUILD_CPU_QUOTA (150000 us/100000 us), PUSH_TIMEOUT (60s),' \
@@ -15,15 +17,16 @@ usage() {
 }
 while (($#)); do
     case "$1" in
-        --tag|--registry|--cpuset)
+        --tag|--image|--registry|--cpuset)
             (($# >= 2)) || { usage >&2; exit 2; }
-            case "$1" in --tag) TAG=$2 ;; --registry) REGISTRY=$2 ;; --cpuset) CPUSET=$2 ;; esac
+            case "$1" in --tag) TAG=$2 ;; --image) IMAGE=$2 ;; --registry) REGISTRY=$2 ;; --cpuset) CPUSET=$2 ;; esac
             shift 2 ;;
         --offline) OFFLINE=1; shift ;;
         -h|--help) usage; exit 0 ;;
         *) printf 'Unknown option: %s\n' "$1" >&2; usage >&2; exit 2 ;;
     esac
 done
+case "$IMAGE" in runtime|webui|monitor|all) ;; *) echo 'Invalid --image; use runtime, webui, monitor or all' >&2; exit 2 ;; esac
 [[ $TAG =~ ^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$ ]] || { echo 'A valid --tag is required' >&2; exit 2; }
 [[ $REGISTRY =~ ^[a-z0-9][a-z0-9.:/_-]*[a-z0-9]$ && $REGISTRY != *//* ]] || { echo 'Invalid --registry prefix' >&2; exit 2; }
 for command in docker python3 timeout; do command -v "$command" >/dev/null || { echo "Missing command: $command" >&2; exit 1; }; done
@@ -45,10 +48,12 @@ if not cpus.issubset(os.sched_getaffinity(0)):
 PY
 fi
 cd "$TASK_ROOT"
-python3 docker/vendor.py verify all
+python3 docker/vendor.py verify "$IMAGE"
 UBUNTU_IMAGE=${UBUNTU_IMAGE:-192.168.10.35/xnet/ubuntu:22.04}
 VPP_IMAGE=${VPP_IMAGE:-192.168.10.35/xcn/vpp:26.06}
-for base in "$UBUNTU_IMAGE" "$VPP_IMAGE"; do
+BASE_IMAGES=("$UBUNTU_IMAGE")
+if [[ $IMAGE = all || $IMAGE = runtime ]]; then BASE_IMAGES+=("$VPP_IMAGE"); fi
+for base in "${BASE_IMAGES[@]}"; do
     if ! docker image inspect "$base" >/dev/null 2>&1; then
         printf 'Pulling required base image: %s\n' "$base"
         timeout 180 docker pull "$base" || { printf 'Base image unavailable: %s; preload it or specify its intranet address.\n' "$base" >&2; exit 1; }
@@ -69,7 +74,9 @@ for key in HTTP_PROXY HTTPS_PROXY ALL_PROXY NO_PROXY http_proxy https_proxy all_
     if ((OFFLINE)); then COMMON+=(--build-arg "$key="); else COMMON+=(--build-arg "$key"); fi
 done
 SUMMARY=()
-for name in runtime webui monitor; do
+IMAGES=(runtime webui monitor)
+[[ $IMAGE = all ]] || IMAGES=("$IMAGE")
+for name in "${IMAGES[@]}"; do
     case "$name" in runtime) file=docker/runtime/Dockerfile ;; webui) file=docker/webui/Dockerfile ;; monitor) file=monitor/Dockerfile ;; esac
     image="$REGISTRY/xcn-$name:$TAG"
     printf '\nBuilding %s (offline=%s)\n' "$image" "$OFFLINE"

@@ -22,6 +22,11 @@
 ```bash
 ./docker/build-images.sh --tag 26.10.27 --offline
 
+# 仅构建并推送一个镜像；--image 可选 runtime、webui、monitor、all，默认 all
+./docker/build-images.sh --tag 26.10.27 --image runtime --offline
+./docker/build-images.sh --tag 26.10.27 --image webui --offline
+./docker/build-images.sh --tag 26.10.27 --image monitor --offline
+
 # 业务主机：CPU 编号需按实际空闲核选择，避开 UPF/VPP 及其 SMT 同胞
 ./docker/build-images.sh --tag 26.10.27 --offline --cpuset 36,37
 
@@ -38,9 +43,11 @@ UBUNTU_IMAGE=ubuntu:22.04 VPP_IMAGE=vpp:26.06 \
 192.168.10.35/xcn/xcn-monitor:<tag>
 ```
 
+指定 `--image` 时仅校验、构建并推送所选组件；只有 runtime（或 all）需要 VPP 基础镜像。单镜像构建仍支持 `--offline`、`--registry` 和 `--cpuset`，沿用相同的资源限制与推送失败处理。
+
 `--registry localhost:5000/xcn` 可替换输出仓库前缀，基础镜像地址独立配置。需要认证时先执行 `docker login 192.168.10.35`。仓库 HTTP/TLS 配置由环境管理员维护，脚本不重启 Docker。
 
-push 失败会提示并继续，本地镜像保留；三个构建均成功时退出码为 0。恢复仓库连接后可直接执行 `docker push <镜像:tag>`。构建失败、离线文件缺失或校验失败返回非零退出码。
+push 失败会提示并继续，本地镜像保留；所选镜像均构建成功时退出码为 0。恢复仓库连接后可直接执行 `docker push <镜像:tag>`。构建失败、所选组件的离线文件缺失或校验失败返回非零退出码。
 
 构建依次执行，默认主机网络、两个编译作业、1.5 CPU 时间额度、4 GiB 内存。`--cpuset` 不传时不额外绑定 CPU；传入后限制构建容器及编译进程的运行 CPU，不调整线上核心网 CPU 配置。
 
