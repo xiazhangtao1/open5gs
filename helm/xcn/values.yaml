@@ -13,8 +13,8 @@ images:
     tag: latest
     pullPolicy: IfNotPresent
   mongodb:
-    repository: mongo
-    tag: latest
+    repository: 192.168.10.35/xcn/xcn-mongo
+    tag: "8.2.11"
     pullPolicy: IfNotPresent
 
 diagnostics:
