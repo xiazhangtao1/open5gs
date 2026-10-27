@@ -114,6 +114,8 @@ docker build --network host -f monitor/Dockerfile -t localhost:5000/xcn-monitor:
 docker build --network host -f docker/webui/Dockerfile -t localhost:5000/xcn-webui:YOUR_TAG .
 ```
 
+`xcn-monitor` 已同时包含信令 decoder，四个监控角色使用同一镜像、不同容器启动命令；无需另建解码镜像。空的 `collectorImage`、`trace.agentImage`、`trace.decoderImage` 字段继承 `monitor.image`。原 values 中的显式旧镜像仍有优先级，迁移时需清空或同步更新，详见[信令构建说明](webui-signaling.md#构建与启用)。
+
 有 Clash/代理时先验证构建网络。主机回环代理用于 `--network host` 构建的 RUN 阶段时，可显式传入 `--build-arg HTTP_PROXY=http://127.0.0.1:7890 --build-arg HTTPS_PROXY=http://127.0.0.1:7890`；镜像不持久化这些构建参数。Docker 守护进程拉取基础镜像使用独立网络设置，`--network host` 不会修复该阶段。不要为此重启生产 Docker 或全局更改代理。
 
 启用前保存实际 release 值和回滚 revision，检查镜像可拉取，并选择已预留 CPU；不要把文档示例 CPU 号当作生产分配。生成覆盖文件后先 `helm diff`（若已安装）或 `helm template` 检查差异，重点查看 5gc Pod、原 UPF/VPP 配置和现有资源限额。

@@ -44,14 +44,15 @@ monitor:
     decoderPlacement: separate
     # Full display for this test environment; set true to mask keys in trees, HEX and copies.
     redactKeys: false
+    # Empty fields inherit monitor.image; explicit role/legacy images still work.
     agentImage:
-      repository: xcn-monitor
-      tag: latest
-      pullPolicy: IfNotPresent
+      repository: ""
+      tag: ""
+      pullPolicy: ""
     decoderImage:
-      repository: xcn-trace-decoder
-      tag: latest
-      pullPolicy: IfNotPresent
+      repository: ""
+      tag: ""
+      pullPolicy: ""
     agentResources:
       requests: {cpu: 50m, memory: 32Mi}
       limits: {cpu: 250m, memory: 128Mi}

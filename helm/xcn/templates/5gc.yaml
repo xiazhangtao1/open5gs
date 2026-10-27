@@ -601,8 +601,8 @@ spec:
 {{- end }}
 {{- if dig "trace" "enabled" false .Values.monitor }}
         - name: signal-trace-agent
-          image: {{ printf "%s:%s" .Values.monitor.trace.agentImage.repository .Values.monitor.trace.agentImage.tag }}
-          imagePullPolicy: {{ .Values.monitor.trace.agentImage.pullPolicy }}
+          image: {{ printf "%s:%s" (default .Values.monitor.image.repository .Values.monitor.trace.agentImage.repository) (default .Values.monitor.image.tag .Values.monitor.trace.agentImage.tag) }}
+          imagePullPolicy: {{ default .Values.monitor.image.pullPolicy .Values.monitor.trace.agentImage.pullPolicy }}
           command: ["python3", "/opt/xcn-monitor/trace_agent.py"]
           env:
             - name: MONITOR_CPUSET

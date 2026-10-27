@@ -12,7 +12,23 @@ This chart deploys the same 5GC-focused lab topology as `k8s/`:
 ```bash
 docker build -f docker/runtime/Dockerfile -t xcn-runtime:latest .
 docker build -f docker/webui/Dockerfile -t xcn-webui:latest .
+docker build -f monitor/Dockerfile -t xcn-monitor:latest .
 ```
+
+The monitoring image includes the collector, both agents, and the TShark decoder;
+they run in separate containers with their existing resource limits. A memif
+deployment with monitoring and signaling therefore uses five image artifacts:
+runtime, WebUI, monitor, VPP, and MongoDB. Trace agent/decoder image fields inherit
+`monitor.image` when empty; explicit legacy or component-specific images remain
+supported. When upgrading old values, clear those overrides or point all four
+monitoring containers at the same release tag to use the shared artifact.
+
+Runtime and WebUI use multi-stage builds. Runtime retains unstripped debugging
+symbols and operational tools including tcpdump, iperf, iperf3, iproute2,
+iptables, procps, and binutils. Build tools and caches stay in build stages.
+On a live host, set `BUILD_CPUSET` to verified spare CPUs and limit builder
+CPU/memory as well; `BUILD_JOBS` defaults to 2 for the native builds. See the
+[image consolidation validation](../../docs/image-consolidation-validation.md).
 
 ## Install and Uninstall
 

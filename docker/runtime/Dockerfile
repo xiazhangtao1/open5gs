@@ -2,6 +2,9 @@ FROM vpp:26.06 AS vpp-libs
 
 FROM ubuntu:22.04 AS build
 
+ARG BUILD_CPUSET
+ARG BUILD_JOBS=2
+
 LABEL org.opencontainers.image.authors="Sukchan Lee <acetcom@gmail.com>"
 RUN apt-get update && \
     DEBIAN_FRONTEND=noninteractive \
@@ -43,28 +46,35 @@ WORKDIR /xcn
 COPY --from=vpp-libs /usr/local/include/libmemif.h /usr/local/include/libmemif.h
 COPY --from=vpp-libs /usr/local/lib/libmemif.so /usr/local/lib/libmemif.so
 COPY ./ /xcn
-RUN meson setup build --prefix=/usr --buildtype=debugoptimized \
-        -Dupf_memif=true && \
-    ninja -C build install
+RUN set -eu; \
+    if [ -n "$BUILD_CPUSET" ]; then taskset -pc "$BUILD_CPUSET" $$ >/dev/null; fi; \
+    meson setup build --prefix=/usr --sysconfdir=/etc --localstatedir=/var \
+        --buildtype=debugoptimized -Dupf_memif=true && \
+    ninja -C build -j "$BUILD_JOBS" && \
+    DESTDIR=/runtime-root ninja -C build install && \
+    mkdir -p /runtime-root/etc/xcn /runtime-root/etc/freeDiameter && \
+    cp -a build/configs/xcn/. /runtime-root/etc/xcn/ && \
+    cp -a build/configs/freeDiameter/. /runtime-root/etc/freeDiameter/
 
 FROM ubuntu:22.04
 
 LABEL org.opencontainers.image.authors="Sukchan Lee <acetcom@gmail.com>"
-RUN apt-get update && \
+RUN apt-get -o Acquire::Retries=3 update && \
     DEBIAN_FRONTEND=noninteractive \
-    apt-get install -y --no-install-recommends \
-        libsctp-dev \
-        libgnutls28-dev \
-        libgcrypt-dev \
-        libssl-dev \
-        libmongoc-dev \
-        libbson-dev \
-        libyaml-dev \
-        libmicrohttpd-dev \
-        libcurl4-gnutls-dev \
-        libnghttp2-dev \
-        libtins-dev \
-        libtalloc-dev \
+    apt-get -o Acquire::Retries=3 install -y --no-install-recommends \
+        libsctp1 \
+        libgnutls30 \
+        libgcrypt20 \
+        libssl3 \
+        libmongoc-1.0-0 \
+        libbson-1.0-0 \
+        libyaml-0-2 \
+        libmicrohttpd12 \
+        libcurl3-gnutls \
+        libnghttp2-14 \
+        libtins4.0 \
+        libtalloc2 \
+        libidn12 \
         iputils-ping \
         iproute2 \
         iperf \
@@ -73,20 +83,24 @@ RUN apt-get update && \
         iptables \
         netbase \
         netcat-openbsd \
-        ca-certificates && \
-    if apt-cache show libidn-dev > /dev/null 2>&1; then \
-        apt-get install -y --no-install-recommends libidn-dev; \
-    else \
-        apt-get install -y --no-install-recommends libidn11-dev; \
-    fi && \
+        ca-certificates \
+        binutils \
+        procps \
+        util-linux \
+        python3 \
+        openssl \
+        xz-utils \
+        bzip2 && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
-COPY --from=build /usr /usr
+# Keep installed artifacts and unstripped symbols, not the builder's /usr tree.
+COPY --from=build /runtime-root/ /
 COPY --from=vpp-libs /usr/local/lib/libmemif.so /usr/local/lib/libmemif.so
 COPY docker/runtime/setup.sh /usr/local/bin/xcn-k8s-setup
 COPY docker/runtime/wait-for-tcp.sh /usr/local/bin/wait-for-tcp.sh
+COPY misc/db/xcn-dbctl /usr/bin/xcn-dbctl
 
-RUN chmod +x /usr/local/bin/xcn-k8s-setup /usr/local/bin/wait-for-tcp.sh && \
+RUN chmod +x /usr/local/bin/xcn-k8s-setup /usr/local/bin/wait-for-tcp.sh /usr/bin/xcn-dbctl && \
     mkdir -p /etc/xcn /var/log/xcn && \
     ldconfig
 

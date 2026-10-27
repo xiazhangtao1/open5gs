@@ -56,7 +56,9 @@ flowchart LR
 
 默认 `monitor.trace.enabled: false`、`monitor.config.trace_enabled: false`。启用基础设施会给共享 5gc Pod 增加 agent、AMF / SMF 环目录和环境变量，**触发整个 5gc Pod 重建，需要维护窗口**。必须使用包含本次 AMF / SMF / libogsproto 的 runtime、包含原生 reader 的 monitor，以及配套 WebUI / decoder 镜像，不能只升级网页。
 
-构建入口为 `monitor/Dockerfile`、`monitor/Dockerfile.decoder` 和现有 WebUI 构建流程。`monitor/Dockerfile.runtime` 接受现行完整 runtime 作为 `BASE_RUNTIME`，构建上下文为 Meson 的 staged install，仅替换 AMF / SMF 和 libogsproto，保留其他 NF / UPF 组件。构建大任务也应使用空闲 CPU。
+统一监控镜像由 `monitor/Dockerfile` 构建，包含两个 agent、collector、原生 trace reader 和 TShark decoder；通过各容器的启动命令选择角色，仍分别限制 CPU、内存和权限。`monitor/Dockerfile.decoder` 是旧构建入口的兼容转接，需先构建统一镜像，或通过 `MONITOR_IMAGE` 指定已构建版本；标准发布不单独生成 decoder 镜像。
+
+runtime 和 WebUI 使用各自的完整多阶段构建入口。`monitor/Dockerfile.runtime` 保留兼容增量更新用途，正式瘦身版本应从完整构建产物生成，避免反复叠加旧版本层。构建大任务必须使用核验过的空闲 CPU，并限制构建资源。
 
 在现有经审核的部署 values 中合并以下字段，并指定已验证镜像的不可变标签；不要直接用示例覆盖现场其他参数：
 
@@ -64,22 +66,21 @@ flowchart LR
 monitor:
   enabled: true
   cpuSet: "36-37" # 示例，必须按目标机器实际 CPU / SMT 分配确认
+  image:
+    repository: localhost:5000/xcn-monitor
+    tag: signal-COMMIT
   trace:
     enabled: true
     decoderPlacement: colocated
     redactKeys: false # 本测试环境默认完整显示；设为 true 可统一遮蔽密钥
-    agentImage:
-      repository: localhost:5000/xcn-monitor
-      tag: signal-COMMIT
-    decoderImage:
-      repository: localhost:5000/xcn-trace-decoder
-      tag: signal-COMMIT
   config:
     enabled: true
     trace_enabled: true
 ```
 
-同时设置配套 runtime、collector 和 WebUI 镜像。先执行 `helm lint helm/xcn` 和 `helm template` 审查清单，再在维护窗口按现有 values 升级。Chart 会拒绝在监控或 UE 事件关闭时单独启用 trace。
+空的 `collectorImage`、`trace.agentImage`、`trace.decoderImage` 字段分别继承 `monitor.image`；仍支持单独覆盖，用于仅升级某个角色。旧 values 中显式指定的镜像不会被新默认值覆盖，迁移时应清空对应字段或统一改为同一监控镜像版本。仅修改 collector/decoder 覆盖不会改变 5gc Pod 模板，改变 agent 镜像会重建 5gc。
+
+同时设置配套 runtime 和 WebUI 镜像。先执行 `helm lint helm/xcn` 和 `helm template` 审查清单，再在维护窗口按现有 values 升级。Chart 会拒绝在监控或 UE 事件关闭时单独启用 trace。
 
 运行时紧急停用应更新监控 ConfigMap 中的 `trace_enabled` 为 `false`，保留基础设施。配置投射到容器后停止新解析和续租，最迟在最后一次续租后的 6 秒停止核心网复制；这不等于修改 ConfigMap 后 6 秒内必定停用，因为 Kubernetes 配置投射有延迟。无需重建 AMF / SMF。已经解析的缓存仍可读取。停用所有监控的 `config.enabled: false` 同样阻止新的信令任务。不要通过卸载 trace 基础设施作为即时停用手段，这会重建 5gc Pod。
 

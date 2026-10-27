@@ -2,8 +2,9 @@
 {{- $monitor := include "xcn.componentName" (dict "root" . "component" "monitor") -}}
 {{- $colocated := eq (dig "trace" "decoderPlacement" "separate" .Values.monitor) "colocated" -}}
 - name: decoder
-  image: {{ printf "%s:%s" .Values.monitor.trace.decoderImage.repository .Values.monitor.trace.decoderImage.tag }}
-  imagePullPolicy: {{ .Values.monitor.trace.decoderImage.pullPolicy }}
+  image: {{ printf "%s:%s" (default .Values.monitor.image.repository .Values.monitor.trace.decoderImage.repository) (default .Values.monitor.image.tag .Values.monitor.trace.decoderImage.tag) }}
+  imagePullPolicy: {{ default .Values.monitor.image.pullPolicy .Values.monitor.trace.decoderImage.pullPolicy }}
+  command: ["python3", "/opt/xcn-monitor/decoder.py"]
   env:
     - name: MONITOR_CPUSET
       value: {{ required "monitor.cpuSet is required" .Values.monitor.cpuSet | quote }}

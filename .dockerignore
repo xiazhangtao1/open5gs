@@ -9,9 +9,9 @@
 .github
 build
 images
-subprojects/freeDiameter
-subprojects/libtins
-subprojects/prometheus-client-c
+# CPack reads vendored README files even though project Markdown is excluded.
+!subprojects/**/*.md
+subprojects/**/.git
 webui/node_modules
 webui/.next
 webui/.env
