@@ -17,7 +17,7 @@ def render(values):
         path = Path(directory) / "values.yaml"
         path.write_text(yaml.safe_dump(values))
         return subprocess.run(
-            ["helm", "template", "xcn", str(CHART), "-f", str(path)],
+            ["helm", "template", "xcn", str(CHART), "-f", str(CHART / "tests/site-values.yaml"), "-f", str(path)],
             capture_output=True, text=True, check=False)
 
 

@@ -1,0 +1,165 @@
+{
+  "format": 1,
+  "platform": "linux/amd64",
+  "assets": {
+    "node": {
+      "version": "19.9.0",
+      "source": "https://nodejs.org/download/release/v19.9.0/node-v19.9.0-linux-x64.tar.xz",
+      "license": "LICENSE",
+      "components": [
+        "webui"
+      ],
+      "files": [
+        {
+          "path": "archives/node-v19.9.0-linux-x64.tar.xz",
+          "sha256": "e8ea737ee15a62c8752159d12765ed757b5d4b18036b1011d9e4c9e692a4e58d",
+          "bytes": 24170372
+        }
+      ]
+    },
+    "python": {
+      "version": "3.12.15",
+      "source": "https://www.python.org/ftp/python/3.12.15/Python-3.12.15.tar.xz",
+      "license": "LICENSE",
+      "components": [
+        "monitor"
+      ],
+      "files": [
+        {
+          "path": "archives/Python-3.12.15.tar.xz",
+          "sha256": "c2c4321961fab0fb999d66e0cecf521c2ab3994c7992873ea99e306c1094fd5a",
+          "bytes": 20829824
+        }
+      ]
+    },
+    "wireshark": {
+      "version": "4.6.9",
+      "source": "https://www.wireshark.org/download/src/wireshark-4.6.9.tar.xz",
+      "license": "COPYING",
+      "components": [
+        "monitor"
+      ],
+      "files": [
+        {
+          "path": "archives/wireshark-4.6.9.tar.xz",
+          "sha256": "d062d416a1ab3a49975aafe3a671c882dde0562ccd71b078808ceb59d465fc0f",
+          "bytes": 56477044
+        }
+      ]
+    },
+    "wait": {
+      "version": "2.9.0",
+      "source": "https://github.com/ufoscout/docker-compose-wait/releases/download/2.9.0/wait",
+      "license": "Apache-2.0",
+      "components": [
+        "webui"
+      ],
+      "files": [
+        {
+          "path": "archives/wait-2.9.0",
+          "sha256": "b945d1bc2b6bac5b8998bdc56791a66d99085432a6b164ef6726c52653f4b8d5",
+          "bytes": 399120
+        }
+      ]
+    },
+    "freeDiameter": {
+      "version": "14725af3ba0edbf9ff61c4e3239ed42464423b2e",
+      "source": "https://github.com/open5gs/freeDiameter.git",
+      "license": "LICENSE",
+      "components": [
+        "runtime"
+      ],
+      "files": [
+        {
+          "path": "archives/freeDiameter-14725af3ba0edbf9ff61c4e3239ed42464423b2e.tar.gz",
+          "sha256": "5f45965493112b3923091ae53d06924d989da08f802713938a65373cde9b133c",
+          "bytes": 1035628
+        }
+      ]
+    },
+    "prometheus-client-c": {
+      "version": "a58ba25bf87a9b1b7c6be4e6f4c62047d620f402",
+      "source": "https://github.com/open5gs/prometheus-client-c.git",
+      "license": "LICENSE",
+      "components": [
+        "runtime"
+      ],
+      "files": [
+        {
+          "path": "archives/prometheus-client-c-a58ba25bf87a9b1b7c6be4e6f4c62047d620f402.tar.gz",
+          "sha256": "e1f23b5c343c0f84b18f6e5b23afa0f4b4ba916f4ddef46b307c967d31f3095f",
+          "bytes": 1024904
+        }
+      ]
+    },
+    "wait-license": {
+      "version": "2.9.0",
+      "license": "Apache-2.0",
+      "source": "https://github.com/ufoscout/docker-compose-wait/tree/2.9.0",
+      "components": [
+        "webui"
+      ],
+      "files": [
+        {
+          "path": "archives/wait-2.9.0.LICENSE",
+          "sha256": "b40930bbcf80744c86c46a12bc9da056641d722716c378f5659b9e555ef833e1",
+          "bytes": 11357
+        }
+      ]
+    },
+    "npm-cache": {
+      "source": "webui/package-lock.json",
+      "version": "npm-9.6.3",
+      "components": [
+        "webui"
+      ],
+      "files": [
+        {
+          "path": "archives/npm-cache.tar.gz",
+          "sha256": "f71131fab581d09260b57c89f54996f65cd493ae4c2761df3016252df7f05d8e",
+          "bytes": 30893556
+        }
+      ]
+    },
+    "python-wheels": {
+      "source": "https://pypi.org/",
+      "version": "CPython-3.12-linux-amd64",
+      "components": [
+        "monitor"
+      ],
+      "files": [
+        {
+          "path": "archives/python-wheels.tar.gz",
+          "sha256": "0177dc32f734ca0dc93215fccb49b911d4610229f4d7a11423aa0f4e7ee2f797",
+          "bytes": 5027451
+        }
+      ]
+    }
+  },
+  "locks": {
+    "webui/package-lock.json": {
+      "sha256": "3ad24220505114c96470895a13a7ec5f279ec073c1f9e81d1bb923c2ce0189d6",
+      "components": [
+        "webui"
+      ]
+    },
+    "webui/package.json": {
+      "sha256": "67722f4347b76ca53145920482789c00591614fadc6fa4b21ed0dbeb36db7dd3",
+      "components": [
+        "webui"
+      ]
+    },
+    "monitor/requirements.txt": {
+      "sha256": "e654d983ccbbf72d9d6c6cfb31459b1ec611996d6d974520c9634a29791ff43d",
+      "components": [
+        "monitor"
+      ]
+    },
+    "monitor/requirements.lock": {
+      "sha256": "83e49de36cb9e1e4d2010a30b48b855052864d40d15f00fdb0f5d7d9d2c2c0b4",
+      "components": [
+        "monitor"
+      ]
+    }
+  }
+}

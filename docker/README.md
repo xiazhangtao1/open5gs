@@ -1,3 +1,5 @@
+X-CN production images: see [联网 / 内网离线构建](offline-build.md).
+
 Docker running example
 ===========================================
 * Development

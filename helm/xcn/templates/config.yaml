@@ -134,8 +134,8 @@ data:
         integrity_order: [ NIA2, NIA1, NIA0 ]
         ciphering_order: [ NEA0, NEA1, NEA2 ]
       network_name:
-        full: xcn
-        short: Next
+        full: U6G
+        short: U6G
       amf_name: xcn-amf0
       time:
         t3512:

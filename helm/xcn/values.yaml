@@ -5,11 +5,11 @@ nodeSelector: {}
 
 images:
   runtime:
-    repository: xcn-runtime
+    repository: 192.168.10.35/xcn/xcn-runtime
     tag: latest
     pullPolicy: IfNotPresent
   webui:
-    repository: xcn-webui
+    repository: 192.168.10.35/xcn/xcn-webui
     tag: latest
     pullPolicy: IfNotPresent
   mongodb:
@@ -28,7 +28,7 @@ diagnostics:
 monitor:
   enabled: false
   image:
-    repository: xcn-monitor
+    repository: 192.168.10.35/xcn/xcn-monitor
     tag: latest
     pullPolicy: IfNotPresent
   # Optional collector-only upgrade, without recreating the 5gc agent Pod.
@@ -222,7 +222,7 @@ services:
 
 fivegc:
   hostNetwork:
-    enabled: false
+    enabled: true
     dnsPolicy: ClusterFirstWithHostNet
   cpusetGuard:
     # Recreate a VPP/memif Pod that was admitted before the CPUSet webhook
@@ -300,7 +300,7 @@ networking:
     # Recommended deployment selector: "tun" or "memif". Empty retains
     # legacy backend/vpp/sessionWorkers overrides; their defaults resolve to
     # the same UDP/TUN mode.
-    mode: ""
+    mode: memif
     rateStats:
       # Low-overhead per-user/session/QFI/PDR rate snapshots. Data-plane
       # counters are published once per TX batch, not atomically per packet.
@@ -375,12 +375,12 @@ vpp:
   # Legacy advanced override, used only when networking.upf.mode is empty.
   enabled: false
   image:
-    repository: vpp
+    repository: 192.168.10.35/xcn/vpp
     tag: "26.06"
     pullPolicy: IfNotPresent
   sriov:
-    resourceName: intel.com/fabric_network
-    deviceEnv: PCIDEVICE_INTEL_COM_FABRIC_NETWORK
+    resourceName: intel.com/external_network       # intel.com/external_network | intel.com/fabric_network
+    deviceEnv: PCIDEVICE_INTEL_COM_EXTERNAL_NETWORK  # PCIDEVICE_INTEL_COM_EXTERNAL_NETWORK | PCIDEVICE_INTEL_COM_FABRIC_NETWORK
   dpdk:
     numRxQueues: 4
     numTxQueues: 4
@@ -414,7 +414,7 @@ vpp:
     externalAddress: ""
     defaultGateway: ""
     nat44:
-      enabled: true
+      enabled: false
       maxSessions: "1048576"
       frameQueueNelts: 8192
       # Empty uses VPP's only Worker. Set an explicit bitmap/list only when

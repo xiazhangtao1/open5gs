@@ -12,9 +12,15 @@ images
 # CPack reads vendored README files even though project Markdown is excluded.
 !subprojects/**/*.md
 subprojects/**/.git
+# Always unpack the pinned Git-tracked archives, never a developer's local checkout.
+subprojects/freeDiameter
+subprojects/prometheus-client-c
+subprojects/libtins
+subprojects/usrsctp
 webui/node_modules
 webui/.next
 webui/.env
 output
 **/__pycache__
+docker/vendor/archives/*.partial
 xcn-runtime-260831.tar

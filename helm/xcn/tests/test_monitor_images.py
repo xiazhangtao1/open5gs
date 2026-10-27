@@ -32,7 +32,8 @@ def containers(documents):
 
 class MonitorImagesTest(unittest.TestCase):
     def values(self, placement="colocated"):
-        return {"networking": {"upf": {"mode": "memif", "n3": {"address": "192.0.2.10"}}},
+        return {"networking": {"amf": {"ngap": {"serverAddress": "192.0.2.9"}},
+                               "upf": {"mode": "memif", "n3": {"address": "192.0.2.10"}}},
                 "vpp": {"n3": {"interfaceAddress": "192.0.2.11/24"},
                         "n6": {"externalAddress": "192.0.2.12/24"}},
                 "monitor": {"enabled": True, "cpuSet": "36,37",
@@ -88,6 +89,27 @@ class MonitorImagesTest(unittest.TestCase):
         self.assertIn("monitor", roles)
         self.assertNotIn("decoder", roles)
         self.assertNotIn("signal-trace-agent", roles)
+
+    def test_intranet_defaults_render_with_explicit_site_addresses(self):
+        values = self.values()
+        del values["monitor"]["image"]
+        del values["networking"]["upf"]["mode"]
+        docs = render(values)
+        roles = containers(docs)
+        for role in ("amf", "smf", "upf", "pcf"):
+            self.assertEqual(roles[role]["image"], "192.168.10.35/xcn/xcn-runtime:latest")
+        self.assertEqual(roles["webui"]["image"], "192.168.10.35/xcn/xcn-webui:latest")
+        self.assertEqual(roles["monitor"]["image"], "192.168.10.35/xcn/xcn-monitor:latest")
+        self.assertEqual(roles["vpp"]["image"], "192.168.10.35/xcn/vpp:26.06")
+        self.assertTrue(workloads(docs)["xcn-5gc"]["hostNetwork"])
+        self.assertEqual(roles["vpp"]["resources"]["requests"]["intel.com/external_network"], "2")
+        config = next(d["data"] for d in docs if d and d["kind"] == "ConfigMap"
+                      and "amf.yaml.tmpl" in d.get("data", {}))
+        self.assertEqual(yaml.safe_load(config["amf.yaml.tmpl"])["amf"]["network_name"],
+                         {"full": "U6G", "short": "U6G"})
+        defaults = yaml.safe_load((CHART / "values.yaml").read_text())
+        self.assertFalse(defaults["vpp"]["n6"]["nat44"]["enabled"])
+        self.assertEqual(defaults["vpp"]["sriov"]["deviceEnv"], "PCIDEVICE_INTEL_COM_EXTERNAL_NETWORK")
 
 
 if __name__ == "__main__":

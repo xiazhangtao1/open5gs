@@ -1,0 +1,13 @@
+# Documentation-only addresses for Helm rendering; never deploy this fixture.
+networking:
+  amf:
+    ngap:
+      serverAddress: 192.0.2.9
+  upf:
+    n3:
+      address: 192.0.2.10
+vpp:
+  n3:
+    interfaceAddress: 192.0.2.11/24
+  n6:
+    externalAddress: 192.0.2.12/24

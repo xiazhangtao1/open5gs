@@ -1,12 +1,17 @@
-FROM vpp:26.06 AS vpp-libs
+ARG UBUNTU_IMAGE=192.168.10.35/xnet/ubuntu:22.04
+ARG VPP_IMAGE=192.168.10.35/xcn/vpp:26.06
+FROM ${VPP_IMAGE} AS vpp-libs
 
-FROM ubuntu:22.04 AS build
+FROM ${UBUNTU_IMAGE} AS build
 
 ARG BUILD_CPUSET
 ARG BUILD_JOBS=2
+ARG OFFLINE=0
+ARG APT_MIRROR
+COPY docker/runtime/sources.list docker/apt-sources.sh /opt/xcn-build/
 
 LABEL org.opencontainers.image.authors="Sukchan Lee <acetcom@gmail.com>"
-RUN apt-get update && \
+RUN sh /opt/xcn-build/apt-sources.sh && apt-get update && \
     DEBIAN_FRONTEND=noninteractive \
     apt-get install -y --no-install-recommends \
         python3-pip \
@@ -48,7 +53,10 @@ COPY --from=vpp-libs /usr/local/lib/libmemif.so /usr/local/lib/libmemif.so
 COPY ./ /xcn
 RUN set -eu; \
     if [ -n "$BUILD_CPUSET" ]; then taskset -pc "$BUILD_CPUSET" $$ >/dev/null; fi; \
-    meson setup build --prefix=/usr --sysconfdir=/etc --localstatedir=/var \
+    python3 docker/vendor.py verify runtime && \
+    python3 docker/vendor.py unpack freeDiameter /xcn/subprojects && \
+    python3 docker/vendor.py unpack prometheus-client-c /xcn/subprojects && \
+    meson setup build --wrap-mode=nodownload --prefix=/usr --sysconfdir=/etc --localstatedir=/var \
         --buildtype=debugoptimized -Dupf_memif=true && \
     ninja -C build -j "$BUILD_JOBS" && \
     DESTDIR=/runtime-root ninja -C build install && \
@@ -56,10 +64,14 @@ RUN set -eu; \
     cp -a build/configs/xcn/. /runtime-root/etc/xcn/ && \
     cp -a build/configs/freeDiameter/. /runtime-root/etc/freeDiameter/
 
-FROM ubuntu:22.04
+FROM ${UBUNTU_IMAGE}
+
+ARG OFFLINE=0
+ARG APT_MIRROR
+COPY docker/runtime/sources.list docker/apt-sources.sh /opt/xcn-build/
 
 LABEL org.opencontainers.image.authors="Sukchan Lee <acetcom@gmail.com>"
-RUN apt-get -o Acquire::Retries=3 update && \
+RUN sh /opt/xcn-build/apt-sources.sh && apt-get -o Acquire::Retries=3 update && \
     DEBIAN_FRONTEND=noninteractive \
     apt-get -o Acquire::Retries=3 install -y --no-install-recommends \
         libsctp1 \

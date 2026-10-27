@@ -10,10 +10,16 @@ This chart deploys the same 5GC-focused lab topology as `k8s/`:
 ## Build Images
 
 ```bash
-docker build -f docker/runtime/Dockerfile -t xcn-runtime:latest .
-docker build -f docker/webui/Dockerfile -t xcn-webui:latest .
-docker build -f monitor/Dockerfile -t xcn-monitor:latest .
+./docker/build-images.sh --tag 26.10.27
+# Intranet APT only; the two base images must be local or available in Harbor:
+./docker/build-images.sh --tag 26.10.27 --offline
 ```
+
+Default bases: `192.168.10.35/xnet/ubuntu:22.04` and
+`192.168.10.35/xcn/vpp:26.06`. Images are automatically pushed to
+`192.168.10.35/xcn`; push failures are reported without failing successful builds.
+See the [offline build guide](../../docker/offline-build.md) for base-image overrides,
+CPU limits, dependency archives and the intranet APT source.
 
 The monitoring image includes the collector, both agents, and the TShark decoder;
 they run in separate containers with their existing resource limits. A memif
@@ -34,16 +40,16 @@ CPU/memory as well; `BUILD_JOBS` defaults to 2 for the native builds. See the
 
 ```bash
 helm uninstall xcn
-helm install xcn helm/xcn
+helm install xcn helm/xcn -f /path/to/site-values.yaml
 
 helm uninstall xcn -n xcn
-helm install xcn helm/xcn -n xcn --create-namespace
+helm install xcn helm/xcn -n xcn --create-namespace -f /path/to/site-values.yaml
 ```
 
 Render the manifests without installing:
 
 ```bash
-helm template xcn helm/xcn
+helm template xcn helm/xcn -f /path/to/site-values.yaml
 ```
 
 For the selected lightweight approach, see the Chinese
@@ -65,17 +71,20 @@ Schedule all xcn workloads on one node by its Kubernetes hostname label:
 
 ```bash
 helm install xcn helm/xcn -n xcn --create-namespace \
+  -f /path/to/site-values.yaml \
   --set 'nodeSelector.kubernetes\.io/hostname=xnet-server1'
 ```
 
 ```bash
 helm install xcn helm/xcn \
+  -f /path/to/site-values.yaml \
   --set images.runtime.repository=registry.example.com/xcn-runtime \
   --set images.webui.repository=registry.example.com/xcn-webui
 ```
 
 ```bash
 helm install xcn helm/xcn \
+  -f /path/to/site-values.yaml \
   --set services.amfNgap.nodePort=31412 \
   --set services.upfN3.nodePort=32152 \
   --set services.pcfSbi.nodePort=30777
@@ -401,15 +410,17 @@ VPP sidecar requires both memif backends.
 
 ### Current defaults and required configuration
 
-A plain `helm install xcn helm/xcn` selects the compatible UDP/TUN mode. The
-important defaults are:
+New deployments default to host networking and VPP/memif. Supply site addresses
+as shown below; a bare install is rejected until those addresses are configured.
+The important defaults are:
 
 | Value | Default | Meaning |
 |---|---|---|
-| `fivegc.hostNetwork.enabled` | `false` | Use the Pod network; empty AMF/N3 addresses resolve to the Pod IP at startup |
-| `networking.upf.mode` | empty (effective `tun`) | Preserve old values compatibility; explicitly set `tun` or `memif` in new deployment commands |
-| `networking.upf.n3.address` | empty | Use the Pod IP in default Pod-network TUN mode; set the environment's N3 address for hostNetwork or memif |
-| `resources.fivegc.upf.requests/limits.cpu` | `8` / `8` | Eight logical CPUs for the UPF container |
+| `fivegc.hostNetwork.enabled` | `true` | Bind AMF to an explicit reachable host address |
+| `networking.upf.mode` | `memif` | Enable VPP and two SR-IOV VFs; choose `tun` explicitly for the compatible backend |
+| `networking.upf.n3.address` | empty | Must be set to the environment's advertised N3 address |
+| `vpp.n6.nat44.enabled` | `false` | The external network needs a route back to the UE subnet; explicitly enable NAT when needed |
+| `resources.fivegc.upf.requests/limits.cpu` | `4` / `4` | Four logical CPUs for the UPF container |
 | `networking.upf.rateStats.enabled` | `true` | Create the rate/control thread; it shares the UPF control CPU |
 
 The chart applies the following requirements:
@@ -417,7 +428,7 @@ The chart applies the following requirements:
 | Scope | Required configuration or node prerequisite |
 |---|---|
 | Both modes | UPF CPU request and limit must be the same integer and at least `4`. The default is `4`. N3 must use a dedicated non-wildcard bind address because SMF and UPF share the Pod network namespace and both use UDP/2152. |
-| Pod-network UDP/TUN | No mode override is required. Empty AMF/UPF addresses resolve to the Pod IP. The gNB still needs a reachable NGAP and GTP-U path through the configured host ports/services. The node must provide `/dev/net/tun`. |
+| Pod-network UDP/TUN | Set `mode=tun` and `fivegc.hostNetwork.enabled=false`. Empty AMF/UPF addresses resolve to the Pod IP. The gNB still needs a reachable NGAP and GTP-U path through the configured host ports/services. The node must provide `/dev/net/tun`. |
 | `hostNetwork=true` | `networking.amf.ngap.serverAddress` and `networking.upf.n3.address` are mandatory explicit addresses. In TUN mode, the N3 address is used for both GTP-U bind and advertise. |
 | VPP/memif mode | Set `mode=memif`, `n3.address`, `vpp.n3.interfaceAddress`, and `vpp.n6.externalAddress`. Set each interface's `defaultGateway` only when it needs to reach a non-directly-connected network. The chart derives both memif backends, Session Workers, VPP, queue counts, the UPF memif/advertise address, and the local compatibility socket `127.0.0.8`. |
 | VPP/memif node | The SR-IOV device plugin must expose at least two allocatable VFs under `vpp.sriov.resourceName`; `vpp.sriov.deviceEnv` must be the matching device environment variable. With defaults, the node also needs two VPP CPUs and 8 GiB of 1-GiB hugepages available. Both VFs must be link-up. |
@@ -527,7 +538,7 @@ helm upgrade --install xcn /path/to/xcn/helm/xcn \
 This renders no VPP container or SR-IOV resource request. The UPF container
 mounts `/dev/net/tun`; `xcn-k8s-setup` creates `ogstun`, enables IP
 forwarding, and installs IPv4 MASQUERADE/FORWARD rules. When Pod networking is
-used instead of `hostNetwork`, omit the two explicit AMF and UPF N3 addresses;
+used instead of `hostNetwork`, set `fivegc.hostNetwork.enabled=false` and omit the two explicit AMF and UPF N3 addresses;
 the UPF GTP-U address defaults to the Pod IP.
 
 Verify the running mode:
@@ -559,7 +570,7 @@ The first-stage accelerated topology keeps xcn UPF responsible for PFCP,
 PDR/FAR/QER/URR and GTP-U semantics. N3 and N6 packet I/O use separate raw-IP
 memif links to a VPP 26.06 sidecar. VPP owns two SR-IOV VFs through DPDK: one
 VF and FIB table for N3, and one VF for N6/NAT44. The resource is configurable;
-the chart currently defaults to `intel.com/fabric_network`. The original UDP
+the chart currently defaults to `intel.com/external_network`. The original UDP
 N3 and TUN N6 backends remain available for fallback.
 
 Build the runtime image and install with free N3/N6 addresses. All omitted
@@ -567,11 +578,13 @@ Worker, queue, CPU, VPP resource, VF resource-name, and hugepage values use the
 defaults from `values.yaml`:
 
 ```bash
-docker build --network host -f docker/runtime/Dockerfile \
-  -t xcn-runtime:latest .
+./docker/build-images.sh --tag 26.10.27 --offline
 
 helm upgrade --install xcn /path/to/xcn/helm/xcn \
   -n xcn --create-namespace \
+  --set-string images.runtime.tag=26.10.27 \
+  --set-string images.webui.tag=26.10.27 \
+  --set-string monitor.image.tag=26.10.27 \
   --set fivegc.hostNetwork.enabled=true \
   --set networking.amf.ngap.serverAddress=10.2.0.119 \
   --set networking.upf.mode=memif \
@@ -590,9 +603,9 @@ The chart requests two VFs, 2 exclusive logical CPUs for VPP, 4 CPUs for UPF, 8 
 of hugepages and 16 GiB of regular memory for VPP. The VPP main heap is 8 GiB.
 Adjust these values to the NIC NUMA layout rather than reducing them for a
 performance run. Both VFs must be link-up and use different PCI functions.
-To use the cabled external PF instead, set the resource and device environment
-to `intel.com/external_network` and
-`PCIDEVICE_INTEL_COM_EXTERNAL_NETWORK`. The entrypoint reads the configured
+To use the fabric PF instead, set the resource and device environment
+to `intel.com/fabric_network` and
+`PCIDEVICE_INTEL_COM_FABRIC_NETWORK`. The entrypoint reads the configured
 environment-variable name rather than assuming one device-plugin resource.
 
 ### UPF Session Worker sizing
@@ -724,10 +737,10 @@ configure a dedicated `failurePolicy: Fail` rule for this label while keeping
 the general fallback rule fail-open. The init-container guard remains useful
 for clusters where the shared webhook configuration cannot be changed.
 
-NAT44 is enabled by default so IPv4 UE traffic keeps the former
-TUN/iptables-MASQUERADE behavior. When the upstream router has a route for
-`10.45.0.0/16` via the VPP external address, disable NAT with
-`--set vpp.n6.nat44.enabled=false`.
+NAT44 is disabled by default. Configure a return route for `10.45.0.0/16`
+via the VPP N6 external address on the upstream router. Environments that rely
+on the former TUN/iptables-MASQUERADE behavior must explicitly enable
+`--set vpp.n6.nat44.enabled=true`.
 
 Verify the connections, PCI interfaces, counters, N3 FIB, and NAT worker:
 
