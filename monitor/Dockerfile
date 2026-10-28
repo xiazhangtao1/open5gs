@@ -91,5 +91,9 @@ WORKDIR /opt/xcn-monitor
 COPY monitor/ .
 COPY --from=native /libxcn-trace.so /opt/xcn-monitor/libxcn-trace.so
 USER 65532:65532
+# Check the final runtime ABI, not only the compiler stage, before publishing.
+# This also validates the native reader and decoder under the production UID.
+RUN python3 -c 'import ssl,sqlite3,ctypes,bz2,lzma,readline,aiohttp,defusedxml; ctypes.CDLL("/opt/xcn-monitor/libxcn-trace.so")' && \
+    tshark --version
 # Agents and decoder use explicit commands; all four roles share this image.
 ENTRYPOINT ["python3", "/opt/xcn-monitor/server.py"]

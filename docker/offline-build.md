@@ -79,6 +79,31 @@ python3 docker/vendor.py verify all
 
 准备工具需 curl、Git、Python 3/pip，自动使用固定版本的 Node/npm 生成缓存，不使用主机 node_modules。若本地 C/C++ 子项目有未归档补丁或提交不一致则停止，避免丢失改动。归档、manifest 和锁文件需一并提交 Git。
 
+## 监控镜像 GLIBC 兼容性排查
+
+`GLIBC_2.35 not found (required by /opt/python/lib/libpython3.12.so.1.0)` 表示容器实际加载的系统库无法满足 Python 的 ABI 要求。先核对容器镜像本身和挂载配置，不据此判断宿主机需要升级 GLIBC；默认监控 Pod 不挂载宿主机 `/lib` 或 `/usr/lib`。
+
+当前 `monitor/Dockerfile` 的编译和运行阶段使用同一个 `UBUNTU_IMAGE`。最终阶段在生产 UID 下实际启动 Python、导入扩展、加载原生 trace reader，并执行 TShark；不兼容将导致构建失败，不进入自动 push。
+
+在发生问题的节点核对基础镜像内容和最终镜像（第二条中的镜像名、tag 按实际部署填写）：
+
+```bash
+docker run --rm --network none --entrypoint /bin/sh \
+  192.168.10.35/xnet/ubuntu:22.04 \
+  -c 'cat /etc/os-release; getconf GNU_LIBC_VERSION'
+
+docker run --rm --network none --entrypoint /bin/sh \
+  192.168.10.35/xcn/xcn-monitor:latest \
+  -c 'cat /etc/os-release; getconf GNU_LIBC_VERSION; ldd /opt/python/lib/libpython3.12.so.1.0; python3 --version'
+
+kubectl get pods -n xcn -l app=xcn-monitor \
+  -o 'custom-columns=POD:.metadata.name,NODE:.spec.nodeName,IMAGES:.spec.containers[*].image,IMAGE_IDS:.status.containerStatuses[*].imageID'
+```
+
+预期基础系统为 Ubuntu 22.04，GLIBC 为 2.35，最终镜像中 Python 可运行。镜像标签只是名称，不能替代上述核对；还需确认实际执行的 Dockerfile、`UBUNTU_IMAGE` 覆盖值及构建日志。若 Docker 自检成功而 Pod 仍失败，核对 Pod 的实际 image ID、旧的 `collectorImage` 覆盖及库目录挂载。Docker 本地镜像和 Kubernetes containerd 缓存可能不同。
+
+修正来源或构建配置后使用新 tag 重新构建和部署；仅覆盖 `latest` 再重建 Pod，在显式 `IfNotPresent` 配置下仍可能使用节点旧镜像。不要通过向容器或宿主机手工复制 `libc.so`、`libm.so` 处理该错误。
+
 ## 部署
 
 Helm 默认 hostNetwork、memif、external_network VF，NAT44 关闭，AMF 完整/短网络名称均为 U6G。填写本环境 AMF、UPF N3、VPP N3/N6 地址和必要网关，不可使用测试地址。
