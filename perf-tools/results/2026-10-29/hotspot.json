@@ -1,0 +1,25 @@
+{
+  "profile": "default-zc/zc-tcp-dl-perf.data",
+  "thread": 1653405,
+  "worker_cpu": 45,
+  "report_bytes": 712,
+  "rep_stosq_offset": "ogs_pfcp_up_handle_pdr+0x8e",
+  "worker_weighted_cycles": 49082519141,
+  "pdr_weighted_cycles": 14231751887,
+  "clear_weighted_cycles": 12303792504,
+  "pdr_worker_percent": 28.995561222349366,
+  "clear_worker_percent": 25.067565233672568,
+  "function_samples": 420,
+  "rep_samples": 397,
+  "microbenchmark": {
+    "cpu": 34,
+    "iterations_per_round": 10000000,
+    "rounds": 5,
+    "median_ns": {
+      "rep_stosq": 16.332,
+      "libc_memset": 5.666
+    },
+    "ratio": 2.8824567596187785,
+    "does_not_predict_upf_gain": true
+  }
+}

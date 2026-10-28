@@ -1,0 +1,11 @@
+round,implementation,iterations,bytes,ns_per_call
+0,rep_stosq,10000000,712,16.332
+0,libc_memset,10000000,712,5.666
+1,libc_memset,10000000,712,5.666
+1,rep_stosq,10000000,712,16.664
+2,rep_stosq,10000000,712,16.664
+2,libc_memset,10000000,712,5.666
+3,libc_memset,10000000,712,5.666
+3,rep_stosq,10000000,712,16.330
+4,rep_stosq,10000000,712,16.330
+4,libc_memset,10000000,712,5.666

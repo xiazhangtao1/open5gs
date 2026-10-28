@@ -1,0 +1,4937 @@
+{
+  "date_local": "2026-10-29",
+  "units": "Mbps receiver application payload; loss percent weighted by packets",
+  "scope": "one UE, one PDU/PFCP session, default UPF 4 logical CPUs + VPP 2 logical CPUs; test-only zero-copy attachment",
+  "deployment_git_workspace": "fdaae9fd2",
+  "helm_revision": 213,
+  "upf_seid": 2520,
+  "udp_low_loss_threshold_percent": 0.1,
+  "rate_grid_mbps": 500,
+  "final_selected": {
+    "tcp_ul": "final-tcp-ul",
+    "tcp_dl": "final-tcp-dl",
+    "udp_ul": "final-udp-ul-23000",
+    "udp_dl": "final-udp-dl-18000"
+  },
+  "runs": [
+    {
+      "label": "baseline-dl",
+      "mode": "bypass",
+      "sender_mbps": 25711.809354392437,
+      "receiver_mbps": 25717.91230307454,
+      "lost_percent": null,
+      "lost_packets": null,
+      "packets": null,
+      "offered_mbps": null,
+      "case": "default-tcp",
+      "protocol": "TCP",
+      "direction": "dl",
+      "duration_seconds": 10,
+      "omit_seconds": 3,
+      "processes": 4,
+      "streams": 4,
+      "flows": 16,
+      "payload_bytes": null,
+      "test_core_zero_copy": false,
+      "upf_affinity": "default",
+      "vf_ports": "up",
+      "profiled": false,
+      "session_seid": 2520,
+      "steady": null
+    },
+    {
+      "label": "baseline-ul",
+      "mode": "bypass",
+      "sender_mbps": 23240.38237345928,
+      "receiver_mbps": 23204.07521858321,
+      "lost_percent": null,
+      "lost_packets": null,
+      "packets": null,
+      "offered_mbps": null,
+      "case": "default-tcp",
+      "protocol": "TCP",
+      "direction": "ul",
+      "duration_seconds": 10,
+      "omit_seconds": 3,
+      "processes": 4,
+      "streams": 4,
+      "flows": 16,
+      "payload_bytes": null,
+      "test_core_zero_copy": false,
+      "upf_affinity": "default",
+      "vf_ports": "up",
+      "profiled": false,
+      "session_seid": 2520,
+      "steady": null
+    },
+    {
+      "label": "default-dl-r1",
+      "mode": "core",
+      "sender_mbps": 16415.658553055575,
+      "receiver_mbps": 16412.793587935488,
+      "lost_percent": null,
+      "lost_packets": null,
+      "packets": null,
+      "offered_mbps": null,
+      "case": "default-tcp",
+      "protocol": "TCP",
+      "direction": "dl",
+      "duration_seconds": 30,
+      "omit_seconds": 3,
+      "processes": 4,
+      "streams": 4,
+      "flows": 16,
+      "payload_bytes": null,
+      "test_core_zero_copy": false,
+      "upf_affinity": "default",
+      "vf_ports": "up",
+      "profiled": false,
+      "session_seid": 2520,
+      "steady": {
+        "sample_window_seconds": 25.036777987,
+        "samples": 26,
+        "roles": {
+          "upf": {
+            "threads": [
+              {
+                "tid": 1653243,
+                "comm": "xcn-upfd",
+                "affinity": "45-46,117-118",
+                "cpu_percent": 0.0,
+                "runqueue_wait_percent": 0.0
+              },
+              {
+                "tid": 1653405,
+                "comm": "xcn-upfd",
+                "affinity": "45",
+                "cpu_percent": 96.81180359783329,
+                "runqueue_wait_percent": 0.0041410160705915595
+              },
+              {
+                "tid": 1653406,
+                "comm": "xcn-upfd",
+                "affinity": "46",
+                "cpu_percent": 66.10946729485012,
+                "runqueue_wait_percent": 0.001337444459402355
+              },
+              {
+                "tid": 1653407,
+                "comm": "xcn-upfd",
+                "affinity": "117",
+                "cpu_percent": 96.13375897448701,
+                "runqueue_wait_percent": 0.0016584721892553482
+              },
+              {
+                "tid": 1653409,
+                "comm": "xcn-upfd",
+                "affinity": "118",
+                "cpu_percent": 0.0038641274068985094,
+                "runqueue_wait_percent": 0.0005835055935546327
+              },
+              {
+                "tid": 1653410,
+                "comm": "xcn-upfd",
+                "affinity": "118",
+                "cpu_percent": 0.002811264294333178,
+                "runqueue_wait_percent": 0.0029557277712980667
+              },
+              {
+                "tid": 1653411,
+                "comm": "xcn-upfd",
+                "affinity": "118",
+                "cpu_percent": 0.08975086175891966,
+                "runqueue_wait_percent": 1.49859538713335e-05
+              }
+            ],
+            "cfs_delta": {
+              "nr_periods": 250,
+              "nr_throttled": 0,
+              "throttled_time": 0
+            },
+            "memory_failcnt_delta": 0,
+            "memory_charge_mib_min": 189.5546875,
+            "memory_charge_mib_max": 189.84765625
+          },
+          "vpp": {
+            "threads": [
+              {
+                "tid": 1653704,
+                "comm": "vpp_main",
+                "affinity": "47",
+                "cpu_percent": 3.293246876367726,
+                "runqueue_wait_percent": 0.0905325158523562
+              },
+              {
+                "tid": 1654088,
+                "comm": "dpdk-intr",
+                "affinity": "47,119",
+                "cpu_percent": 0.036585769961119396,
+                "runqueue_wait_percent": 0.010263241545434567
+              },
+              {
+                "tid": 1654124,
+                "comm": "dpdk-iavf-event",
+                "affinity": "47,119",
+                "cpu_percent": 0.0,
+                "runqueue_wait_percent": 0.0
+              },
+              {
+                "tid": 1654204,
+                "comm": "vpp_wk_0",
+                "affinity": "119",
+                "cpu_percent": 99.82137899683728,
+                "runqueue_wait_percent": 0.027437352376439395
+              }
+            ],
+            "cfs_delta": {
+              "nr_periods": 250,
+              "nr_throttled": 0,
+              "throttled_time": 0
+            },
+            "memory_failcnt_delta": 0,
+            "memory_charge_mib_min": 303.28515625,
+            "memory_charge_mib_max": 303.37109375
+          }
+        }
+      }
+    },
+    {
+      "label": "default-dl-r2",
+      "mode": "core",
+      "sender_mbps": 16463.980694771373,
+      "receiver_mbps": 16461.86148022521,
+      "lost_percent": null,
+      "lost_packets": null,
+      "packets": null,
+      "offered_mbps": null,
+      "case": "default-tcp",
+      "protocol": "TCP",
+      "direction": "dl",
+      "duration_seconds": 30,
+      "omit_seconds": 3,
+      "processes": 4,
+      "streams": 4,
+      "flows": 16,
+      "payload_bytes": null,
+      "test_core_zero_copy": false,
+      "upf_affinity": "default",
+      "vf_ports": "up",
+      "profiled": false,
+      "session_seid": 2520,
+      "steady": {
+        "sample_window_seconds": 25.032079377,
+        "samples": 26,
+        "roles": {
+          "upf": {
+            "threads": [
+              {
+                "tid": 1653243,
+                "comm": "xcn-upfd",
+                "affinity": "45-46,117-118",
+                "cpu_percent": 0.0,
+                "runqueue_wait_percent": 0.0
+              },
+              {
+                "tid": 1653405,
+                "comm": "xcn-upfd",
+                "affinity": "45",
+                "cpu_percent": 97.60466208591953,
+                "runqueue_wait_percent": 7.972170309725044e-05
+              },
+              {
+                "tid": 1653406,
+                "comm": "xcn-upfd",
+                "affinity": "46",
+                "cpu_percent": 73.19742931078834,
+                "runqueue_wait_percent": 0.004161016687079675
+              },
+              {
+                "tid": 1653407,
+                "comm": "xcn-upfd",
+                "affinity": "117",
+                "cpu_percent": 96.97914000826157,
+                "runqueue_wait_percent": 0.0012729945251483534
+              },
+              {
+                "tid": 1653409,
+                "comm": "xcn-upfd",
+                "affinity": "118",
+                "cpu_percent": 0.0036326187141908087,
+                "runqueue_wait_percent": 0.0006878453739572448
+              },
+              {
+                "tid": 1653410,
+                "comm": "xcn-upfd",
+                "affinity": "118",
+                "cpu_percent": 0.002890299240041436,
+                "runqueue_wait_percent": 0.003168110759223085
+              },
+              {
+                "tid": 1653411,
+                "comm": "xcn-upfd",
+                "affinity": "118",
+                "cpu_percent": 0.09276390367048651,
+                "runqueue_wait_percent": 0.00013758745121128497
+              }
+            ],
+            "cfs_delta": {
+              "nr_periods": 250,
+              "nr_throttled": 1,
+              "throttled_time": 2290
+            },
+            "memory_failcnt_delta": 0,
+            "memory_charge_mib_min": 190.578125,
+            "memory_charge_mib_max": 190.81640625
+          },
+          "vpp": {
+            "threads": [
+              {
+                "tid": 1653704,
+                "comm": "vpp_main",
+                "affinity": "47",
+                "cpu_percent": 3.311048936516002,
+                "runqueue_wait_percent": 0.08338220603110545
+              },
+              {
+                "tid": 1654088,
+                "comm": "dpdk-intr",
+                "affinity": "47,119",
+                "cpu_percent": 0.03705472430118046,
+                "runqueue_wait_percent": 0.010510149637897578
+              },
+              {
+                "tid": 1654124,
+                "comm": "dpdk-iavf-event",
+                "affinity": "47,119",
+                "cpu_percent": 0.0,
+                "runqueue_wait_percent": 0.0
+              },
+              {
+                "tid": 1654204,
+                "comm": "vpp_wk_0",
+                "affinity": "119",
+                "cpu_percent": 99.83904824128587,
+                "runqueue_wait_percent": 0.02869211099817455
+              }
+            ],
+            "cfs_delta": {
+              "nr_periods": 250,
+              "nr_throttled": 0,
+              "throttled_time": 0
+            },
+            "memory_failcnt_delta": 0,
+            "memory_charge_mib_min": 303.28515625,
+            "memory_charge_mib_max": 303.42578125
+          }
+        }
+      }
+    },
+    {
+      "label": "default-profile-dl",
+      "mode": "core",
+      "sender_mbps": 16232.012599085387,
+      "receiver_mbps": 16229.023034201635,
+      "lost_percent": null,
+      "lost_packets": null,
+      "packets": null,
+      "offered_mbps": null,
+      "case": "default-tcp",
+      "protocol": "TCP",
+      "direction": "dl",
+      "duration_seconds": 30,
+      "omit_seconds": 3,
+      "processes": 4,
+      "streams": 4,
+      "flows": 16,
+      "payload_bytes": null,
+      "test_core_zero_copy": false,
+      "upf_affinity": "default",
+      "vf_ports": "up",
+      "profiled": true,
+      "session_seid": 2520,
+      "steady": {
+        "sample_window_seconds": 25.037603651,
+        "samples": 26,
+        "roles": {
+          "upf": {
+            "threads": [
+              {
+                "tid": 1653243,
+                "comm": "xcn-upfd",
+                "affinity": "45-46,117-118",
+                "cpu_percent": 0.0,
+                "runqueue_wait_percent": 0.0
+              },
+              {
+                "tid": 1653405,
+                "comm": "xcn-upfd",
+                "affinity": "45",
+                "cpu_percent": 96.66661473424728,
+                "runqueue_wait_percent": 0.0075958906711267515
+              },
+              {
+                "tid": 1653406,
+                "comm": "xcn-upfd",
+                "affinity": "46",
+                "cpu_percent": 70.23719916701225,
+                "runqueue_wait_percent": 0.016623008567490324
+              },
+              {
+                "tid": 1653407,
+                "comm": "xcn-upfd",
+                "affinity": "117",
+                "cpu_percent": 96.22321478851977,
+                "runqueue_wait_percent": 0.07667649535315348
+              },
+              {
+                "tid": 1653409,
+                "comm": "xcn-upfd",
+                "affinity": "118",
+                "cpu_percent": 0.004657698141784519,
+                "runqueue_wait_percent": 0.0005187277576974214
+              },
+              {
+                "tid": 1653410,
+                "comm": "xcn-upfd",
+                "affinity": "118",
+                "cpu_percent": 0.005282905738254112,
+                "runqueue_wait_percent": 0.002803387296099985
+              },
+              {
+                "tid": 1653411,
+                "comm": "xcn-upfd",
+                "affinity": "118",
+                "cpu_percent": 0.09949657062729737,
+                "runqueue_wait_percent": 0.0
+              }
+            ],
+            "cfs_delta": {
+              "nr_periods": 250,
+              "nr_throttled": 0,
+              "throttled_time": 0
+            },
+            "memory_failcnt_delta": 0,
+            "memory_charge_mib_min": 190.875,
+            "memory_charge_mib_max": 191.1875
+          },
+          "vpp": {
+            "threads": [
+              {
+                "tid": 1653704,
+                "comm": "vpp_main",
+                "affinity": "47",
+                "cpu_percent": 3.3222621445514315,
+                "runqueue_wait_percent": 0.1057421124203417
+              },
+              {
+                "tid": 1654088,
+                "comm": "dpdk-intr",
+                "affinity": "47,119",
+                "cpu_percent": 0.04647498283860425,
+                "runqueue_wait_percent": 0.008723039275017717
+              },
+              {
+                "tid": 1654124,
+                "comm": "dpdk-iavf-event",
+                "affinity": "47,119",
+                "cpu_percent": 0.0,
+                "runqueue_wait_percent": 0.0
+              },
+              {
+                "tid": 1654204,
+                "comm": "vpp_wk_0",
+                "affinity": "119",
+                "cpu_percent": 99.75672022830521,
+                "runqueue_wait_percent": 0.03564521638892366
+              }
+            ],
+            "cfs_delta": {
+              "nr_periods": 250,
+              "nr_throttled": 0,
+              "throttled_time": 0
+            },
+            "memory_failcnt_delta": 0,
+            "memory_charge_mib_min": 333.31640625,
+            "memory_charge_mib_max": 333.5390625
+          }
+        }
+      }
+    },
+    {
+      "label": "default-ul-r1",
+      "mode": "core",
+      "sender_mbps": 15645.14253584066,
+      "receiver_mbps": 15639.384560825782,
+      "lost_percent": null,
+      "lost_packets": null,
+      "packets": null,
+      "offered_mbps": null,
+      "case": "default-tcp",
+      "protocol": "TCP",
+      "direction": "ul",
+      "duration_seconds": 30,
+      "omit_seconds": 3,
+      "processes": 4,
+      "streams": 4,
+      "flows": 16,
+      "payload_bytes": null,
+      "test_core_zero_copy": false,
+      "upf_affinity": "default",
+      "vf_ports": "up",
+      "profiled": false,
+      "session_seid": 2520,
+      "steady": {
+        "sample_window_seconds": 25.036992029,
+        "samples": 26,
+        "roles": {
+          "upf": {
+            "threads": [
+              {
+                "tid": 1653243,
+                "comm": "xcn-upfd",
+                "affinity": "45-46,117-118",
+                "cpu_percent": 0.0,
+                "runqueue_wait_percent": 0.0
+              },
+              {
+                "tid": 1653405,
+                "comm": "xcn-upfd",
+                "affinity": "45",
+                "cpu_percent": 91.58679623510615,
+                "runqueue_wait_percent": 0.0029806216303285143
+              },
+              {
+                "tid": 1653406,
+                "comm": "xcn-upfd",
+                "affinity": "46",
+                "cpu_percent": 64.59330480381965,
+                "runqueue_wait_percent": 0.002775640936399485
+              },
+              {
+                "tid": 1653407,
+                "comm": "xcn-upfd",
+                "affinity": "117",
+                "cpu_percent": 11.066207824769045,
+                "runqueue_wait_percent": 0.0010010986931244831
+              },
+              {
+                "tid": 1653409,
+                "comm": "xcn-upfd",
+                "affinity": "118",
+                "cpu_percent": 0.004326298457679635,
+                "runqueue_wait_percent": 0.0008113714289827718
+              },
+              {
+                "tid": 1653410,
+                "comm": "xcn-upfd",
+                "affinity": "118",
+                "cpu_percent": 0.00455023510284475,
+                "runqueue_wait_percent": 0.00456063571325747
+              },
+              {
+                "tid": 1653411,
+                "comm": "xcn-upfd",
+                "affinity": "118",
+                "cpu_percent": 0.0035369105001682947,
+                "runqueue_wait_percent": 0.0
+              }
+            ],
+            "cfs_delta": {
+              "nr_periods": 250,
+              "nr_throttled": 0,
+              "throttled_time": 0
+            },
+            "memory_failcnt_delta": 0,
+            "memory_charge_mib_min": 189.11328125,
+            "memory_charge_mib_max": 189.234375
+          },
+          "vpp": {
+            "threads": [
+              {
+                "tid": 1653704,
+                "comm": "vpp_main",
+                "affinity": "47",
+                "cpu_percent": 3.3145539529619987,
+                "runqueue_wait_percent": 0.09962267021177873
+              },
+              {
+                "tid": 1654088,
+                "comm": "dpdk-intr",
+                "affinity": "47,119",
+                "cpu_percent": 0.03677380649135326,
+                "runqueue_wait_percent": 0.010054766151956744
+              },
+              {
+                "tid": 1654124,
+                "comm": "dpdk-iavf-event",
+                "affinity": "47,119",
+                "cpu_percent": 0.0,
+                "runqueue_wait_percent": 0.0
+              },
+              {
+                "tid": 1654204,
+                "comm": "vpp_wk_0",
+                "affinity": "119",
+                "cpu_percent": 99.79536006585515,
+                "runqueue_wait_percent": 0.05274645206861722
+              }
+            ],
+            "cfs_delta": {
+              "nr_periods": 250,
+              "nr_throttled": 0,
+              "throttled_time": 0
+            },
+            "memory_failcnt_delta": 0,
+            "memory_charge_mib_min": 303.1015625,
+            "memory_charge_mib_max": 303.4375
+          }
+        }
+      }
+    },
+    {
+      "label": "no-dpdk-dl",
+      "mode": "core",
+      "sender_mbps": 16469.804973814335,
+      "receiver_mbps": 16471.704080109437,
+      "lost_percent": null,
+      "lost_packets": null,
+      "packets": null,
+      "offered_mbps": null,
+      "case": "default-tcp",
+      "protocol": "TCP",
+      "direction": "dl",
+      "duration_seconds": 30,
+      "omit_seconds": 3,
+      "processes": 4,
+      "streams": 4,
+      "flows": 16,
+      "payload_bytes": null,
+      "test_core_zero_copy": false,
+      "upf_affinity": "default",
+      "vf_ports": "down",
+      "profiled": true,
+      "session_seid": 2520,
+      "steady": {
+        "sample_window_seconds": 25.037540487,
+        "samples": 26,
+        "roles": {
+          "upf": {
+            "threads": [
+              {
+                "tid": 1653243,
+                "comm": "xcn-upfd",
+                "affinity": "45-46,117-118",
+                "cpu_percent": 0.0,
+                "runqueue_wait_percent": 0.0
+              },
+              {
+                "tid": 1653405,
+                "comm": "xcn-upfd",
+                "affinity": "45",
+                "cpu_percent": 97.13237665108204,
+                "runqueue_wait_percent": 0.0036092243184557174
+              },
+              {
+                "tid": 1653406,
+                "comm": "xcn-upfd",
+                "affinity": "46",
+                "cpu_percent": 71.13059378674585,
+                "runqueue_wait_percent": 0.017409409691272283
+              },
+              {
+                "tid": 1653407,
+                "comm": "xcn-upfd",
+                "affinity": "117",
+                "cpu_percent": 96.40233019905571,
+                "runqueue_wait_percent": 0.07721377429239822
+              },
+              {
+                "tid": 1653409,
+                "comm": "xcn-upfd",
+                "affinity": "118",
+                "cpu_percent": 0.004647988489940689,
+                "runqueue_wait_percent": 0.0005305393318044562
+              },
+              {
+                "tid": 1653410,
+                "comm": "xcn-upfd",
+                "affinity": "118",
+                "cpu_percent": 0.00491626963374903,
+                "runqueue_wait_percent": 0.0025115765677004294
+              },
+              {
+                "tid": 1653411,
+                "comm": "xcn-upfd",
+                "affinity": "118",
+                "cpu_percent": 0.10115791929782611,
+                "runqueue_wait_percent": 0.000325682948140768
+              }
+            ],
+            "cfs_delta": {
+              "nr_periods": 250,
+              "nr_throttled": 0,
+              "throttled_time": 0
+            },
+            "memory_failcnt_delta": 0,
+            "memory_charge_mib_min": 191.359375,
+            "memory_charge_mib_max": 191.73046875
+          },
+          "vpp": {
+            "threads": [
+              {
+                "tid": 1653704,
+                "comm": "vpp_main",
+                "affinity": "47",
+                "cpu_percent": 3.350485605547251,
+                "runqueue_wait_percent": 0.08203693573921449
+              },
+              {
+                "tid": 1654088,
+                "comm": "dpdk-intr",
+                "affinity": "47,119",
+                "cpu_percent": 0.048352369140594334,
+                "runqueue_wait_percent": 0.00939160937641183
+              },
+              {
+                "tid": 1654124,
+                "comm": "dpdk-iavf-event",
+                "affinity": "47,119",
+                "cpu_percent": 0.0,
+                "runqueue_wait_percent": 0.0
+              },
+              {
+                "tid": 1654204,
+                "comm": "vpp_wk_0",
+                "affinity": "119",
+                "cpu_percent": 99.49088826809412,
+                "runqueue_wait_percent": 0.07548473465200392
+              }
+            ],
+            "cfs_delta": {
+              "nr_periods": 250,
+              "nr_throttled": 0,
+              "throttled_time": 0
+            },
+            "memory_failcnt_delta": 0,
+            "memory_charge_mib_min": 333.328125,
+            "memory_charge_mib_max": 333.5390625
+          }
+        }
+      }
+    },
+    {
+      "label": "no-dpdk-ul",
+      "mode": "core",
+      "sender_mbps": 15972.51382491903,
+      "receiver_mbps": 15970.296013819812,
+      "lost_percent": null,
+      "lost_packets": null,
+      "packets": null,
+      "offered_mbps": null,
+      "case": "default-tcp",
+      "protocol": "TCP",
+      "direction": "ul",
+      "duration_seconds": 30,
+      "omit_seconds": 3,
+      "processes": 4,
+      "streams": 4,
+      "flows": 16,
+      "payload_bytes": null,
+      "test_core_zero_copy": false,
+      "upf_affinity": "default",
+      "vf_ports": "down",
+      "profiled": false,
+      "session_seid": 2520,
+      "steady": {
+        "sample_window_seconds": 25.038100666,
+        "samples": 26,
+        "roles": {
+          "upf": {
+            "threads": [
+              {
+                "tid": 1653243,
+                "comm": "xcn-upfd",
+                "affinity": "45-46,117-118",
+                "cpu_percent": 0.0,
+                "runqueue_wait_percent": 0.0
+              },
+              {
+                "tid": 1653405,
+                "comm": "xcn-upfd",
+                "affinity": "45",
+                "cpu_percent": 93.01962238144793,
+                "runqueue_wait_percent": 0.001833957000674358
+              },
+              {
+                "tid": 1653406,
+                "comm": "xcn-upfd",
+                "affinity": "46",
+                "cpu_percent": 64.96505228964159,
+                "runqueue_wait_percent": 0.0030108274188052984
+              },
+              {
+                "tid": 1653407,
+                "comm": "xcn-upfd",
+                "affinity": "117",
+                "cpu_percent": 9.934689324808868,
+                "runqueue_wait_percent": 0.0013888433657118678
+              },
+              {
+                "tid": 1653409,
+                "comm": "xcn-upfd",
+                "affinity": "118",
+                "cpu_percent": 0.003941093668258839,
+                "runqueue_wait_percent": 0.0008048933211362303
+              },
+              {
+                "tid": 1653410,
+                "comm": "xcn-upfd",
+                "affinity": "118",
+                "cpu_percent": 0.004408425442185656,
+                "runqueue_wait_percent": 0.004387597185004464
+              },
+              {
+                "tid": 1653411,
+                "comm": "xcn-upfd",
+                "affinity": "118",
+                "cpu_percent": 0.0037171629446471374,
+                "runqueue_wait_percent": 2.0025480634034927e-05
+              }
+            ],
+            "cfs_delta": {
+              "nr_periods": 250,
+              "nr_throttled": 0,
+              "throttled_time": 0
+            },
+            "memory_failcnt_delta": 0,
+            "memory_charge_mib_min": 191.1796875,
+            "memory_charge_mib_max": 191.30078125
+          },
+          "vpp": {
+            "threads": [
+              {
+                "tid": 1653704,
+                "comm": "vpp_main",
+                "affinity": "47",
+                "cpu_percent": 3.3628847300841027,
+                "runqueue_wait_percent": 0.08154173222781307
+              },
+              {
+                "tid": 1654088,
+                "comm": "dpdk-intr",
+                "affinity": "47,119",
+                "cpu_percent": 0.03792988184960914,
+                "runqueue_wait_percent": 0.010356140965281316
+              },
+              {
+                "tid": 1654124,
+                "comm": "dpdk-iavf-event",
+                "affinity": "47,119",
+                "cpu_percent": 0.0,
+                "runqueue_wait_percent": 0.0
+              },
+              {
+                "tid": 1654204,
+                "comm": "vpp_wk_0",
+                "affinity": "119",
+                "cpu_percent": 100.04230069261757,
+                "runqueue_wait_percent": 0.07048861347524707
+              }
+            ],
+            "cfs_delta": {
+              "nr_periods": 250,
+              "nr_throttled": 0,
+              "throttled_time": 0
+            },
+            "memory_failcnt_delta": 0,
+            "memory_charge_mib_min": 333.4296875,
+            "memory_charge_mib_max": 333.70703125
+          }
+        }
+      }
+    },
+    {
+      "label": "packed-dl",
+      "mode": "core",
+      "sender_mbps": 16134.7198977447,
+      "receiver_mbps": 16137.02620367433,
+      "lost_percent": null,
+      "lost_packets": null,
+      "packets": null,
+      "offered_mbps": null,
+      "case": "default-tcp",
+      "protocol": "TCP",
+      "direction": "dl",
+      "duration_seconds": 30,
+      "omit_seconds": 3,
+      "processes": 4,
+      "streams": 4,
+      "flows": 16,
+      "payload_bytes": null,
+      "test_core_zero_copy": false,
+      "upf_affinity": "packed",
+      "vf_ports": "up",
+      "profiled": false,
+      "session_seid": 2520,
+      "steady": {
+        "sample_window_seconds": 25.036888653,
+        "samples": 26,
+        "roles": {
+          "upf": {
+            "threads": [
+              {
+                "tid": 1653243,
+                "comm": "xcn-upfd",
+                "affinity": "117",
+                "cpu_percent": 0.0,
+                "runqueue_wait_percent": 0.0
+              },
+              {
+                "tid": 1653405,
+                "comm": "xcn-upfd",
+                "affinity": "45",
+                "cpu_percent": 97.85947763946386,
+                "runqueue_wait_percent": 0.0037488963305651528
+              },
+              {
+                "tid": 1653406,
+                "comm": "xcn-upfd",
+                "affinity": "46",
+                "cpu_percent": 34.77325593712221,
+                "runqueue_wait_percent": 0.0012369588102269697
+              },
+              {
+                "tid": 1653407,
+                "comm": "xcn-upfd",
+                "affinity": "118",
+                "cpu_percent": 97.31380006389327,
+                "runqueue_wait_percent": 0.0020695862300682175
+              },
+              {
+                "tid": 1653409,
+                "comm": "xcn-upfd",
+                "affinity": "117",
+                "cpu_percent": 0.0052938606644367696,
+                "runqueue_wait_percent": 0.0011191166917077235
+              },
+              {
+                "tid": 1653410,
+                "comm": "xcn-upfd",
+                "affinity": "117",
+                "cpu_percent": 0.005990932103379675,
+                "runqueue_wait_percent": 0.005717875011711823
+              },
+              {
+                "tid": 1653411,
+                "comm": "xcn-upfd",
+                "affinity": "117",
+                "cpu_percent": 0.100732133091857,
+                "runqueue_wait_percent": 3.843928106796457e-05
+              }
+            ],
+            "cfs_delta": {
+              "nr_periods": 250,
+              "nr_throttled": 0,
+              "throttled_time": 0
+            },
+            "memory_failcnt_delta": 0,
+            "memory_charge_mib_min": 190.16015625,
+            "memory_charge_mib_max": 190.52734375
+          },
+          "vpp": {
+            "threads": [
+              {
+                "tid": 1653704,
+                "comm": "vpp_main",
+                "affinity": "47",
+                "cpu_percent": 3.353547825517823,
+                "runqueue_wait_percent": 0.08649873113289193
+              },
+              {
+                "tid": 1654088,
+                "comm": "dpdk-intr",
+                "affinity": "47,119",
+                "cpu_percent": 0.037791101486830576,
+                "runqueue_wait_percent": 0.010527897601542286
+              },
+              {
+                "tid": 1654124,
+                "comm": "dpdk-iavf-event",
+                "affinity": "47,119",
+                "cpu_percent": 0.0,
+                "runqueue_wait_percent": 0.0
+              },
+              {
+                "tid": 1654204,
+                "comm": "vpp_wk_0",
+                "affinity": "119",
+                "cpu_percent": 100.0457888244777,
+                "runqueue_wait_percent": 0.02893789280455127
+              }
+            ],
+            "cfs_delta": {
+              "nr_periods": 250,
+              "nr_throttled": 0,
+              "throttled_time": 0
+            },
+            "memory_failcnt_delta": 0,
+            "memory_charge_mib_min": 303.25390625,
+            "memory_charge_mib_max": 303.4296875
+          }
+        }
+      }
+    },
+    {
+      "label": "packed-ul",
+      "mode": "core",
+      "sender_mbps": 15874.854343924679,
+      "receiver_mbps": 15876.577350098165,
+      "lost_percent": null,
+      "lost_packets": null,
+      "packets": null,
+      "offered_mbps": null,
+      "case": "default-tcp",
+      "protocol": "TCP",
+      "direction": "ul",
+      "duration_seconds": 30,
+      "omit_seconds": 3,
+      "processes": 4,
+      "streams": 4,
+      "flows": 16,
+      "payload_bytes": null,
+      "test_core_zero_copy": false,
+      "upf_affinity": "packed",
+      "vf_ports": "up",
+      "profiled": false,
+      "session_seid": 2520,
+      "steady": {
+        "sample_window_seconds": 25.03741262,
+        "samples": 26,
+        "roles": {
+          "upf": {
+            "threads": [
+              {
+                "tid": 1653243,
+                "comm": "xcn-upfd",
+                "affinity": "117",
+                "cpu_percent": 0.0,
+                "runqueue_wait_percent": 0.0
+              },
+              {
+                "tid": 1653405,
+                "comm": "xcn-upfd",
+                "affinity": "45",
+                "cpu_percent": 92.15810653920516,
+                "runqueue_wait_percent": 0.0021128660857609016
+              },
+              {
+                "tid": 1653406,
+                "comm": "xcn-upfd",
+                "affinity": "46",
+                "cpu_percent": 64.99225688760487,
+                "runqueue_wait_percent": 0.0007345247801408003
+              },
+              {
+                "tid": 1653407,
+                "comm": "xcn-upfd",
+                "affinity": "118",
+                "cpu_percent": 12.270952316957102,
+                "runqueue_wait_percent": 0.0010646507450497095
+              },
+              {
+                "tid": 1653409,
+                "comm": "xcn-upfd",
+                "affinity": "117",
+                "cpu_percent": 0.004720567647856258,
+                "runqueue_wait_percent": 0.0011925753053312104
+              },
+              {
+                "tid": 1653410,
+                "comm": "xcn-upfd",
+                "affinity": "117",
+                "cpu_percent": 0.0054410574314367795,
+                "runqueue_wait_percent": 0.0059744272409566574
+              },
+              {
+                "tid": 1653411,
+                "comm": "xcn-upfd",
+                "affinity": "117",
+                "cpu_percent": 0.003660869491234194,
+                "runqueue_wait_percent": 0.0
+              }
+            ],
+            "cfs_delta": {
+              "nr_periods": 250,
+              "nr_throttled": 0,
+              "throttled_time": 0
+            },
+            "memory_failcnt_delta": 0,
+            "memory_charge_mib_min": 190.0625,
+            "memory_charge_mib_max": 190.08203125
+          },
+          "vpp": {
+            "threads": [
+              {
+                "tid": 1653704,
+                "comm": "vpp_main",
+                "affinity": "47",
+                "cpu_percent": 3.32516828170562,
+                "runqueue_wait_percent": 0.08748243012340466
+              },
+              {
+                "tid": 1654088,
+                "comm": "dpdk-intr",
+                "affinity": "47,119",
+                "cpu_percent": 0.03758843272999508,
+                "runqueue_wait_percent": 0.010346408549942251
+              },
+              {
+                "tid": 1654124,
+                "comm": "dpdk-iavf-event",
+                "affinity": "47,119",
+                "cpu_percent": 0.0,
+                "runqueue_wait_percent": 0.0
+              },
+              {
+                "tid": 1654204,
+                "comm": "vpp_wk_0",
+                "affinity": "119",
+                "cpu_percent": 99.79596491148932,
+                "runqueue_wait_percent": 0.05066320626863559
+              }
+            ],
+            "cfs_delta": {
+              "nr_periods": 250,
+              "nr_throttled": 0,
+              "throttled_time": 0
+            },
+            "memory_failcnt_delta": 0,
+            "memory_charge_mib_min": 303.2578125,
+            "memory_charge_mib_max": 303.40234375
+          }
+        }
+      }
+    },
+    {
+      "label": "udp-low-dl",
+      "mode": "core",
+      "sender_mbps": 18499.90333557797,
+      "receiver_mbps": 18498.76027196437,
+      "lost_percent": 0.006719905674318621,
+      "lost_packets": 3330,
+      "packets": 49554267,
+      "offered_mbps": 18500.0,
+      "case": "default-tcp",
+      "protocol": "UDP",
+      "direction": "dl",
+      "duration_seconds": 30,
+      "omit_seconds": 3,
+      "processes": 4,
+      "streams": 4,
+      "flows": 16,
+      "payload_bytes": 1400,
+      "test_core_zero_copy": false,
+      "upf_affinity": "default",
+      "vf_ports": "up",
+      "profiled": false,
+      "session_seid": 2520,
+      "steady": {
+        "sample_window_seconds": 24.033199231,
+        "samples": 25,
+        "roles": {
+          "upf": {
+            "threads": [
+              {
+                "tid": 1653243,
+                "comm": "xcn-upfd",
+                "affinity": "45-46,117-118",
+                "cpu_percent": 0.0,
+                "runqueue_wait_percent": 0.0
+              },
+              {
+                "tid": 1653405,
+                "comm": "xcn-upfd",
+                "affinity": "45",
+                "cpu_percent": 99.9885792774669,
+                "runqueue_wait_percent": 0.006107701209028436
+              },
+              {
+                "tid": 1653406,
+                "comm": "xcn-upfd",
+                "affinity": "46",
+                "cpu_percent": 0.0009320731619910899,
+                "runqueue_wait_percent": 0.00022926202820691794
+              },
+              {
+                "tid": 1653407,
+                "comm": "xcn-upfd",
+                "affinity": "117",
+                "cpu_percent": 99.87913337828726,
+                "runqueue_wait_percent": 0.007492331681241078
+              },
+              {
+                "tid": 1653409,
+                "comm": "xcn-upfd",
+                "affinity": "118",
+                "cpu_percent": 0.002729570015605052,
+                "runqueue_wait_percent": 0.00037398683020138277
+              },
+              {
+                "tid": 1653410,
+                "comm": "xcn-upfd",
+                "affinity": "118",
+                "cpu_percent": 0.0015041651197802612,
+                "runqueue_wait_percent": 0.0017923955768833196
+              },
+              {
+                "tid": 1653411,
+                "comm": "xcn-upfd",
+                "affinity": "118",
+                "cpu_percent": 0.08036698657699402,
+                "runqueue_wait_percent": 0.0
+              }
+            ],
+            "cfs_delta": {
+              "nr_periods": 240,
+              "nr_throttled": 0,
+              "throttled_time": 0
+            },
+            "memory_failcnt_delta": 0,
+            "memory_charge_mib_min": 191.98046875,
+            "memory_charge_mib_max": 192.21875
+          },
+          "vpp": {
+            "threads": [
+              {
+                "tid": 1653704,
+                "comm": "vpp_main",
+                "affinity": "47",
+                "cpu_percent": 3.302425188471155,
+                "runqueue_wait_percent": 0.08068817977003521
+              },
+              {
+                "tid": 1654088,
+                "comm": "dpdk-intr",
+                "affinity": "47,119",
+                "cpu_percent": 0.02823361939781857,
+                "runqueue_wait_percent": 0.008640946966899465
+              },
+              {
+                "tid": 1654124,
+                "comm": "dpdk-iavf-event",
+                "affinity": "47,119",
+                "cpu_percent": 0.0,
+                "runqueue_wait_percent": 0.0
+              },
+              {
+                "tid": 1654204,
+                "comm": "vpp_wk_0",
+                "affinity": "119",
+                "cpu_percent": 99.81195099925895,
+                "runqueue_wait_percent": 0.04697435364925511
+              }
+            ],
+            "cfs_delta": {
+              "nr_periods": 240,
+              "nr_throttled": 0,
+              "throttled_time": 0
+            },
+            "memory_failcnt_delta": 0,
+            "memory_charge_mib_min": 333.83984375,
+            "memory_charge_mib_max": 334.02734375
+          }
+        }
+      }
+    },
+    {
+      "label": "udp-low-ul",
+      "mode": "core",
+      "sender_mbps": 17499.893332210453,
+      "receiver_mbps": 17498.754232977066,
+      "lost_percent": 0.0068585938009661255,
+      "lost_packets": 3215,
+      "packets": 46875498,
+      "offered_mbps": 17500.0,
+      "case": "default-tcp",
+      "protocol": "UDP",
+      "direction": "ul",
+      "duration_seconds": 30,
+      "omit_seconds": 3,
+      "processes": 4,
+      "streams": 4,
+      "flows": 16,
+      "payload_bytes": 1400,
+      "test_core_zero_copy": false,
+      "upf_affinity": "default",
+      "vf_ports": "up",
+      "profiled": false,
+      "session_seid": 2520,
+      "steady": {
+        "sample_window_seconds": 25.035381754,
+        "samples": 26,
+        "roles": {
+          "upf": {
+            "threads": [
+              {
+                "tid": 1653243,
+                "comm": "xcn-upfd",
+                "affinity": "45-46,117-118",
+                "cpu_percent": 0.0,
+                "runqueue_wait_percent": 0.0
+              },
+              {
+                "tid": 1653405,
+                "comm": "xcn-upfd",
+                "affinity": "45",
+                "cpu_percent": 96.85420747828553,
+                "runqueue_wait_percent": 0.0039578825269628035
+              },
+              {
+                "tid": 1653406,
+                "comm": "xcn-upfd",
+                "affinity": "46",
+                "cpu_percent": 86.62551014439785,
+                "runqueue_wait_percent": 0.0031069588139023352
+              },
+              {
+                "tid": 1653407,
+                "comm": "xcn-upfd",
+                "affinity": "117",
+                "cpu_percent": 0.0011539388647582433,
+                "runqueue_wait_percent": 0.0006338149805710368
+              },
+              {
+                "tid": 1653409,
+                "comm": "xcn-upfd",
+                "affinity": "118",
+                "cpu_percent": 0.004292564861042302,
+                "runqueue_wait_percent": 0.000688833115047054
+              },
+              {
+                "tid": 1653410,
+                "comm": "xcn-upfd",
+                "affinity": "118",
+                "cpu_percent": 0.0033449060542733835,
+                "runqueue_wait_percent": 0.004058683865835809
+              },
+              {
+                "tid": 1653411,
+                "comm": "xcn-upfd",
+                "affinity": "118",
+                "cpu_percent": 0.0038072716819974556,
+                "runqueue_wait_percent": 0.0
+              }
+            ],
+            "cfs_delta": {
+              "nr_periods": 250,
+              "nr_throttled": 0,
+              "throttled_time": 0
+            },
+            "memory_failcnt_delta": 0,
+            "memory_charge_mib_min": 191.95703125,
+            "memory_charge_mib_max": 192.0078125
+          },
+          "vpp": {
+            "threads": [
+              {
+                "tid": 1653704,
+                "comm": "vpp_main",
+                "affinity": "47",
+                "cpu_percent": 3.2730931649127992,
+                "runqueue_wait_percent": 0.0826330479130588
+              },
+              {
+                "tid": 1654088,
+                "comm": "dpdk-intr",
+                "affinity": "47,119",
+                "cpu_percent": 0.02911618473257494,
+                "runqueue_wait_percent": 0.009040189689292006
+              },
+              {
+                "tid": 1654124,
+                "comm": "dpdk-iavf-event",
+                "affinity": "47,119",
+                "cpu_percent": 0.0,
+                "runqueue_wait_percent": 0.0
+              },
+              {
+                "tid": 1654204,
+                "comm": "vpp_wk_0",
+                "affinity": "119",
+                "cpu_percent": 99.80674935387286,
+                "runqueue_wait_percent": 0.0655681233915168
+              }
+            ],
+            "cfs_delta": {
+              "nr_periods": 250,
+              "nr_throttled": 0,
+              "throttled_time": 0
+            },
+            "memory_failcnt_delta": 0,
+            "memory_charge_mib_min": 333.6875,
+            "memory_charge_mib_max": 334.07421875
+          }
+        }
+      }
+    },
+    {
+      "label": "udp-peak-dl",
+      "mode": "core",
+      "sender_mbps": 23999.854680900076,
+      "receiver_mbps": 19630.04270345331,
+      "lost_percent": 18.213508894555364,
+      "lost_packets": 11710899,
+      "packets": 64297874,
+      "offered_mbps": 24000.0,
+      "case": "default-tcp",
+      "protocol": "UDP",
+      "direction": "dl",
+      "duration_seconds": 30,
+      "omit_seconds": 3,
+      "processes": 4,
+      "streams": 4,
+      "flows": 16,
+      "payload_bytes": 1400,
+      "test_core_zero_copy": false,
+      "upf_affinity": "default",
+      "vf_ports": "up",
+      "profiled": true,
+      "session_seid": 2520,
+      "steady": {
+        "sample_window_seconds": 25.036208596,
+        "samples": 26,
+        "roles": {
+          "upf": {
+            "threads": [
+              {
+                "tid": 1653243,
+                "comm": "xcn-upfd",
+                "affinity": "45-46,117-118",
+                "cpu_percent": 0.0,
+                "runqueue_wait_percent": 0.0
+              },
+              {
+                "tid": 1653405,
+                "comm": "xcn-upfd",
+                "affinity": "45",
+                "cpu_percent": 99.41250646464297,
+                "runqueue_wait_percent": 0.022569116159635947
+              },
+              {
+                "tid": 1653406,
+                "comm": "xcn-upfd",
+                "affinity": "46",
+                "cpu_percent": 0.0012200130016842908,
+                "runqueue_wait_percent": 0.00022487430468603372
+              },
+              {
+                "tid": 1653407,
+                "comm": "xcn-upfd",
+                "affinity": "117",
+                "cpu_percent": 99.4958250946185,
+                "runqueue_wait_percent": 0.2676259416160362
+              },
+              {
+                "tid": 1653409,
+                "comm": "xcn-upfd",
+                "affinity": "118",
+                "cpu_percent": 0.0023891237273664712,
+                "runqueue_wait_percent": 0.0003046267956570112
+              },
+              {
+                "tid": 1653410,
+                "comm": "xcn-upfd",
+                "affinity": "118",
+                "cpu_percent": 0.0022404310854384608,
+                "runqueue_wait_percent": 0.001480607571144875
+              },
+              {
+                "tid": 1653411,
+                "comm": "xcn-upfd",
+                "affinity": "118",
+                "cpu_percent": 0.08571833437842795,
+                "runqueue_wait_percent": 0.00028580206034643796
+              }
+            ],
+            "cfs_delta": {
+              "nr_periods": 251,
+              "nr_throttled": 2,
+              "throttled_time": 99782148
+            },
+            "memory_failcnt_delta": 0,
+            "memory_charge_mib_min": 192.27734375,
+            "memory_charge_mib_max": 192.6953125
+          },
+          "vpp": {
+            "threads": [
+              {
+                "tid": 1653704,
+                "comm": "vpp_main",
+                "affinity": "47",
+                "cpu_percent": 3.3270927137629127,
+                "runqueue_wait_percent": 0.09469393462310326
+              },
+              {
+                "tid": 1654088,
+                "comm": "dpdk-intr",
+                "affinity": "47,119",
+                "cpu_percent": 0.03831340501585586,
+                "runqueue_wait_percent": 0.008472389067484026
+              },
+              {
+                "tid": 1654124,
+                "comm": "dpdk-iavf-event",
+                "affinity": "47,119",
+                "cpu_percent": 0.0,
+                "runqueue_wait_percent": 0.0
+              },
+              {
+                "tid": 1654204,
+                "comm": "vpp_wk_0",
+                "affinity": "119",
+                "cpu_percent": 99.81451166688467,
+                "runqueue_wait_percent": 0.00804637008944659
+              }
+            ],
+            "cfs_delta": {
+              "nr_periods": 251,
+              "nr_throttled": 0,
+              "throttled_time": 0
+            },
+            "memory_failcnt_delta": 0,
+            "memory_charge_mib_min": 333.84375,
+            "memory_charge_mib_max": 334.06640625
+          }
+        }
+      }
+    },
+    {
+      "label": "udp-peak-ul",
+      "mode": "core",
+      "sender_mbps": 21999.86654074028,
+      "receiver_mbps": 18302.1875525591,
+      "lost_percent": 16.81916728137391,
+      "lost_packets": 9913214,
+      "packets": 58939981,
+      "offered_mbps": 22000.0,
+      "case": "default-tcp",
+      "protocol": "UDP",
+      "direction": "ul",
+      "duration_seconds": 30,
+      "omit_seconds": 3,
+      "processes": 4,
+      "streams": 4,
+      "flows": 16,
+      "payload_bytes": 1400,
+      "test_core_zero_copy": false,
+      "upf_affinity": "default",
+      "vf_ports": "up",
+      "profiled": false,
+      "session_seid": 2520,
+      "steady": {
+        "sample_window_seconds": 25.035730176,
+        "samples": 26,
+        "roles": {
+          "upf": {
+            "threads": [
+              {
+                "tid": 1653243,
+                "comm": "xcn-upfd",
+                "affinity": "45-46,117-118",
+                "cpu_percent": 0.0,
+                "runqueue_wait_percent": 0.0
+              },
+              {
+                "tid": 1653405,
+                "comm": "xcn-upfd",
+                "affinity": "45",
+                "cpu_percent": 87.24076802416486,
+                "runqueue_wait_percent": 0.004444000603052354
+              },
+              {
+                "tid": 1653406,
+                "comm": "xcn-upfd",
+                "affinity": "46",
+                "cpu_percent": 74.89312709550748,
+                "runqueue_wait_percent": 0.0016619367482992962
+              },
+              {
+                "tid": 1653407,
+                "comm": "xcn-upfd",
+                "affinity": "117",
+                "cpu_percent": 0.0012894491102539035,
+                "runqueue_wait_percent": 0.000639969351297741
+              },
+              {
+                "tid": 1653409,
+                "comm": "xcn-upfd",
+                "affinity": "118",
+                "cpu_percent": 0.0036897186281610126,
+                "runqueue_wait_percent": 0.0007608126412170516
+              },
+              {
+                "tid": 1653410,
+                "comm": "xcn-upfd",
+                "affinity": "118",
+                "cpu_percent": 0.003337913430626039,
+                "runqueue_wait_percent": 0.0036903856748132413
+              },
+              {
+                "tid": 1653411,
+                "comm": "xcn-upfd",
+                "affinity": "118",
+                "cpu_percent": 0.0030968220001956932,
+                "runqueue_wait_percent": 0.0
+              }
+            ],
+            "cfs_delta": {
+              "nr_periods": 250,
+              "nr_throttled": 0,
+              "throttled_time": 0
+            },
+            "memory_failcnt_delta": 0,
+            "memory_charge_mib_min": 192.37890625,
+            "memory_charge_mib_max": 192.39453125
+          },
+          "vpp": {
+            "threads": [
+              {
+                "tid": 1653704,
+                "comm": "vpp_main",
+                "affinity": "47",
+                "cpu_percent": 3.338894923868986,
+                "runqueue_wait_percent": 0.09573332126328793
+              },
+              {
+                "tid": 1654088,
+                "comm": "dpdk-intr",
+                "affinity": "47,119",
+                "cpu_percent": 0.030131168322110616,
+                "runqueue_wait_percent": 0.007689478143703092
+              },
+              {
+                "tid": 1654124,
+                "comm": "dpdk-iavf-event",
+                "affinity": "47,119",
+                "cpu_percent": 0.0,
+                "runqueue_wait_percent": 0.0
+              },
+              {
+                "tid": 1654204,
+                "comm": "vpp_wk_0",
+                "affinity": "119",
+                "cpu_percent": 99.84953566069301,
+                "runqueue_wait_percent": 0.004899122140147482
+              }
+            ],
+            "cfs_delta": {
+              "nr_periods": 250,
+              "nr_throttled": 0,
+              "throttled_time": 0
+            },
+            "memory_failcnt_delta": 0,
+            "memory_charge_mib_min": 333.953125,
+            "memory_charge_mib_max": 333.9921875
+          }
+        }
+      }
+    },
+    {
+      "label": "zc-packed-dl",
+      "mode": "core",
+      "sender_mbps": 17173.718263540795,
+      "receiver_mbps": 17174.019086348937,
+      "lost_percent": null,
+      "lost_packets": null,
+      "packets": null,
+      "offered_mbps": null,
+      "case": "default-zc",
+      "protocol": "TCP",
+      "direction": "dl",
+      "duration_seconds": 30,
+      "omit_seconds": 3,
+      "processes": 4,
+      "streams": 4,
+      "flows": 16,
+      "payload_bytes": null,
+      "test_core_zero_copy": true,
+      "upf_affinity": "packed",
+      "vf_ports": "up",
+      "profiled": true,
+      "session_seid": 2520,
+      "steady": {
+        "sample_window_seconds": 25.037044323,
+        "samples": 26,
+        "roles": {
+          "upf": {
+            "threads": [
+              {
+                "tid": 1653243,
+                "comm": "xcn-upfd",
+                "affinity": "117",
+                "cpu_percent": 0.0,
+                "runqueue_wait_percent": 0.0
+              },
+              {
+                "tid": 1653405,
+                "comm": "xcn-upfd",
+                "affinity": "45",
+                "cpu_percent": 96.31777080750268,
+                "runqueue_wait_percent": 0.006039267177439825
+              },
+              {
+                "tid": 1653406,
+                "comm": "xcn-upfd",
+                "affinity": "46",
+                "cpu_percent": 94.65707967065774,
+                "runqueue_wait_percent": 0.04277937068698139
+              },
+              {
+                "tid": 1653407,
+                "comm": "xcn-upfd",
+                "affinity": "118",
+                "cpu_percent": 95.8360283364507,
+                "runqueue_wait_percent": 0.032660045229413084
+              },
+              {
+                "tid": 1653409,
+                "comm": "xcn-upfd",
+                "affinity": "117",
+                "cpu_percent": 0.006259448918099037,
+                "runqueue_wait_percent": 0.0009554642189942654
+              },
+              {
+                "tid": 1653410,
+                "comm": "xcn-upfd",
+                "affinity": "117",
+                "cpu_percent": 0.010595296177045474,
+                "runqueue_wait_percent": 0.004998297657884447
+              },
+              {
+                "tid": 1653411,
+                "comm": "xcn-upfd",
+                "affinity": "117",
+                "cpu_percent": 0.11714488588038595,
+                "runqueue_wait_percent": 0.0
+              }
+            ],
+            "cfs_delta": {
+              "nr_periods": 250,
+              "nr_throttled": 0,
+              "throttled_time": 0
+            },
+            "memory_failcnt_delta": 0,
+            "memory_charge_mib_min": 193.16015625,
+            "memory_charge_mib_max": 193.4453125
+          },
+          "vpp": {
+            "threads": [
+              {
+                "tid": 1653704,
+                "comm": "vpp_main",
+                "affinity": "47",
+                "cpu_percent": 3.2946405228920437,
+                "runqueue_wait_percent": 0.12759961834094008
+              },
+              {
+                "tid": 1654088,
+                "comm": "dpdk-intr",
+                "affinity": "47,119",
+                "cpu_percent": 0.07800896842307355,
+                "runqueue_wait_percent": 0.010984088075738476
+              },
+              {
+                "tid": 1654124,
+                "comm": "dpdk-iavf-event",
+                "affinity": "47,119",
+                "cpu_percent": 0.0,
+                "runqueue_wait_percent": 0.0
+              },
+              {
+                "tid": 1654204,
+                "comm": "vpp_wk_0",
+                "affinity": "119",
+                "cpu_percent": 99.418682224937,
+                "runqueue_wait_percent": 0.12214392244338083
+              }
+            ],
+            "cfs_delta": {
+              "nr_periods": 250,
+              "nr_throttled": 0,
+              "throttled_time": 0
+            },
+            "memory_failcnt_delta": 0,
+            "memory_charge_mib_min": 333.82421875,
+            "memory_charge_mib_max": 334.05078125
+          }
+        }
+      }
+    },
+    {
+      "label": "zc-packed-ul",
+      "mode": "core",
+      "sender_mbps": 17635.62147805254,
+      "receiver_mbps": 17638.977342415954,
+      "lost_percent": null,
+      "lost_packets": null,
+      "packets": null,
+      "offered_mbps": null,
+      "case": "default-zc",
+      "protocol": "TCP",
+      "direction": "ul",
+      "duration_seconds": 30,
+      "omit_seconds": 3,
+      "processes": 4,
+      "streams": 4,
+      "flows": 16,
+      "payload_bytes": null,
+      "test_core_zero_copy": true,
+      "upf_affinity": "packed",
+      "vf_ports": "up",
+      "profiled": false,
+      "session_seid": 2520,
+      "steady": {
+        "sample_window_seconds": 25.036855375,
+        "samples": 26,
+        "roles": {
+          "upf": {
+            "threads": [
+              {
+                "tid": 1653243,
+                "comm": "xcn-upfd",
+                "affinity": "117",
+                "cpu_percent": 0.0,
+                "runqueue_wait_percent": 0.0
+              },
+              {
+                "tid": 1653405,
+                "comm": "xcn-upfd",
+                "affinity": "45",
+                "cpu_percent": 97.26793019428864,
+                "runqueue_wait_percent": 0.0033039292978701406
+              },
+              {
+                "tid": 1653406,
+                "comm": "xcn-upfd",
+                "affinity": "46",
+                "cpu_percent": 96.09211838968814,
+                "runqueue_wait_percent": 0.0010868737144670271
+              },
+              {
+                "tid": 1653407,
+                "comm": "xcn-upfd",
+                "affinity": "118",
+                "cpu_percent": 92.93494485427166,
+                "runqueue_wait_percent": 0.004074960631912025
+              },
+              {
+                "tid": 1653409,
+                "comm": "xcn-upfd",
+                "affinity": "117",
+                "cpu_percent": 0.004945125821337297,
+                "runqueue_wait_percent": 0.0011649625946685007
+              },
+              {
+                "tid": 1653410,
+                "comm": "xcn-upfd",
+                "affinity": "117",
+                "cpu_percent": 0.005452561751677251,
+                "runqueue_wait_percent": 0.005961870920460992
+              },
+              {
+                "tid": 1653411,
+                "comm": "xcn-upfd",
+                "affinity": "117",
+                "cpu_percent": 0.004309746507053105,
+                "runqueue_wait_percent": 0.0
+              }
+            ],
+            "cfs_delta": {
+              "nr_periods": 251,
+              "nr_throttled": 0,
+              "throttled_time": 0
+            },
+            "memory_failcnt_delta": 0,
+            "memory_charge_mib_min": 193.09765625,
+            "memory_charge_mib_max": 193.234375
+          },
+          "vpp": {
+            "threads": [
+              {
+                "tid": 1653704,
+                "comm": "vpp_main",
+                "affinity": "47",
+                "cpu_percent": 3.319741175762573,
+                "runqueue_wait_percent": 0.08163632250881267
+              },
+              {
+                "tid": 1654088,
+                "comm": "dpdk-intr",
+                "affinity": "47,119",
+                "cpu_percent": 0.03588086389223711,
+                "runqueue_wait_percent": 0.012013070151786185
+              },
+              {
+                "tid": 1654124,
+                "comm": "dpdk-iavf-event",
+                "affinity": "47,119",
+                "cpu_percent": 0.0,
+                "runqueue_wait_percent": 0.0
+              },
+              {
+                "tid": 1654204,
+                "comm": "vpp_wk_0",
+                "affinity": "119",
+                "cpu_percent": 100.24270920644722,
+                "runqueue_wait_percent": 0.005805801001077197
+              }
+            ],
+            "cfs_delta": {
+              "nr_periods": 251,
+              "nr_throttled": 0,
+              "throttled_time": 0
+            },
+            "memory_failcnt_delta": 0,
+            "memory_charge_mib_min": 333.90625,
+            "memory_charge_mib_max": 334.01171875
+          }
+        }
+      }
+    },
+    {
+      "label": "zc-tcp-dl",
+      "mode": "core",
+      "sender_mbps": 16563.95550776484,
+      "receiver_mbps": 16566.818544318954,
+      "lost_percent": null,
+      "lost_packets": null,
+      "packets": null,
+      "offered_mbps": null,
+      "case": "default-zc",
+      "protocol": "TCP",
+      "direction": "dl",
+      "duration_seconds": 30,
+      "omit_seconds": 3,
+      "processes": 4,
+      "streams": 4,
+      "flows": 16,
+      "payload_bytes": null,
+      "test_core_zero_copy": true,
+      "upf_affinity": "default",
+      "vf_ports": "up",
+      "profiled": true,
+      "session_seid": 2520,
+      "steady": {
+        "sample_window_seconds": 25.037116935,
+        "samples": 26,
+        "roles": {
+          "upf": {
+            "threads": [
+              {
+                "tid": 1653243,
+                "comm": "xcn-upfd",
+                "affinity": "45-46,117-118",
+                "cpu_percent": 0.0,
+                "runqueue_wait_percent": 0.0
+              },
+              {
+                "tid": 1653405,
+                "comm": "xcn-upfd",
+                "affinity": "45",
+                "cpu_percent": 96.56709476881309,
+                "runqueue_wait_percent": 0.007980623348876012
+              },
+              {
+                "tid": 1653406,
+                "comm": "xcn-upfd",
+                "affinity": "46",
+                "cpu_percent": 95.26727023691956,
+                "runqueue_wait_percent": 0.020113262294031778
+              },
+              {
+                "tid": 1653407,
+                "comm": "xcn-upfd",
+                "affinity": "117",
+                "cpu_percent": 95.93096438921114,
+                "runqueue_wait_percent": 0.0727693889328396
+              },
+              {
+                "tid": 1653409,
+                "comm": "xcn-upfd",
+                "affinity": "118",
+                "cpu_percent": 0.004726466721676475,
+                "runqueue_wait_percent": 0.0005936745847610509
+              },
+              {
+                "tid": 1653410,
+                "comm": "xcn-upfd",
+                "affinity": "118",
+                "cpu_percent": 0.005891604867403636,
+                "runqueue_wait_percent": 0.0029507830391095305
+              },
+              {
+                "tid": 1653411,
+                "comm": "xcn-upfd",
+                "affinity": "118",
+                "cpu_percent": 0.1103292127113277,
+                "runqueue_wait_percent": 0.00030783097031535274
+              }
+            ],
+            "cfs_delta": {
+              "nr_periods": 250,
+              "nr_throttled": 0,
+              "throttled_time": 0
+            },
+            "memory_failcnt_delta": 0,
+            "memory_charge_mib_min": 192.80859375,
+            "memory_charge_mib_max": 193.109375
+          },
+          "vpp": {
+            "threads": [
+              {
+                "tid": 1653704,
+                "comm": "vpp_main",
+                "affinity": "47",
+                "cpu_percent": 3.2828598441819756,
+                "runqueue_wait_percent": 0.07841318571530649
+              },
+              {
+                "tid": 1654088,
+                "comm": "dpdk-intr",
+                "affinity": "47,119",
+                "cpu_percent": 0.04524840471613191,
+                "runqueue_wait_percent": 0.009285873473514613
+              },
+              {
+                "tid": 1654124,
+                "comm": "dpdk-iavf-event",
+                "affinity": "47,119",
+                "cpu_percent": 0.0,
+                "runqueue_wait_percent": 0.0
+              },
+              {
+                "tid": 1654204,
+                "comm": "vpp_wk_0",
+                "affinity": "119",
+                "cpu_percent": 99.46241437722469,
+                "runqueue_wait_percent": 0.03808824724011699
+              }
+            ],
+            "cfs_delta": {
+              "nr_periods": 250,
+              "nr_throttled": 0,
+              "throttled_time": 0
+            },
+            "memory_failcnt_delta": 0,
+            "memory_charge_mib_min": 333.828125,
+            "memory_charge_mib_max": 334.19921875
+          }
+        }
+      }
+    },
+    {
+      "label": "zc-tcp-ul",
+      "mode": "core",
+      "sender_mbps": 17925.9098994125,
+      "receiver_mbps": 17932.41063340608,
+      "lost_percent": null,
+      "lost_packets": null,
+      "packets": null,
+      "offered_mbps": null,
+      "case": "default-zc",
+      "protocol": "TCP",
+      "direction": "ul",
+      "duration_seconds": 30,
+      "omit_seconds": 3,
+      "processes": 4,
+      "streams": 4,
+      "flows": 16,
+      "payload_bytes": null,
+      "test_core_zero_copy": true,
+      "upf_affinity": "default",
+      "vf_ports": "up",
+      "profiled": false,
+      "session_seid": 2520,
+      "steady": {
+        "sample_window_seconds": 25.03735595,
+        "samples": 26,
+        "roles": {
+          "upf": {
+            "threads": [
+              {
+                "tid": 1653243,
+                "comm": "xcn-upfd",
+                "affinity": "45-46,117-118",
+                "cpu_percent": 0.0,
+                "runqueue_wait_percent": 0.0
+              },
+              {
+                "tid": 1653405,
+                "comm": "xcn-upfd",
+                "affinity": "45",
+                "cpu_percent": 95.82580151399733,
+                "runqueue_wait_percent": 0.0022834399971854856
+              },
+              {
+                "tid": 1653406,
+                "comm": "xcn-upfd",
+                "affinity": "46",
+                "cpu_percent": 94.57839077452586,
+                "runqueue_wait_percent": 0.004207069636680227
+              },
+              {
+                "tid": 1653407,
+                "comm": "xcn-upfd",
+                "affinity": "117",
+                "cpu_percent": 90.77409677917687,
+                "runqueue_wait_percent": 0.001078464517336544
+              },
+              {
+                "tid": 1653409,
+                "comm": "xcn-upfd",
+                "affinity": "118",
+                "cpu_percent": 0.004240595541000008,
+                "runqueue_wait_percent": 0.000998420122712678
+              },
+              {
+                "tid": 1653410,
+                "comm": "xcn-upfd",
+                "affinity": "118",
+                "cpu_percent": 0.004628823436126449,
+                "runqueue_wait_percent": 0.005294129310806879
+              },
+              {
+                "tid": 1653411,
+                "comm": "xcn-upfd",
+                "affinity": "118",
+                "cpu_percent": 0.004165987023881409,
+                "runqueue_wait_percent": 0.0
+              }
+            ],
+            "cfs_delta": {
+              "nr_periods": 251,
+              "nr_throttled": 0,
+              "throttled_time": 0
+            },
+            "memory_failcnt_delta": 0,
+            "memory_charge_mib_min": 192.75,
+            "memory_charge_mib_max": 192.87109375
+          },
+          "vpp": {
+            "threads": [
+              {
+                "tid": 1653704,
+                "comm": "vpp_main",
+                "affinity": "47",
+                "cpu_percent": 3.304259901293611,
+                "runqueue_wait_percent": 0.09335004880976659
+              },
+              {
+                "tid": 1654088,
+                "comm": "dpdk-intr",
+                "affinity": "47,119",
+                "cpu_percent": 0.034874317469612844,
+                "runqueue_wait_percent": 0.00878758925021394
+              },
+              {
+                "tid": 1654124,
+                "comm": "dpdk-iavf-event",
+                "affinity": "47,119",
+                "cpu_percent": 0.0,
+                "runqueue_wait_percent": 0.0
+              },
+              {
+                "tid": 1654204,
+                "comm": "vpp_wk_0",
+                "affinity": "119",
+                "cpu_percent": 100.18270687244832,
+                "runqueue_wait_percent": 0.04722400409856377
+              }
+            ],
+            "cfs_delta": {
+              "nr_periods": 251,
+              "nr_throttled": 0,
+              "throttled_time": 0
+            },
+            "memory_failcnt_delta": 0,
+            "memory_charge_mib_min": 333.82421875,
+            "memory_charge_mib_max": 334.046875
+          }
+        }
+      }
+    },
+    {
+      "label": "zc-udp-baseline-dl",
+      "mode": "bypass",
+      "sender_mbps": 25302.590583170193,
+      "receiver_mbps": 25123.963647511366,
+      "lost_percent": 0.6834135913555582,
+      "lost_packets": 154744,
+      "packets": 22642804,
+      "offered_mbps": 80000.0,
+      "case": "default-zc",
+      "protocol": "UDP",
+      "direction": "dl",
+      "duration_seconds": 10,
+      "omit_seconds": 3,
+      "processes": 4,
+      "streams": 4,
+      "flows": 16,
+      "payload_bytes": 1400,
+      "test_core_zero_copy": true,
+      "upf_affinity": "default",
+      "vf_ports": "up",
+      "profiled": false,
+      "session_seid": 2520,
+      "steady": {
+        "sample_window_seconds": 5.006908836,
+        "samples": 6,
+        "roles": {
+          "upf": {
+            "threads": [
+              {
+                "tid": 1653243,
+                "comm": "xcn-upfd",
+                "affinity": "45-46,117-118",
+                "cpu_percent": 0.0,
+                "runqueue_wait_percent": 0.0
+              },
+              {
+                "tid": 1653405,
+                "comm": "xcn-upfd",
+                "affinity": "45",
+                "cpu_percent": 0.0,
+                "runqueue_wait_percent": 0.0
+              },
+              {
+                "tid": 1653406,
+                "comm": "xcn-upfd",
+                "affinity": "46",
+                "cpu_percent": 0.0003420473701630624,
+                "runqueue_wait_percent": 0.0002287039843359353
+              },
+              {
+                "tid": 1653407,
+                "comm": "xcn-upfd",
+                "affinity": "117",
+                "cpu_percent": 0.0003050984250035584,
+                "runqueue_wait_percent": 0.0002459401679427742
+              },
+              {
+                "tid": 1653409,
+                "comm": "xcn-upfd",
+                "affinity": "118",
+                "cpu_percent": 0.002458902369358019,
+                "runqueue_wait_percent": 0.0003797952114341233
+              },
+              {
+                "tid": 1653410,
+                "comm": "xcn-upfd",
+                "affinity": "118",
+                "cpu_percent": 0.001444543976514295,
+                "runqueue_wait_percent": 0.0019317707425500247
+              },
+              {
+                "tid": 1653411,
+                "comm": "xcn-upfd",
+                "affinity": "118",
+                "cpu_percent": 0.0008680205976092991,
+                "runqueue_wait_percent": 0.0
+              }
+            ],
+            "cfs_delta": {
+              "nr_periods": 0,
+              "nr_throttled": 0,
+              "throttled_time": 0
+            },
+            "memory_failcnt_delta": 0,
+            "memory_charge_mib_min": 194.00390625,
+            "memory_charge_mib_max": 194.0078125
+          },
+          "vpp": {
+            "threads": [
+              {
+                "tid": 1653704,
+                "comm": "vpp_main",
+                "affinity": "47",
+                "cpu_percent": 3.345958424396605,
+                "runqueue_wait_percent": 0.04202592994844774
+              },
+              {
+                "tid": 1654088,
+                "comm": "dpdk-intr",
+                "affinity": "47,119",
+                "cpu_percent": 0.020940664876127973,
+                "runqueue_wait_percent": 0.005388414465631385
+              },
+              {
+                "tid": 1654124,
+                "comm": "dpdk-iavf-event",
+                "affinity": "47,119",
+                "cpu_percent": 0.0,
+                "runqueue_wait_percent": 0.0
+              },
+              {
+                "tid": 1654204,
+                "comm": "vpp_wk_0",
+                "affinity": "119",
+                "cpu_percent": 99.75997795458963,
+                "runqueue_wait_percent": 0.10064143696344305
+              }
+            ],
+            "cfs_delta": {
+              "nr_periods": 50,
+              "nr_throttled": 0,
+              "throttled_time": 0
+            },
+            "memory_failcnt_delta": 0,
+            "memory_charge_mib_min": 333.94921875,
+            "memory_charge_mib_max": 334.05859375
+          }
+        }
+      }
+    },
+    {
+      "label": "zc-udp-baseline-ul",
+      "mode": "bypass",
+      "sender_mbps": 23728.841913159995,
+      "receiver_mbps": 23610.20190620013,
+      "lost_percent": 0.4835236015723246,
+      "lost_packets": 102476,
+      "packets": 21193588,
+      "offered_mbps": 80000.0,
+      "case": "default-zc",
+      "protocol": "UDP",
+      "direction": "ul",
+      "duration_seconds": 10,
+      "omit_seconds": 3,
+      "processes": 4,
+      "streams": 4,
+      "flows": 16,
+      "payload_bytes": 1400,
+      "test_core_zero_copy": true,
+      "upf_affinity": "default",
+      "vf_ports": "up",
+      "profiled": false,
+      "session_seid": 2520,
+      "steady": {
+        "sample_window_seconds": 5.007021859,
+        "samples": 6,
+        "roles": {
+          "upf": {
+            "threads": [
+              {
+                "tid": 1653243,
+                "comm": "xcn-upfd",
+                "affinity": "45-46,117-118",
+                "cpu_percent": 0.0,
+                "runqueue_wait_percent": 0.0
+              },
+              {
+                "tid": 1653405,
+                "comm": "xcn-upfd",
+                "affinity": "45",
+                "cpu_percent": 0.0,
+                "runqueue_wait_percent": 0.0
+              },
+              {
+                "tid": 1653406,
+                "comm": "xcn-upfd",
+                "affinity": "46",
+                "cpu_percent": 0.002475163949548877,
+                "runqueue_wait_percent": 0.00022586280464648558
+              },
+              {
+                "tid": 1653407,
+                "comm": "xcn-upfd",
+                "affinity": "117",
+                "cpu_percent": 0.0003261220034549883,
+                "runqueue_wait_percent": 0.000258956329034073
+              },
+              {
+                "tid": 1653409,
+                "comm": "xcn-upfd",
+                "affinity": "118",
+                "cpu_percent": 0.0018020093089431827,
+                "runqueue_wait_percent": 0.0002853193056132013
+              },
+              {
+                "tid": 1653410,
+                "comm": "xcn-upfd",
+                "affinity": "118",
+                "cpu_percent": 0.001447287470290231,
+                "runqueue_wait_percent": 0.001950281080248825
+              },
+              {
+                "tid": 1653411,
+                "comm": "xcn-upfd",
+                "affinity": "118",
+                "cpu_percent": 0.0025507977315982395,
+                "runqueue_wait_percent": 0.0
+              }
+            ],
+            "cfs_delta": {
+              "nr_periods": 0,
+              "nr_throttled": 0,
+              "throttled_time": 0
+            },
+            "memory_failcnt_delta": 0,
+            "memory_charge_mib_min": 193.90625,
+            "memory_charge_mib_max": 194.02734375
+          },
+          "vpp": {
+            "threads": [
+              {
+                "tid": 1653704,
+                "comm": "vpp_main",
+                "affinity": "47",
+                "cpu_percent": 3.223053554478201,
+                "runqueue_wait_percent": 0.04681910856423126
+              },
+              {
+                "tid": 1654088,
+                "comm": "dpdk-intr",
+                "affinity": "47,119",
+                "cpu_percent": 0.020756789749816828,
+                "runqueue_wait_percent": 0.005280144713664211
+              },
+              {
+                "tid": 1654124,
+                "comm": "dpdk-iavf-event",
+                "affinity": "47,119",
+                "cpu_percent": 0.0,
+                "runqueue_wait_percent": 0.0
+              },
+              {
+                "tid": 1654204,
+                "comm": "vpp_wk_0",
+                "affinity": "119",
+                "cpu_percent": 99.83714596761061,
+                "runqueue_wait_percent": 0.10343487897283414
+              }
+            ],
+            "cfs_delta": {
+              "nr_periods": 50,
+              "nr_throttled": 0,
+              "throttled_time": 0
+            },
+            "memory_failcnt_delta": 0,
+            "memory_charge_mib_min": 333.90234375,
+            "memory_charge_mib_max": 334.015625
+          }
+        }
+      }
+    },
+    {
+      "label": "zc-udp-low-dl",
+      "mode": "core",
+      "sender_mbps": 18499.883313204336,
+      "receiver_mbps": 18500.016601414478,
+      "lost_percent": 0.0,
+      "lost_packets": 0,
+      "packets": 49554289,
+      "offered_mbps": 18500.0,
+      "case": "default-zc",
+      "protocol": "UDP",
+      "direction": "dl",
+      "duration_seconds": 30,
+      "omit_seconds": 3,
+      "processes": 4,
+      "streams": 4,
+      "flows": 16,
+      "payload_bytes": 1400,
+      "test_core_zero_copy": true,
+      "upf_affinity": "default",
+      "vf_ports": "up",
+      "profiled": false,
+      "session_seid": 2520,
+      "steady": {
+        "sample_window_seconds": 24.034070886,
+        "samples": 25,
+        "roles": {
+          "upf": {
+            "threads": [
+              {
+                "tid": 1653243,
+                "comm": "xcn-upfd",
+                "affinity": "45-46,117-118",
+                "cpu_percent": 0.0,
+                "runqueue_wait_percent": 0.0
+              },
+              {
+                "tid": 1653405,
+                "comm": "xcn-upfd",
+                "affinity": "45",
+                "cpu_percent": 99.80163624287314,
+                "runqueue_wait_percent": 0.003150481679077794
+              },
+              {
+                "tid": 1653406,
+                "comm": "xcn-upfd",
+                "affinity": "46",
+                "cpu_percent": 0.0009004799936995576,
+                "runqueue_wait_percent": 0.00023559055088325748
+              },
+              {
+                "tid": 1653407,
+                "comm": "xcn-upfd",
+                "affinity": "117",
+                "cpu_percent": 99.6725907135198,
+                "runqueue_wait_percent": 0.007047536840655051
+              },
+              {
+                "tid": 1653409,
+                "comm": "xcn-upfd",
+                "affinity": "118",
+                "cpu_percent": 0.0021734145766553353,
+                "runqueue_wait_percent": 0.00037152257902348606
+              },
+              {
+                "tid": 1653410,
+                "comm": "xcn-upfd",
+                "affinity": "118",
+                "cpu_percent": 0.0015805686926773593,
+                "runqueue_wait_percent": 0.0017052000967456911
+              },
+              {
+                "tid": 1653411,
+                "comm": "xcn-upfd",
+                "affinity": "118",
+                "cpu_percent": 0.07859230377406817,
+                "runqueue_wait_percent": 0.0
+              }
+            ],
+            "cfs_delta": {
+              "nr_periods": 240,
+              "nr_throttled": 0,
+              "throttled_time": 0
+            },
+            "memory_failcnt_delta": 0,
+            "memory_charge_mib_min": 193.41015625,
+            "memory_charge_mib_max": 193.78125
+          },
+          "vpp": {
+            "threads": [
+              {
+                "tid": 1653704,
+                "comm": "vpp_main",
+                "affinity": "47",
+                "cpu_percent": 3.268600690770219,
+                "runqueue_wait_percent": 0.12223048329741037
+              },
+              {
+                "tid": 1654088,
+                "comm": "dpdk-intr",
+                "affinity": "47,119",
+                "cpu_percent": 0.0614528477928531,
+                "runqueue_wait_percent": 0.008748505444513733
+              },
+              {
+                "tid": 1654124,
+                "comm": "dpdk-iavf-event",
+                "affinity": "47,119",
+                "cpu_percent": 0.0,
+                "runqueue_wait_percent": 0.0
+              },
+              {
+                "tid": 1654204,
+                "comm": "vpp_wk_0",
+                "affinity": "119",
+                "cpu_percent": 99.7871152072294,
+                "runqueue_wait_percent": 0.06808368868351686
+              }
+            ],
+            "cfs_delta": {
+              "nr_periods": 240,
+              "nr_throttled": 0,
+              "throttled_time": 0
+            },
+            "memory_failcnt_delta": 0,
+            "memory_charge_mib_min": 333.94140625,
+            "memory_charge_mib_max": 334.05078125
+          }
+        }
+      }
+    },
+    {
+      "label": "zc-udp-low-ul",
+      "mode": "core",
+      "sender_mbps": 18999.897902226603,
+      "receiver_mbps": 18999.958760483794,
+      "lost_percent": 0.0,
+      "lost_packets": 0,
+      "packets": 50893354,
+      "offered_mbps": 19000.0,
+      "case": "default-zc",
+      "protocol": "UDP",
+      "direction": "ul",
+      "duration_seconds": 30,
+      "omit_seconds": 3,
+      "processes": 4,
+      "streams": 4,
+      "flows": 16,
+      "payload_bytes": 1400,
+      "test_core_zero_copy": true,
+      "upf_affinity": "default",
+      "vf_ports": "up",
+      "profiled": false,
+      "session_seid": 2520,
+      "steady": {
+        "sample_window_seconds": 24.033804048,
+        "samples": 25,
+        "roles": {
+          "upf": {
+            "threads": [
+              {
+                "tid": 1653243,
+                "comm": "xcn-upfd",
+                "affinity": "45-46,117-118",
+                "cpu_percent": 0.0,
+                "runqueue_wait_percent": 0.0
+              },
+              {
+                "tid": 1653405,
+                "comm": "xcn-upfd",
+                "affinity": "45",
+                "cpu_percent": 98.2148231834498,
+                "runqueue_wait_percent": 0.0027482415962152475
+              },
+              {
+                "tid": 1653406,
+                "comm": "xcn-upfd",
+                "affinity": "46",
+                "cpu_percent": 91.39661921237946,
+                "runqueue_wait_percent": 0.004481679212532456
+              },
+              {
+                "tid": 1653407,
+                "comm": "xcn-upfd",
+                "affinity": "117",
+                "cpu_percent": 0.0011905689146359307,
+                "runqueue_wait_percent": 0.0006278198811084856
+              },
+              {
+                "tid": 1653409,
+                "comm": "xcn-upfd",
+                "affinity": "118",
+                "cpu_percent": 0.0037179091508585307,
+                "runqueue_wait_percent": 0.0007852606255051215
+              },
+              {
+                "tid": 1653410,
+                "comm": "xcn-upfd",
+                "affinity": "118",
+                "cpu_percent": 0.0034952311266343403,
+                "runqueue_wait_percent": 0.003932469442258973
+              },
+              {
+                "tid": 1653411,
+                "comm": "xcn-upfd",
+                "affinity": "118",
+                "cpu_percent": 0.0031128072713992863,
+                "runqueue_wait_percent": 0.0
+              }
+            ],
+            "cfs_delta": {
+              "nr_periods": 241,
+              "nr_throttled": 0,
+              "throttled_time": 0
+            },
+            "memory_failcnt_delta": 0,
+            "memory_charge_mib_min": 193.4609375,
+            "memory_charge_mib_max": 193.4765625
+          },
+          "vpp": {
+            "threads": [
+              {
+                "tid": 1653704,
+                "comm": "vpp_main",
+                "affinity": "47",
+                "cpu_percent": 3.2865642842991023,
+                "runqueue_wait_percent": 0.08165907053583214
+              },
+              {
+                "tid": 1654088,
+                "comm": "dpdk-intr",
+                "affinity": "47,119",
+                "cpu_percent": 0.02903290709229469,
+                "runqueue_wait_percent": 0.008616401281562117
+              },
+              {
+                "tid": 1654124,
+                "comm": "dpdk-iavf-event",
+                "affinity": "47,119",
+                "cpu_percent": 0.0,
+                "runqueue_wait_percent": 0.0
+              },
+              {
+                "tid": 1654204,
+                "comm": "vpp_wk_0",
+                "affinity": "119",
+                "cpu_percent": 100.22591228126667,
+                "runqueue_wait_percent": 0.04660661698676091
+              }
+            ],
+            "cfs_delta": {
+              "nr_periods": 241,
+              "nr_throttled": 0,
+              "throttled_time": 0
+            },
+            "memory_failcnt_delta": 0,
+            "memory_charge_mib_min": 333.9375,
+            "memory_charge_mib_max": 334.0234375
+          }
+        }
+      }
+    },
+    {
+      "label": "zc-udp-peak-dl",
+      "mode": "core",
+      "sender_mbps": 23999.86501410597,
+      "receiver_mbps": 18035.06386236341,
+      "lost_percent": 24.86257134821175,
+      "lost_packets": 15985797,
+      "packets": 64296636,
+      "offered_mbps": 24000.0,
+      "case": "default-zc",
+      "protocol": "UDP",
+      "direction": "dl",
+      "duration_seconds": 30,
+      "omit_seconds": 3,
+      "processes": 4,
+      "streams": 4,
+      "flows": 16,
+      "payload_bytes": 1400,
+      "test_core_zero_copy": true,
+      "upf_affinity": "default",
+      "vf_ports": "up",
+      "profiled": true,
+      "session_seid": 2520,
+      "steady": {
+        "sample_window_seconds": 25.035157987,
+        "samples": 26,
+        "roles": {
+          "upf": {
+            "threads": [
+              {
+                "tid": 1653243,
+                "comm": "xcn-upfd",
+                "affinity": "45-46,117-118",
+                "cpu_percent": 0.0,
+                "runqueue_wait_percent": 0.0
+              },
+              {
+                "tid": 1653405,
+                "comm": "xcn-upfd",
+                "affinity": "45",
+                "cpu_percent": 99.70703489054038,
+                "runqueue_wait_percent": 0.008515664255472389
+              },
+              {
+                "tid": 1653406,
+                "comm": "xcn-upfd",
+                "affinity": "46",
+                "cpu_percent": 0.0015322971007380845,
+                "runqueue_wait_percent": 0.000218996021628741
+              },
+              {
+                "tid": 1653407,
+                "comm": "xcn-upfd",
+                "affinity": "117",
+                "cpu_percent": 99.71131447607588,
+                "runqueue_wait_percent": 0.06538134893536353
+              },
+              {
+                "tid": 1653409,
+                "comm": "xcn-upfd",
+                "affinity": "118",
+                "cpu_percent": 0.002449407350728216,
+                "runqueue_wait_percent": 0.0003042321523976409
+              },
+              {
+                "tid": 1653410,
+                "comm": "xcn-upfd",
+                "affinity": "118",
+                "cpu_percent": 0.00224898920267397,
+                "runqueue_wait_percent": 0.0014323137093290993
+              },
+              {
+                "tid": 1653411,
+                "comm": "xcn-upfd",
+                "affinity": "118",
+                "cpu_percent": 0.0823234868767437,
+                "runqueue_wait_percent": 5.187504711072227e-05
+              }
+            ],
+            "cfs_delta": {
+              "nr_periods": 251,
+              "nr_throttled": 0,
+              "throttled_time": 0
+            },
+            "memory_failcnt_delta": 0,
+            "memory_charge_mib_min": 193.62890625,
+            "memory_charge_mib_max": 193.95703125
+          },
+          "vpp": {
+            "threads": [
+              {
+                "tid": 1653704,
+                "comm": "vpp_main",
+                "affinity": "47",
+                "cpu_percent": 3.2859238213202815,
+                "runqueue_wait_percent": 0.11799454996584918
+              },
+              {
+                "tid": 1654088,
+                "comm": "dpdk-intr",
+                "affinity": "47,119",
+                "cpu_percent": 0.06339278149649011,
+                "runqueue_wait_percent": 0.007717275045770615
+              },
+              {
+                "tid": 1654124,
+                "comm": "dpdk-iavf-event",
+                "affinity": "47,119",
+                "cpu_percent": 0.0,
+                "runqueue_wait_percent": 0.0
+              },
+              {
+                "tid": 1654204,
+                "comm": "vpp_wk_0",
+                "affinity": "119",
+                "cpu_percent": 99.70026677667077,
+                "runqueue_wait_percent": 0.05923565973780008
+              }
+            ],
+            "cfs_delta": {
+              "nr_periods": 251,
+              "nr_throttled": 0,
+              "throttled_time": 0
+            },
+            "memory_failcnt_delta": 0,
+            "memory_charge_mib_min": 333.83203125,
+            "memory_charge_mib_max": 334.0078125
+          }
+        }
+      }
+    },
+    {
+      "label": "zc-udp-peak-ul",
+      "mode": "core",
+      "sender_mbps": 23999.862227446807,
+      "receiver_mbps": 23775.424833336496,
+      "lost_percent": 0.9366124449421969,
+      "lost_packets": 602122,
+      "packets": 64287209,
+      "offered_mbps": 24000.0,
+      "case": "default-zc",
+      "protocol": "UDP",
+      "direction": "ul",
+      "duration_seconds": 30,
+      "omit_seconds": 3,
+      "processes": 4,
+      "streams": 4,
+      "flows": 16,
+      "payload_bytes": 1400,
+      "test_core_zero_copy": true,
+      "upf_affinity": "default",
+      "vf_ports": "up",
+      "profiled": false,
+      "session_seid": 2520,
+      "steady": {
+        "sample_window_seconds": 24.03477321,
+        "samples": 25,
+        "roles": {
+          "upf": {
+            "threads": [
+              {
+                "tid": 1653243,
+                "comm": "xcn-upfd",
+                "affinity": "45-46,117-118",
+                "cpu_percent": 0.0,
+                "runqueue_wait_percent": 0.0
+              },
+              {
+                "tid": 1653405,
+                "comm": "xcn-upfd",
+                "affinity": "45",
+                "cpu_percent": 98.76438210419045,
+                "runqueue_wait_percent": 0.964607400179417
+              },
+              {
+                "tid": 1653406,
+                "comm": "xcn-upfd",
+                "affinity": "46",
+                "cpu_percent": 99.12343471619552,
+                "runqueue_wait_percent": 0.6489071672833978
+              },
+              {
+                "tid": 1653407,
+                "comm": "xcn-upfd",
+                "affinity": "117",
+                "cpu_percent": 0.0011760959736553305,
+                "runqueue_wait_percent": 0.000640405460268539
+              },
+              {
+                "tid": 1653409,
+                "comm": "xcn-upfd",
+                "affinity": "118",
+                "cpu_percent": 0.0037217784090753233,
+                "runqueue_wait_percent": 0.0008446095922200716
+              },
+              {
+                "tid": 1653410,
+                "comm": "xcn-upfd",
+                "affinity": "118",
+                "cpu_percent": 0.0034877175360707303,
+                "runqueue_wait_percent": 0.004142393986000919
+              },
+              {
+                "tid": 1653411,
+                "comm": "xcn-upfd",
+                "affinity": "118",
+                "cpu_percent": 0.0032852067839420234,
+                "runqueue_wait_percent": 0.0
+              }
+            ],
+            "cfs_delta": {
+              "nr_periods": 240,
+              "nr_throttled": 8,
+              "throttled_time": 427078945
+            },
+            "memory_failcnt_delta": 0,
+            "memory_charge_mib_min": 193.81640625,
+            "memory_charge_mib_max": 193.82421875
+          },
+          "vpp": {
+            "threads": [
+              {
+                "tid": 1653704,
+                "comm": "vpp_main",
+                "affinity": "47",
+                "cpu_percent": 3.333146179497485,
+                "runqueue_wait_percent": 0.08196128096521366
+              },
+              {
+                "tid": 1654088,
+                "comm": "dpdk-intr",
+                "affinity": "47,119",
+                "cpu_percent": 0.03029808909105991,
+                "runqueue_wait_percent": 0.009813477245621158
+              },
+              {
+                "tid": 1654124,
+                "comm": "dpdk-iavf-event",
+                "affinity": "47,119",
+                "cpu_percent": 0.0,
+                "runqueue_wait_percent": 0.0
+              },
+              {
+                "tid": 1654204,
+                "comm": "vpp_wk_0",
+                "affinity": "119",
+                "cpu_percent": 99.82687407267615,
+                "runqueue_wait_percent": 0.025728930104599892
+              }
+            ],
+            "cfs_delta": {
+              "nr_periods": 240,
+              "nr_throttled": 0,
+              "throttled_time": 0
+            },
+            "memory_failcnt_delta": 0,
+            "memory_charge_mib_min": 333.9375,
+            "memory_charge_mib_max": 334.046875
+          }
+        }
+      }
+    },
+    {
+      "label": "zc8-tcp-dl",
+      "mode": "core",
+      "sender_mbps": 16425.93691982892,
+      "receiver_mbps": 16419.179336826626,
+      "lost_percent": null,
+      "lost_packets": null,
+      "packets": null,
+      "offered_mbps": null,
+      "case": "default-zc8",
+      "protocol": "TCP",
+      "direction": "dl",
+      "duration_seconds": 30,
+      "omit_seconds": 3,
+      "processes": 8,
+      "streams": 4,
+      "flows": 32,
+      "payload_bytes": null,
+      "test_core_zero_copy": true,
+      "upf_affinity": "default",
+      "vf_ports": "up",
+      "profiled": false,
+      "session_seid": 2520,
+      "steady": {
+        "sample_window_seconds": 25.037287149,
+        "samples": 26,
+        "roles": {
+          "upf": {
+            "threads": [
+              {
+                "tid": 1653243,
+                "comm": "xcn-upfd",
+                "affinity": "45-46,117-118",
+                "cpu_percent": 0.0,
+                "runqueue_wait_percent": 0.0
+              },
+              {
+                "tid": 1653405,
+                "comm": "xcn-upfd",
+                "affinity": "45",
+                "cpu_percent": 98.94505780746877,
+                "runqueue_wait_percent": 0.0046102518740577785
+              },
+              {
+                "tid": 1653406,
+                "comm": "xcn-upfd",
+                "affinity": "46",
+                "cpu_percent": 98.87930081909371,
+                "runqueue_wait_percent": 0.03533163935595681
+              },
+              {
+                "tid": 1653407,
+                "comm": "xcn-upfd",
+                "affinity": "117",
+                "cpu_percent": 98.76484246412315,
+                "runqueue_wait_percent": 0.05852009010722714
+              },
+              {
+                "tid": 1653409,
+                "comm": "xcn-upfd",
+                "affinity": "118",
+                "cpu_percent": 0.0038781557850958367,
+                "runqueue_wait_percent": 0.0007172142849636652
+              },
+              {
+                "tid": 1653410,
+                "comm": "xcn-upfd",
+                "affinity": "118",
+                "cpu_percent": 0.004270594468309663,
+                "runqueue_wait_percent": 0.003954230320993631
+              },
+              {
+                "tid": 1653411,
+                "comm": "xcn-upfd",
+                "affinity": "118",
+                "cpu_percent": 0.10528027994060372,
+                "runqueue_wait_percent": 2.602518380375029e-05
+              }
+            ],
+            "cfs_delta": {
+              "nr_periods": 250,
+              "nr_throttled": 2,
+              "throttled_time": 36444940
+            },
+            "memory_failcnt_delta": 0,
+            "memory_charge_mib_min": 194.1875,
+            "memory_charge_mib_max": 194.30859375
+          },
+          "vpp": {
+            "threads": [
+              {
+                "tid": 1653704,
+                "comm": "vpp_main",
+                "affinity": "47",
+                "cpu_percent": 3.326639563796617,
+                "runqueue_wait_percent": 0.07442143347684621
+              },
+              {
+                "tid": 1654088,
+                "comm": "dpdk-intr",
+                "affinity": "47,119",
+                "cpu_percent": 0.03715791948478563,
+                "runqueue_wait_percent": 0.009375440661883987
+              },
+              {
+                "tid": 1654124,
+                "comm": "dpdk-iavf-event",
+                "affinity": "47,119",
+                "cpu_percent": 0.0,
+                "runqueue_wait_percent": 0.0
+              },
+              {
+                "tid": 1654204,
+                "comm": "vpp_wk_0",
+                "affinity": "119",
+                "cpu_percent": 99.75791689555143,
+                "runqueue_wait_percent": 0.08930348909982859
+              }
+            ],
+            "cfs_delta": {
+              "nr_periods": 250,
+              "nr_throttled": 0,
+              "throttled_time": 0
+            },
+            "memory_failcnt_delta": 0,
+            "memory_charge_mib_min": 333.94921875,
+            "memory_charge_mib_max": 334.0625
+          }
+        }
+      }
+    },
+    {
+      "label": "zc8-tcp-ul",
+      "mode": "core",
+      "sender_mbps": 15433.513373640397,
+      "receiver_mbps": 15428.062601798178,
+      "lost_percent": null,
+      "lost_packets": null,
+      "packets": null,
+      "offered_mbps": null,
+      "case": "default-zc8",
+      "protocol": "TCP",
+      "direction": "ul",
+      "duration_seconds": 30,
+      "omit_seconds": 3,
+      "processes": 8,
+      "streams": 4,
+      "flows": 32,
+      "payload_bytes": null,
+      "test_core_zero_copy": true,
+      "upf_affinity": "default",
+      "vf_ports": "up",
+      "profiled": false,
+      "session_seid": 2520,
+      "steady": {
+        "sample_window_seconds": 25.038037362,
+        "samples": 26,
+        "roles": {
+          "upf": {
+            "threads": [
+              {
+                "tid": 1653243,
+                "comm": "xcn-upfd",
+                "affinity": "45-46,117-118",
+                "cpu_percent": 0.0,
+                "runqueue_wait_percent": 0.0
+              },
+              {
+                "tid": 1653405,
+                "comm": "xcn-upfd",
+                "affinity": "45",
+                "cpu_percent": 84.57780534403852,
+                "runqueue_wait_percent": 11.272741294346183
+              },
+              {
+                "tid": 1653406,
+                "comm": "xcn-upfd",
+                "affinity": "46",
+                "cpu_percent": 87.31711463207776,
+                "runqueue_wait_percent": 11.840224188255606
+              },
+              {
+                "tid": 1653407,
+                "comm": "xcn-upfd",
+                "affinity": "117",
+                "cpu_percent": 93.8938553334043,
+                "runqueue_wait_percent": 5.113225523590861
+              },
+              {
+                "tid": 1653409,
+                "comm": "xcn-upfd",
+                "affinity": "118",
+                "cpu_percent": 0.004496103203793917,
+                "runqueue_wait_percent": 0.21088035071045358
+              },
+              {
+                "tid": 1653410,
+                "comm": "xcn-upfd",
+                "affinity": "118",
+                "cpu_percent": 0.004777179547688223,
+                "runqueue_wait_percent": 0.17431244857170286
+              },
+              {
+                "tid": 1653411,
+                "comm": "xcn-upfd",
+                "affinity": "118",
+                "cpu_percent": 0.004339661229394406,
+                "runqueue_wait_percent": 0.0
+              }
+            ],
+            "cfs_delta": {
+              "nr_periods": 251,
+              "nr_throttled": 65,
+              "throttled_time": 8446860646
+            },
+            "memory_failcnt_delta": 0,
+            "memory_charge_mib_min": 194.0703125,
+            "memory_charge_mib_max": 194.203125
+          },
+          "vpp": {
+            "threads": [
+              {
+                "tid": 1653704,
+                "comm": "vpp_main",
+                "affinity": "47",
+                "cpu_percent": 3.3298231883994744,
+                "runqueue_wait_percent": 0.10461681010091625
+              },
+              {
+                "tid": 1654088,
+                "comm": "dpdk-intr",
+                "affinity": "47,119",
+                "cpu_percent": 0.06755692051834554,
+                "runqueue_wait_percent": 0.018821287514939528
+              },
+              {
+                "tid": 1654124,
+                "comm": "dpdk-iavf-event",
+                "affinity": "47,119",
+                "cpu_percent": 0.0,
+                "runqueue_wait_percent": 0.0
+              },
+              {
+                "tid": 1654204,
+                "comm": "vpp_wk_0",
+                "affinity": "119",
+                "cpu_percent": 100.09036081252253,
+                "runqueue_wait_percent": 0.08809218822188927
+              }
+            ],
+            "cfs_delta": {
+              "nr_periods": 251,
+              "nr_throttled": 0,
+              "throttled_time": 0
+            },
+            "memory_failcnt_delta": 0,
+            "memory_charge_mib_min": 333.96484375,
+            "memory_charge_mib_max": 334.234375
+          }
+        }
+      }
+    },
+    {
+      "label": "zc8-udp-baseline-dl",
+      "mode": "bypass",
+      "sender_mbps": 26718.36721028338,
+      "receiver_mbps": 26624.46851882187,
+      "lost_percent": 0.3990648412471813,
+      "lost_packets": 95365,
+      "packets": 23897119,
+      "offered_mbps": 80000.0,
+      "case": "default-zc8",
+      "protocol": "UDP",
+      "direction": "dl",
+      "duration_seconds": 10,
+      "omit_seconds": 3,
+      "processes": 8,
+      "streams": 2,
+      "flows": 16,
+      "payload_bytes": 1400,
+      "test_core_zero_copy": true,
+      "upf_affinity": "default",
+      "vf_ports": "up",
+      "profiled": false,
+      "session_seid": 2520,
+      "steady": {
+        "sample_window_seconds": 4.005595067,
+        "samples": 5,
+        "roles": {
+          "upf": {
+            "threads": [
+              {
+                "tid": 1653243,
+                "comm": "xcn-upfd",
+                "affinity": "45-46,117-118",
+                "cpu_percent": 0.0,
+                "runqueue_wait_percent": 0.0
+              },
+              {
+                "tid": 1653405,
+                "comm": "xcn-upfd",
+                "affinity": "45",
+                "cpu_percent": 0.0,
+                "runqueue_wait_percent": 0.0
+              },
+              {
+                "tid": 1653406,
+                "comm": "xcn-upfd",
+                "affinity": "46",
+                "cpu_percent": 0.002158355963443671,
+                "runqueue_wait_percent": 0.0002502749237582881
+              },
+              {
+                "tid": 1653407,
+                "comm": "xcn-upfd",
+                "affinity": "117",
+                "cpu_percent": 0.0015785170228740947,
+                "runqueue_wait_percent": 0.00026797516524902393
+              },
+              {
+                "tid": 1653409,
+                "comm": "xcn-upfd",
+                "affinity": "118",
+                "cpu_percent": 0.002243262199423914,
+                "runqueue_wait_percent": 0.000396170849388556
+              },
+              {
+                "tid": 1653410,
+                "comm": "xcn-upfd",
+                "affinity": "118",
+                "cpu_percent": 0.0014650757008234552,
+                "runqueue_wait_percent": 0.0020034726091298135
+              },
+              {
+                "tid": 1653411,
+                "comm": "xcn-upfd",
+                "affinity": "118",
+                "cpu_percent": 0.0010500811813587147,
+                "runqueue_wait_percent": 0.0
+              }
+            ],
+            "cfs_delta": {
+              "nr_periods": 2,
+              "nr_throttled": 0,
+              "throttled_time": 0
+            },
+            "memory_failcnt_delta": 0,
+            "memory_charge_mib_min": 194.1953125,
+            "memory_charge_mib_max": 194.19921875
+          },
+          "vpp": {
+            "threads": [
+              {
+                "tid": 1653704,
+                "comm": "vpp_main",
+                "affinity": "47",
+                "cpu_percent": 3.3577898601900786,
+                "runqueue_wait_percent": 0.050542627652981384
+              },
+              {
+                "tid": 1654088,
+                "comm": "dpdk-intr",
+                "affinity": "47,119",
+                "cpu_percent": 0.021582111659815464,
+                "runqueue_wait_percent": 0.004565563841104061
+              },
+              {
+                "tid": 1654124,
+                "comm": "dpdk-iavf-event",
+                "affinity": "47,119",
+                "cpu_percent": 0.0,
+                "runqueue_wait_percent": 0.0
+              },
+              {
+                "tid": 1654204,
+                "comm": "vpp_wk_0",
+                "affinity": "119",
+                "cpu_percent": 99.85513975070012,
+                "runqueue_wait_percent": 0.0034773859481587984
+              }
+            ],
+            "cfs_delta": {
+              "nr_periods": 40,
+              "nr_throttled": 0,
+              "throttled_time": 0
+            },
+            "memory_failcnt_delta": 0,
+            "memory_charge_mib_min": 333.99609375,
+            "memory_charge_mib_max": 334.0703125
+          }
+        }
+      }
+    },
+    {
+      "label": "zc8-udp-baseline-ul",
+      "mode": "bypass",
+      "sender_mbps": 25030.00097253332,
+      "receiver_mbps": 24918.01681222778,
+      "lost_percent": 0.41120478626763823,
+      "lost_packets": 92003,
+      "packets": 22374010,
+      "offered_mbps": 80000.0,
+      "case": "default-zc8",
+      "protocol": "UDP",
+      "direction": "ul",
+      "duration_seconds": 10,
+      "omit_seconds": 3,
+      "processes": 8,
+      "streams": 2,
+      "flows": 16,
+      "payload_bytes": 1400,
+      "test_core_zero_copy": true,
+      "upf_affinity": "default",
+      "vf_ports": "up",
+      "profiled": false,
+      "session_seid": 2520,
+      "steady": {
+        "sample_window_seconds": 5.00715029,
+        "samples": 6,
+        "roles": {
+          "upf": {
+            "threads": [
+              {
+                "tid": 1653243,
+                "comm": "xcn-upfd",
+                "affinity": "45-46,117-118",
+                "cpu_percent": 0.0,
+                "runqueue_wait_percent": 0.0
+              },
+              {
+                "tid": 1653405,
+                "comm": "xcn-upfd",
+                "affinity": "45",
+                "cpu_percent": 0.0,
+                "runqueue_wait_percent": 0.0
+              },
+              {
+                "tid": 1653406,
+                "comm": "xcn-upfd",
+                "affinity": "46",
+                "cpu_percent": 0.00032022206387577793,
+                "runqueue_wait_percent": 0.00026262443183026565
+              },
+              {
+                "tid": 1653407,
+                "comm": "xcn-upfd",
+                "affinity": "117",
+                "cpu_percent": 0.0013510878659885402,
+                "runqueue_wait_percent": 0.00027209089423996496
+              },
+              {
+                "tid": 1653409,
+                "comm": "xcn-upfd",
+                "affinity": "118",
+                "cpu_percent": 0.002536173125332733,
+                "runqueue_wait_percent": 0.00037005080588463823
+              },
+              {
+                "tid": 1653410,
+                "comm": "xcn-upfd",
+                "affinity": "118",
+                "cpu_percent": 0.0014701376179383663,
+                "runqueue_wait_percent": 0.0021176116924583066
+              },
+              {
+                "tid": 1653411,
+                "comm": "xcn-upfd",
+                "affinity": "118",
+                "cpu_percent": 0.002011723119259518,
+                "runqueue_wait_percent": 2.801992987512264e-05
+              }
+            ],
+            "cfs_delta": {
+              "nr_periods": 0,
+              "nr_throttled": 0,
+              "throttled_time": 0
+            },
+            "memory_failcnt_delta": 0,
+            "memory_charge_mib_min": 194.08203125,
+            "memory_charge_mib_max": 194.171875
+          },
+          "vpp": {
+            "threads": [
+              {
+                "tid": 1653704,
+                "comm": "vpp_main",
+                "affinity": "47",
+                "cpu_percent": 3.3885533921131814,
+                "runqueue_wait_percent": 0.0445895543510838
+              },
+              {
+                "tid": 1654088,
+                "comm": "dpdk-intr",
+                "affinity": "47,119",
+                "cpu_percent": 0.021893471066553507,
+                "runqueue_wait_percent": 0.005242343145246396
+              },
+              {
+                "tid": 1654124,
+                "comm": "dpdk-iavf-event",
+                "affinity": "47,119",
+                "cpu_percent": 0.0,
+                "runqueue_wait_percent": 0.0
+              },
+              {
+                "tid": 1654204,
+                "comm": "vpp_wk_0",
+                "affinity": "119",
+                "cpu_percent": 99.75569447107608,
+                "runqueue_wait_percent": 0.10011718661634181
+              }
+            ],
+            "cfs_delta": {
+              "nr_periods": 50,
+              "nr_throttled": 0,
+              "throttled_time": 0
+            },
+            "memory_failcnt_delta": 0,
+            "memory_charge_mib_min": 333.83984375,
+            "memory_charge_mib_max": 334.19140625
+          }
+        }
+      }
+    },
+    {
+      "label": "final-tcp-baseline-dl",
+      "mode": "bypass",
+      "sender_mbps": 23555.95870357234,
+      "receiver_mbps": 23559.519552463706,
+      "lost_percent": null,
+      "lost_packets": null,
+      "packets": null,
+      "offered_mbps": null,
+      "case": "final",
+      "protocol": "TCP",
+      "direction": "dl",
+      "duration_seconds": 10,
+      "omit_seconds": 3,
+      "processes": 4,
+      "streams": 4,
+      "flows": 16,
+      "payload_bytes": null,
+      "test_core_zero_copy": true,
+      "upf_affinity": "default",
+      "vf_ports": "up",
+      "profiled": false,
+      "session_seid": 2520,
+      "steady": {
+        "sample_window_seconds": 5.007117146,
+        "samples": 6,
+        "roles": {
+          "upf": {
+            "threads": [
+              {
+                "tid": 1653243,
+                "comm": "xcn-upfd",
+                "affinity": "45-46,117-118",
+                "cpu_percent": 0.0,
+                "runqueue_wait_percent": 0.0
+              },
+              {
+                "tid": 1653405,
+                "comm": "xcn-upfd",
+                "affinity": "45",
+                "cpu_percent": 0.0,
+                "runqueue_wait_percent": 0.0
+              },
+              {
+                "tid": 1653406,
+                "comm": "xcn-upfd",
+                "affinity": "46",
+                "cpu_percent": 0.0017613528389375534,
+                "runqueue_wait_percent": 0.00024604976557902165
+              },
+              {
+                "tid": 1653407,
+                "comm": "xcn-upfd",
+                "affinity": "117",
+                "cpu_percent": 0.00035595332564244346,
+                "runqueue_wait_percent": 0.00028253782740636523
+              },
+              {
+                "tid": 1653409,
+                "comm": "xcn-upfd",
+                "affinity": "118",
+                "cpu_percent": 0.00186045177861313,
+                "runqueue_wait_percent": 0.00037536569351117796
+              },
+              {
+                "tid": 1653410,
+                "comm": "xcn-upfd",
+                "affinity": "118",
+                "cpu_percent": 0.0015073743593216104,
+                "runqueue_wait_percent": 0.001879404800328592
+              },
+              {
+                "tid": 1653411,
+                "comm": "xcn-upfd",
+                "affinity": "118",
+                "cpu_percent": 0.0013407914782587354,
+                "runqueue_wait_percent": 0.0
+              }
+            ],
+            "cfs_delta": {
+              "nr_periods": 2,
+              "nr_throttled": 0,
+              "throttled_time": 0
+            },
+            "memory_failcnt_delta": 0,
+            "memory_charge_mib_min": 195.59375,
+            "memory_charge_mib_max": 195.59765625
+          },
+          "vpp": {
+            "threads": [
+              {
+                "tid": 1653704,
+                "comm": "vpp_main",
+                "affinity": "47",
+                "cpu_percent": 3.3097128381026297,
+                "runqueue_wait_percent": 0.06585997299133292
+              },
+              {
+                "tid": 1654088,
+                "comm": "dpdk-intr",
+                "affinity": "47,119",
+                "cpu_percent": 0.024584505696723716,
+                "runqueue_wait_percent": 0.005314075789350426
+              },
+              {
+                "tid": 1654124,
+                "comm": "dpdk-iavf-event",
+                "affinity": "47,119",
+                "cpu_percent": 0.0,
+                "runqueue_wait_percent": 0.0
+              },
+              {
+                "tid": 1654204,
+                "comm": "vpp_wk_0",
+                "affinity": "119",
+                "cpu_percent": 99.74820774844319,
+                "runqueue_wait_percent": 0.10746594982900765
+              }
+            ],
+            "cfs_delta": {
+              "nr_periods": 50,
+              "nr_throttled": 0,
+              "throttled_time": 0
+            },
+            "memory_failcnt_delta": 0,
+            "memory_charge_mib_min": 333.98046875,
+            "memory_charge_mib_max": 334.03125
+          }
+        }
+      }
+    },
+    {
+      "label": "final-tcp-baseline-ul",
+      "mode": "bypass",
+      "sender_mbps": 23027.89467926044,
+      "receiver_mbps": 23032.914742681616,
+      "lost_percent": null,
+      "lost_packets": null,
+      "packets": null,
+      "offered_mbps": null,
+      "case": "final",
+      "protocol": "TCP",
+      "direction": "ul",
+      "duration_seconds": 10,
+      "omit_seconds": 3,
+      "processes": 4,
+      "streams": 4,
+      "flows": 16,
+      "payload_bytes": null,
+      "test_core_zero_copy": true,
+      "upf_affinity": "default",
+      "vf_ports": "up",
+      "profiled": false,
+      "session_seid": 2520,
+      "steady": {
+        "sample_window_seconds": 5.007194608,
+        "samples": 6,
+        "roles": {
+          "upf": {
+            "threads": [
+              {
+                "tid": 1653243,
+                "comm": "xcn-upfd",
+                "affinity": "45-46,117-118",
+                "cpu_percent": 0.0,
+                "runqueue_wait_percent": 0.0
+              },
+              {
+                "tid": 1653405,
+                "comm": "xcn-upfd",
+                "affinity": "45",
+                "cpu_percent": 0.0,
+                "runqueue_wait_percent": 0.0
+              },
+              {
+                "tid": 1653406,
+                "comm": "xcn-upfd",
+                "affinity": "46",
+                "cpu_percent": 0.0003588835946437814,
+                "runqueue_wait_percent": 0.0002483226831274779
+              },
+              {
+                "tid": 1653407,
+                "comm": "xcn-upfd",
+                "affinity": "117",
+                "cpu_percent": 0.0014237113909274285,
+                "runqueue_wait_percent": 0.00026102440634358503
+              },
+              {
+                "tid": 1653409,
+                "comm": "xcn-upfd",
+                "affinity": "118",
+                "cpu_percent": 0.0026675416167487613,
+                "runqueue_wait_percent": 0.0003996848847860878
+              },
+              {
+                "tid": 1653410,
+                "comm": "xcn-upfd",
+                "affinity": "118",
+                "cpu_percent": 0.0014692458703813975,
+                "runqueue_wait_percent": 0.0020948257100375915
+              },
+              {
+                "tid": 1653411,
+                "comm": "xcn-upfd",
+                "affinity": "118",
+                "cpu_percent": 0.0014316599535689548,
+                "runqueue_wait_percent": 0.0
+              }
+            ],
+            "cfs_delta": {
+              "nr_periods": 2,
+              "nr_throttled": 0,
+              "throttled_time": 0
+            },
+            "memory_failcnt_delta": 0,
+            "memory_charge_mib_min": 195.45703125,
+            "memory_charge_mib_max": 195.58203125
+          },
+          "vpp": {
+            "threads": [
+              {
+                "tid": 1653704,
+                "comm": "vpp_main",
+                "affinity": "47",
+                "cpu_percent": 3.3696193419450973,
+                "runqueue_wait_percent": 0.05924031782708774
+              },
+              {
+                "tid": 1654088,
+                "comm": "dpdk-intr",
+                "affinity": "47,119",
+                "cpu_percent": 0.024560059999169895,
+                "runqueue_wait_percent": 0.0044787354508191305
+              },
+              {
+                "tid": 1654124,
+                "comm": "dpdk-iavf-event",
+                "affinity": "47,119",
+                "cpu_percent": 0.0,
+                "runqueue_wait_percent": 0.0
+              },
+              {
+                "tid": 1654204,
+                "comm": "vpp_wk_0",
+                "affinity": "119",
+                "cpu_percent": 99.85059685940611,
+                "runqueue_wait_percent": 0.004079569818868921
+              }
+            ],
+            "cfs_delta": {
+              "nr_periods": 50,
+              "nr_throttled": 0,
+              "throttled_time": 0
+            },
+            "memory_failcnt_delta": 0,
+            "memory_charge_mib_min": 333.98828125,
+            "memory_charge_mib_max": 334.07421875
+          }
+        }
+      }
+    },
+    {
+      "label": "final-tcp-dl",
+      "mode": "core",
+      "sender_mbps": 16548.81034137786,
+      "receiver_mbps": 16546.932559349338,
+      "lost_percent": null,
+      "lost_packets": null,
+      "packets": null,
+      "offered_mbps": null,
+      "case": "final",
+      "protocol": "TCP",
+      "direction": "dl",
+      "duration_seconds": 30,
+      "omit_seconds": 3,
+      "processes": 4,
+      "streams": 4,
+      "flows": 16,
+      "payload_bytes": null,
+      "test_core_zero_copy": true,
+      "upf_affinity": "default",
+      "vf_ports": "up",
+      "profiled": false,
+      "session_seid": 2520,
+      "steady": {
+        "sample_window_seconds": 25.037815105,
+        "samples": 26,
+        "roles": {
+          "upf": {
+            "threads": [
+              {
+                "tid": 1653243,
+                "comm": "xcn-upfd",
+                "affinity": "45-46,117-118",
+                "cpu_percent": 0.0,
+                "runqueue_wait_percent": 0.0
+              },
+              {
+                "tid": 1653405,
+                "comm": "xcn-upfd",
+                "affinity": "45",
+                "cpu_percent": 97.46001773184673,
+                "runqueue_wait_percent": 0.0
+              },
+              {
+                "tid": 1653406,
+                "comm": "xcn-upfd",
+                "affinity": "46",
+                "cpu_percent": 95.96047278583016,
+                "runqueue_wait_percent": 0.0030276563542823557
+              },
+              {
+                "tid": 1653407,
+                "comm": "xcn-upfd",
+                "affinity": "117",
+                "cpu_percent": 96.92720723923566,
+                "runqueue_wait_percent": 0.0037899233460291183
+              },
+              {
+                "tid": 1653409,
+                "comm": "xcn-upfd",
+                "affinity": "118",
+                "cpu_percent": 0.004120782886498594,
+                "runqueue_wait_percent": 0.0006901520730756271
+              },
+              {
+                "tid": 1653410,
+                "comm": "xcn-upfd",
+                "affinity": "118",
+                "cpu_percent": 0.0033664239330199338,
+                "runqueue_wait_percent": 0.003494901597165541
+              },
+              {
+                "tid": 1653411,
+                "comm": "xcn-upfd",
+                "affinity": "118",
+                "cpu_percent": 0.09982784398391299,
+                "runqueue_wait_percent": 0.0
+              }
+            ],
+            "cfs_delta": {
+              "nr_periods": 250,
+              "nr_throttled": 0,
+              "throttled_time": 0
+            },
+            "memory_failcnt_delta": 0,
+            "memory_charge_mib_min": 194.5078125,
+            "memory_charge_mib_max": 194.62890625
+          },
+          "vpp": {
+            "threads": [
+              {
+                "tid": 1653704,
+                "comm": "vpp_main",
+                "affinity": "47",
+                "cpu_percent": 3.3249420227316597,
+                "runqueue_wait_percent": 0.07904244406712581
+              },
+              {
+                "tid": 1654088,
+                "comm": "dpdk-intr",
+                "affinity": "47,119",
+                "cpu_percent": 0.03485020543289135,
+                "runqueue_wait_percent": 0.008557859346010216
+              },
+              {
+                "tid": 1654124,
+                "comm": "dpdk-iavf-event",
+                "affinity": "47,119",
+                "cpu_percent": 0.0,
+                "runqueue_wait_percent": 0.0
+              },
+              {
+                "tid": 1654204,
+                "comm": "vpp_wk_0",
+                "affinity": "119",
+                "cpu_percent": 99.91477784339202,
+                "runqueue_wait_percent": 0.04953371908846517
+              }
+            ],
+            "cfs_delta": {
+              "nr_periods": 250,
+              "nr_throttled": 0,
+              "throttled_time": 0
+            },
+            "memory_failcnt_delta": 0,
+            "memory_charge_mib_min": 333.8515625,
+            "memory_charge_mib_max": 334.02734375
+          }
+        }
+      }
+    },
+    {
+      "label": "final-tcp-ul",
+      "mode": "core",
+      "sender_mbps": 17623.370255674934,
+      "receiver_mbps": 17617.184627164184,
+      "lost_percent": null,
+      "lost_packets": null,
+      "packets": null,
+      "offered_mbps": null,
+      "case": "final",
+      "protocol": "TCP",
+      "direction": "ul",
+      "duration_seconds": 30,
+      "omit_seconds": 3,
+      "processes": 4,
+      "streams": 4,
+      "flows": 16,
+      "payload_bytes": null,
+      "test_core_zero_copy": true,
+      "upf_affinity": "default",
+      "vf_ports": "up",
+      "profiled": false,
+      "session_seid": 2520,
+      "steady": {
+        "sample_window_seconds": 25.037657213,
+        "samples": 26,
+        "roles": {
+          "upf": {
+            "threads": [
+              {
+                "tid": 1653243,
+                "comm": "xcn-upfd",
+                "affinity": "45-46,117-118",
+                "cpu_percent": 0.0,
+                "runqueue_wait_percent": 0.0
+              },
+              {
+                "tid": 1653405,
+                "comm": "xcn-upfd",
+                "affinity": "45",
+                "cpu_percent": 94.2856671379895,
+                "runqueue_wait_percent": 0.003738488757302726
+              },
+              {
+                "tid": 1653406,
+                "comm": "xcn-upfd",
+                "affinity": "46",
+                "cpu_percent": 92.8508052499792,
+                "runqueue_wait_percent": 0.0013660782919514124
+              },
+              {
+                "tid": 1653407,
+                "comm": "xcn-upfd",
+                "affinity": "117",
+                "cpu_percent": 89.44051654470584,
+                "runqueue_wait_percent": 0.0030502334683433145
+              },
+              {
+                "tid": 1653409,
+                "comm": "xcn-upfd",
+                "affinity": "118",
+                "cpu_percent": 0.004075233522528696,
+                "runqueue_wait_percent": 0.0010614251874253423
+              },
+              {
+                "tid": 1653410,
+                "comm": "xcn-upfd",
+                "affinity": "118",
+                "cpu_percent": 0.004568650294509486,
+                "runqueue_wait_percent": 0.005283285847180514
+              },
+              {
+                "tid": 1653411,
+                "comm": "xcn-upfd",
+                "affinity": "118",
+                "cpu_percent": 0.004815546397743551,
+                "runqueue_wait_percent": 0.0
+              }
+            ],
+            "cfs_delta": {
+              "nr_periods": 250,
+              "nr_throttled": 0,
+              "throttled_time": 0
+            },
+            "memory_failcnt_delta": 0,
+            "memory_charge_mib_min": 194.26171875,
+            "memory_charge_mib_max": 194.38671875
+          },
+          "vpp": {
+            "threads": [
+              {
+                "tid": 1653704,
+                "comm": "vpp_main",
+                "affinity": "47",
+                "cpu_percent": 3.2683656104018888,
+                "runqueue_wait_percent": 0.08916176865145742
+              },
+              {
+                "tid": 1654088,
+                "comm": "dpdk-intr",
+                "affinity": "47,119",
+                "cpu_percent": 0.035021862969859485,
+                "runqueue_wait_percent": 0.009038972699190616
+              },
+              {
+                "tid": 1654124,
+                "comm": "dpdk-iavf-event",
+                "affinity": "47,119",
+                "cpu_percent": 0.0,
+                "runqueue_wait_percent": 0.0
+              },
+              {
+                "tid": 1654204,
+                "comm": "vpp_wk_0",
+                "affinity": "119",
+                "cpu_percent": 99.7758290022005,
+                "runqueue_wait_percent": 0.06959224999275494
+              }
+            ],
+            "cfs_delta": {
+              "nr_periods": 250,
+              "nr_throttled": 0,
+              "throttled_time": 0
+            },
+            "memory_failcnt_delta": 0,
+            "memory_charge_mib_min": 333.95703125,
+            "memory_charge_mib_max": 334.22265625
+          }
+        }
+      }
+    },
+    {
+      "label": "final-udp-baseline-dl",
+      "mode": "bypass",
+      "sender_mbps": 25967.167290615573,
+      "receiver_mbps": 25969.20435659593,
+      "lost_percent": 0.00985491688502775,
+      "lost_packets": 3429,
+      "packets": 34794814,
+      "offered_mbps": 26000.0,
+      "case": "final",
+      "protocol": "UDP",
+      "direction": "dl",
+      "duration_seconds": 15,
+      "omit_seconds": 3,
+      "processes": 4,
+      "streams": 4,
+      "flows": 16,
+      "payload_bytes": 1400,
+      "test_core_zero_copy": true,
+      "upf_affinity": "default",
+      "vf_ports": "up",
+      "profiled": false,
+      "session_seid": 2520,
+      "steady": {
+        "sample_window_seconds": 10.014054301,
+        "samples": 11,
+        "roles": {
+          "upf": {
+            "threads": [
+              {
+                "tid": 1653243,
+                "comm": "xcn-upfd",
+                "affinity": "45-46,117-118",
+                "cpu_percent": 0.0,
+                "runqueue_wait_percent": 0.0
+              },
+              {
+                "tid": 1653405,
+                "comm": "xcn-upfd",
+                "affinity": "45",
+                "cpu_percent": 0.0,
+                "runqueue_wait_percent": 0.0
+              },
+              {
+                "tid": 1653406,
+                "comm": "xcn-upfd",
+                "affinity": "46",
+                "cpu_percent": 0.0011166006957724804,
+                "runqueue_wait_percent": 0.00021494790574333637
+              },
+              {
+                "tid": 1653407,
+                "comm": "xcn-upfd",
+                "affinity": "117",
+                "cpu_percent": 0.000756846305421287,
+                "runqueue_wait_percent": 0.00024747219512805395
+              },
+              {
+                "tid": 1653409,
+                "comm": "xcn-upfd",
+                "affinity": "118",
+                "cpu_percent": 0.0020696013200098584,
+                "runqueue_wait_percent": 0.0003931674306586127
+              },
+              {
+                "tid": 1653410,
+                "comm": "xcn-upfd",
+                "affinity": "118",
+                "cpu_percent": 0.0013561140764579123,
+                "runqueue_wait_percent": 0.001871749387071753
+              },
+              {
+                "tid": 1653411,
+                "comm": "xcn-upfd",
+                "affinity": "118",
+                "cpu_percent": 0.0017174662212768841,
+                "runqueue_wait_percent": 1.7615243007258782e-05
+              }
+            ],
+            "cfs_delta": {
+              "nr_periods": 2,
+              "nr_throttled": 0,
+              "throttled_time": 0
+            },
+            "memory_failcnt_delta": 0,
+            "memory_charge_mib_min": 194.5,
+            "memory_charge_mib_max": 194.62109375
+          },
+          "vpp": {
+            "threads": [
+              {
+                "tid": 1653704,
+                "comm": "vpp_main",
+                "affinity": "47",
+                "cpu_percent": 3.385414276874311,
+                "runqueue_wait_percent": 0.04177125342312441
+              },
+              {
+                "tid": 1654088,
+                "comm": "dpdk-intr",
+                "affinity": "47,119",
+                "cpu_percent": 0.020791928397992418,
+                "runqueue_wait_percent": 0.005381456738717558
+              },
+              {
+                "tid": 1654124,
+                "comm": "dpdk-iavf-event",
+                "affinity": "47,119",
+                "cpu_percent": 0.0,
+                "runqueue_wait_percent": 0.0
+              },
+              {
+                "tid": 1654204,
+                "comm": "vpp_wk_0",
+                "affinity": "119",
+                "cpu_percent": 100.76126014208238,
+                "runqueue_wait_percent": 0.05438202985833799
+              }
+            ],
+            "cfs_delta": {
+              "nr_periods": 101,
+              "nr_throttled": 0,
+              "throttled_time": 0
+            },
+            "memory_failcnt_delta": 0,
+            "memory_charge_mib_min": 333.9765625,
+            "memory_charge_mib_max": 334.03515625
+          }
+        }
+      }
+    },
+    {
+      "label": "final-udp-baseline-ul",
+      "mode": "bypass",
+      "sender_mbps": 24128.35980486986,
+      "receiver_mbps": 24073.43603019063,
+      "lost_percent": 0.238460680427322,
+      "lost_packets": 77068,
+      "packets": 32318955,
+      "offered_mbps": 26000.0,
+      "case": "final",
+      "protocol": "UDP",
+      "direction": "ul",
+      "duration_seconds": 15,
+      "omit_seconds": 3,
+      "processes": 4,
+      "streams": 4,
+      "flows": 16,
+      "payload_bytes": 1400,
+      "test_core_zero_copy": true,
+      "upf_affinity": "default",
+      "vf_ports": "up",
+      "profiled": false,
+      "session_seid": 2520,
+      "steady": {
+        "sample_window_seconds": 10.013344186,
+        "samples": 11,
+        "roles": {
+          "upf": {
+            "threads": [
+              {
+                "tid": 1653243,
+                "comm": "xcn-upfd",
+                "affinity": "45-46,117-118",
+                "cpu_percent": 0.0,
+                "runqueue_wait_percent": 0.0
+              },
+              {
+                "tid": 1653405,
+                "comm": "xcn-upfd",
+                "affinity": "45",
+                "cpu_percent": 0.0,
+                "runqueue_wait_percent": 0.0
+              },
+              {
+                "tid": 1653406,
+                "comm": "xcn-upfd",
+                "affinity": "46",
+                "cpu_percent": 0.0010566000532362006,
+                "runqueue_wait_percent": 0.0002372134579495418
+              },
+              {
+                "tid": 1653407,
+                "comm": "xcn-upfd",
+                "affinity": "117",
+                "cpu_percent": 0.0007622927823326096,
+                "runqueue_wait_percent": 0.00024312556871896584
+              },
+              {
+                "tid": 1653409,
+                "comm": "xcn-upfd",
+                "affinity": "118",
+                "cpu_percent": 0.002051991783996388,
+                "runqueue_wait_percent": 0.00036009947656062723
+              },
+              {
+                "tid": 1653410,
+                "comm": "xcn-upfd",
+                "affinity": "118",
+                "cpu_percent": 0.0013448753732872036,
+                "runqueue_wait_percent": 0.0018907868987936135
+              },
+              {
+                "tid": 1653411,
+                "comm": "xcn-upfd",
+                "affinity": "118",
+                "cpu_percent": 0.001756056685296486,
+                "runqueue_wait_percent": 0.0
+              }
+            ],
+            "cfs_delta": {
+              "nr_periods": 0,
+              "nr_throttled": 0,
+              "throttled_time": 0
+            },
+            "memory_failcnt_delta": 0,
+            "memory_charge_mib_min": 194.49609375,
+            "memory_charge_mib_max": 194.61328125
+          },
+          "vpp": {
+            "threads": [
+              {
+                "tid": 1653704,
+                "comm": "vpp_main",
+                "affinity": "47",
+                "cpu_percent": 3.3592063725352506,
+                "runqueue_wait_percent": 0.044997664279828445
+              },
+              {
+                "tid": 1654088,
+                "comm": "dpdk-intr",
+                "affinity": "47,119",
+                "cpu_percent": 0.020972573807421506,
+                "runqueue_wait_percent": 0.0053336726480121815
+              },
+              {
+                "tid": 1654124,
+                "comm": "dpdk-iavf-event",
+                "affinity": "47,119",
+                "cpu_percent": 0.0,
+                "runqueue_wait_percent": 0.0
+              },
+              {
+                "tid": 1654204,
+                "comm": "vpp_wk_0",
+                "affinity": "119",
+                "cpu_percent": 99.81105089719723,
+                "runqueue_wait_percent": 0.05431508094572552
+              }
+            ],
+            "cfs_delta": {
+              "nr_periods": 100,
+              "nr_throttled": 0,
+              "throttled_time": 0
+            },
+            "memory_failcnt_delta": 0,
+            "memory_charge_mib_min": 333.9140625,
+            "memory_charge_mib_max": 334.0234375
+          }
+        }
+      }
+    },
+    {
+      "label": "final-udp-dl-18000",
+      "mode": "core",
+      "sender_mbps": 17999.900620502096,
+      "receiver_mbps": 17999.933637485603,
+      "lost_percent": 0.0,
+      "lost_packets": 0,
+      "packets": 48214703,
+      "offered_mbps": 18000.0,
+      "case": "final",
+      "protocol": "UDP",
+      "direction": "dl",
+      "duration_seconds": 30,
+      "omit_seconds": 3,
+      "processes": 4,
+      "streams": 4,
+      "flows": 16,
+      "payload_bytes": 1400,
+      "test_core_zero_copy": true,
+      "upf_affinity": "default",
+      "vf_ports": "up",
+      "profiled": false,
+      "session_seid": 2520,
+      "steady": {
+        "sample_window_seconds": 25.03516043,
+        "samples": 26,
+        "roles": {
+          "upf": {
+            "threads": [
+              {
+                "tid": 1653243,
+                "comm": "xcn-upfd",
+                "affinity": "45-46,117-118",
+                "cpu_percent": 0.0,
+                "runqueue_wait_percent": 0.0
+              },
+              {
+                "tid": 1653405,
+                "comm": "xcn-upfd",
+                "affinity": "45",
+                "cpu_percent": 99.89938713965732,
+                "runqueue_wait_percent": 0.006023372625137997
+              },
+              {
+                "tid": 1653406,
+                "comm": "xcn-upfd",
+                "affinity": "46",
+                "cpu_percent": 0.0009537186736534127,
+                "runqueue_wait_percent": 0.0002287263153759626
+              },
+              {
+                "tid": 1653407,
+                "comm": "xcn-upfd",
+                "affinity": "117",
+                "cpu_percent": 99.71785956715756,
+                "runqueue_wait_percent": 0.0009984597490354488
+              },
+              {
+                "tid": 1653409,
+                "comm": "xcn-upfd",
+                "affinity": "118",
+                "cpu_percent": 0.0020455351242180957,
+                "runqueue_wait_percent": 0.00039908272319387727
+              },
+              {
+                "tid": 1653410,
+                "comm": "xcn-upfd",
+                "affinity": "118",
+                "cpu_percent": 0.0015474875868410802,
+                "runqueue_wait_percent": 0.0018955900096063415
+              },
+              {
+                "tid": 1653411,
+                "comm": "xcn-upfd",
+                "affinity": "118",
+                "cpu_percent": 0.07616437311562298,
+                "runqueue_wait_percent": 8.923449906568065e-06
+              }
+            ],
+            "cfs_delta": {
+              "nr_periods": 250,
+              "nr_throttled": 0,
+              "throttled_time": 0
+            },
+            "memory_failcnt_delta": 0,
+            "memory_charge_mib_min": 195.390625,
+            "memory_charge_mib_max": 195.66015625
+          },
+          "vpp": {
+            "threads": [
+              {
+                "tid": 1653704,
+                "comm": "vpp_main",
+                "affinity": "47",
+                "cpu_percent": 3.297977343938275,
+                "runqueue_wait_percent": 0.0769372461337169
+              },
+              {
+                "tid": 1654088,
+                "comm": "dpdk-intr",
+                "affinity": "47,119",
+                "cpu_percent": 0.02820368984549783,
+                "runqueue_wait_percent": 0.009260252221998643
+              },
+              {
+                "tid": 1654124,
+                "comm": "dpdk-iavf-event",
+                "affinity": "47,119",
+                "cpu_percent": 0.0,
+                "runqueue_wait_percent": 0.0
+              },
+              {
+                "tid": 1654204,
+                "comm": "vpp_wk_0",
+                "affinity": "119",
+                "cpu_percent": 99.65258394791121,
+                "runqueue_wait_percent": 0.08526412307077035
+              }
+            ],
+            "cfs_delta": {
+              "nr_periods": 250,
+              "nr_throttled": 0,
+              "throttled_time": 0
+            },
+            "memory_failcnt_delta": 0,
+            "memory_charge_mib_min": 333.9296875,
+            "memory_charge_mib_max": 334.0859375
+          }
+        }
+      }
+    },
+    {
+      "label": "final-udp-dl-18500",
+      "mode": "core",
+      "sender_mbps": 18499.900614717255,
+      "receiver_mbps": 18479.72552735223,
+      "lost_percent": 0.10978458687200096,
+      "lost_packets": 54403,
+      "packets": 49554315,
+      "offered_mbps": 18500.0,
+      "case": "final",
+      "protocol": "UDP",
+      "direction": "dl",
+      "duration_seconds": 30,
+      "omit_seconds": 3,
+      "processes": 4,
+      "streams": 4,
+      "flows": 16,
+      "payload_bytes": 1400,
+      "test_core_zero_copy": true,
+      "upf_affinity": "default",
+      "vf_ports": "up",
+      "profiled": false,
+      "session_seid": 2520,
+      "steady": {
+        "sample_window_seconds": 25.035839793,
+        "samples": 26,
+        "roles": {
+          "upf": {
+            "threads": [
+              {
+                "tid": 1653243,
+                "comm": "xcn-upfd",
+                "affinity": "45-46,117-118",
+                "cpu_percent": 0.0,
+                "runqueue_wait_percent": 0.0
+              },
+              {
+                "tid": 1653405,
+                "comm": "xcn-upfd",
+                "affinity": "45",
+                "cpu_percent": 99.84815978487516,
+                "runqueue_wait_percent": 0.0026522577452570938
+              },
+              {
+                "tid": 1653406,
+                "comm": "xcn-upfd",
+                "affinity": "46",
+                "cpu_percent": 0.0008886340615672271,
+                "runqueue_wait_percent": 0.0002417334529234419
+              },
+              {
+                "tid": 1653407,
+                "comm": "xcn-upfd",
+                "affinity": "117",
+                "cpu_percent": 99.71014332812479,
+                "runqueue_wait_percent": 0.007840224319332862
+              },
+              {
+                "tid": 1653409,
+                "comm": "xcn-upfd",
+                "affinity": "118",
+                "cpu_percent": 0.002231373121968116,
+                "runqueue_wait_percent": 0.00029200138922617685
+              },
+              {
+                "tid": 1653410,
+                "comm": "xcn-upfd",
+                "affinity": "118",
+                "cpu_percent": 0.0015401800106893662,
+                "runqueue_wait_percent": 0.0018068217552920974
+              },
+              {
+                "tid": 1653411,
+                "comm": "xcn-upfd",
+                "affinity": "118",
+                "cpu_percent": 0.07927368989455331,
+                "runqueue_wait_percent": 0.0
+              }
+            ],
+            "cfs_delta": {
+              "nr_periods": 250,
+              "nr_throttled": 0,
+              "throttled_time": 0
+            },
+            "memory_failcnt_delta": 0,
+            "memory_charge_mib_min": 194.8671875,
+            "memory_charge_mib_max": 195.11328125
+          },
+          "vpp": {
+            "threads": [
+              {
+                "tid": 1653704,
+                "comm": "vpp_main",
+                "affinity": "47",
+                "cpu_percent": 3.290164072028898,
+                "runqueue_wait_percent": 0.08328597391739988
+              },
+              {
+                "tid": 1654088,
+                "comm": "dpdk-intr",
+                "affinity": "47,119",
+                "cpu_percent": 0.028263437769634716,
+                "runqueue_wait_percent": 0.008673190186362844
+              },
+              {
+                "tid": 1654124,
+                "comm": "dpdk-iavf-event",
+                "affinity": "47,119",
+                "cpu_percent": 0.0,
+                "runqueue_wait_percent": 0.0
+              },
+              {
+                "tid": 1654204,
+                "comm": "vpp_wk_0",
+                "affinity": "119",
+                "cpu_percent": 99.99663103771643,
+                "runqueue_wait_percent": 0.04667069727482019
+              }
+            ],
+            "cfs_delta": {
+              "nr_periods": 250,
+              "nr_throttled": 0,
+              "throttled_time": 0
+            },
+            "memory_failcnt_delta": 0,
+            "memory_charge_mib_min": 333.96484375,
+            "memory_charge_mib_max": 334.05078125
+          }
+        }
+      }
+    },
+    {
+      "label": "final-udp-dl-19000",
+      "mode": "core",
+      "sender_mbps": 18999.891938903507,
+      "receiver_mbps": 18894.739951216703,
+      "lost_percent": 0.5577603887305503,
+      "lost_packets": 283875,
+      "packets": 50895511,
+      "offered_mbps": 19000.0,
+      "case": "final",
+      "protocol": "UDP",
+      "direction": "dl",
+      "duration_seconds": 30,
+      "omit_seconds": 3,
+      "processes": 4,
+      "streams": 4,
+      "flows": 16,
+      "payload_bytes": 1400,
+      "test_core_zero_copy": true,
+      "upf_affinity": "default",
+      "vf_ports": "up",
+      "profiled": false,
+      "session_seid": 2520,
+      "steady": {
+        "sample_window_seconds": 24.033699593,
+        "samples": 25,
+        "roles": {
+          "upf": {
+            "threads": [
+              {
+                "tid": 1653243,
+                "comm": "xcn-upfd",
+                "affinity": "45-46,117-118",
+                "cpu_percent": 0.0,
+                "runqueue_wait_percent": 0.0
+              },
+              {
+                "tid": 1653405,
+                "comm": "xcn-upfd",
+                "affinity": "45",
+                "cpu_percent": 99.92009294729807,
+                "runqueue_wait_percent": 0.002388762486517945
+              },
+              {
+                "tid": 1653406,
+                "comm": "xcn-upfd",
+                "affinity": "46",
+                "cpu_percent": 0.0009107045677801071,
+                "runqueue_wait_percent": 0.00023244444653153237
+              },
+              {
+                "tid": 1653407,
+                "comm": "xcn-upfd",
+                "affinity": "117",
+                "cpu_percent": 99.92629007477001,
+                "runqueue_wait_percent": 0.007216117490730092
+              },
+              {
+                "tid": 1653409,
+                "comm": "xcn-upfd",
+                "affinity": "118",
+                "cpu_percent": 0.0021854188447665347,
+                "runqueue_wait_percent": 0.00036859493752597973
+              },
+              {
+                "tid": 1653410,
+                "comm": "xcn-upfd",
+                "affinity": "118",
+                "cpu_percent": 0.001536933581826018,
+                "runqueue_wait_percent": 0.0018245630403390723
+              },
+              {
+                "tid": 1653411,
+                "comm": "xcn-upfd",
+                "affinity": "118",
+                "cpu_percent": 0.0815668221371531,
+                "runqueue_wait_percent": 0.0
+              }
+            ],
+            "cfs_delta": {
+              "nr_periods": 241,
+              "nr_throttled": 0,
+              "throttled_time": 0
+            },
+            "memory_failcnt_delta": 0,
+            "memory_charge_mib_min": 194.75,
+            "memory_charge_mib_max": 194.875
+          },
+          "vpp": {
+            "threads": [
+              {
+                "tid": 1653704,
+                "comm": "vpp_main",
+                "affinity": "47",
+                "cpu_percent": 3.3307862150076764,
+                "runqueue_wait_percent": 0.08065864735051488
+              },
+              {
+                "tid": 1654088,
+                "comm": "dpdk-intr",
+                "affinity": "47,119",
+                "cpu_percent": 0.028606336587490858,
+                "runqueue_wait_percent": 0.009014579680570779
+              },
+              {
+                "tid": 1654124,
+                "comm": "dpdk-iavf-event",
+                "affinity": "47,119",
+                "cpu_percent": 0.0,
+                "runqueue_wait_percent": 0.0
+              },
+              {
+                "tid": 1654204,
+                "comm": "vpp_wk_0",
+                "affinity": "119",
+                "cpu_percent": 100.24538578329063,
+                "runqueue_wait_percent": 0.027382147199329854
+              }
+            ],
+            "cfs_delta": {
+              "nr_periods": 241,
+              "nr_throttled": 0,
+              "throttled_time": 0
+            },
+            "memory_failcnt_delta": 0,
+            "memory_charge_mib_min": 333.9609375,
+            "memory_charge_mib_max": 334.07421875
+          }
+        }
+      }
+    },
+    {
+      "label": "final-udp-ul-23000",
+      "mode": "core",
+      "sender_mbps": 22999.855664117145,
+      "receiver_mbps": 22999.964336994515,
+      "lost_percent": 0.0,
+      "lost_packets": 0,
+      "packets": 61607878,
+      "offered_mbps": 23000.0,
+      "case": "final",
+      "protocol": "UDP",
+      "direction": "ul",
+      "duration_seconds": 30,
+      "omit_seconds": 3,
+      "processes": 4,
+      "streams": 4,
+      "flows": 16,
+      "payload_bytes": 1400,
+      "test_core_zero_copy": true,
+      "upf_affinity": "default",
+      "vf_ports": "up",
+      "profiled": false,
+      "session_seid": 2520,
+      "steady": {
+        "sample_window_seconds": 25.036084999,
+        "samples": 26,
+        "roles": {
+          "upf": {
+            "threads": [
+              {
+                "tid": 1653243,
+                "comm": "xcn-upfd",
+                "affinity": "45-46,117-118",
+                "cpu_percent": 0.0,
+                "runqueue_wait_percent": 0.0
+              },
+              {
+                "tid": 1653405,
+                "comm": "xcn-upfd",
+                "affinity": "45",
+                "cpu_percent": 100.20960792393099,
+                "runqueue_wait_percent": 0.005968780662230887
+              },
+              {
+                "tid": 1653406,
+                "comm": "xcn-upfd",
+                "affinity": "46",
+                "cpu_percent": 99.39406287362398,
+                "runqueue_wait_percent": 0.0011353652138956776
+              },
+              {
+                "tid": 1653407,
+                "comm": "xcn-upfd",
+                "affinity": "117",
+                "cpu_percent": 0.001218309492127795,
+                "runqueue_wait_percent": 0.0006476012523782213
+              },
+              {
+                "tid": 1653409,
+                "comm": "xcn-upfd",
+                "affinity": "118",
+                "cpu_percent": 0.0036666515552917583,
+                "runqueue_wait_percent": 0.0008340201753123149
+              },
+              {
+                "tid": 1653410,
+                "comm": "xcn-upfd",
+                "affinity": "118",
+                "cpu_percent": 0.00337585529060857,
+                "runqueue_wait_percent": 0.004176950989109397
+              },
+              {
+                "tid": 1653411,
+                "comm": "xcn-upfd",
+                "affinity": "118",
+                "cpu_percent": 0.003860060388988936,
+                "runqueue_wait_percent": 0.0
+              }
+            ],
+            "cfs_delta": {
+              "nr_periods": 251,
+              "nr_throttled": 0,
+              "throttled_time": 0
+            },
+            "memory_failcnt_delta": 0,
+            "memory_charge_mib_min": 194.71875,
+            "memory_charge_mib_max": 194.8046875
+          },
+          "vpp": {
+            "threads": [
+              {
+                "tid": 1653704,
+                "comm": "vpp_main",
+                "affinity": "47",
+                "cpu_percent": 3.2941803162632723,
+                "runqueue_wait_percent": 0.07714216899635636
+              },
+              {
+                "tid": 1654088,
+                "comm": "dpdk-intr",
+                "affinity": "47,119",
+                "cpu_percent": 0.029508499433098606,
+                "runqueue_wait_percent": 0.00981872764890432
+              },
+              {
+                "tid": 1654124,
+                "comm": "dpdk-iavf-event",
+                "affinity": "47,119",
+                "cpu_percent": 0.0,
+                "runqueue_wait_percent": 0.0
+              },
+              {
+                "tid": 1654204,
+                "comm": "vpp_wk_0",
+                "affinity": "119",
+                "cpu_percent": 100.22714229082649,
+                "runqueue_wait_percent": 0.025399122907011983
+              }
+            ],
+            "cfs_delta": {
+              "nr_periods": 251,
+              "nr_throttled": 0,
+              "throttled_time": 0
+            },
+            "memory_failcnt_delta": 0,
+            "memory_charge_mib_min": 333.91015625,
+            "memory_charge_mib_max": 334.0703125
+          }
+        }
+      }
+    },
+    {
+      "label": "final-udp-ul-23500",
+      "mode": "core",
+      "sender_mbps": 23499.85635078816,
+      "receiver_mbps": 23396.63158754465,
+      "lost_percent": 0.4397258983914892,
+      "lost_packets": 276795,
+      "packets": 62947168,
+      "offered_mbps": 23500.0,
+      "case": "final",
+      "protocol": "UDP",
+      "direction": "ul",
+      "duration_seconds": 30,
+      "omit_seconds": 3,
+      "processes": 4,
+      "streams": 4,
+      "flows": 16,
+      "payload_bytes": 1400,
+      "test_core_zero_copy": true,
+      "upf_affinity": "default",
+      "vf_ports": "up",
+      "profiled": false,
+      "session_seid": 2520,
+      "steady": {
+        "sample_window_seconds": 25.035946832,
+        "samples": 26,
+        "roles": {
+          "upf": {
+            "threads": [
+              {
+                "tid": 1653243,
+                "comm": "xcn-upfd",
+                "affinity": "45-46,117-118",
+                "cpu_percent": 0.0,
+                "runqueue_wait_percent": 0.0
+              },
+              {
+                "tid": 1653405,
+                "comm": "xcn-upfd",
+                "affinity": "45",
+                "cpu_percent": 99.30073314113196,
+                "runqueue_wait_percent": 0.4290591752763313
+              },
+              {
+                "tid": 1653406,
+                "comm": "xcn-upfd",
+                "affinity": "46",
+                "cpu_percent": 99.1244123920258,
+                "runqueue_wait_percent": 0.492539414736204
+              },
+              {
+                "tid": 1653407,
+                "comm": "xcn-upfd",
+                "affinity": "117",
+                "cpu_percent": 0.001105929813072228,
+                "runqueue_wait_percent": 0.0006172844232216893
+              },
+              {
+                "tid": 1653409,
+                "comm": "xcn-upfd",
+                "affinity": "118",
+                "cpu_percent": 0.003817031592264567,
+                "runqueue_wait_percent": 0.0008206679834348675
+              },
+              {
+                "tid": 1653410,
+                "comm": "xcn-upfd",
+                "affinity": "118",
+                "cpu_percent": 0.0032277029721405827,
+                "runqueue_wait_percent": 0.003930684174253722
+              },
+              {
+                "tid": 1653411,
+                "comm": "xcn-upfd",
+                "affinity": "118",
+                "cpu_percent": 0.004432127162779078,
+                "runqueue_wait_percent": 0.0
+              }
+            ],
+            "cfs_delta": {
+              "nr_periods": 250,
+              "nr_throttled": 3,
+              "throttled_time": 265662637
+            },
+            "memory_failcnt_delta": 0,
+            "memory_charge_mib_min": 194.625,
+            "memory_charge_mib_max": 194.6640625
+          },
+          "vpp": {
+            "threads": [
+              {
+                "tid": 1653704,
+                "comm": "vpp_main",
+                "affinity": "47",
+                "cpu_percent": 3.2500726473822703,
+                "runqueue_wait_percent": 0.09163836763974799
+              },
+              {
+                "tid": 1654088,
+                "comm": "dpdk-intr",
+                "affinity": "47,119",
+                "cpu_percent": 0.02964608468697199,
+                "runqueue_wait_percent": 0.009194139991773249
+              },
+              {
+                "tid": 1654124,
+                "comm": "dpdk-iavf-event",
+                "affinity": "47,119",
+                "cpu_percent": 0.0,
+                "runqueue_wait_percent": 0.0
+              },
+              {
+                "tid": 1654204,
+                "comm": "vpp_wk_0",
+                "affinity": "119",
+                "cpu_percent": 99.84918522054161,
+                "runqueue_wait_percent": 0.004564408958319839
+              }
+            ],
+            "cfs_delta": {
+              "nr_periods": 250,
+              "nr_throttled": 0,
+              "throttled_time": 0
+            },
+            "memory_failcnt_delta": 0,
+            "memory_charge_mib_min": 333.83984375,
+            "memory_charge_mib_max": 334.0703125
+          }
+        }
+      }
+    }
+  ],
+  "failed_excluded": [
+    {
+      "case": "default-tcp",
+      "label": "udp-small-ul",
+      "reason": "test VPP CLI stalled; no complete valid after snapshot/summary"
+    },
+    {
+      "case": "default-zc8",
+      "label": "zc8-udp-peak-ul",
+      "reason": "test VPP CLI stalled under load; no complete valid after snapshot/summary"
+    },
+    {
+      "case": "udp-affinity",
+      "label": "udp-packed-dl-23000",
+      "reason": "test VPP session/CLI stalled; interrupted or empty client output; UDP affinity A/B not validated"
+    },
+    {
+      "case": "udp-affinity",
+      "label": "udp-restored-dl-23000",
+      "reason": "test VPP session/CLI stalled; interrupted or empty client output; UDP affinity A/B not validated"
+    }
+  ]
+}

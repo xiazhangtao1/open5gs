@@ -1,0 +1,286 @@
+
+/proc/1653243/root/usr/lib/x86_64-linux-gnu/libogspfcp.so.2.7.7:     file format elf64-x86-64
+
+
+Disassembly of section .init:
+
+Disassembly of section .plt:
+
+Disassembly of section .plt.got:
+
+Disassembly of section .plt.sec:
+
+Disassembly of section .text:
+
+000000000001b140 <ogs_pfcp_up_handle_pdr>:
+   1b140:	f3 0f 1e fa          	endbr64
+   1b144:	41 56                	push   %r14
+   1b146:	41 55                	push   %r13
+   1b148:	41 54                	push   %r12
+   1b14a:	55                   	push   %rbp
+   1b14b:	53                   	push   %rbx
+   1b14c:	48 83 ec 20          	sub    $0x20,%rsp
+   1b150:	64 48 8b 04 25 28 00 	mov    %fs:0x28,%rax
+   1b157:	00 00
+   1b159:	48 89 44 24 18       	mov    %rax,0x18(%rsp)
+   1b15e:	31 c0                	xor    %eax,%eax
+   1b160:	4d 85 c0             	test   %r8,%r8
+   1b163:	0f 84 f7 02 00 00    	je     1b460 <ogs_pfcp_up_handle_pdr+0x320>
+   1b169:	40 84 f6             	test   %sil,%sil
+   1b16c:	0f 84 3e 03 00 00    	je     1b4b0 <ogs_pfcp_up_handle_pdr+0x370>
+   1b172:	48 89 fd             	mov    %rdi,%rbp
+   1b175:	48 85 ff             	test   %rdi,%rdi
+   1b178:	0f 84 5a 03 00 00    	je     1b4d8 <ogs_pfcp_up_handle_pdr+0x398>
+   1b17e:	4c 89 cb             	mov    %r9,%rbx
+   1b181:	4d 85 c9             	test   %r9,%r9
+   1b184:	0f 84 76 03 00 00    	je     1b500 <ogs_pfcp_up_handle_pdr+0x3c0>
+   1b18a:	4c 8b af d0 00 00 00 	mov    0xd0(%rdi),%r13
+   1b191:	4d 85 ed             	test   %r13,%r13
+   1b194:	0f 84 96 03 00 00    	je     1b530 <ogs_pfcp_up_handle_pdr+0x3f0>
+   1b19a:	49 8d 79 08          	lea    0x8(%r9),%rdi
+   1b19e:	41 89 d2             	mov    %edx,%r10d
+   1b1a1:	48 89 ca             	mov    %rcx,%rdx
+   1b1a4:	4c 89 c9             	mov    %r9,%rcx
+   1b1a7:	48 83 e7 f8          	and    $0xfffffffffffffff8,%rdi
+   1b1ab:	31 c0                	xor    %eax,%eax
+   1b1ad:	49 c7 01 00 00 00 00 	movq   $0x0,(%r9)
+   1b1b4:	4d 89 c4             	mov    %r8,%r12
+   1b1b7:	49 c7 81 c0 02 00 00 	movq   $0x0,0x2c0(%r9)
+   1b1be:	00 00 00 00
+   1b1c2:	48 29 f9             	sub    %rdi,%rcx
+   1b1c5:	81 c1 c8 02 00 00    	add    $0x2c8,%ecx
+   1b1cb:	c1 e9 03             	shr    $0x3,%ecx
+   1b1ce:	f3 48 ab             	rep stos %rax,%es:(%rdi)
+   1b1d1:	48 85 d2             	test   %rdx,%rdx
+   1b1d4:	74 3a                	je     1b210 <ogs_pfcp_up_handle_pdr+0xd0>
+   1b1d6:	41 83 fa 07          	cmp    $0x7,%r10d
+   1b1da:	7e 34                	jle    1b210 <ogs_pfcp_up_handle_pdr+0xd0>
+   1b1dc:	80 7d 60 00          	cmpb   $0x0,0x60(%rbp)
+   1b1e0:	75 2e                	jne    1b210 <ogs_pfcp_up_handle_pdr+0xd0>
+   1b1e2:	41 80 7d 46 00       	cmpb   $0x0,0x46(%r13)
+   1b1e7:	75 27                	jne    1b210 <ogs_pfcp_up_handle_pdr+0xd0>
+   1b1e9:	80 bd c8 00 00 00 00 	cmpb   $0x0,0xc8(%rbp)
+   1b1f0:	75 1e                	jne    1b210 <ogs_pfcp_up_handle_pdr+0xd0>
+   1b1f2:	48 83 bd 20 01 00 00 	cmpq   $0x0,0x120(%rbp)
+   1b1f9:	00
+   1b1fa:	75 14                	jne    1b210 <ogs_pfcp_up_handle_pdr+0xd0>
+   1b1fc:	80 7a 08 00          	cmpb   $0x0,0x8(%rdx)
+   1b200:	0f 84 54 01 00 00    	je     1b35a <ogs_pfcp_up_handle_pdr+0x21a>
+   1b206:	80 7a 0f 00          	cmpb   $0x0,0xf(%rdx)
+   1b20a:	0f 85 4a 01 00 00    	jne    1b35a <ogs_pfcp_up_handle_pdr+0x21a>
+   1b210:	66 81 7d 60 01 01    	cmpw   $0x101,0x60(%rbp)
+   1b216:	0f 84 34 01 00 00    	je     1b350 <ogs_pfcp_up_handle_pdr+0x210>
+   1b21c:	66 41 81 7d 46 01 01 	cmpw   $0x101,0x46(%r13)
+   1b223:	75 0b                	jne    1b230 <ogs_pfcp_up_handle_pdr+0xf0>
+   1b225:	41 80 7d 48 15       	cmpb   $0x15,0x48(%r13)
+   1b22a:	0f 84 2a 01 00 00    	je     1b35a <ogs_pfcp_up_handle_pdr+0x21a>
+   1b230:	41 8b 45 4b          	mov    0x4b(%r13),%eax
+   1b234:	66 0f ef c0          	pxor   %xmm0,%xmm0
+   1b238:	c7 44 24 10 00 00 00 	movl   $0x0,0x10(%rsp)
+   1b23f:	00
+   1b240:	0f 29 04 24          	movaps %xmm0,(%rsp)
+   1b244:	89 44 24 04          	mov    %eax,0x4(%rsp)
+   1b248:	48 8b 85 20 01 00 00 	mov    0x120(%rbp),%rax
+   1b24f:	40 88 34 24          	mov    %sil,(%rsp)
+   1b253:	48 85 c0             	test   %rax,%rax
+   1b256:	0f 84 c4 00 00 00    	je     1b320 <ogs_pfcp_up_handle_pdr+0x1e0>
+   1b25c:	0f b6 40 3d          	movzbl 0x3d(%rax),%eax
+   1b260:	84 c0                	test   %al,%al
+   1b262:	0f 84 b8 00 00 00    	je     1b320 <ogs_pfcp_up_handle_pdr+0x1e0>
+   1b268:	88 44 24 08          	mov    %al,0x8(%rsp)
+   1b26c:	48 85 d2             	test   %rdx,%rdx
+   1b26f:	74 1e                	je     1b28f <ogs_pfcp_up_handle_pdr+0x14f>
+   1b271:	80 7a 0e 00          	cmpb   $0x0,0xe(%rdx)
+   1b275:	74 0e                	je     1b285 <ogs_pfcp_up_handle_pdr+0x145>
+   1b277:	0f b7 42 10          	movzwl 0x10(%rdx),%eax
+   1b27b:	c6 44 24 0e 01       	movb   $0x1,0xe(%rsp)
+   1b280:	66 89 44 24 10       	mov    %ax,0x10(%rsp)
+   1b285:	80 7a 0a 00          	cmpb   $0x0,0xa(%rdx)
+   1b289:	0f 85 11 01 00 00    	jne    1b3a0 <ogs_pfcp_up_handle_pdr+0x260>
+   1b28f:	48 89 e7             	mov    %rsp,%rdi
+   1b292:	4c 89 e6             	mov    %r12,%rsi
+   1b295:	e8 86 7e ff ff       	call   13120 <ogs_gtp2_encapsulate_header@plt>
+   1b29a:	4c 8b 35 d7 3c 02 00 	mov    0x23cd7(%rip),%r14        # 3ef78 <__ogs_pfcp_domain@@Base-0x62db0>
+   1b2a1:	41 8b 3e             	mov    (%r14),%edi
+   1b2a4:	e8 d7 80 ff ff       	call   13380 <ogs_log_get_domain_level@plt>
+   1b2a9:	83 f8 05             	cmp    $0x5,%eax
+   1b2ac:	0f 87 56 01 00 00    	ja     1b408 <ogs_pfcp_up_handle_pdr+0x2c8>
+   1b2b2:	49 83 bd 80 02 00 00 	cmpq   $0x0,0x280(%r13)
+   1b2b9:	00
+   1b2ba:	74 17                	je     1b2d3 <ogs_pfcp_up_handle_pdr+0x193>
+   1b2bc:	41 0f b7 45 44       	movzwl 0x44(%r13),%eax
+   1b2c1:	f6 c4 02             	test   $0x2,%ah
+   1b2c4:	0f 85 86 01 00 00    	jne    1b450 <ogs_pfcp_up_handle_pdr+0x310>
+   1b2ca:	f6 c4 04             	test   $0x4,%ah
+   1b2cd:	0f 84 e5 00 00 00    	je     1b3b8 <ogs_pfcp_up_handle_pdr+0x278>
+   1b2d3:	41 8b 45 6c          	mov    0x6c(%r13),%eax
+   1b2d7:	85 c0                	test   %eax,%eax
+   1b2d9:	0f 84 a9 00 00 00    	je     1b388 <ogs_pfcp_up_handle_pdr+0x248>
+   1b2df:	83 f8 3f             	cmp    $0x3f,%eax
+   1b2e2:	0f 86 a3 00 00 00    	jbe    1b38b <ogs_pfcp_up_handle_pdr+0x24b>
+   1b2e8:	4c 89 e7             	mov    %r12,%rdi
+   1b2eb:	e8 50 80 ff ff       	call   13340 <ogs_pkbuf_free@plt>
+   1b2f0:	48 8b 44 24 18       	mov    0x18(%rsp),%rax
+   1b2f5:	64 48 2b 04 25 28 00 	sub    %fs:0x28,%rax
+   1b2fc:	00 00
+   1b2fe:	0f 85 8c 02 00 00    	jne    1b590 <ogs_pfcp_up_handle_pdr+0x450>
+   1b304:	48 83 c4 20          	add    $0x20,%rsp
+   1b308:	b8 01 00 00 00       	mov    $0x1,%eax
+   1b30d:	5b                   	pop    %rbx
+   1b30e:	5d                   	pop    %rbp
+   1b30f:	41 5c                	pop    %r12
+   1b311:	41 5d                	pop    %r13
+   1b313:	41 5e                	pop    %r14
+   1b315:	c3                   	ret
+   1b316:	66 2e 0f 1f 84 00 00 	cs nopw 0x0(%rax,%rax,1)
+   1b31d:	00 00 00
+   1b320:	80 7d 60 00          	cmpb   $0x0,0x60(%rbp)
+   1b324:	0f 85 42 ff ff ff    	jne    1b26c <ogs_pfcp_up_handle_pdr+0x12c>
+   1b32a:	41 80 7d 46 00       	cmpb   $0x0,0x46(%r13)
+   1b32f:	0f 85 37 ff ff ff    	jne    1b26c <ogs_pfcp_up_handle_pdr+0x12c>
+   1b335:	0f b6 42 08          	movzbl 0x8(%rdx),%eax
+   1b339:	84 c0                	test   %al,%al
+   1b33b:	0f 84 30 ff ff ff    	je     1b271 <ogs_pfcp_up_handle_pdr+0x131>
+   1b341:	88 44 24 08          	mov    %al,0x8(%rsp)
+   1b345:	e9 27 ff ff ff       	jmp    1b271 <ogs_pfcp_up_handle_pdr+0x131>
+   1b34a:	66 0f 1f 44 00 00    	nopw   0x0(%rax,%rax,1)
+   1b350:	80 7d 62 15          	cmpb   $0x15,0x62(%rbp)
+   1b354:	0f 85 c2 fe ff ff    	jne    1b21c <ogs_pfcp_up_handle_pdr+0xdc>
+   1b35a:	49 8b 44 24 48       	mov    0x48(%r12),%rax
+   1b35f:	48 89 c2             	mov    %rax,%rdx
+   1b362:	49 2b 54 24 38       	sub    0x38(%r12),%rdx
+   1b367:	41 39 d2             	cmp    %edx,%r10d
+   1b36a:	0f 8f f0 01 00 00    	jg     1b560 <ogs_pfcp_up_handle_pdr+0x420>
+   1b370:	44 89 d2             	mov    %r10d,%edx
+   1b373:	45 01 54 24 30       	add    %r10d,0x30(%r12)
+   1b378:	48 29 d0             	sub    %rdx,%rax
+   1b37b:	49 89 44 24 48       	mov    %rax,0x48(%r12)
+   1b380:	e9 2d ff ff ff       	jmp    1b2b2 <ogs_pfcp_up_handle_pdr+0x172>
+   1b385:	0f 1f 00             	nopl   (%rax)
+   1b388:	80 0b 01             	orb    $0x1,(%rbx)
+   1b38b:	8d 50 01             	lea    0x1(%rax),%edx
+   1b38e:	41 89 55 6c          	mov    %edx,0x6c(%r13)
+   1b392:	4d 89 64 c5 70       	mov    %r12,0x70(%r13,%rax,8)
+   1b397:	e9 54 ff ff ff       	jmp    1b2f0 <ogs_pfcp_up_handle_pdr+0x1b0>
+   1b39c:	0f 1f 40 00          	nopl   0x0(%rax)
+   1b3a0:	0f b7 42 0c          	movzwl 0xc(%rdx),%eax
+   1b3a4:	c6 44 24 0a 01       	movb   $0x1,0xa(%rsp)
+   1b3a9:	66 89 44 24 0c       	mov    %ax,0xc(%rsp)
+   1b3ae:	e9 dc fe ff ff       	jmp    1b28f <ogs_pfcp_up_handle_pdr+0x14f>
+   1b3b3:	0f 1f 44 00 00       	nopl   0x0(%rax,%rax,1)
+   1b3b8:	48 83 ec 08          	sub    $0x8,%rsp
+   1b3bc:	4c 8d 0d 1d 86 01 00 	lea    0x1861d(%rip),%r9        # 339e0 <__func__.18>
+   1b3c3:	31 d2                	xor    %edx,%edx
+   1b3c5:	bf 02 00 00 00       	mov    $0x2,%edi
+   1b3ca:	50                   	push   %rax
+   1b3cb:	48 8d 05 92 7b 01 00 	lea    0x17b92(%rip),%rax        # 32f64 <__func__.19+0x224>
+   1b3d2:	41 b8 7f 01 00 00    	mov    $0x17f,%r8d
+   1b3d8:	48 8d 0d 82 79 01 00 	lea    0x17982(%rip),%rcx        # 32d61 <__func__.19+0x21>
+   1b3df:	50                   	push   %rax
+   1b3e0:	48 8b 05 91 3b 02 00 	mov    0x23b91(%rip),%rax        # 3ef78 <__ogs_pfcp_domain@@Base-0x62db0>
+   1b3e7:	6a 00                	push   $0x0
+   1b3e9:	8b 30                	mov    (%rax),%esi
+   1b3eb:	31 c0                	xor    %eax,%eax
+   1b3ed:	e8 0e 7f ff ff       	call   13300 <ogs_log_printf@plt>
+   1b3f2:	48 83 c4 20          	add    $0x20,%rsp
+   1b3f6:	4c 89 e7             	mov    %r12,%rdi
+   1b3f9:	e8 42 7f ff ff       	call   13340 <ogs_pkbuf_free@plt>
+   1b3fe:	e9 ed fe ff ff       	jmp    1b2f0 <ogs_pfcp_up_handle_pdr+0x1b0>
+   1b403:	0f 1f 44 00 00       	nopl   0x0(%rax,%rax,1)
+   1b408:	8b 44 24 04          	mov    0x4(%rsp),%eax
+   1b40c:	4c 8d 0d cd 85 01 00 	lea    0x185cd(%rip),%r9        # 339e0 <__func__.18>
+   1b413:	31 d2                	xor    %edx,%edx
+   1b415:	bf 06 00 00 00       	mov    $0x6,%edi
+   1b41a:	41 b8 6e 01 00 00    	mov    $0x16e,%r8d
+   1b420:	48 8d 0d 3a 79 01 00 	lea    0x1793a(%rip),%rcx        # 32d61 <__func__.19+0x21>
+   1b427:	50                   	push   %rax
+   1b428:	0f b6 44 24 08       	movzbl 0x8(%rsp),%eax
+   1b42d:	50                   	push   %rax
+   1b42e:	48 8d 05 13 7b 01 00 	lea    0x17b13(%rip),%rax        # 32f48 <__func__.19+0x208>
+   1b435:	50                   	push   %rax
+   1b436:	31 c0                	xor    %eax,%eax
+   1b438:	6a 00                	push   $0x0
+   1b43a:	41 8b 36             	mov    (%r14),%esi
+   1b43d:	e8 be 7e ff ff       	call   13300 <ogs_log_printf@plt>
+   1b442:	48 83 c4 20          	add    $0x20,%rsp
+   1b446:	e9 67 fe ff ff       	jmp    1b2b2 <ogs_pfcp_up_handle_pdr+0x172>
+   1b44b:	0f 1f 44 00 00       	nopl   0x0(%rax,%rax,1)
+   1b450:	4c 89 e6             	mov    %r12,%rsi
+   1b453:	48 89 ef             	mov    %rbp,%rdi
+   1b456:	e8 35 7f ff ff       	call   13390 <ogs_pfcp_send_gtpu@plt>
+   1b45b:	e9 90 fe ff ff       	jmp    1b2f0 <ogs_pfcp_up_handle_pdr+0x1b0>
+   1b460:	48 8d 05 a6 7a 01 00 	lea    0x17aa6(%rip),%rax        # 32f0d <__func__.19+0x1cd>
+   1b467:	4c 8d 0d 72 85 01 00 	lea    0x18572(%rip),%r9        # 339e0 <__func__.18>
+   1b46e:	41 b8 e4 00 00 00    	mov    $0xe4,%r8d
+   1b474:	50                   	push   %rax
+   1b475:	48 8d 05 a7 3b 01 00 	lea    0x13ba7(%rip),%rax        # 2f023 <_fini+0x7e7>
+   1b47c:	41 51                	push   %r9
+   1b47e:	50                   	push   %rax
+   1b47f:	6a 00                	push   $0x0
+   1b481:	48 8b 05 f0 3a 02 00 	mov    0x23af0(%rip),%rax        # 3ef78 <__ogs_pfcp_domain@@Base-0x62db0>
+   1b488:	48 8d 0d d2 78 01 00 	lea    0x178d2(%rip),%rcx        # 32d61 <__func__.19+0x21>
+   1b48f:	31 d2                	xor    %edx,%edx
+   1b491:	8b 30                	mov    (%rax),%esi
+   1b493:	bf 01 00 00 00       	mov    $0x1,%edi
+   1b498:	31 c0                	xor    %eax,%eax
+   1b49a:	e8 61 7e ff ff       	call   13300 <ogs_log_printf@plt>
+   1b49f:	48 83 c4 20          	add    $0x20,%rsp
+   1b4a3:	e8 68 76 ff ff       	call   12b10 <ogs_abort@plt>
+   1b4a8:	0f 1f 84 00 00 00 00 	nopl   0x0(%rax,%rax,1)
+   1b4af:	00
+   1b4b0:	48 8d 05 bd 4b 01 00 	lea    0x14bbd(%rip),%rax        # 30074 <__func__.2+0xd64>
+   1b4b7:	4c 8d 0d 22 85 01 00 	lea    0x18522(%rip),%r9        # 339e0 <__func__.18>
+   1b4be:	41 b8 e5 00 00 00    	mov    $0xe5,%r8d
+   1b4c4:	50                   	push   %rax
+   1b4c5:	48 8d 05 57 3b 01 00 	lea    0x13b57(%rip),%rax        # 2f023 <_fini+0x7e7>
+   1b4cc:	41 51                	push   %r9
+   1b4ce:	50                   	push   %rax
+   1b4cf:	6a 00                	push   $0x0
+   1b4d1:	eb ae                	jmp    1b481 <ogs_pfcp_up_handle_pdr+0x341>
+   1b4d3:	0f 1f 44 00 00       	nopl   0x0(%rax,%rax,1)
+   1b4d8:	48 8d 05 8a 70 01 00 	lea    0x1708a(%rip),%rax        # 32569 <__func__.10+0x279>
+   1b4df:	4c 8d 0d fa 84 01 00 	lea    0x184fa(%rip),%r9        # 339e0 <__func__.18>
+   1b4e6:	41 b8 e6 00 00 00    	mov    $0xe6,%r8d
+   1b4ec:	50                   	push   %rax
+   1b4ed:	48 8d 05 2f 3b 01 00 	lea    0x13b2f(%rip),%rax        # 2f023 <_fini+0x7e7>
+   1b4f4:	41 51                	push   %r9
+   1b4f6:	50                   	push   %rax
+   1b4f7:	6a 00                	push   $0x0
+   1b4f9:	eb 86                	jmp    1b481 <ogs_pfcp_up_handle_pdr+0x341>
+   1b4fb:	0f 1f 44 00 00       	nopl   0x0(%rax,%rax,1)
+   1b500:	48 8d 05 65 a2 01 00 	lea    0x1a265(%rip),%rax        # 3576c <__func__.14+0xbdc>
+   1b507:	4c 8d 0d d2 84 01 00 	lea    0x184d2(%rip),%r9        # 339e0 <__func__.18>
+   1b50e:	41 b8 e7 00 00 00    	mov    $0xe7,%r8d
+   1b514:	50                   	push   %rax
+   1b515:	48 8d 05 07 3b 01 00 	lea    0x13b07(%rip),%rax        # 2f023 <_fini+0x7e7>
+   1b51c:	41 51                	push   %r9
+   1b51e:	50                   	push   %rax
+   1b51f:	6a 00                	push   $0x0
+   1b521:	e9 5b ff ff ff       	jmp    1b481 <ogs_pfcp_up_handle_pdr+0x341>
+   1b526:	66 2e 0f 1f 84 00 00 	cs nopw 0x0(%rax,%rax,1)
+   1b52d:	00 00 00
+   1b530:	48 8d 05 36 70 01 00 	lea    0x17036(%rip),%rax        # 3256d <__func__.10+0x27d>
+   1b537:	4c 8d 0d a2 84 01 00 	lea    0x184a2(%rip),%r9        # 339e0 <__func__.18>
+   1b53e:	41 b8 ea 00 00 00    	mov    $0xea,%r8d
+   1b544:	50                   	push   %rax
+   1b545:	48 8d 05 d7 3a 01 00 	lea    0x13ad7(%rip),%rax        # 2f023 <_fini+0x7e7>
+   1b54c:	41 51                	push   %r9
+   1b54e:	50                   	push   %rax
+   1b54f:	6a 00                	push   $0x0
+   1b551:	e9 2b ff ff ff       	jmp    1b481 <ogs_pfcp_up_handle_pdr+0x341>
+   1b556:	66 2e 0f 1f 84 00 00 	cs nopw 0x0(%rax,%rax,1)
+   1b55d:	00 00 00
+   1b560:	48 83 ec 08          	sub    $0x8,%rsp
+   1b564:	4c 8d 0d 5d 84 01 00 	lea    0x1845d(%rip),%r9        # 339c8 <__func__.17>
+   1b56b:	31 d2                	xor    %edx,%edx
+   1b56d:	41 b8 9e 00 00 00    	mov    $0x9e,%r8d
+   1b573:	48 8d 05 b3 79 01 00 	lea    0x179b3(%rip),%rax        # 32f2d <__func__.19+0x1ed>
+   1b57a:	41 51                	push   %r9
+   1b57c:	be 01 00 00 00       	mov    $0x1,%esi
+   1b581:	48 8d 0d 8d 79 01 00 	lea    0x1798d(%rip),%rcx        # 32f15 <__func__.19+0x1d5>
+   1b588:	50                   	push   %rax
+   1b589:	6a 00                	push   $0x0
+   1b58b:	e9 03 ff ff ff       	jmp    1b493 <ogs_pfcp_up_handle_pdr+0x353>
+   1b590:	e8 9b 78 ff ff       	call   12e30 <__stack_chk_fail@plt>
+
+Disassembly of section .fini:

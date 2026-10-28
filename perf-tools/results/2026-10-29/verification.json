@@ -1,0 +1,195 @@
+{
+  "utc": "2026-10-28T18:25:00.206126+00:00",
+  "pod": "xcn-5gc-56b56d44b5-xrw4v",
+  "uid": "df54c1ae-2dbe-4751-9dd5-18d514c22934",
+  "containers": [
+    {
+      "name": "amf",
+      "ready": true,
+      "restarts": 0
+    },
+    {
+      "name": "ausf",
+      "ready": true,
+      "restarts": 0
+    },
+    {
+      "name": "nssf",
+      "ready": true,
+      "restarts": 0
+    },
+    {
+      "name": "pcf",
+      "ready": true,
+      "restarts": 0
+    },
+    {
+      "name": "signal-trace-agent",
+      "ready": true,
+      "restarts": 0
+    },
+    {
+      "name": "smf",
+      "ready": true,
+      "restarts": 0
+    },
+    {
+      "name": "udm",
+      "ready": true,
+      "restarts": 0
+    },
+    {
+      "name": "udr",
+      "ready": true,
+      "restarts": 0
+    },
+    {
+      "name": "upf",
+      "ready": true,
+      "restarts": 0
+    },
+    {
+      "name": "upf-monitor-agent",
+      "ready": true,
+      "restarts": 0
+    },
+    {
+      "name": "vpp",
+      "ready": true,
+      "restarts": 0
+    }
+  ],
+  "pdu": {
+    "items": [
+      {
+        "supi": "imsi-460110000000100",
+        "pdu": [
+          {
+            "psi": 1,
+            "upf_seid": "2520",
+            "dnn": "cmnet",
+            "ipv4": "10.45.0.3",
+            "snssai": {
+              "sst": 1,
+              "sd": "010101"
+            },
+            "session_control": {
+              "observed": {
+                "defaultQos": {
+                  "5qi": 9,
+                  "arp": {
+                    "priorityLevel": 8,
+                    "preemptionCapability": "NOT_PREEMPT",
+                    "preemptionVulnerability": "NOT_PREEMPTABLE"
+                  }
+                },
+                "sessionAmbr": {
+                  "uplink": "1000000000 bps",
+                  "downlink": "1000000000 bps"
+                }
+              },
+              "confirmed": {
+                "defaultQos": {
+                  "5qi": 9,
+                  "arp": {
+                    "priorityLevel": 8,
+                    "preemptionCapability": "NOT_PREEMPT",
+                    "preemptionVulnerability": "NOT_PREEMPTABLE"
+                  }
+                },
+                "sessionAmbr": {
+                  "uplink": "1000000000 bps",
+                  "downlink": "1000000000 bps"
+                }
+              }
+            },
+            "qos_flows": [
+              {
+                "qfi": 1,
+                "is_default": true,
+                "5qi": 9
+              }
+            ],
+            "n3": {
+              "gnb": {
+                "teid": 494742934,
+                "addr": "[10.2.0.119]:2152"
+              },
+              "upf": {
+                "teid": 21599,
+                "addr": "[10.2.0.230]:2152",
+                "pdr_id": 2
+              }
+            },
+            "pdu_state": "active"
+          }
+        ],
+        "ue_activity": "active"
+      }
+    ],
+    "pager": {
+      "page": 0,
+      "page_size": 100,
+      "count": 1
+    }
+  },
+  "upf_rates": {
+    "level": "session",
+    "rows": [
+      {
+        "supi": "imsi-460110000000100",
+        "ue_ip": "10.45.0.3",
+        "seid": 2520,
+        "dnn": "cmnet",
+        "worker": 0,
+        "uptime_seconds": 5316,
+        "ul_bps": 671,
+        "dl_bps": 671,
+        "ul_pps": 0,
+        "dl_pps": 0,
+        "ul_bytes": 1024470822110,
+        "dl_bytes": 1183033308013,
+        "psi": 1,
+        "cm_state": "connected",
+        "gnb_peer": "[10.2.0.119]:52756"
+      }
+    ]
+  },
+  "core_interfaces": "              Name               Idx    State  MTU (L3/IP4/IP6/MPLS)     Counter          Count     \ndpdk-n3                           1      up          9000/0/0/0     rx packets                175077\n                                                                    rx bytes                36680214\n                                                                    tx packets                  1269\n                                                                    tx bytes                  311557\n                                                                    drops                     168261\n                                                                    punt                        5735\n                                                                    ip4                        45935\n                                                                    ip6                        28936\ndpdk-n6                           2      up          9000/0/0/0     rx packets                174939\n                                                                    rx bytes                36657756\n                                                                    tx packets                  1214\n                                                                    tx bytes                  307930\n                                                                    drops                     168157\n                                                                    punt                        5732\n                                                                    ip4                        45875\n                                                                    ip6                        28926\nlocal0                            0     down          0/0/0/0       \nmemif1/0                          4      up           0/0/0/0       rx packets             716132554\n                                                                    rx bytes           1024470822110\n                                                                    tx packets             834372597\n                                                                    tx bytes           1208802532293\n                                                                    ip4                    716132554\nmemif2/0                          3      up           0/0/0/0       rx packets             816331847\n                                                                    rx bytes           1218951909281\n                                                                    tx packets             717149204\n                                                                    tx bytes           1057486613350\n                                                                    drops                          1\n                                                                    ip4                    816331847\n",
+  "core_routes_vrf10": "ipv4-VRF:10, fib_index:1, flow hash:[src dst sport dport proto flowlabel ] epoch:0 flags:none locks:[interface:2, CLI:1, adjacency:1, ]\n0.0.0.0/0\n  unicast-ip4-chain\n  [@0]: dpo-load-balance: [proto:ip4 index:13 buckets:1 uRPF:33 to:[843:229875]]\n    [0] [@5]: ipv4 via 10.2.7.254 dpdk-n3: mtu:9000 next:5 flags:[] 6ce2d30a0841c2febf4f91a80800\n0.0.0.0/32\n  unicast-ip4-chain\n  [@0]: dpo-load-balance: [proto:ip4 index:14 buckets:1 uRPF:14 to:[0:0]]\n    [0] [@0]: dpo-drop ip4\n10.2.0.0/32\n  unicast-ip4-chain\n  [@0]: dpo-load-balance: [proto:ip4 index:25 buckets:1 uRPF:29 to:[0:0]]\n    [0] [@0]: dpo-drop ip4\n10.2.0.119/32\n  unicast-ip4-chain\n  [@0]: dpo-load-balance: [proto:ip4 index:33 buckets:1 uRPF:44 to:[3:384]]\n    [0] [@5]: ipv4 via 10.2.0.119 dpdk-n3: mtu:9000 next:5 flags:[] 444988065660c2febf4f91a80800\n10.2.0.230/32\n  unicast-ip4-chain\n  [@0]: dpo-load-balance: [proto:ip4 index:22 buckets:1 uRPF:38 to:[9:988]]\n    [0] [@5]: ipv4 via 0.0.0.0 memif2/0: mtu:9000 next:4 flags:[]\n10.2.0.0/20\n  unicast-ip4-chain\n  [@0]: dpo-load-balance: [proto:ip4 index:26 buckets:1 uRPF:30 to:[1:128]]\n    [0] [@4]: ipv4-glean: [src:10.2.0.0/20] dpdk-n3: mtu:9000 next:1 flags:[] ffffffffffffc2febf4f91a80806\n10.2.0.231/32\n  unicast-ip4-chain\n  [@0]: dpo-load-balance: [proto:ip4 index:24 buckets:1 uRPF:31 to:[0:0]]\n    [0] [@12]: dpo-receive: 10.2.0.231 on dpdk-n3\n10.2.7.254/32\n  unicast-ip4-chain\n  [@0]: dpo-load-balance: [proto:ip4 index:18 buckets:1 uRPF:19 to:[0:0]]\n    [0] [@5]: ipv4 via 10.2.7.254 dpdk-n3: mtu:9000 next:5 flags:[] 6ce2d30a0841c2febf4f91a80800\n10.2.15.255/32\n  unicast-ip4-chain\n  [@0]: dpo-load-balance: [proto:ip4 index:23 buckets:1 uRPF:27 to:[7527:1457250]]\n    [0] [@0]: dpo-drop ip4\n224.0.0.0/4\n  unicast-ip4-chain\n  [@0]: dpo-load-balance: [proto:ip4 index:16 buckets:1 uRPF:16 to:[0:0]]\n    [0] [@0]: dpo-drop ip4\n240.0.0.0/4\n  unicast-ip4-chain\n  [@0]: dpo-load-balance: [proto:ip4 index:15 buckets:1 uRPF:15 to:[0:0]]\n    [0] [@0]: dpo-drop ip4\n255.255.255.255/32\n  unicast-ip4-chain\n  [@0]: dpo-load-balance: [proto:ip4 index:17 buckets:1 uRPF:17 to:[1742:440093]]\n    [0] [@0]: dpo-drop ip4\n",
+  "test_containers": "",
+  "ping_command_exit": 0,
+  "ping_output": "PING 10.45.0.1 (10.45.0.1) from 10.45.0.3 oaitun_ue1: 56(84) bytes of data.\n64 bytes from 10.45.0.1: icmp_seq=1 ttl=64 time=6.72 ms\n64 bytes from 10.45.0.1: icmp_seq=2 ttl=64 time=6.02 ms\n64 bytes from 10.45.0.1: icmp_seq=3 ttl=64 time=5.66 ms\n64 bytes from 10.45.0.1: icmp_seq=4 ttl=64 time=6.22 ms\n64 bytes from 10.45.0.1: icmp_seq=5 ttl=64 time=5.91 ms\n\n--- 10.45.0.1 ping statistics ---\n5 packets transmitted, 5 received, 0% packet loss, time 4006ms\nrtt min/avg/max/mdev = 5.658/6.104/6.715/0.354 ms\n",
+  "ue_interfaces": "lo               UNKNOWN        127.0.0.1/8 ::1/128 \ntunl0@NONE       DOWN           \neth0@if620       UP             172.30.180.22/32 fe80::9cc5:8bff:feb5:1c4e/64 \noaitun_ue1       UNKNOWN        10.45.0.3/24 fe80::10b8:6214:6b73:e5d1/64 \n",
+  "upf_cpus": "1\nCpus_allowed_list:\t45-46,117-118\n18\nCpus_allowed_list:\t45\n19\nCpus_allowed_list:\t46\n20\nCpus_allowed_list:\t117\n21\nCpus_allowed_list:\t118\n22\nCpus_allowed_list:\t118\n23\nCpus_allowed_list:\t118\n400000\n",
+  "vpp_cpus": "ID     Name                Type        LWP     Sched Policy (Priority)  lcore  Core   Socket State     \n0      vpp_main                        7       other (0)                47     11     1                \n1      vpp_wk_0            workers     10      other (0)                119    11     1                \n",
+  "first_ping_output": "PING 10.45.0.1 (10.45.0.1) from 10.45.0.3 oaitun_ue1: 56(84) bytes of data.\n64 bytes from 10.45.0.1: icmp_seq=2 ttl=64 time=6.41 ms\n64 bytes from 10.45.0.1: icmp_seq=3 ttl=64 time=5.39 ms\n64 bytes from 10.45.0.1: icmp_seq=4 ttl=64 time=6.11 ms\n\n--- 10.45.0.1 ping statistics ---\n4 packets transmitted, 3 received, 25% packet loss, time 3075ms\nrtt min/avg/max/mdev = 5.391/5.969/6.405/0.426 ms\n",
+  "live_ue_ping_passed": true,
+  "final_warmup_ping": "PING 10.45.0.1 (10.45.0.1) from 10.45.0.3 oaitun_ue1: 56(84) bytes of data.\n64 bytes from 10.45.0.1: icmp_seq=1 ttl=64 time=5.76 ms\n\n--- 10.45.0.1 ping statistics ---\n1 packets transmitted, 1 received, 0% packet loss, time 0ms\nrtt min/avg/max/mdev = 5.763/5.763/5.763/0.000 ms\n",
+  "upf_affinity_final": {
+    "1": [
+      45,
+      46,
+      117,
+      118
+    ],
+    "18": [
+      45
+    ],
+    "19": [
+      46
+    ],
+    "20": [
+      117
+    ],
+    "21": [
+      118
+    ],
+    "22": [
+      118
+    ],
+    "23": [
+      118
+    ]
+  }
+}

@@ -1,0 +1,344 @@
+{
+  "utc": "2026-10-28T02:39:56.416442+00:00",
+  "git_commit": "c2b90f2e316959ad48107885a85b87bc6aa53ffc",
+  "helm_revision": 212,
+  "kernel": "Linux xnet-server 5.15.148-rt74-rc202408 #0 SMP PREEMPT_RT Tue Aug 27 09:11:43 CST 2024 x86_64 x86_64 x86_64 GNU/Linux",
+  "cpu": "Architecture:                       x86_64\nCPU op-mode(s):                     32-bit, 64-bit\nAddress sizes:                      46 bits physical, 57 bits virtual\nByte Order:                         Little Endian\nCPU(s):                             144\nOn-line CPU(s) list:                0-143\nVendor ID:                          GenuineIntel\nModel name:                         INTEL(R) XEON(R) GOLD 6554S\nCPU family:                         6\nModel:                              207\nThread(s) per core:                 2\nCore(s) per socket:                 36\nSocket(s):                          2\nStepping:                           2\nCPU max MHz:                        4000.0000\nCPU min MHz:                        800.0000\nBogoMIPS:                           4400.00\nFlags:                              fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush dts acpi mmx fxsr sse sse2 ss ht tm pbe syscall nx pdpe1gb rdtscp lm constant_tsc art arch_perfmon pebs bts rep_good nopl xtopology nonstop_tsc cpuid aperfmperf tsc_known_freq pni pclmulqdq dtes64 monitor ds_cpl vmx smx est tm2 ssse3 sdbg fma cx16 xtpr pdcm pcid dca sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand lahf_lm abm 3dnowprefetch cpuid_fault epb cat_l3 cat_l2 cdp_l3 invpcid_single cdp_l2 ssbd mba ibrs ibpb stibp ibrs_enhanced tpr_shadow vnmi flexpriority ept vpid ept_ad fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid cqm rdt_a avx512f avx512dq rdseed adx smap avx512ifma clflushopt clwb intel_pt avx512cd sha_ni avx512bw avx512vl xsaveopt xsavec xgetbv1 xsaves cqm_llc cqm_occup_llc cqm_mbm_total cqm_mbm_local avx_vnni avx512_bf16 wbnoinvd dtherm ida arat pln pts hwp hwp_act_window hwp_epp hwp_pkg_req avx512vbmi umip pku ospke waitpkg avx512_vbmi2 gfni vaes vpclmulqdq avx512_vnni avx512_bitalg tme avx512_vpopcntdq la57 rdpid bus_lock_detect cldemote movdiri movdir64b enqcmd fsrm md_clear serialize tsxldtrk pconfig arch_lbr avx512_fp16 flush_l1d arch_capabilities\nVirtualization:                     VT-x\nL1d cache:                          3.4 MiB (72 instances)\nL1i cache:                          2.3 MiB (72 instances)\nL2 cache:                           144 MiB (72 instances)\nL3 cache:                           360 MiB (2 instances)\nNUMA node(s):                       2\nNUMA node0 CPU(s):                  0-35,72-107\nNUMA node1 CPU(s):                  36-71,108-143\nVulnerability Gather data sampling: Not affected\nVulnerability Itlb multihit:        Not affected\nVulnerability L1tf:                 Not affected\nVulnerability Mds:                  Not affected\nVulnerability Meltdown:             Not affected\nVulnerability Mmio stale data:      Not affected\nVulnerability Retbleed:             Not affected\nVulnerability Spec rstack overflow: Not affected\nVulnerability Spec store bypass:    Mitigation; Speculative Store Bypass disabled via prctl and seccomp\nVulnerability Spectre v1:           Mitigation; usercopy/swapgs barriers and __user pointer sanitization\nVulnerability Spectre v2:           Mitigation; Enhanced IBRS, IBPB conditional, RSB filling, PBRSB-eIBRS SW sequence\nVulnerability Srbds:                Not affected\nVulnerability Tsx async abort:      Not affected\n",
+  "isolated_cpus": "1-35,44-71,73-107,116-143",
+  "pod": "xcn-5gc-7cf9cb4687-xwlt6",
+  "uid": "68653ee9-f3aa-4e1c-bb72-05c50945e4d7",
+  "cpu_allocation": {
+    "smf": {
+      "cpu": "47"
+    },
+    "upf": {
+      "cpu": "44-45,116-117"
+    },
+    "vpp": {
+      "cpu": "46,118"
+    }
+  },
+  "images": [
+    {
+      "name": "amf",
+      "image": "localhost:5000/xcn-runtime:online-20261027-verified",
+      "imageID": "localhost:5000/xcn-runtime@sha256:516977838188751f61023af4a4a7e3c4f02aeab32705cb87716fb568b727b71d"
+    },
+    {
+      "name": "ausf",
+      "image": "localhost:5000/xcn-runtime:online-20261027-verified",
+      "imageID": "localhost:5000/xcn-runtime@sha256:516977838188751f61023af4a4a7e3c4f02aeab32705cb87716fb568b727b71d"
+    },
+    {
+      "name": "nssf",
+      "image": "localhost:5000/xcn-runtime:online-20261027-verified",
+      "imageID": "localhost:5000/xcn-runtime@sha256:516977838188751f61023af4a4a7e3c4f02aeab32705cb87716fb568b727b71d"
+    },
+    {
+      "name": "pcf",
+      "image": "localhost:5000/xcn-runtime:online-20261027-verified",
+      "imageID": "localhost:5000/xcn-runtime@sha256:516977838188751f61023af4a4a7e3c4f02aeab32705cb87716fb568b727b71d"
+    },
+    {
+      "name": "signal-trace-agent",
+      "image": "localhost:5000/xcn-monitor:online-20261027-verified",
+      "imageID": "localhost:5000/xcn-monitor@sha256:33e63de95a64443c0d75463b819df0b8c3c74ee5d04238f12591d2a11f36315b"
+    },
+    {
+      "name": "smf",
+      "image": "localhost:5000/xcn-runtime:online-20261027-verified",
+      "imageID": "localhost:5000/xcn-runtime@sha256:516977838188751f61023af4a4a7e3c4f02aeab32705cb87716fb568b727b71d"
+    },
+    {
+      "name": "udm",
+      "image": "localhost:5000/xcn-runtime:online-20261027-verified",
+      "imageID": "localhost:5000/xcn-runtime@sha256:516977838188751f61023af4a4a7e3c4f02aeab32705cb87716fb568b727b71d"
+    },
+    {
+      "name": "udr",
+      "image": "localhost:5000/xcn-runtime:online-20261027-verified",
+      "imageID": "localhost:5000/xcn-runtime@sha256:516977838188751f61023af4a4a7e3c4f02aeab32705cb87716fb568b727b71d"
+    },
+    {
+      "name": "upf",
+      "image": "localhost:5000/xcn-runtime:online-20261027-verified",
+      "imageID": "localhost:5000/xcn-runtime@sha256:516977838188751f61023af4a4a7e3c4f02aeab32705cb87716fb568b727b71d"
+    },
+    {
+      "name": "upf-monitor-agent",
+      "image": "localhost:5000/xcn-monitor:online-20261027-verified",
+      "imageID": "localhost:5000/xcn-monitor@sha256:33e63de95a64443c0d75463b819df0b8c3c74ee5d04238f12591d2a11f36315b"
+    },
+    {
+      "name": "vpp",
+      "image": "192.168.10.35/xcn/vpp:26.06",
+      "imageID": "sha256:c6905634e001db54e9920644265f7d3ebb29b9dd6a7c171ebb0ae2c7e4e4541c"
+    }
+  ],
+  "upf_resources": {
+    "limits": {
+      "cpu": 4,
+      "memory": "4Gi"
+    },
+    "requests": {
+      "cpu": 4,
+      "memory": "4Gi"
+    }
+  },
+  "upf": {
+    "dataplane": {
+      "ioPacketBudget": 1024,
+      "ioTimeBudgetUs": 50,
+      "sessionWorkers": {
+        "busyPollUs": 20,
+        "count": "auto",
+        "enabled": false,
+        "queueSize": 8192,
+        "reservedCpus": 3
+      },
+      "statsInterval": 10
+    },
+    "gtpu": {
+      "advertiseAddress": "",
+      "serverAddress": ""
+    },
+    "mode": "memif",
+    "n3": {
+      "address": "10.2.0.230",
+      "backend": "udp",
+      "hostInterface": "",
+      "memif": {
+        "bufferSize": 2048,
+        "burstSize": 256,
+        "id": 0,
+        "localAddress": "",
+        "log2RingSize": 13,
+        "queues": "auto",
+        "ringSize": 8192,
+        "socket": "/run/vpp/memif-n3.sock",
+        "socketId": 2,
+        "udpChecksum": false
+      }
+    },
+    "n6": {
+      "backend": "tun",
+      "memif": {
+        "bufferSize": 2048,
+        "burstSize": 256,
+        "id": 0,
+        "log2RingSize": 13,
+        "queues": "auto",
+        "ringSize": 8192,
+        "socket": "/run/vpp/memif.sock",
+        "socketId": 1
+      }
+    },
+    "rateStats": {
+      "enabled": true,
+      "intervalMs": 1000,
+      "socket": "/run/xcn/upf-stats.sock"
+    }
+  },
+  "vpp": {
+    "cpu": {
+      "affinityPollMs": 250,
+      "cpusetWaitSeconds": 120,
+      "disableCfsQuota": false,
+      "initialMode": "dense",
+      "workers": "auto"
+    },
+    "dpdk": {
+      "numRxDesc": 4096,
+      "numRxQueues": 4,
+      "numTxDesc": 4096,
+      "numTxQueues": 4
+    },
+    "enabled": false,
+    "image": {
+      "pullPolicy": "IfNotPresent",
+      "repository": "vpp",
+      "tag": "26.06"
+    },
+    "memory": {
+      "mainHeapSize": "8G"
+    },
+    "n3": {
+      "defaultGateway": "10.2.7.254",
+      "fibTable": 10,
+      "interfaceAddress": "10.2.0.231/20"
+    },
+    "n6": {
+      "defaultGateway": "10.2.7.254",
+      "externalAddress": "10.2.0.232/20",
+      "interfaceAddress": "",
+      "nat44": {
+        "enabled": false,
+        "frameQueueNelts": 8192,
+        "maxSessions": "1048576",
+        "workers": ""
+      }
+    },
+    "neighbor": {
+      "ip4AgeSeconds": 30
+    },
+    "resources": {
+      "limits": {
+        "cpu": "2",
+        "hugepages-1Gi": "8Gi",
+        "memory": "16Gi"
+      },
+      "requests": {
+        "cpu": "2",
+        "hugepages-1Gi": "8Gi",
+        "memory": "16Gi"
+      }
+    },
+    "sriov": {
+      "deviceEnv": "PCIDEVICE_INTEL_COM_EXTERNAL_NETWORK",
+      "resourceName": "intel.com/external_network"
+    }
+  },
+  "monitor": {
+    "enabled": true,
+    "cpuSet": "36-37",
+    "trace": {
+      "agentImage": {
+        "pullPolicy": "",
+        "repository": "",
+        "tag": ""
+      },
+      "agentResources": {
+        "limits": {
+          "cpu": "250m",
+          "memory": "128Mi"
+        },
+        "requests": {
+          "cpu": "50m",
+          "memory": "32Mi"
+        }
+      },
+      "decoderImage": {
+        "pullPolicy": "",
+        "repository": "",
+        "tag": ""
+      },
+      "decoderPlacement": "colocated",
+      "decoderResources": {
+        "limits": {
+          "cpu": "500m",
+          "memory": "512Mi"
+        },
+        "requests": {
+          "cpu": "100m",
+          "memory": "128Mi"
+        }
+      },
+      "enabled": true,
+      "redactKeys": false
+    },
+    "config": {
+      "enabled": true,
+      "events_interval": 2,
+      "gnbs_interval": 15,
+      "info_interval": 10,
+      "metrics_interval": 15,
+      "pods_interval": 30,
+      "rates_interval": 2,
+      "trace_enabled": true
+    },
+    "image": {
+      "pullPolicy": "IfNotPresent",
+      "repository": "localhost:5000/xcn-monitor",
+      "tag": "online-20261027-verified"
+    },
+    "resources": {
+      "limits": {
+        "cpu": "900m",
+        "memory": "512Mi"
+      },
+      "requests": {
+        "cpu": "200m",
+        "memory": "256Mi"
+      }
+    }
+  },
+  "smf_user_intent_enabled": false,
+  "ue_subnet": {
+    "ipv4Gateway": "10.45.0.1",
+    "ipv4Subnet": "10.45.0.0/16"
+  },
+  "environment_overrides": {
+    "images": {
+      "mongodb": {
+        "pullPolicy": "IfNotPresent",
+        "repository": "mongo",
+        "tag": "latest"
+      },
+      "runtime": {
+        "pullPolicy": "IfNotPresent",
+        "repository": "localhost:5000/xcn-runtime",
+        "tag": "online-20261027-verified"
+      },
+      "webui": {
+        "pullPolicy": "IfNotPresent",
+        "repository": "localhost:5000/xcn-webui",
+        "tag": "memory-label-20261028"
+      }
+    },
+    "nodeSelector": {
+      "kubernetes.io/hostname": "xnet-server"
+    },
+    "networking": {
+      "amf": {
+        "ngap": {
+          "serverAddress": "10.2.0.119"
+        }
+      },
+      "upf": {
+        "n3": {
+          "address": "10.2.0.230"
+        }
+      }
+    },
+    "vpp": {
+      "image": {
+        "pullPolicy": "IfNotPresent",
+        "repository": "vpp",
+        "tag": "26.06"
+      },
+      "n3": {
+        "interfaceAddress": "10.2.0.231/20",
+        "defaultGateway": "10.2.7.254"
+      },
+      "n6": {
+        "externalAddress": "10.2.0.232/20",
+        "defaultGateway": "10.2.7.254"
+      }
+    },
+    "monitor": {
+      "image": {
+        "pullPolicy": "IfNotPresent",
+        "repository": "localhost:5000/xcn-monitor",
+        "tag": "online-20261027-verified"
+      },
+      "cpuSet": "36-37"
+    }
+  },
+  "physical_links": {
+    "ens5f0": "Settings for ens5f0:\n\tSupported ports: [  ]\n\tSupported link modes:   Not reported\n\tSupported pause frame use: Symmetric Receive-only\n\tSupports auto-negotiation: Yes\n\tSupported FEC modes: Not reported\n\tAdvertised link modes:  Not reported\n\tAdvertised pause frame use: No\n\tAdvertised auto-negotiation: Yes\n\tAdvertised FEC modes: Not reported\n\tSpeed: 1000Mb/s\n\tDuplex: Full\n\tAuto-negotiation: on\n\tPort: Other\n\tPHYAD: 0\n\tTransceiver: internal\n        Current message level: 0x00000007 (7)\n                               drv probe link\n\tLink detected: yes\n",
+    "ens5f1": "Settings for ens5f1:\n\tSupported ports: [  ]\n\tSupported link modes:   10000baseT/Full\n\t                        1000baseX/Full\n\t                        10000baseSR/Full\n\t                        10000baseLR/Full\n\tSupported pause frame use: Symmetric Receive-only\n\tSupports auto-negotiation: Yes\n\tSupported FEC modes: Not reported\n\tAdvertised link modes:  10000baseT/Full\n\t                        1000baseX/Full\n\t                        10000baseSR/Full\n\t                        10000baseLR/Full\n\tAdvertised pause frame use: No\n\tAdvertised auto-negotiation: Yes\n\tAdvertised FEC modes: Not reported\n\tSpeed: Unknown!\n\tDuplex: Unknown! (255)\n\tAuto-negotiation: off\n\tPort: Other\n\tPHYAD: 0\n\tTransceiver: internal\n        Current message level: 0x00000007 (7)\n                               drv probe link\n\tLink detected: no\n"
+  },
+  "iperf": {
+    "version": "3.22",
+    "official_release": "https://github.com/esnet/iperf/releases/tag/3.22",
+    "source_sha256": "1c0d0fb02c52626111d6e132db80edfbf27bbaff8bd9245df2a371dcb0b35a92",
+    "binary_sha256": "b6246b8a891d58e18a2313e2c6934cd8e02ae909ec3864ee448d352803a22b61",
+    "configure_flags": [
+      "--disable-shared",
+      "--disable-profiling",
+      "--without-openssl",
+      "--without-sctp"
+    ],
+    "build_image": "xcn-offline-builder:20261027"
+  }
+}
