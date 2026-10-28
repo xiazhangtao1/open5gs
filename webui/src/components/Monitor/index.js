@@ -338,8 +338,8 @@ export default class Monitor extends Component {
       {h.affinity && !h.affinity.verified && <div className="xcn-alert warn">{h.affinity.error || 'CPU 隔离尚未验证'}</div>}
       <section className="xcn-panel"><div className="xcn-panel-heading"><h2>采集服务</h2>
         <Status state={memory.paused ? '内存保护中' : h.enabled ? 'ready' : '已暂停'}/></div>
-        <div className="xcn-memory"><div><span>缓存内存</span><strong>{mib(memory.used_bytes)}<small> / {mib(memory.limit_bytes)}</small></strong></div>
-          <progress value={used} max={100} aria-label="缓存内存使用率"/>
+        <div className="xcn-memory"><div><span>监控服务内存</span><strong>{mib(memory.used_bytes)}<small> / {mib(memory.limit_bytes)}</small></strong></div>
+          <progress value={used} max={100} aria-label="监控服务内存使用率"/>
           <span>启动于 {dateTime(h.started_at)}</span></div>
         {memory.last_reason && <p className="xcn-panel-note">最近保护原因：{memory.last_reason}</p>}</section>
       <section className="xcn-panel"><div className="xcn-panel-heading"><h2>数据源</h2></div>
