@@ -1,4 +1,6 @@
 # Documentation-only addresses for Helm rendering; never deploy this fixture.
+monitor:
+  cpuSet: "36-37" # Rendering fixture only; real deployments must select their own CPUs.
 networking:
   amf:
     ngap:
