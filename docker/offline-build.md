@@ -85,6 +85,23 @@ python3 docker/vendor.py verify all
 
 当前 `monitor/Dockerfile` 的编译和运行阶段使用同一个 `UBUNTU_IMAGE`。最终阶段在生产 UID 下实际启动 Python、导入扩展、加载原生 trace reader，并执行 TShark；不兼容将导致构建失败，不进入自动 push。
 
+已遇到 Harbor 的 `ubuntu:22.04` 实际为 `Jammy Jellyfish (development branch)`、GLIBC 2.34 的情况：编译阶段安装 `libc6-dev` 时升级到 2.35，运行阶段仅安装其他依赖则可能保留 2.34，从而无法加载编译出的 Python。运行阶段现显式通过所配置的 Jammy APT 源安装/升级 `libc6`、`libc-bin`，使旧基础镜像也获得正式版运行库；不执行全系统升级，也不修改宿主机。离线源需要提供这两个包及其依赖。建议镜像库后续将基础镜像维护为正式发行版，并使用可追溯的 tag/digest。
+
+更新代码后可只重建监控镜像，使用新 tag 避免旧镜像缓存：
+
+```bash
+./docker/build-images.sh --tag 26.10.28-glibc-fix --image monitor --offline
+docker run --rm --network none --entrypoint /bin/sh \
+  192.168.10.35/xcn/xcn-monitor:26.10.28-glibc-fix \
+  -ec 'getconf GNU_LIBC_VERSION; python3 --version; tshark --version'
+```
+
+该命令自动 push；若 push 失败，需先将本地新镜像实际导入运行节点使用的容器运行时，不能仅修改部署 tag。
+
+运行库修复后 `getconf GNU_LIBC_VERSION` 应显示 2.35，Python、TShark 应正常启动。旧基础镜像的 `/etc/os-release` 仍可能显示开发版，因为本次没有更新 `base-files`；不能仅凭该文件判断运行库是否修复。更新 Helm 的 `monitor.image.tag` 时还会影响使用同一镜像的 agent，重建所在的 5gc Pod；如配置了各角色独立镜像覆盖，也需核对对应 tag。
+
+修复回归：正式版基础镜像完成全镜像构建及本地 registry push；另以官方 `jammy-20220101` 的 GLIBC 2.34 作为最终运行阶段，复用已验证的编译产物，在无外网路由、代理清空的隔离网络通过 Jammy APT 源升级至 2.35。两种镜像均通过生产 UID 下的 Python 扩展、原生 trace reader 和 TShark 自检；旧运行阶段修复镜像另外通过只读、无网络启动验证。构建入口 14 项回归通过，未修改运行中的核心网部署。
+
 在发生问题的节点核对基础镜像内容和最终镜像（第二条中的镜像名、tag 按实际部署填写）：
 
 ```bash

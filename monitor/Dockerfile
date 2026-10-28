@@ -77,9 +77,11 @@ FROM ${UBUNTU_IMAGE}
 ARG OFFLINE=0
 ARG APT_MIRROR
 COPY docker/runtime/sources.list docker/apt-sources.sh /opt/xcn-build/
+# Older Jammy development bases can still contain glibc 2.34. Compiler stages
+# upgrade it through libc6-dev; explicitly upgrade the runtime libraries too.
 RUN sh /opt/xcn-build/apt-sources.sh && apt-get -o Acquire::Retries=3 update && \
     DEBIAN_FRONTEND=noninteractive apt-get -o Acquire::Retries=3 install -y --no-install-recommends \
-        ca-certificates util-linux libstdc++6 libglib2.0-0 libgcrypt20 libpcre2-8-0 libc-ares2 libxml2 zlib1g \
+        libc6 libc-bin ca-certificates util-linux libstdc++6 libglib2.0-0 libgcrypt20 libpcre2-8-0 libc-ares2 libxml2 zlib1g \
         libssl3 libbz2-1.0 libreadline8 libsqlite3-0 libffi8 liblzma5 libncursesw6 \
         libgdbm6 libgdbm-compat4 libnsl2 libuuid1 && rm -rf /var/lib/apt/lists/*
 COPY --from=python /opt/python/ /opt/python/
