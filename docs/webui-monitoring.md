@@ -102,6 +102,8 @@ UPF 进程仅在设置 `XCN_UPF_MONITOR_SNAPSHOT=1` 时分配快照和创建查�
 
 2026-10-28 在独立 Docker 测试容器验证：整数 CPU 分配未收敛时不启动子进程，实际 cpuset 收敛后正常启动；同一物理核的两个 SMT 线程被正确识别为两个逻辑 CPU；共享集合扩大后主进程能继续使用新增 CPU；整数与共享模式等待超时均拒绝启动。新版 WebUI 的 Python 入口能成功 exec Node，四个监控角色能在自动模式运行并通过健康检查。监控回归 74 项中 73 项通过（含 18 项 CPU 分配测试及真实协议解码），仅 xcnctl 对照测试因未配置该程序跳过；Helm 回归 38 项及 lint 通过。本轮未修改 CPU Manager、未部署到现场，因此这些结果不代表现场吞吐和时延验收。
 
+同日随后按用户授权完成默认配置现场重部署，补齐 xcnctl 对照后监控 74 项全部通过，并执行六 UE 双向流量、50 阅读者、监控中断和控制操作实测。结果及现场 NAS 完成回复缺失的边界见[默认配置现场验收记录](default-config-live-validation-20261028.md)。
+
 ```bash
 lscpu -e=CPU,CORE,SOCKET,ONLINE
 kubectl -n xcn get pods -o wide
