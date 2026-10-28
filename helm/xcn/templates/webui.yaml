@@ -74,9 +74,7 @@ spec:
           image: {{ printf "%s:%s" .Values.images.webui.repository .Values.images.webui.tag }}
           imagePullPolicy: {{ .Values.images.webui.pullPolicy }}
 {{- if .Values.monitor.enabled }}
-          command: ["/bin/sh", "-ec"]
-          args:
-            - exec taskset -c "$MONITOR_CPUSET" npm run start
+          command: ["python3", "/opt/xcn-cpu/cpu_entrypoint.py", "npm", "run", "start"]
 {{- end }}
           env:
             - name: XCN_CHART_VERSION
@@ -84,8 +82,7 @@ spec:
             - name: XCN_APP_VERSION
               value: {{ .Chart.AppVersion | quote }}
 {{- if .Values.monitor.enabled }}
-            - name: MONITOR_CPUSET
-              value: {{ required "monitor.cpuSet is required" .Values.monitor.cpuSet | quote }}
+{{ include "xcn.monitorCpuEnv" (dict "root" . "resources" .Values.monitor.webuiResources) | indent 12 }}
             - name: MONITOR_URL
               value: {{ printf "http://%s:9998" (include "xcn.componentName" (dict "root" . "component" "monitor")) | quote }}
             - name: MONITOR_INTERNAL_TOKEN
@@ -119,7 +116,11 @@ spec:
             tcpSocket:
               port: http
             periodSeconds: 5
+{{- if .Values.monitor.enabled }}
+            failureThreshold: {{ include "xcn.monitorStartupThreshold" . }}
+{{- else }}
             failureThreshold: 24
+{{- end }}
           readinessProbe:
             tcpSocket:
               port: http

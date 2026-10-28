@@ -47,5 +47,6 @@ COPY --from=build /opt/node/ /opt/node/
 COPY --from=build /usr/src/xcn/webui/ ./
 COPY --from=build /wait /wait
 COPY --from=build /xcn/docker/vendor/archives/wait-2.9.0.LICENSE /usr/share/doc/xcn-wait/LICENSE
+COPY monitor/common.py monitor/cpu_entrypoint.py /opt/xcn-cpu/
 CMD /wait && npm run start
 EXPOSE 9999

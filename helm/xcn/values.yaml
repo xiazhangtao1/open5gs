@@ -59,9 +59,11 @@ monitor:
     decoderResources:
       requests: {cpu: 100m, memory: 128Mi}
       limits: {cpu: 500m, memory: 512Mi}
-  # Mandatory when enabled. Choose spare CPUs outside UPF/VPP AND their SMT siblings.
-  # Applied to collector, agent and WebUI; collector revalidates the live CPU annotations.
+  # Empty: use each container's resources CPU quantity and CPU Manager allocation.
+  # Optional legacy override: explicit spare CPUs outside UPF/VPP and their SMT siblings.
   cpuSet: ""
+  # Allow the existing CPU Manager to replace an initial node-wide cpuset.
+  cpuSetWaitSeconds: 120
   # Optional pre-created Secret with key "token"; otherwise Helm preserves a generated token.
   existingSecret: ""
   config:
@@ -78,8 +80,8 @@ monitor:
       cpu: 200m
       memory: 256Mi
     limits:
-      # The xnet webhook allocates exclusive CPUs for whole-core limits.
-      # Keep this fractional so MONITOR_CPUSET can use the shared spare CPUs.
+      # Fractional CPU limits use the manager's shared pool; integer limits
+      # wait for that many allocated logical CPUs. No fixed CPU IDs required.
       cpu: 900m
       memory: 512Mi
   agentResources:

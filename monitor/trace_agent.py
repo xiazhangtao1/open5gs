@@ -6,7 +6,7 @@ import os
 import time
 
 import aiohttp
-from common import config, pin_cpu, read_limited
+from common import config, pin_cpu, read_limited, wait_for_cpu
 
 
 class Reader:
@@ -119,4 +119,5 @@ async def main():
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
+    wait_for_cpu()
     asyncio.run(main())

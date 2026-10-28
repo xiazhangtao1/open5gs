@@ -1,8 +1,4 @@
 {{- if .Values.monitor.enabled }}
-{{- $cpus := required "monitor.cpuSet must specify spare CPUs outside UPF/VPP and their SMT siblings" .Values.monitor.cpuSet }}
-{{- if not (regexMatch "^[0-9]+(-[0-9]+)?(,[0-9]+(-[0-9]+)?)*$" (toString $cpus)) }}
-{{- fail "monitor.cpuSet must be a CPU list such as 36-37 or 36,108" }}
-{{- end }}
 {{- if has (dir .Values.networking.upf.rateStats.socket) (list "/" "/run" "/var/run" "/tmp" "/etc" "/var") }}
 {{- fail "monitor UPF socket must use a dedicated directory, for example /run/xcn/upf-stats.sock" }}
 {{- end }}
@@ -131,8 +127,7 @@ spec:
                 resourceFieldRef:
                   resource: limits.memory
                   divisor: "1"
-            - name: MONITOR_CPUSET
-              value: {{ $cpus | quote }}
+{{ include "xcn.monitorCpuEnv" (dict "root" . "resources" .Values.monitor.resources) | indent 12 }}
             - name: MONITOR_INTERNAL_TOKEN
               valueFrom:
                 secretKeyRef:
@@ -153,6 +148,10 @@ spec:
           ports:
             - name: http
               containerPort: 9998
+          startupProbe:
+            httpGet: {path: /healthz, port: http}
+            periodSeconds: 5
+            failureThreshold: {{ include "xcn.monitorStartupThreshold" . }}
           readinessProbe:
             httpGet:
               path: /healthz

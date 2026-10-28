@@ -6,8 +6,7 @@
   imagePullPolicy: {{ default .Values.monitor.image.pullPolicy .Values.monitor.trace.decoderImage.pullPolicy }}
   command: ["python3", "/opt/xcn-monitor/decoder.py"]
   env:
-    - name: MONITOR_CPUSET
-      value: {{ required "monitor.cpuSet is required" .Values.monitor.cpuSet | quote }}
+{{ include "xcn.monitorCpuEnv" (dict "root" . "resources" .Values.monitor.trace.decoderResources) | indent 4 }}
     - name: MONITOR_URL
       value: {{ if $colocated }}"http://127.0.0.1:9998"{{ else }}{{ printf "http://%s:9998" $monitor | quote }}{{ end }}
     - name: TRACE_REDACT_KEYS
@@ -20,6 +19,10 @@
   ports:
     - name: trace-http
       containerPort: 9997
+  startupProbe:
+    httpGet: {path: /healthz, port: trace-http}
+    periodSeconds: 5
+    failureThreshold: {{ include "xcn.monitorStartupThreshold" . }}
   readinessProbe:
     httpGet: {path: /healthz, port: trace-http}
     periodSeconds: 5

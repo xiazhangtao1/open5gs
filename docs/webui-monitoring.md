@@ -2,11 +2,11 @@
 
 管理员的专载管理、会话释放与用户释放见 [WebUI 会话与用户控制](webui-core-control.md)。显式控制操作使用独立路由和有界审计，不改变监控轮询的数据路径。
 
-NGAP ASN.1 / NAS 协议树、码流、容量限制和启用流程见 [WebUI 信令详情](webui-signaling.md)。该扩展默认关闭，需独立性能验收后在维护窗口启用。
+NGAP ASN.1 / NAS 协议树、码流、容量限制和启用流程见 [WebUI 信令详情](webui-signaling.md)。Chart 默认开启监控及信令详情；从关闭状态启用时需在维护窗口操作。
 
 监控采用单实例定时采集、独立进程内存缓存和 WebUI 只读接口。浏览器不会调用 `xcnctl`，也不会直接查询 AMF、SMF 或 UPF。事件按容量保留，无 30 分钟过期规则；速率曲线使用固定点数的环形缓存。
 
-Chart 默认 `monitor.enabled: false`。2026-10-23 应用户明确要求，现场 `xcn` 已升级并启用监控演示，接入真实 OAI UE 并保持限速双向流量，见本文末尾记录。第一次启用会给 5gc Pod 增加 sidecar 和共享 socket 卷，触发 Pod 重建，需安排维护窗口；正式性能验收要求见下文。
+Chart 默认 `monitor.enabled: true`。2026-10-23 应用户明确要求，现场 `xcn` 已升级并启用监控演示，接入真实 OAI UE 并保持限速双向流量，见本文末尾记录。第一次启用会给 5gc Pod 增加 sidecar 和共享 socket 卷，触发 Pod 重建，需安排维护窗口；正式性能验收要求见下文。
 
 ## 数据路径
 
@@ -84,15 +84,23 @@ flowchart LR
 
 ## UPF 与 CPU 隔离
 
-UPF 监控默认关闭，仅设置 `XCN_UPF_MONITOR_SNAPSHOT=1` 才分配快照和创建查询线程。不开启时沿用原统计及 CLI 单线程路径。可选快照分配或查询线程创建失败会回退到旧路径。
+UPF 进程仅在设置 `XCN_UPF_MONITOR_SNAPSHOT=1` 时分配快照和创建查询线程；Chart 在监控开启时注入该变量。不开启时沿用原统计及 CLI 单线程路径。可选快照分配或查询线程创建失败会回退到旧路径。
 
 新快照借用已有统计线程及其已有的规则读锁遍历，复制有界标量，不保留 session 指针；不增加包处理路径的锁、分配或序列化。固定双缓冲使用原子所有权，缓冲被占用就跳过。JSON、地址格式化和 socket I/O 都在规则锁外进行。旧 CLI 与统计线程共享的速率字段由专用 mutex 保护，采样端只 trylock，不等待；转发线程不使用此 mutex。统计和 socket 线程沿用现有控制线程绑核规则。
 
 这会略微延长原有统计读锁持有时间，仍需测量控制面写入与高负载转发的影响，不能据此宣称“零性能影响”。socket 客户端读写有超时，关闭客户端不会因 SIGPIPE 结束 UPF。停止 agent 后订阅 6 秒到期，停止快照复制。
 
-`monitor.cpuSet` 必须指定预留 CPU，供采集器、agent 和 WebUI 使用。不得与 UPF/VPP 的工作核、控制核及其 SMT 兄弟重叠。采集器读取实际 `xnet.com/used-core` 注解再验证，未能验证时停止 NF 采集；后续 Pod 分配变化也会重新验证。该实现不替运维系统预留 CPU，请同时确保这些核不被其他繁忙任务使用。
+`monitor.cpuSet` 默认留空。各容器只需配置各自的 `resources.requests.cpu` 和 `resources.limits.cpu`，支持 `200m`、`900m`、`1`、`2` 等数量，由现有 CPU Manager 选择核号。采集器使用 `monitor.resources`，UPF agent 使用 `monitor.agentResources`，信令 agent / decoder 使用 `monitor.trace.agentResources` / `decoderResources`，WebUI 使用 `monitor.webuiResources`，各自独立限制。
 
-监控和 WebUI 默认 CPU 上限为 `900m`、内存上限为 `512Mi`。现场 xnet CPU webhook 会把整数核上限自动分配到独占 CPU，即使 request 是小数核，也会与手动指定的共享空闲核冲突；使用小数核上限后，再由 `monitor.cpuSet` 绑定已核验的空闲 CPU。不要将上限改为整数核而不重新核对实际分配。
+监控和 WebUI 默认 CPU 上限为 `900m`，decoder 为 `500m`，两个 agent 各为 `250m`；五个角色合计申请 `650m`，保留原有的小额预算，不默认预留五个整核。监控和 WebUI 的内存上限仍为 `512Mi`。
+
+启动入口通过 Downward API 获取本容器的 CPU 上限，并只读检查 cgroup v1/v2 的实际 cpuset。整数核上限等待相应数量的逻辑 CPU；有 `ISOCPU` 时还验证两者一致，偶数分配在同一物理核的两个 SMT 线程上同样有效，不改变 CPU Manager 的选择。分数核使用 CPU Manager 的共享集合；若容器仍暴露节点全部在线 CPU，则等待分配完成。默认最多等待 `monitor.cpuSetWaitSeconds: 120` 秒，启动探针留出对应时间，超时不在全部 CPU 上继续运行。自动模式不写 cgroup、配额或线程 affinity，后续共享集合调整仍由 CPU Manager 接管。
+
+采集器继续读取实际 `xnet.com/used-core` 注解，校验与 UPF/VPP 及其 SMT 兄弟无重叠；无法验证时停止 NF 采集，后续 Pod 分配变化也会重新验证。两个 agent 和 decoder 使用各自实际集合校验，不借用另一个容器的核号。`monitor.cpuSet` 仍可作为兼容手动覆盖，但必须自行确认空闲核及容器允许范围。该自动模式依赖 CPU Manager 正确隔离共享集合；不会在未配置隔离的节点上自行挑核或伪装就绪。
+
+切换该启动方式需要配套构建新版 monitor 与 WebUI 镜像；仅修改 Chart、继续使用缺少新启动入口的旧镜像不能启用自动模式。
+
+2026-10-28 在独立 Docker 测试容器验证：整数 CPU 分配未收敛时不启动子进程，实际 cpuset 收敛后正常启动；同一物理核的两个 SMT 线程被正确识别为两个逻辑 CPU；共享集合扩大后主进程能继续使用新增 CPU；整数与共享模式等待超时均拒绝启动。新版 WebUI 的 Python 入口能成功 exec Node，四个监控角色能在自动模式运行并通过健康检查。监控回归 74 项中 73 项通过（含 18 项 CPU 分配测试及真实协议解码），仅 xcnctl 对照测试因未配置该程序跳过；Helm 回归 38 项及 lint 通过。本轮未修改 CPU Manager、未部署到现场，因此这些结果不代表现场吞吐和时延验收。
 
 ```bash
 lscpu -e=CPU,CORE,SOCKET,ONLINE
@@ -135,7 +143,7 @@ docker build --network host -f docker/webui/Dockerfile -t localhost:5000/xcn-web
 
 有 Clash/代理时先验证构建网络。主机回环代理用于 `--network host` 构建的 RUN 阶段时，可显式传入 `--build-arg HTTP_PROXY=http://127.0.0.1:7890 --build-arg HTTPS_PROXY=http://127.0.0.1:7890`；镜像不持久化这些构建参数。Docker 守护进程拉取基础镜像使用独立网络设置，`--network host` 不会修复该阶段。不要为此重启生产 Docker 或全局更改代理。
 
-启用前保存实际 release 值和回滚 revision，检查镜像可拉取，并选择已预留 CPU；不要把文档示例 CPU 号当作生产分配。生成覆盖文件后先 `helm diff`（若已安装）或 `helm template` 检查差异，重点查看 5gc Pod、原 UPF/VPP 配置和现有资源限额。
+启用前保存实际 release 值和回滚 revision，检查镜像可拉取及 CPU Manager 的分配状态。默认按资源数量配置，不填写机器专属核号。生成覆盖文件后先 `helm diff`（若已安装）或 `helm template` 检查差异，重点查看 5gc Pod、原 UPF/VPP 配置和现有资源限额。
 
 ```bash
 helm get values xcn -n xcn -o yaml > /tmp/xcn-before-monitor-values.yaml
@@ -143,7 +151,8 @@ helm history xcn -n xcn
 cat > /tmp/xcn-monitor-values.yaml <<'YAML'
 monitor:
   enabled: true
-  cpuSet: "REPLACE_WITH_RESERVED_CPUS"
+  cpuSet: "" # 使用各容器的资源数量和 CPU Manager 实际分配
+  cpuSetWaitSeconds: 120
   image:
     repository: localhost:5000/xcn-monitor
     tag: YOUR_TAG

@@ -2,6 +2,33 @@
 {{- printf "%s-%s" .Chart.Name .Chart.Version | replace "+" "_" | trunc 63 | trimSuffix "-" -}}
 {{- end -}}
 
+{{/* CPU amounts stay in resources; an empty cpuSet follows the kernel allocation. */}}
+{{- define "xcn.monitorCpuEnv" -}}
+{{- $cpus := toString (default "" .root.Values.monitor.cpuSet) -}}
+{{- if and (ne $cpus "") (not (regexMatch "^[0-9]+(-[0-9]+)?(,[0-9]+(-[0-9]+)?)*$" $cpus)) -}}
+{{- fail "monitor.cpuSet must be empty or a CPU list such as 36-37 or 36,108" -}}
+{{- end -}}
+{{- $wait := toString (dig "cpuSetWaitSeconds" 120 .root.Values.monitor) -}}
+{{- if or (not (regexMatch "^[0-9]{1,3}$" $wait)) (gt (int $wait) 600) -}}
+{{- fail "monitor.cpuSetWaitSeconds must be an integer between 0 and 600" -}}
+{{- end -}}
+{{- $limit := required "monitoring containers require resources.limits.cpu" .resources.limits.cpu -}}
+- name: MONITOR_CPUSET
+  value: {{ $cpus | quote }}
+- name: MONITOR_CPU_LIMIT_MILLICORES
+  valueFrom:
+    resourceFieldRef:
+      resource: limits.cpu
+      divisor: "1m"
+- name: MONITOR_CPUSET_WAIT_SECONDS
+  value: {{ $wait | quote }}
+{{- end -}}
+
+{{- define "xcn.monitorStartupThreshold" -}}
+{{- $wait := int (dig "cpuSetWaitSeconds" 120 .Values.monitor) -}}
+{{- max 24 (div (add $wait 34) 5) -}}
+{{- end -}}
+
 {{/* Parse a canonical dotted IPv4 address using integer arithmetic. */}}
 {{- define "xcn.ipv4Number" -}}
 {{- if not (kindIs "string" .value) -}}

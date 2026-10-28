@@ -48,13 +48,13 @@ flowchart LR
 
 “查看信令记录（JSON）”展开这条信令的结构化日志，包括时间、IMSI、协议、方向、结果、记录 ID（`event_id`）和关联标识等；其他详情使用“查看原始记录（JSON）”。“信令内容”中的协议树才是对 NGAP / NAS 报文的解析结果。“已遮蔽”表示主动隐藏敏感字段，与加密后无法解码不同；NAS 明文来自核心网正常解密后的采集位置。
 
-点击详情后的主要解析 CPU 消耗发生在 decoder 容器的 TShark 子进程，使用 `monitor.cpuSet` 并受整个容器 `500m` 总 CPU 配额约束。采集器负责排队、缓存和响应，浏览器负责树形展示。5gc Pod 的 `signal-trace-agent` 只读取 AMF / SMF 共享环并上传，资源上限 `250m / 128 MiB`；解析器不在 5gc Pod 内。
+点击详情后的主要解析 CPU 消耗发生在 decoder 容器的 TShark 子进程，使用 CPU Manager 分配的本容器 CPU 集合，并受整个容器默认 `500m` 总 CPU 配额约束。采集器负责排队、缓存和响应，浏览器负责树形展示。5gc Pod 的 `signal-trace-agent` 只读取 AMF / SMF 共享环并上传，资源上限 `250m / 128 MiB`；解析器不在 5gc Pod 内。
 
-`monitor.trace.decoderPlacement` 支持 `separate`（默认、保留独立解码 Pod）和 `colocated`（monitor、decoder 两个容器放入同一监控 Pod）。两种布局中，`upf-monitor-agent` 与 `signal-trace-agent` 都留在 5gc Pod，共享本地 socket / tmpfs；不能直接把 `emptyDir` 挪给另一个 Pod 使用。合并后 monitor 与 decoder 通过 localhost 通信，仍各自限制 CPU / 内存，分别接受存活探测；解码器没有采集器的 Kubernetes API 令牌挂载。监控 Service 在此布局发布未就绪地址，保证仅 decoder 重启时，仍运行的采集器可以继续提供普通状态 API。Pod 整体重建、节点故障和升级会同时影响两者，因此需要独立升级时使用 `separate`。
+`monitor.trace.decoderPlacement` 支持 `colocated`（默认，monitor、decoder 两个容器放入同一监控 Pod）和 `separate`（独立解码 Pod）。两种布局中，`upf-monitor-agent` 与 `signal-trace-agent` 都留在 5gc Pod，共享本地 socket / tmpfs；不能直接把 `emptyDir` 挪给另一个 Pod 使用。合并后 monitor 与 decoder 通过 localhost 通信，仍各自限制 CPU / 内存，分别接受存活探测；解码器没有采集器的 Kubernetes API 令牌挂载。监控 Service 在此布局发布未就绪地址，保证仅 decoder 重启时，仍运行的采集器可以继续提供普通状态 API。Pod 整体重建、节点故障和升级会同时影响两者，因此需要独立升级时使用 `separate`。
 
 ## 构建与启用
 
-默认 `monitor.trace.enabled: false`、`monitor.config.trace_enabled: false`。启用基础设施会给共享 5gc Pod 增加 agent、AMF / SMF 环目录和环境变量，**触发整个 5gc Pod 重建，需要维护窗口**。必须使用包含本次 AMF / SMF / libogsproto 的 runtime、包含原生 reader 的 monitor，以及配套 WebUI / decoder 镜像，不能只升级网页。
+默认 `monitor.trace.enabled: true`、`monitor.config.trace_enabled: true`。从关闭状态启用基础设施会给共享 5gc Pod 增加 agent、AMF / SMF 环目录和环境变量，**触发整个 5gc Pod 重建，需要维护窗口**。必须使用包含本次 AMF / SMF / libogsproto 的 runtime、包含原生 reader 的 monitor，以及配套 WebUI / decoder 镜像，不能只升级网页。
 
 统一监控镜像由 `monitor/Dockerfile` 构建，包含两个 agent、collector、原生 trace reader 和 TShark decoder；通过各容器的启动命令选择角色，仍分别限制 CPU、内存和权限。`monitor/Dockerfile.decoder` 是旧构建入口的兼容转接，需先构建统一镜像，或通过 `MONITOR_IMAGE` 指定已构建版本；标准发布不单独生成 decoder 镜像。
 
@@ -65,7 +65,8 @@ runtime 和 WebUI 使用各自的完整多阶段构建入口。`monitor/Dockerfi
 ```yaml
 monitor:
   enabled: true
-  cpuSet: "36-37" # 示例，必须按目标机器实际 CPU / SMT 分配确认
+  cpuSet: "" # 核号由 CPU Manager 分配，各容器独立配置 resources CPU 数量
+  cpuSetWaitSeconds: 120
   image:
     repository: localhost:5000/xcn-monitor
     tag: signal-COMMIT

@@ -500,8 +500,7 @@ spec:
           imagePullPolicy: {{ .Values.monitor.image.pullPolicy }}
           command: ["python3", "/opt/xcn-monitor/agent.py"]
           env:
-            - name: MONITOR_CPUSET
-              value: {{ required "monitor.cpuSet is required" .Values.monitor.cpuSet | quote }}
+{{ include "xcn.monitorCpuEnv" (dict "root" . "resources" .Values.monitor.agentResources) | indent 12 }}
             - name: MONITOR_URL
               value: {{ printf "http://%s:9998" $monitorName | quote }}
             - name: MONITOR_INTERNAL_TOKEN
@@ -605,8 +604,7 @@ spec:
           imagePullPolicy: {{ default .Values.monitor.image.pullPolicy .Values.monitor.trace.agentImage.pullPolicy }}
           command: ["python3", "/opt/xcn-monitor/trace_agent.py"]
           env:
-            - name: MONITOR_CPUSET
-              value: {{ .Values.monitor.cpuSet | quote }}
+{{ include "xcn.monitorCpuEnv" (dict "root" . "resources" .Values.monitor.trace.agentResources) | indent 12 }}
             - name: MONITOR_URL
               value: {{ printf "http://%s:9998" $monitorName | quote }}
             - name: MONITOR_INTERNAL_TOKEN

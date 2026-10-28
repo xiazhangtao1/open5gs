@@ -12,7 +12,7 @@ import time
 import aiohttp
 from aiohttp import web
 from defusedxml import ElementTree as ET
-from common import pin_cpu, read_limited, trace_redact_keys
+from common import pin_cpu, read_limited, trace_redact_keys, wait_for_cpu
 
 VERSION = "tshark-4.6.9/xcn-tree-3"
 MAX_OUTPUT = 4 * 1024 * 1024
@@ -215,4 +215,5 @@ def application():
 
 
 if __name__ == "__main__":
+    wait_for_cpu()
     web.run_app(application(), host="0.0.0.0", port=9997, access_log=None)

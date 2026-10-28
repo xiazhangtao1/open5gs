@@ -93,6 +93,7 @@ class MonitorImagesTest(unittest.TestCase):
     def test_intranet_defaults_render_with_explicit_site_addresses(self):
         values = self.values()
         del values["monitor"]["image"]
+        del values["monitor"]["cpuSet"]
         del values["networking"]["upf"]["mode"]
         docs = render(values)
         roles = containers(docs)
@@ -110,6 +111,42 @@ class MonitorImagesTest(unittest.TestCase):
         defaults = yaml.safe_load((CHART / "values.yaml").read_text())
         self.assertFalse(defaults["vpp"]["n6"]["nat44"]["enabled"])
         self.assertEqual(defaults["vpp"]["sriov"]["deviceEnv"], "PCIDEVICE_INTEL_COM_EXTERNAL_NETWORK")
+
+    def test_cpu_quantities_preserve_small_per_container_budgets(self):
+        values = self.values()
+        del values['monitor']['cpuSet']
+        roles = containers(render(values))
+        expected = {'monitor': ('200m', '900m'), 'decoder': ('100m', '500m'),
+                    'upf-monitor-agent': ('50m', '250m'), 'signal-trace-agent': ('50m', '250m'),
+                    'webui': ('250m', '900m')}
+        for name, (request, limit) in expected.items():
+            with self.subTest(container=name):
+                role = roles[name]
+                self.assertEqual(role['resources']['requests']['cpu'], request)
+                self.assertEqual(role['resources']['limits']['cpu'], limit)
+                env = {e['name']: e for e in role['env']}
+                self.assertEqual(env['MONITOR_CPUSET']['value'], '')
+                self.assertEqual(env['MONITOR_CPU_LIMIT_MILLICORES']['valueFrom']['resourceFieldRef'],
+                                 {'resource': 'limits.cpu', 'divisor': '1m'})
+                self.assertEqual(env['MONITOR_CPUSET_WAIT_SECONDS']['value'], '120')
+        for name in ['monitor', 'decoder', 'webui']:
+            probe = roles[name]['startupProbe']
+            self.assertGreaterEqual(probe['periodSeconds'] * probe['failureThreshold'], 150)
+        self.assertEqual(roles['webui']['command'],
+                         ['python3', '/opt/xcn-cpu/cpu_entrypoint.py', 'npm', 'run', 'start'])
+
+    def test_integer_quantities_are_forwarded_without_fixed_core_ids(self):
+        values = self.values()
+        values['monitor'].update(cpuSet='', cpuSetWaitSeconds=240)
+        values['monitor']['resources'] = {'requests': {'cpu': 1, 'memory': '256Mi'},
+                                          'limits': {'cpu': 2, 'memory': '512Mi'}}
+        role = containers(render(values))['monitor']
+        self.assertEqual(role['resources']['limits']['cpu'], 2)
+        env = {e['name']: e for e in role['env']}
+        self.assertEqual(env['MONITOR_CPUSET']['value'], '')
+        self.assertEqual(env['MONITOR_CPUSET_WAIT_SECONDS']['value'], '240')
+        probe = role['startupProbe']
+        self.assertGreaterEqual(probe['periodSeconds'] * probe['failureThreshold'], 270)
 
 
 if __name__ == "__main__":

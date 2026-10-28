@@ -11,7 +11,7 @@ from aiohttp import web
 from cache import Cache
 from signals import Signals, MAX_BATCH
 from collector import Collector
-from common import config
+from common import config, wait_for_cpu
 from memory import MemoryPressure, UPF_BODY_LIMIT, MIB
 
 ENDPOINTS = {"overview", "ues", "gnbs", "sessions", "rates", "events", "trends", "health", "system", "signal"}
@@ -236,5 +236,6 @@ def application(token=None, collecting=True):
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
+    wait_for_cpu()
     web.run_app(application(), host=os.getenv("MONITOR_HOST", "0.0.0.0"),
                 port=int(os.getenv("MONITOR_PORT", "9998")), access_log=None)

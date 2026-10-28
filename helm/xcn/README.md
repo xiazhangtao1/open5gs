@@ -29,6 +29,13 @@ runtime, WebUI, monitor, VPP, and MongoDB. Trace agent/decoder image fields inhe
 supported. When upgrading old values, clear those overrides or point all four
 monitoring containers at the same release tag to use the shared artifact.
 
+Leave `monitor.cpuSet` empty to let the existing CPU Manager choose CPUs from
+each container's own resource quantities. Configure collector, agents, decoder,
+and WebUI independently through their respective `resources` fields; defaults
+request 650m CPU in total. Startup waits up to `monitor.cpuSetWaitSeconds` (120)
+for the actual cpuset, including delayed integer-CPU assignments. Both monitor
+and WebUI need matching new images. See [CPU isolation](../../docs/webui-monitoring.md#upf-与-cpu-隔离).
+
 Runtime and WebUI use multi-stage builds. Runtime retains unstripped debugging
 symbols and operational tools including tcpdump, iperf, iperf3, iproute2,
 iptables, procps, and binutils. Build tools and caches stay in build stages.
