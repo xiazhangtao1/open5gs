@@ -246,7 +246,7 @@ for client in clients.values():
         for q, name in enumerate(names):
             node = "error-drop" if baseline else self.interface
             rate = args.rate_mpps * 1000000 / len(names)
-            self.cli(role, f"packet-generator new {{ name {name} source {self.pg} worker {q} rate {rate} "
+            self.cli(role, f"packet-generator new {{ name {name} source {self.pg} worker {q} rate {rate} maxframe {args.maxframe} "
                      f"size {size}-{size} interface {self.pg} node {node} data {{ hex 0x{packet.hex()} }} }}")
         return names
 
@@ -327,6 +327,7 @@ for client in clients.values():
                 "total_lost_percent": 100 * (total_generated - total_received) / total_generated}
         result = {"label": args.label, "size": args.size, "direction": args.direction,
                   "target_mpps": args.rate_mpps, "warmup": args.warmup, "duration": args.duration,
+                  "maxframe": args.maxframe,
                   "streams": streams}
         write_json(pathlib.Path(str(stem) + "-raw.json"), {"initial": initial, "start": start, "end": end,
             "final": final, "samples": samples, "health_before": health_before, "health_after": health_after})
@@ -379,11 +380,14 @@ def main():
     parser.add_argument("--size", type=int, choices=(64, 1400), default=1400)
     parser.add_argument("--direction", choices=("rx", "tx", "duplex", "baseline-dut", "baseline-peer"), default="rx")
     parser.add_argument("--rate-mpps", type=float, default=0, help="Total offered Mpps per direction; 0 = unpaced")
+    parser.add_argument("--maxframe", type=int, default=256, help="PG batch size, 1..256; use with rate 0 to avoid timed pacing")
     parser.add_argument("--duration", type=float, default=30)
     parser.add_argument("--warmup", type=float, default=3)
     args = parser.parse_args()
     if args.rate_mpps < 0 or args.duration <= 0 or args.warmup < 0:
         parser.error("Invalid rate or duration")
+    if not 1 <= args.maxframe <= 256:
+        parser.error("maxframe must be in 1..256")
     if args.queues <= 0 or args.socket_id <= 2:
         parser.error("Use a positive queue count and a non-production socket ID")
     bench = Bench(args)

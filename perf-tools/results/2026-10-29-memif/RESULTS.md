@@ -4,6 +4,43 @@
 master/copy、IP 模式、4 对队列、ring 8192、buffer 2048 字节。
 结果为两个独立的 30 秒窗口的接收端平均值，均预热 3 秒；RX/TX 分开测量。
 
+## 严格零丢包补测
+
+零丢包定义为从 PG 实际提交报文至 memif 排空，**实际丢失包数恰好为 0**，
+不使用百分比四舍五入，也不沿用下面的 ≤0.1% 标准。RX 另做补测，TX 沿用
+原先两轮均为零丢包的正式结果。以下是各自两轮 30 秒有效测试的实收均值：
+
+| 报文总长 | RX Gbit/s | RX Mpps | TX Gbit/s | TX Mpps |
+| --- | ---: | ---: | ---: | ---: |
+| 1400 B | 58.800 | 5.250 | 78.290 | 6.990 |
+| 64 B | 2.560 | 5.000 | 17.601 | 34.377 |
+
+| RX 补测档位 | 第一轮 Gbit/s / Mpps / 丢失包数 | 第二轮 Gbit/s / Mpps / 丢失包数 |
+| --- | ---: | ---: |
+| 1400 B，5.25 Mpps | 58.800318 / 5.250028 / 0 | 58.800147 / 5.250013 / 0 |
+| 64 B，5 Mpps | 2.559999 / 4.999998 / 0 | 2.560000 / 4.999999 / 0 |
+
+这两个 RX 档位是本轮**已重复验证的零丢包速率**，不能当作 memif 的绝对
+零丢包上限。原来 10 秒扫描中零丢包的档位，在更长窗口中未必能重复：
+1400 B / 5.5 Mpps 的本次 30 秒测试丢失 24,262 包；64 B / 10 Mpps 第一轮
+零丢包，第二轮丢失 25,703 包。此前 5.75 / 37.5 Mpps 的低丢包 RX 值均不
+属于严格零丢包结果。
+
+小包高档位出现约 5 秒周期的短时突发丢包，对端计数为 `no free tx slots`。
+这些突发丢包不能说明 memif 在 5 Mpps 就达到持续收包极限：定时 PG 还出现过设定
+7.5 Mpps、实际约 42.406 Mpps 的异常轮次，已排除这些无效轮次；其原因
+尚未最终定位。尝试临时隔离 readiness 的 CLI 访问，丢包仍然存在，不能
+据此认定 readiness 是根因，原 CLI socket 已恢复。
+
+为排除定时 PG 的影响，另使用不限速、固定批量发包。较高的固定批量也未
+重复达到零丢包：`maxframe 2` 的短测约 24.699 Mpps 发送、丢失 64,642 包；
+`maxframe 1` 的 10 秒探测约 12.480 Mpps 且零丢包，但接着的 30 秒测试
+实际发送约 13.988 Mpps、丢失 88,350 包。因此表中保留两轮均有效且实际
+丢失包数为零的结果，不把工具或瞬时突发造成的限制解释为 memif 函数极限。
+所选四个 RX 补测窗口均无新增 CPU 配额节流、内存分配失败或 IP/GTP 查表处理。
+
+## 原低丢包档位（≤0.1%）
+
 | 报文总长 | 方向（相对核心 VPP） | 实收 Gbit/s | 实收 Mpps | 两轮最差丢包率 |
 | --- | --- | ---: | ---: | ---: |
 | 1400 B | RX | 64.400 | 5.750 | 0.00004471% |
@@ -70,6 +107,9 @@ FCS、前导码、IFG 或 GTP 开销。终点经过基础 IP 输入检查和 buf
 工具为 [memif_only.py](../../scripts/memif_only.py)，依赖本机 Docker、kubectl
 和缓存的匹配 VPP 镜像。先确认对端 CPU 可用，并按机器配置调整
 `--peer-main` / `--peer-workers`。当前工具要求 DUT 恰好有一个 VPP Worker。
+下面复现严格零丢包补测的 RX 档位；原低丢包对照分别使用 5.75 / 37.5 Mpps。
+本次还新增 `--maxframe 1..256`，可配合 `--rate-mpps 0` 做固定批量对照。
+定时发包必须另外核验实际发送速率，不能只看所配置的目标值。
 
 ```bash
 memif_bench_dir=$(mktemp -d /tmp/memif-only.XXXXXX)
@@ -83,9 +123,9 @@ python3 perf-tools/scripts/memif_only.py quiesce --work-dir "$memif_bench_dir" \
 
 for memif_round in 1 2; do
   python3 perf-tools/scripts/memif_only.py run --work-dir "$memif_bench_dir" \
-    --label "rx1400-r$memif_round" --direction rx --size 1400 --rate-mpps 5.75
+    --label "rx1400-r$memif_round" --direction rx --size 1400 --rate-mpps 5.25
   python3 perf-tools/scripts/memif_only.py run --work-dir "$memif_bench_dir" \
-    --label "rx64-r$memif_round" --direction rx --size 64 --rate-mpps 37.5
+    --label "rx64-r$memif_round" --direction rx --size 64 --rate-mpps 5
   for memif_size in 1400 64; do
     python3 perf-tools/scripts/memif_only.py run --work-dir "$memif_bench_dir" \
       --label "tx${memif_size}-r$memif_round" --direction tx --size "$memif_size"
