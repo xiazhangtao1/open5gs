@@ -58,7 +58,10 @@ class Bench:
         self.state = json.loads(self.state_file.read_text()) if self.state_file.exists() else {}
         if self.state:
             # Setup addresses/CPU placement are part of the test fixture.
-            for name in ("namespace", "pod", "smf_url", "ue_cpu", "dn_cpu", "session_count"):
+            for name in ("namespace", "pod", "smf_url", "ue_cpu", "dn_cpu",
+                         "session_count", "expected_workers", "endpoint_count",
+                         "endpoint_cpu_count", "ran_main_cpu", "ran_worker_cpus",
+                         "test_core_zero_copy", "test_link_queues", "vpp_image", "iperf_binary"):
                 if name in self.state.get("args", {}):
                     setattr(args, name, self.state["args"][name])
         if not args.pod:
@@ -106,6 +109,9 @@ class Bench:
                       for s in sessions}
         if identities != {(r["supi"], int(r["seid"]), r["ue_ip"]) for r in rates["rows"]}:
             raise RuntimeError("SMF and UPF sessions do not match")
+        expected = getattr(self.args, "expected_workers", None)
+        if expected is not None and {r["worker"] for r in rates["rows"]} != set(range(expected)):
+            raise RuntimeError(f"Sessions must occupy exactly Workers 0..{expected - 1}")
         if len({s["pdu"]["ipv4"] for s in sessions}) != count:
             raise RuntimeError("UE addresses must be unique")
         for side in ("gnb", "upf"):
@@ -243,26 +249,27 @@ plugins {{ plugin dpdk_plugin.so {{ disable }} }}
         # production N3/N6 memifs retain their original settings.
         core_role = "slave" if self.args.test_core_zero_copy else "master"
         ran_role = "master" if self.args.test_core_zero_copy else "slave"
+        queues = self.args.test_link_queues
         self.cli([
             "create memif socket id 88 filename /run/vpp/perf-n3.sock",
-            f"create interface memif id 0 socket-id 88 {core_role} mode ip ring-size 8192 buffer-size 2048 rx-queues 1 tx-queues 1",
+            f"create interface memif id 0 socket-id 88 {core_role} mode ip ring-size 8192 buffer-size 2048 rx-queues {queues} tx-queues {queues}",
             "set interface ip table memif88/0 10", "set interface state memif88/0 up",
             "set interface unnumbered memif88/0 use dpdk-n3",
             f"ip route add table 10 {gnb}/32 via memif88/0",
             "create memif socket id 89 filename /run/vpp/perf-n6.sock",
-            f"create interface memif id 0 socket-id 89 {core_role} mode ip ring-size 8192 buffer-size 2048 rx-queues 1 tx-queues 1",
+            f"create interface memif id 0 socket-id 89 {core_role} mode ip ring-size 8192 buffer-size 2048 rx-queues {queues} tx-queues {queues}",
             "set interface state memif89/0 up", "set interface unnumbered memif89/0 use memif1/0",
             "ip route add 198.19.0.0/24 via memif89/0",
         ])
         self.cli([
             "ip table add 10",
             "create memif socket id 88 filename /core-vpp/perf-n3.sock",
-            f"create interface memif id 0 socket-id 88 {ran_role} mode ip ring-size 8192 buffer-size 2048 rx-queues 1 tx-queues 1",
+            f"create interface memif id 0 socket-id 88 {ran_role} mode ip ring-size 8192 buffer-size 2048 rx-queues {queues} tx-queues {queues}",
             "set interface ip table memif88/0 10", "set interface state memif88/0 up",
             f"set interface ip address memif88/0 {gnb}/32",
             f"ip route add table 10 {upf}/32 via memif88/0",
             "create memif socket id 89 filename /core-vpp/perf-n6.sock",
-            f"create interface memif id 0 socket-id 89 {ran_role} mode ip ring-size 8192 buffer-size 2048 rx-queues 1 tx-queues 1",
+            f"create interface memif id 0 socket-id 89 {ran_role} mode ip ring-size 8192 buffer-size 2048 rx-queues {queues} tx-queues {queues}",
             "set interface state memif89/0 up", "set interface ip address memif89/0 198.18.0.2/32",
             *[f"ip route add {s['pdu']['ipv4']}/32 via memif89/0" for s in self.sessions],
             "create loopback interface instance 89", f"set interface ip address loop89 {DN_IP}/32",
@@ -312,17 +319,17 @@ plugins {{ plugin dpdk_plugin.so {{ disable }} }}
                 section = re.split(r"(?m)^interface ", status.split(marker, 1)[1])[0]
                 if "zero-copy" not in section:
                     raise RuntimeError(f"Test memif{ident}/0 did not enter zero-copy mode")
-        self.cli(["set interface rx-placement memif88/0 queue 0 worker 0",
-                  "set interface rx-placement memif89/0 queue 0 worker 1"], fake=True)
+        self.cli([f"set interface rx-placement memif{ident}/0 queue {qid} worker {(qid + offset) % len(workers)}"
+                  for ident, offset in ((88, 0), (89, 1)) for qid in range(queues)], fake=True)
         self.snapshot("setup")
 
     def snapshot(self, label):
         data = {"utc": datetime.datetime.now(datetime.timezone.utc).isoformat(),
                 "pdu": http_json(self.args.smf_url),
                 "rates": json.loads(self.core("upf", "xcnctl", "show", "rate", "--level", "session", "--json"))}
-        for cmd in ("show interface", "show errors", "show runtime", "show threads", "show memif"):
+        for cmd in ("show interface", "show errors", "show runtime", "show threads", "show memif", "show interface rx-placement"):
             data["core_" + cmd.replace(" ", "_")] = self.core("vpp", "vppctl", *cmd.split())
-        for cmd in ("show interface", "show errors", "show runtime", "show threads"):
+        for cmd in ("show interface", "show errors", "show runtime", "show threads", "show interface rx-placement"):
             data["ran_" + cmd.replace(" ", "_")] = self.docker(RAN, "vppctl", *cmd.split())
         task_script = '''
 for p in /proc/[0-9]*; do
@@ -473,9 +480,13 @@ def main():
     parser.add_argument("--endpoint-count", type=int, choices=range(1, 17), default=4)
     parser.add_argument("--session-count", type=int, choices=range(1, 17), default=1,
                         help="Required distinct users, each with exactly one PDU/PFCP session")
+    parser.add_argument("--expected-workers", type=int, choices=range(1, 17),
+                        help="Require active sessions to occupy exactly Workers 0..N-1")
     parser.add_argument("--endpoint-cpu-count", type=int, choices=range(1, 9), default=1)
     parser.add_argument("--test-core-zero-copy", action="store_true",
                         help="Use slave/zero-copy only on the two added core-side test memifs")
+    parser.add_argument("--test-link-queues", type=int, choices=range(1, 17), default=1,
+                        help="RX/TX queues on the two added test links; production memifs retain their settings")
     parser.add_argument("--label", default="measurement")
     parser.add_argument("--direction", choices=("ul", "dl"), default="ul")
     parser.add_argument("--seconds", type=int, default=30)

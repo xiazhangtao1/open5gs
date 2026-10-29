@@ -1,0 +1,20 @@
+# Four independent Session Workers; the three remaining CPUs are reserved
+# for the N3 dispatcher, N6 dispatcher, and shared control threads.
+resources:
+  fivegc:
+    upf:
+      requests:
+        cpu: 7
+      limits:
+        cpu: 7
+networking:
+  upf:
+    dataplane:
+      sessionWorkers:
+        count: 4
+    n3:
+      memif:
+        queues: 4
+    n6:
+      memif:
+        queues: 4
