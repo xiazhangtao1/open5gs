@@ -1,0 +1,631 @@
+{
+  "utc": "2026-10-29T00:30:45.571872+00:00",
+  "git_commit": "6c221375e1cee052a15395e620c7ed3607705ae4",
+  "helm_revision": "213",
+  "pod": "xcn-5gc-56b56d44b5-xrw4v",
+  "uid": "df54c1ae-2dbe-4751-9dd5-18d514c22934",
+  "cpu_allocation": {
+    "smf": {
+      "cpu": "44"
+    },
+    "upf": {
+      "cpu": "45-46,117-118"
+    },
+    "vpp": {
+      "cpu": "47,119"
+    }
+  },
+  "images": [
+    {
+      "name": "amf",
+      "image": "192.168.10.35/xcn/xcn-runtime:latest",
+      "imageID": "localhost:5000/xcn-runtime@sha256:516977838188751f61023af4a4a7e3c4f02aeab32705cb87716fb568b727b71d"
+    },
+    {
+      "name": "ausf",
+      "image": "192.168.10.35/xcn/xcn-runtime:latest",
+      "imageID": "localhost:5000/xcn-runtime@sha256:516977838188751f61023af4a4a7e3c4f02aeab32705cb87716fb568b727b71d"
+    },
+    {
+      "name": "nssf",
+      "image": "192.168.10.35/xcn/xcn-runtime:latest",
+      "imageID": "localhost:5000/xcn-runtime@sha256:516977838188751f61023af4a4a7e3c4f02aeab32705cb87716fb568b727b71d"
+    },
+    {
+      "name": "pcf",
+      "image": "192.168.10.35/xcn/xcn-runtime:latest",
+      "imageID": "localhost:5000/xcn-runtime@sha256:516977838188751f61023af4a4a7e3c4f02aeab32705cb87716fb568b727b71d"
+    },
+    {
+      "name": "signal-trace-agent",
+      "image": "192.168.10.35/xcn/xcn-monitor:latest",
+      "imageID": "sha256:c05afa10ed482efa90041d92063df3e67dc58bcb7c9c75850a7f9a761ef0bc4e"
+    },
+    {
+      "name": "smf",
+      "image": "192.168.10.35/xcn/xcn-runtime:latest",
+      "imageID": "localhost:5000/xcn-runtime@sha256:516977838188751f61023af4a4a7e3c4f02aeab32705cb87716fb568b727b71d"
+    },
+    {
+      "name": "udm",
+      "image": "192.168.10.35/xcn/xcn-runtime:latest",
+      "imageID": "localhost:5000/xcn-runtime@sha256:516977838188751f61023af4a4a7e3c4f02aeab32705cb87716fb568b727b71d"
+    },
+    {
+      "name": "udr",
+      "image": "192.168.10.35/xcn/xcn-runtime:latest",
+      "imageID": "localhost:5000/xcn-runtime@sha256:516977838188751f61023af4a4a7e3c4f02aeab32705cb87716fb568b727b71d"
+    },
+    {
+      "name": "upf",
+      "image": "192.168.10.35/xcn/xcn-runtime:latest",
+      "imageID": "localhost:5000/xcn-runtime@sha256:516977838188751f61023af4a4a7e3c4f02aeab32705cb87716fb568b727b71d"
+    },
+    {
+      "name": "upf-monitor-agent",
+      "image": "192.168.10.35/xcn/xcn-monitor:latest",
+      "imageID": "sha256:c05afa10ed482efa90041d92063df3e67dc58bcb7c9c75850a7f9a761ef0bc4e"
+    },
+    {
+      "name": "vpp",
+      "image": "192.168.10.35/xcn/vpp:26.06",
+      "imageID": "sha256:c6905634e001db54e9920644265f7d3ebb29b9dd6a7c171ebb0ae2c7e4e4541c"
+    }
+  ],
+  "values": {
+    "resources": {
+      "core": {
+        "nrf": {
+          "limits": {
+            "cpu": "500m",
+            "memory": "256Mi"
+          },
+          "requests": {
+            "cpu": "200m",
+            "memory": "128Mi"
+          }
+        },
+        "scp": {
+          "limits": {
+            "cpu": "500m",
+            "memory": "256Mi"
+          },
+          "requests": {
+            "cpu": "200m",
+            "memory": "128Mi"
+          }
+        }
+      },
+      "fivegc": {
+        "amf": {
+          "limits": {
+            "cpu": "1500m",
+            "memory": "4Gi"
+          },
+          "requests": {
+            "cpu": "500m",
+            "memory": "1Gi"
+          }
+        },
+        "ausf": {
+          "limits": {
+            "cpu": "500m",
+            "memory": "256Mi"
+          },
+          "requests": {
+            "cpu": "200m",
+            "memory": "128Mi"
+          }
+        },
+        "nssf": {
+          "limits": {
+            "cpu": "500m",
+            "memory": "512Mi"
+          },
+          "requests": {
+            "cpu": "200m",
+            "memory": "256Mi"
+          }
+        },
+        "pcf": {
+          "limits": {
+            "cpu": "500m",
+            "memory": "512Mi"
+          },
+          "requests": {
+            "cpu": "300m",
+            "memory": "256Mi"
+          }
+        },
+        "smf": {
+          "limits": {
+            "cpu": 1,
+            "memory": "4Gi"
+          },
+          "requests": {
+            "cpu": 1,
+            "memory": "1Gi"
+          }
+        },
+        "udm": {
+          "limits": {
+            "cpu": "500m",
+            "memory": "512Mi"
+          },
+          "requests": {
+            "cpu": "200m",
+            "memory": "256Mi"
+          }
+        },
+        "udr": {
+          "limits": {
+            "cpu": "750m",
+            "memory": "512Mi"
+          },
+          "requests": {
+            "cpu": "200m",
+            "memory": "256Mi"
+          }
+        },
+        "upf": {
+          "limits": {
+            "cpu": 4,
+            "memory": "4Gi"
+          },
+          "requests": {
+            "cpu": 4,
+            "memory": "4Gi"
+          }
+        }
+      },
+      "mongodb": {
+        "mongodb": {
+          "limits": {
+            "cpu": "2500m",
+            "memory": "2Gi"
+          },
+          "requests": {
+            "cpu": "1500m",
+            "memory": "1Gi"
+          }
+        }
+      },
+      "webui": {
+        "mongoAdmin": {
+          "limits": {
+            "cpu": "200m",
+            "memory": "256Mi"
+          },
+          "requests": {
+            "cpu": "100m",
+            "memory": "128Mi"
+          }
+        },
+        "waitForMongodb": {
+          "limits": {
+            "cpu": "200m",
+            "memory": "256Mi"
+          },
+          "requests": {
+            "cpu": "100m",
+            "memory": "128Mi"
+          }
+        },
+        "webui": {
+          "limits": {
+            "cpu": "500m",
+            "memory": "256Mi"
+          },
+          "requests": {
+            "cpu": "200m",
+            "memory": "128Mi"
+          }
+        }
+      }
+    },
+    "fivegc": {
+      "cpusetGuard": {
+        "apiTimeoutSeconds": 10,
+        "deleteDelaySeconds": 30,
+        "enabled": true,
+        "tokenExpirationSeconds": 600
+      },
+      "healthProbe": {
+        "livenessPeriodSeconds": 10,
+        "readinessPeriodSeconds": 5,
+        "timeoutSeconds": 3
+      },
+      "hostNetwork": {
+        "dnsPolicy": "ClusterFirstWithHostNet",
+        "enabled": true
+      },
+      "startupProbe": {
+        "failureThreshold": 120,
+        "periodSeconds": 5,
+        "timeoutSeconds": 3
+      },
+      "wait": {
+        "interval": 2,
+        "timeout": 600
+      }
+    },
+    "networking": {
+      "amf": {
+        "ngap": {
+          "serverAddress": "10.2.0.119"
+        }
+      },
+      "smf": {
+        "ipv4PoolRanges": [],
+        "userIntent": {
+          "enabled": false,
+          "faceRecognition": {
+            "fiveQi": 2,
+            "flowDescriptions": [
+              "permit out ip from 0.0.0.0/0 to assigned",
+              "permit in ip from assigned to 0.0.0.0/0"
+            ],
+            "gbrDl": "5 Mbps",
+            "gbrUl": "5 Mbps",
+            "maxbrDl": "500 Mbps",
+            "maxbrUl": "500 Mbps",
+            "priorityLevel": 40
+          },
+          "mcc": "",
+          "mnc": "",
+          "notifyUri": "http://10.2.0.102:8000/api/v1/intent/notify",
+          "objectRecognition": {
+            "fiveQi": 3,
+            "flowDescriptions": [
+              "permit out ip from 0.0.0.0/0 to assigned",
+              "permit in ip from assigned to 0.0.0.0/0"
+            ],
+            "gbrDl": "5 Mbps",
+            "gbrUl": "5 Mbps",
+            "maxbrDl": "500 Mbps",
+            "maxbrUl": "500 Mbps",
+            "priorityLevel": 30
+          }
+        }
+      },
+      "ue": {
+        "ipv4Gateway": "10.45.0.1",
+        "ipv4Subnet": "10.45.0.0/16"
+      },
+      "upf": {
+        "dataplane": {
+          "ioPacketBudget": 1024,
+          "ioTimeBudgetUs": 50,
+          "sessionWorkers": {
+            "busyPollUs": 20,
+            "count": "auto",
+            "enabled": false,
+            "queueSize": 8192,
+            "reservedCpus": 3
+          },
+          "statsInterval": 10
+        },
+        "gtpu": {
+          "advertiseAddress": "",
+          "serverAddress": ""
+        },
+        "mode": "memif",
+        "n3": {
+          "address": "10.2.0.230",
+          "backend": "udp",
+          "hostInterface": "",
+          "memif": {
+            "bufferSize": 2048,
+            "burstSize": 256,
+            "id": 0,
+            "localAddress": "",
+            "log2RingSize": 13,
+            "queues": "auto",
+            "ringSize": 8192,
+            "socket": "/run/vpp/memif-n3.sock",
+            "socketId": 2,
+            "udpChecksum": false
+          }
+        },
+        "n6": {
+          "backend": "tun",
+          "memif": {
+            "bufferSize": 2048,
+            "burstSize": 256,
+            "id": 0,
+            "log2RingSize": 13,
+            "queues": "auto",
+            "ringSize": 8192,
+            "socket": "/run/vpp/memif.sock",
+            "socketId": 1
+          }
+        },
+        "rateStats": {
+          "enabled": true,
+          "intervalMs": 1000,
+          "socket": "/run/xcn/upf-stats.sock"
+        }
+      },
+      "webui": {
+        "hostname": "0.0.0.0",
+        "port": 9999
+      }
+    },
+    "vpp": {
+      "cpu": {
+        "affinityPollMs": 250,
+        "cpusetWaitSeconds": 120,
+        "disableCfsQuota": false,
+        "initialMode": "dense",
+        "workers": "auto"
+      },
+      "dpdk": {
+        "numRxDesc": 4096,
+        "numRxQueues": 4,
+        "numTxDesc": 4096,
+        "numTxQueues": 4
+      },
+      "enabled": false,
+      "image": {
+        "pullPolicy": "IfNotPresent",
+        "repository": "192.168.10.35/xcn/vpp",
+        "tag": "26.06"
+      },
+      "memory": {
+        "mainHeapSize": "8G"
+      },
+      "n3": {
+        "defaultGateway": "10.2.7.254",
+        "fibTable": 10,
+        "interfaceAddress": "10.2.0.231/20"
+      },
+      "n6": {
+        "defaultGateway": "10.2.7.254",
+        "externalAddress": "10.2.0.232/20",
+        "interfaceAddress": "",
+        "nat44": {
+          "enabled": false,
+          "frameQueueNelts": 8192,
+          "maxSessions": "1048576",
+          "workers": ""
+        }
+      },
+      "neighbor": {
+        "ip4AgeSeconds": 30
+      },
+      "resources": {
+        "limits": {
+          "cpu": "2",
+          "hugepages-1Gi": "8Gi",
+          "memory": "16Gi"
+        },
+        "requests": {
+          "cpu": "2",
+          "hugepages-1Gi": "8Gi",
+          "memory": "16Gi"
+        }
+      },
+      "sriov": {
+        "deviceEnv": "PCIDEVICE_INTEL_COM_EXTERNAL_NETWORK",
+        "resourceName": "intel.com/external_network"
+      }
+    },
+    "images": {
+      "mongodb": {
+        "pullPolicy": "IfNotPresent",
+        "repository": "192.168.10.35/xcn/xcn-mongo",
+        "tag": "8.2.11"
+      },
+      "runtime": {
+        "pullPolicy": "IfNotPresent",
+        "repository": "192.168.10.35/xcn/xcn-runtime",
+        "tag": "latest"
+      },
+      "webui": {
+        "pullPolicy": "IfNotPresent",
+        "repository": "192.168.10.35/xcn/xcn-webui",
+        "tag": "latest"
+      }
+    },
+    "monitor": {
+      "agentResources": {
+        "limits": {
+          "cpu": "250m",
+          "memory": "128Mi"
+        },
+        "requests": {
+          "cpu": "50m",
+          "memory": "32Mi"
+        }
+      },
+      "collectorImage": {
+        "pullPolicy": "",
+        "repository": "",
+        "tag": ""
+      },
+      "config": {
+        "enabled": true,
+        "events_interval": 2,
+        "gnbs_interval": 15,
+        "info_interval": 10,
+        "metrics_interval": 15,
+        "pods_interval": 30,
+        "rates_interval": 2,
+        "trace_enabled": true
+      },
+      "cpuSet": "",
+      "cpuSetWaitSeconds": 120,
+      "enabled": true,
+      "existingSecret": "",
+      "image": {
+        "pullPolicy": "IfNotPresent",
+        "repository": "192.168.10.35/xcn/xcn-monitor",
+        "tag": "latest"
+      },
+      "resources": {
+        "limits": {
+          "cpu": "900m",
+          "memory": "512Mi"
+        },
+        "requests": {
+          "cpu": "200m",
+          "memory": "256Mi"
+        }
+      },
+      "trace": {
+        "agentImage": {
+          "pullPolicy": "",
+          "repository": "",
+          "tag": ""
+        },
+        "agentResources": {
+          "limits": {
+            "cpu": "250m",
+            "memory": "128Mi"
+          },
+          "requests": {
+            "cpu": "50m",
+            "memory": "32Mi"
+          }
+        },
+        "decoderImage": {
+          "pullPolicy": "",
+          "repository": "",
+          "tag": ""
+        },
+        "decoderPlacement": "colocated",
+        "decoderResources": {
+          "limits": {
+            "cpu": "500m",
+            "memory": "512Mi"
+          },
+          "requests": {
+            "cpu": "100m",
+            "memory": "128Mi"
+          }
+        },
+        "enabled": true,
+        "redactKeys": false
+      },
+      "webuiResources": {
+        "limits": {
+          "cpu": "900m",
+          "memory": "512Mi"
+        },
+        "requests": {
+          "cpu": "250m",
+          "memory": "256Mi"
+        }
+      }
+    },
+    "nodeSelector": {
+      "kubernetes.io/hostname": "xnet-server"
+    }
+  },
+  "kernel": "Linux xnet-server 5.15.148-rt74-rc202408 #0 SMP PREEMPT_RT Tue Aug 27 09:11:43 CST 2024 x86_64 x86_64 x86_64 GNU/Linux",
+  "host_cpu": "Architecture:                       x86_64\nCPU op-mode(s):                     32-bit, 64-bit\nAddress sizes:                      46 bits physical, 57 bits virtual\nByte Order:                         Little Endian\nCPU(s):                             144\nOn-line CPU(s) list:                0-143\nVendor ID:                          GenuineIntel\nModel name:                         INTEL(R) XEON(R) GOLD 6554S\nCPU family:                         6\nModel:                              207\nThread(s) per core:                 2\nCore(s) per socket:                 36\nSocket(s):                          2\nStepping:                           2\nCPU max MHz:                        4000.0000\nCPU min MHz:                        800.0000\nBogoMIPS:                           4400.00\nFlags:                              fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush dts acpi mmx fxsr sse sse2 ss ht tm pbe syscall nx pdpe1gb rdtscp lm constant_tsc art arch_perfmon pebs bts rep_good nopl xtopology nonstop_tsc cpuid aperfmperf tsc_known_freq pni pclmulqdq dtes64 monitor ds_cpl vmx smx est tm2 ssse3 sdbg fma cx16 xtpr pdcm pcid dca sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand lahf_lm abm 3dnowprefetch cpuid_fault epb cat_l3 cat_l2 cdp_l3 invpcid_single cdp_l2 ssbd mba ibrs ibpb stibp ibrs_enhanced tpr_shadow vnmi flexpriority ept vpid ept_ad fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid cqm rdt_a avx512f avx512dq rdseed adx smap avx512ifma clflushopt clwb intel_pt avx512cd sha_ni avx512bw avx512vl xsaveopt xsavec xgetbv1 xsaves cqm_llc cqm_occup_llc cqm_mbm_total cqm_mbm_local avx_vnni avx512_bf16 wbnoinvd dtherm ida arat pln pts hwp hwp_act_window hwp_epp hwp_pkg_req avx512vbmi umip pku ospke waitpkg avx512_vbmi2 gfni vaes vpclmulqdq avx512_vnni avx512_bitalg tme avx512_vpopcntdq la57 rdpid bus_lock_detect cldemote movdiri movdir64b enqcmd fsrm md_clear serialize tsxldtrk pconfig arch_lbr avx512_fp16 flush_l1d arch_capabilities\nVirtualization:                     VT-x\nL1d cache:                          3.4 MiB (72 instances)\nL1i cache:                          2.3 MiB (72 instances)\nL2 cache:                           144 MiB (72 instances)\nL3 cache:                           360 MiB (2 instances)\nNUMA node(s):                       2\nNUMA node0 CPU(s):                  0-35,72-107\nNUMA node1 CPU(s):                  36-71,108-143\nVulnerability Gather data sampling: Not affected\nVulnerability Itlb multihit:        Not affected\nVulnerability L1tf:                 Not affected\nVulnerability Mds:                  Not affected\nVulnerability Meltdown:             Not affected\nVulnerability Mmio stale data:      Not affected\nVulnerability Retbleed:             Not affected\nVulnerability Spec rstack overflow: Not affected\nVulnerability Spec store bypass:    Mitigation; Speculative Store Bypass disabled via prctl and seccomp\nVulnerability Spectre v1:           Mitigation; usercopy/swapgs barriers and __user pointer sanitization\nVulnerability Spectre v2:           Mitigation; Enhanced IBRS, IBPB conditional, RSB filling, PBRSB-eIBRS SW sequence\nVulnerability Srbds:                Not affected\nVulnerability Tsx async abort:      Not affected\n",
+  "resources": {
+    "upf": {
+      "limits": {
+        "cpu": "4",
+        "memory": "4Gi"
+      },
+      "requests": {
+        "cpu": "4",
+        "memory": "4Gi"
+      }
+    },
+    "vpp": {
+      "limits": {
+        "cpu": "2",
+        "hugepages-1Gi": "8Gi",
+        "intel.com/external_network": "2",
+        "memory": "16Gi"
+      },
+      "requests": {
+        "cpu": "2",
+        "hugepages-1Gi": "8Gi",
+        "intel.com/external_network": "2",
+        "memory": "16Gi"
+      }
+    }
+  },
+  "physical_links": {
+    "ens5f0": "Settings for ens5f0:\n\tSupported ports: [  ]\n\tSupported link modes:   Not reported\n\tSupported pause frame use: Symmetric Receive-only\n\tSupports auto-negotiation: Yes\n\tSupported FEC modes: Not reported\n\tAdvertised link modes:  Not reported\n\tAdvertised pause frame use: No\n\tAdvertised auto-negotiation: Yes\n\tAdvertised FEC modes: Not reported\n\tSpeed: 1000Mb/s\n\tDuplex: Full\n\tAuto-negotiation: on\n\tPort: Other\n\tPHYAD: 0\n\tTransceiver: internal\n        Current message level: 0x00000007 (7)\n                               drv probe link\n\tLink detected: yes\n",
+    "ens5f1": "Settings for ens5f1:\n\tSupported ports: [  ]\n\tSupported link modes:   10000baseT/Full\n\t                        1000baseX/Full\n\t                        10000baseSR/Full\n\t                        10000baseLR/Full\n\tSupported pause frame use: Symmetric Receive-only\n\tSupports auto-negotiation: Yes\n\tSupported FEC modes: Not reported\n\tAdvertised link modes:  10000baseT/Full\n\t                        1000baseX/Full\n\t                        10000baseSR/Full\n\t                        10000baseLR/Full\n\tAdvertised pause frame use: No\n\tAdvertised auto-negotiation: Yes\n\tAdvertised FEC modes: Not reported\n\tSpeed: Unknown!\n\tDuplex: Unknown! (255)\n\tAuto-negotiation: off\n\tPort: Other\n\tPHYAD: 0\n\tTransceiver: internal\n        Current message level: 0x00000007 (7)\n                               drv probe link\n\tLink detected: no\n"
+  },
+  "iperf": [
+    {
+      "path": "/tmp/xcn-iperf-20261028/iperf-3.22/src/iperf3",
+      "sha256": "b6246b8a891d58e18a2313e2c6934cd8e02ae909ec3864ee448d352803a22b61",
+      "version": "iperf 3.22 (cJSON 1.7.15)\nLinux xnet-server 5.15.148-rt74-rc202408 #0 SMP PREEMPT_RT Tue Aug 27 09:11:43 CST 2024 x86_64\nOptional features available: CPU affinity setting, IPv6 flow label, TCP congestion algorithm setting, sendfile / zerocopy, socket pacing, bind to device, support IPv4 don't fragment, POSIX threads, GSO/GRO support\n"
+    },
+    {
+      "path": "/tmp/xcn-iperf-20261028/iperf-3.15/src/iperf3",
+      "sha256": "8319b4b5c99585edd0139adf570bc53071b909c4ba489db2badd6d404a060a3f",
+      "version": "iperf 3.15 (cJSON 1.7.15)\nLinux xnet-server 5.15.148-rt74-rc202408 #0 SMP PREEMPT_RT Tue Aug 27 09:11:43 CST 2024 x86_64\nOptional features available: CPU affinity setting, IPv6 flow label, TCP congestion algorithm setting, sendfile / zerocopy, socket pacing, bind to device, support IPv4 don't fragment\n"
+    }
+  ],
+  "pods_cpu": {
+    "gnb-oai-gnb-57bd468c5c-g7t84": {
+      "gnb": {
+        "cpu": "48-51,120-123"
+      }
+    },
+    "nrue-101-oai-nr-ue-6c7b9867c6-v64d5": {
+      "nr-ue": {
+        "cpu": "54-55,126-127"
+      }
+    },
+    "nrue-102-oai-nr-ue-86795bbd76-b42nf": {
+      "nr-ue": {
+        "cpu": "58-59,130-131"
+      }
+    },
+    "nrue-103-oai-nr-ue-794488c444-qzjt9": {
+      "nr-ue": {
+        "cpu": "56-57,128-129"
+      }
+    },
+    "nrue-oai-nr-ue-79c98c9db7-dxh5g": {
+      "nr-ue": {
+        "cpu": "52-53,124-125"
+      }
+    },
+    "xcn-5gc-56b56d44b5-xrw4v": {
+      "smf": {
+        "cpu": "44"
+      },
+      "upf": {
+        "cpu": "45-46,117-118"
+      },
+      "vpp": {
+        "cpu": "47,119"
+      }
+    }
+  },
+  "initial_deployment_replicas": {
+    "nrue-oai-nr-ue": 1,
+    "nrue-101-oai-nr-ue": 0,
+    "nrue-102-oai-nr-ue": 0,
+    "nrue-103-oai-nr-ue": 0,
+    "nrue-104-oai-nr-ue": 0,
+    "nrue-105-oai-nr-ue": 0
+  },
+  "script_sha256": {
+    "iperf_core.py": "5be537b140df16f5bab32d95f50cdc69dbbdd12ba3046e7de249f5d11e05fbdc",
+    "iperf_core_udp.py": "3092d447082b5eecc553bbaca21da51e47476cc728e086c0ca3fce0922177fb2",
+    "iperf_core_diag.py": "97915ee0b1a64cba7359ae8c3abb9dc864aa4a290c1d8a1b27de5fdd6db4c22b"
+  },
+  "session_count": 4,
+  "session_workers_actual": 1,
+  "runtime_upf_config_sha256": "35a5bc7176641751bcf214758bfc5ef32373f001d56639b31efdeba9212cf8cd",
+  "final_deployment_replicas": {
+    "nrue-101-oai-nr-ue": 1,
+    "nrue-102-oai-nr-ue": 1,
+    "nrue-103-oai-nr-ue": 1,
+    "nrue-104-oai-nr-ue": 0,
+    "nrue-105-oai-nr-ue": 0,
+    "nrue-oai-nr-ue": 1
+  }
+}

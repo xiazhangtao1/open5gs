@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Measure TCP on one real PFCP session with iperf3 and VCL, without the OAI radio data path.
+"""Measure real PFCP sessions with iperf3 and VCL, without the OAI radio data path.
 
 Requires local Docker, Kubernetes access, hostNetwork VPP/memif UPF, and exactly
-one established PDU session. See perf-tools/results for a worked measurement.
+one PDU session per user. See perf-tools/results for worked measurements.
 The script does not redeploy the core or change its CPU/queue/QoS settings.
 """
 
@@ -58,7 +58,7 @@ class Bench:
         self.state = json.loads(self.state_file.read_text()) if self.state_file.exists() else {}
         if self.state:
             # Setup addresses/CPU placement are part of the test fixture.
-            for name in ("namespace", "pod", "smf_url", "ue_cpu", "dn_cpu"):
+            for name in ("namespace", "pod", "smf_url", "ue_cpu", "dn_cpu", "session_count"):
                 if name in self.state.get("args", {}):
                     setattr(args, name, self.state["args"][name])
         if not args.pod:
@@ -94,22 +94,80 @@ class Bench:
 
     def session(self):
         data = http_json(self.args.smf_url)
-        sessions = [(ue["supi"], pdu) for ue in data["items"] for pdu in ue.get("pdu", [])]
+        sessions = sorted(({"supi": ue["supi"], "pdu": pdu}
+                           for ue in data["items"] for pdu in ue.get("pdu", [])),
+                          key=lambda s: s["supi"])
         rates = json.loads(self.core("upf", "xcnctl", "show", "rate", "--level", "session", "--json"))
-        if len(sessions) != 1 or len(rates["rows"]) != 1:
-            raise RuntimeError("Exactly one SMF PDU and one UPF PFCP session are required")
-        supi, pdu = sessions[0]
-        if pdu.get("qos_flows") != [{"qfi": 1, "is_default": True, "5qi": 9}]:
-            raise RuntimeError("This default-session harness requires only the default QFI 1 / 5QI 9")
-        for endpoint in pdu["n3"].values():
-            if not 0 < endpoint["teid"] <= 0xffffffff:
-                raise RuntimeError("Invalid TEID")
-        ipaddress.IPv4Address(pdu["ipv4"])
-        if self.state and (supi != self.state["supi"] or pdu["ipv4"] != self.state["pdu"]["ipv4"] or
-                           pdu["upf_seid"] != self.state["pdu"]["upf_seid"] or
-                           pdu["n3"] != self.state["pdu"]["n3"]):
+        count = getattr(self.args, "session_count", 1)
+        if (len(sessions) != count or len(rates["rows"]) != count or
+                len({s["supi"] for s in sessions}) != count):
+            raise RuntimeError(f"Exactly {count} users, each with one SMF PDU / UPF PFCP session, are required")
+        identities = {(s["supi"], int(s["pdu"]["upf_seid"]), s["pdu"]["ipv4"])
+                      for s in sessions}
+        if identities != {(r["supi"], int(r["seid"]), r["ue_ip"]) for r in rates["rows"]}:
+            raise RuntimeError("SMF and UPF sessions do not match")
+        if len({s["pdu"]["ipv4"] for s in sessions}) != count:
+            raise RuntimeError("UE addresses must be unique")
+        for side in ("gnb", "upf"):
+            if len({(s["pdu"]["n3"][side]["addr"], s["pdu"]["n3"][side]["teid"])
+                    for s in sessions}) != count:
+                raise RuntimeError("Each user must have an independent GTP-U tunnel")
+        for item in sessions:
+            pdu = item["pdu"]
+            if pdu.get("qos_flows") != [{"qfi": 1, "is_default": True, "5qi": 9}]:
+                raise RuntimeError("This default-session harness requires only the default QFI 1 / 5QI 9")
+            for endpoint in pdu["n3"].values():
+                if not 0 < endpoint["teid"] <= 0xffffffff:
+                    raise RuntimeError("Invalid TEID")
+            ipaddress.IPv4Address(pdu["ipv4"])
+        def stable(items):
+            return [(s["supi"], s["pdu"]["ipv4"], s["pdu"]["upf_seid"],
+                     s["pdu"]["psi"], s["pdu"]["n3"]) for s in items]
+        if self.state and stable(sessions) != stable(self.test_sessions()):
             raise RuntimeError("Session/TEIDs changed; cleanup and setup again")
-        return supi, pdu, rates
+        self.sessions = sessions
+        return sessions[0]["supi"], sessions[0]["pdu"], rates
+
+    def test_sessions(self):
+        return self.state.get("sessions", [{"supi": self.state["supi"], "pdu": self.state["pdu"]}])
+
+    def process_session(self, index):
+        sessions = self.test_sessions()
+        return sessions[index % len(sessions)]
+
+    def ue_role(self, index):
+        count = len(self.test_sessions())
+        return "ue" if count == 1 else f"ue{index % count}"
+
+    def per_user(self, receiver_sums, sender_sums):
+        result = []
+        sessions = self.test_sessions()
+        for i, item in enumerate(sessions):
+            rx, tx = receiver_sums[i::len(sessions)], sender_sums[i::len(sessions)]
+            packets = sum(v.get("packets", 0) for v in rx)
+            lost = sum(v.get("lost_packets", 0) for v in rx)
+            result.append({"supi": item["supi"], "ue_ip": item["pdu"]["ipv4"],
+                           "seid": item["pdu"]["upf_seid"], "processes": len(rx),
+                           "receiver_mbps": sum(v["bits_per_second"] for v in rx) / 1000000,
+                           "sender_mbps": sum(v["bits_per_second"] for v in tx) / 1000000,
+                           "packets": packets, "lost_packets": lost,
+                           "lost_percent": 100 * lost / packets if packets else None})
+        return result
+
+    def stop_endpoints(self, *names):
+        for name in {"iperf3", "iperf3-server", *names}:
+            self.docker(RAN, "pkill", "-x", pathlib.Path(name).name, check=False)
+
+    def tcp_servers(self):
+        self.stop_endpoints()
+        time.sleep(0.5)
+        for i in range(self.state["args"]["endpoint_count"]):
+            width = self.state["args"].get("endpoint_cpu_count", 1)
+            cmd = self.endpoint("dn", self.args.dn_cpu + i * width, "iperf3", "-s", "-B", DN_IP,
+                                "-p", str(5201 + i), "-J", "--logfile",
+                                f"/config/{self.args.label}-server-{i}.json")
+            cmd.insert(2, "-d")
+            run(cmd)
 
     def setup(self):
         if self.state:
@@ -147,8 +205,11 @@ class Bench:
         self.path.mkdir(parents=True, exist_ok=True)
         gnb = pdu["n3"]["gnb"]["addr"].split("]")[0].lstrip("[")
         upf = pdu["n3"]["upf"]["addr"].split("]")[0].lstrip("[")
+        if any(s["pdu"]["n3"][side]["addr"] != pdu["n3"][side]["addr"]
+               for s in self.sessions for side in ("gnb", "upf")):
+            raise RuntimeError("This fixture requires all users on the same gNB and UPF addresses")
         self.state = {"supi": supi, "pdu": pdu, "pod_uid": pod["metadata"]["uid"],
-                      "args": vars(self.args), "mode": "core", "gnb": gnb, "upf": upf}
+                      "sessions": self.sessions, "args": vars(self.args), "mode": "core", "gnb": gnb, "upf": upf}
         write_json(self.state_file, self.state)
         startup = f"""unix {{ nodaemon cli-listen /run/vpp/cli.sock log /dev/stderr }}
 cpu {{ main-core {self.args.ran_main_cpu} corelist-workers {self.args.ran_worker_cpus} }}
@@ -194,7 +255,7 @@ plugins {{ plugin dpdk_plugin.so {{ disable }} }}
             "ip route add 198.19.0.0/24 via memif89/0",
         ])
         self.cli([
-            "ip table add 10", "ip table add 20",
+            "ip table add 10",
             "create memif socket id 88 filename /core-vpp/perf-n3.sock",
             f"create interface memif id 0 socket-id 88 {ran_role} mode ip ring-size 8192 buffer-size 2048 rx-queues 1 tx-queues 1",
             "set interface ip table memif88/0 10", "set interface state memif88/0 up",
@@ -203,20 +264,28 @@ plugins {{ plugin dpdk_plugin.so {{ disable }} }}
             "create memif socket id 89 filename /core-vpp/perf-n6.sock",
             f"create interface memif id 0 socket-id 89 {ran_role} mode ip ring-size 8192 buffer-size 2048 rx-queues 1 tx-queues 1",
             "set interface state memif89/0 up", "set interface ip address memif89/0 198.18.0.2/32",
-            "ip route add 10.45.0.0/16 via memif89/0",
-            "create loopback interface instance 88", "set interface ip table loop88 20",
-            f"set interface ip address loop88 {pdu['ipv4']}/32", "set interface state loop88 up",
+            *[f"ip route add {s['pdu']['ipv4']}/32 via memif89/0" for s in self.sessions],
             "create loopback interface instance 89", f"set interface ip address loop89 {DN_IP}/32",
             "set interface state loop89 up",
-            f"create gtpu tunnel src {gnb} dst {upf} teid {pdu['n3']['gnb']['teid']} "
-            f"tteid {pdu['n3']['upf']['teid']} encap-vrf-id 10 decap-next ip4 qfi 1",
-            "set interface ip table gtpu_tunnel0 20", "set interface state gtpu_tunnel0 up",
-            "set interface unnumbered gtpu_tunnel0 use loop88",
-            "ip route add table 20 0.0.0.0/0 via gtpu_tunnel0",
-            "session enable",
-            "app ns add id ue secret 42 if loop88", "app ns add id dn secret 42 if loop89",
+            "session enable", "app ns add id dn secret 42 if loop89",
         ], fake=True)
-        for role in ("ue", "dn"):
+        for i, item in enumerate(self.sessions):
+            pdu = item["pdu"]
+            loop, table = (88 if i == 0 else 89 + i), 20 + i
+            self.cli([
+                f"ip table add {table}", f"create loopback interface instance {loop}",
+                f"set interface ip table loop{loop} {table}",
+                f"set interface ip address loop{loop} {pdu['ipv4']}/32",
+                f"set interface state loop{loop} up",
+                f"create gtpu tunnel src {gnb} dst {upf} teid {pdu['n3']['gnb']['teid']} "
+                f"tteid {pdu['n3']['upf']['teid']} encap-vrf-id 10 decap-next ip4 qfi 1",
+                f"set interface ip table gtpu_tunnel{i} {table}",
+                f"set interface state gtpu_tunnel{i} up",
+                f"set interface unnumbered gtpu_tunnel{i} use loop{loop}",
+                f"ip route add table {table} 0.0.0.0/0 via gtpu_tunnel{i}",
+                f"app ns add id {self.ue_role(i)} secret 42 if loop{loop}",
+            ], fake=True)
+        for role in ("dn", *(self.ue_role(i) for i in range(len(self.sessions)))):
             (self.path / f"{role}-vcl.conf").write_text(f"""vcl {{
  app-socket-api /run/vpp/app_ns_sockets/{role}
  namespace-id {role}
@@ -245,11 +314,6 @@ plugins {{ plugin dpdk_plugin.so {{ disable }} }}
                     raise RuntimeError(f"Test memif{ident}/0 did not enter zero-copy mode")
         self.cli(["set interface rx-placement memif88/0 queue 0 worker 0",
                   "set interface rx-placement memif89/0 queue 0 worker 1"], fake=True)
-        for i in range(self.args.endpoint_count):
-            cmd = self.endpoint("dn", self.args.dn_cpu + i * self.args.endpoint_cpu_count, "iperf3", "-s", "-B", DN_IP,
-                                "-p", str(5201 + i), "-J", "--logfile", f"/config/server-{5201 + i}.json")
-            cmd.insert(2, "-d")
-            run(cmd)
         self.snapshot("setup")
 
     def snapshot(self, label):
@@ -287,12 +351,15 @@ done
         if (self.path / f"{self.args.label}-summary.json").exists():
             raise RuntimeError("Choose a new --label to preserve existing results")
         self.session()
+        if self.args.processes < len(self.test_sessions()):
+            raise RuntimeError("At least one iperf process per user is required")
+        self.tcp_servers()
         before = self.snapshot(self.args.label + "-before")
         processes = []
         for i in range(self.args.processes):
             width = self.state.get("args", {}).get("endpoint_cpu_count", 1)
-            cmd = self.endpoint("ue", self.args.ue_cpu + i * width, "iperf3",
-                   "-c", DN_IP, "-B", self.state["pdu"]["ipv4"], "-p", str(5201 + i),
+            cmd = self.endpoint(self.ue_role(i), self.args.ue_cpu + i * width, "iperf3",
+                   "-c", DN_IP, "-B", self.process_session(i)["pdu"]["ipv4"], "-p", str(5201 + i),
                    "-t", str(self.args.seconds), "-O", str(self.args.omit), "-J", "--get-server-output",
                    "-P", str(self.args.streams))
             if self.args.direction == "dl":
@@ -309,6 +376,10 @@ done
             value = json.loads(stdout)
             if "error" in value:
                 raise RuntimeError(value["error"])
+            if (len(value["start"]["connected"]) != self.args.streams or
+                    any(c["local_host"] != self.process_session(i)["pdu"]["ipv4"] or
+                        c["remote_host"] != DN_IP for c in value["start"]["connected"])):
+                raise RuntimeError("TCP addresses/stream count do not match the user")
             outputs.append(value)
         after = self.snapshot(self.args.label + "-after")
         self.session()
@@ -320,10 +391,11 @@ done
         bps = sum(v["bits_per_second"] for v in receiver_sums)
         lost = sum(v.get("lost_packets", 0) for v in receiver_sums)
         packets = sum(v.get("packets", 0) for v in receiver_sums)
-        result = {"label": self.args.label, "mode": self.state["mode"], "args": vars(self.args),
+        result = {"label": self.args.label, "mode": self.state["mode"], "protocol": "TCP", "args": vars(self.args),
                   "receiver_mbps": bps / 1000000,
                   "lost_percent": 100 * lost / packets if packets else None,
                   "sender_mbps": sum(v["bits_per_second"] for v in sender_sums) / 1000000,
+                  "per_user": self.per_user(receiver_sums, sender_sums),
                   "iperf_cpu": [v["end"]["cpu_utilization_percent"] for v in outputs],
                   "session_before": before["rates"], "session_after": after["rates"]}
         write_json(self.path / f"{self.args.label}-summary.json", result)
@@ -333,24 +405,34 @@ done
         """Temporarily replace the UPF with VPP GTP-U, retaining both test links."""
         if (self.state["mode"] == "bypass") == enabled:
             return
-        pdu, upf, gnb = self.state["pdu"], self.state["upf"], self.state["gnb"]
+        upf, gnb = self.state["upf"], self.state["gnb"]
         if enabled:
-            self.cli([
+            commands = [
                 f"ip route del table 10 {upf}/32 via memif2/0",
                 f"ip route add table 10 {upf}/32 via local",
-                f"create gtpu tunnel src {upf} dst {gnb} teid {pdu['n3']['upf']['teid']} "
-                f"tteid {pdu['n3']['gnb']['teid']} encap-vrf-id 10 decap-next ip4 qfi 1",
-                "set interface state gtpu_tunnel0 up",
-                "set interface unnumbered gtpu_tunnel0 use memif1/0",
-                f"ip route add {pdu['ipv4']}/32 via gtpu_tunnel0",
-            ])
+            ]
+            for i, item in enumerate(self.test_sessions()):
+                pdu = item["pdu"]
+                commands += [
+                    f"create gtpu tunnel src {upf} dst {gnb} teid {pdu['n3']['upf']['teid']} "
+                    f"tteid {pdu['n3']['gnb']['teid']} encap-vrf-id 10 decap-next ip4 qfi 1",
+                    f"set interface state gtpu_tunnel{i} up",
+                    f"set interface unnumbered gtpu_tunnel{i} use memif1/0",
+                    f"ip route add {pdu['ipv4']}/32 via gtpu_tunnel{i}",
+                ]
         else:
-            self.cli([
-                f"ip route del {pdu['ipv4']}/32 via gtpu_tunnel0",
-                f"create gtpu tunnel src {upf} dst {gnb} teid {pdu['n3']['upf']['teid']} encap-vrf-id 10 del",
+            commands = []
+            for i, item in enumerate(self.test_sessions()):
+                pdu = item["pdu"]
+                commands += [
+                    f"ip route del {pdu['ipv4']}/32 via gtpu_tunnel{i}",
+                    f"create gtpu tunnel src {upf} dst {gnb} teid {pdu['n3']['upf']['teid']} encap-vrf-id 10 del",
+                ]
+            commands += [
                 f"ip route del table 10 {upf}/32 via local",
                 f"ip route add table 10 {upf}/32 via memif2/0",
-            ])
+            ]
+        self.cli(commands)
         self.state["mode"] = "bypass" if enabled else "core"
         write_json(self.state_file, self.state)
         print("mode:", self.state["mode"])
@@ -389,6 +471,8 @@ def main():
     parser.add_argument("--ue-cpu", type=int, default=64)
     parser.add_argument("--dn-cpu", type=int, default=68)
     parser.add_argument("--endpoint-count", type=int, choices=range(1, 17), default=4)
+    parser.add_argument("--session-count", type=int, choices=range(1, 17), default=1,
+                        help="Required distinct users, each with exactly one PDU/PFCP session")
     parser.add_argument("--endpoint-cpu-count", type=int, choices=range(1, 9), default=1)
     parser.add_argument("--test-core-zero-copy", action="store_true",
                         help="Use slave/zero-copy only on the two added core-side test memifs")
@@ -401,6 +485,8 @@ def main():
     args = parser.parse_args()
     if args.seconds < 1 or args.omit < 0 or args.streams < 1:
         parser.error("Invalid duration or stream count")
+    if args.action == "setup" and args.endpoint_count < args.session_count:
+        parser.error("At least one endpoint process per user is required")
     bench = Bench(args)
     if args.action == "run" and args.processes > bench.state.get("args", {}).get("endpoint_count", 4):
         parser.error("More processes requested than servers created at setup")

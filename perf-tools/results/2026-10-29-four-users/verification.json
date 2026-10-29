@@ -1,0 +1,157 @@
+{
+  "utc": "2026-10-29T00:47:09.460014+00:00",
+  "pod": "xcn-5gc-56b56d44b5-xrw4v",
+  "uid": "df54c1ae-2dbe-4751-9dd5-18d514c22934",
+  "containers": [
+    {
+      "name": "amf",
+      "ready": true,
+      "restartCount": 0,
+      "imageID": "localhost:5000/xcn-runtime@sha256:516977838188751f61023af4a4a7e3c4f02aeab32705cb87716fb568b727b71d"
+    },
+    {
+      "name": "ausf",
+      "ready": true,
+      "restartCount": 0,
+      "imageID": "localhost:5000/xcn-runtime@sha256:516977838188751f61023af4a4a7e3c4f02aeab32705cb87716fb568b727b71d"
+    },
+    {
+      "name": "nssf",
+      "ready": true,
+      "restartCount": 0,
+      "imageID": "localhost:5000/xcn-runtime@sha256:516977838188751f61023af4a4a7e3c4f02aeab32705cb87716fb568b727b71d"
+    },
+    {
+      "name": "pcf",
+      "ready": true,
+      "restartCount": 0,
+      "imageID": "localhost:5000/xcn-runtime@sha256:516977838188751f61023af4a4a7e3c4f02aeab32705cb87716fb568b727b71d"
+    },
+    {
+      "name": "signal-trace-agent",
+      "ready": true,
+      "restartCount": 0,
+      "imageID": "sha256:c05afa10ed482efa90041d92063df3e67dc58bcb7c9c75850a7f9a761ef0bc4e"
+    },
+    {
+      "name": "smf",
+      "ready": true,
+      "restartCount": 0,
+      "imageID": "localhost:5000/xcn-runtime@sha256:516977838188751f61023af4a4a7e3c4f02aeab32705cb87716fb568b727b71d"
+    },
+    {
+      "name": "udm",
+      "ready": true,
+      "restartCount": 0,
+      "imageID": "localhost:5000/xcn-runtime@sha256:516977838188751f61023af4a4a7e3c4f02aeab32705cb87716fb568b727b71d"
+    },
+    {
+      "name": "udr",
+      "ready": true,
+      "restartCount": 0,
+      "imageID": "localhost:5000/xcn-runtime@sha256:516977838188751f61023af4a4a7e3c4f02aeab32705cb87716fb568b727b71d"
+    },
+    {
+      "name": "upf",
+      "ready": true,
+      "restartCount": 0,
+      "imageID": "localhost:5000/xcn-runtime@sha256:516977838188751f61023af4a4a7e3c4f02aeab32705cb87716fb568b727b71d"
+    },
+    {
+      "name": "upf-monitor-agent",
+      "ready": true,
+      "restartCount": 0,
+      "imageID": "sha256:c05afa10ed482efa90041d92063df3e67dc58bcb7c9c75850a7f9a761ef0bc4e"
+    },
+    {
+      "name": "vpp",
+      "ready": true,
+      "restartCount": 0,
+      "imageID": "sha256:c6905634e001db54e9920644265f7d3ebb29b9dd6a7c171ebb0ae2c7e4e4541c"
+    }
+  ],
+  "core_memif": "sockets\n  id  listener    filename\n  2   yes (1)     /run/vpp/memif-n3.sock\n  0   no          /run/vpp/memif.sock\n  1   yes (1)     /run/vpp/memif.sock\n\ninterface memif2/0\n  remote-name \"xcn-upf-n3\"\n  remote-interface \"xcn-n3\"\n  socket-id 2 id 0 mode ip\n  flags admin-up connected\n  listener-fd 36 conn-fd 35\n  num-s2m-rings 1 num-m2s-rings 1 buffer-size 0 num-regions 2\n  region 0 size 262400 fd 39\n  region 1 size 33554432 fd 41\n    master-to-slave ring 0:\n      region 0 offset 131200 ring-size 8192 int-fd 45\n      head 65353 tail 57161 flags 0x0000 interrupts 25255052\n    slave-to-master ring 0:\n      region 0 offset 0 ring-size 8192 int-fd 43\n      head 9608 tail 9608 flags 0x0001 interrupts 0\ninterface memif1/0\n  remote-name \"xcn-upf\"\n  remote-interface \"xcn-n6\"\n  socket-id 1 id 0 mode ip\n  flags admin-up connected\n  listener-fd 37 conn-fd 38\n  num-s2m-rings 1 num-m2s-rings 1 buffer-size 0 num-regions 2\n  region 0 size 262400 fd 40\n  region 1 size 33554432 fd 42\n    master-to-slave ring 0:\n      region 0 offset 131200 ring-size 8192 int-fd 46\n      head 54359 tail 46167 flags 0x0000 interrupts 46268209\n    slave-to-master ring 0:\n      region 0 offset 0 ring-size 8192 int-fd 44\n      head 19417 tail 19417 flags 0x0001 interrupts 0\n",
+  "core_interfaces": "              Name               Idx    State  MTU (L3/IP4/IP6/MPLS)     Counter          Count     \ndpdk-n3                           1      up          9000/0/0/0     rx packets                948169\n                                                                    rx bytes               198714828\n                                                                    tx packets                  7335\n                                                                    tx bytes                 1696374\n                                                                    drops                     911454\n                                                                    punt                       30957\n                                                                    ip4                       248564\n                                                                    ip6                       155546\ndpdk-n6                           2      up          9000/0/0/0     rx packets                947982\n                                                                    rx bytes               198687912\n                                                                    tx packets                  6547\n                                                                    tx bytes                 1661673\n                                                                    drops                     911350\n                                                                    punt                       30954\n                                                                    ip4                       248471\n                                                                    ip6                       155536\nlocal0                            0     down          0/0/0/0       tx-error                      22\nmemif1/0                          4      up           0/0/0/0       rx packets            1161776089\n                                                                    rx bytes           1663569439335\n                                                                    tx packets            1195073402\n                                                                    tx bytes           1727318725721\n                                                                    ip4                   1161776089\nmemif2/0                          3      up           0/0/0/0       rx packets            1172055432\n                                                                    rx bytes           1746010664057\n                                                                    tx packets            1166730502\n                                                                    tx bytes           1721992273295\n                                                                    drops                          1\n                                                                    ip4                   1172055432\n",
+  "core_n3_fib": "ipv4-VRF:10, fib_index:1, flow hash:[src dst sport dport proto flowlabel ] epoch:0 flags:none locks:[interface:2, CLI:1, adjacency:1, ]\n0.0.0.0/0\n  unicast-ip4-chain\n  [@0]: dpo-load-balance: [proto:ip4 index:13 buckets:1 uRPF:33 to:[5668:1545648]]\n    [0] [@5]: ipv4 via 10.2.7.254 dpdk-n3: mtu:9000 next:5 flags:[] 6ce2d30a0841c2febf4f91a80800\n0.0.0.0/32\n  unicast-ip4-chain\n  [@0]: dpo-load-balance: [proto:ip4 index:14 buckets:1 uRPF:14 to:[0:0]]\n    [0] [@0]: dpo-drop ip4\n10.2.0.0/32\n  unicast-ip4-chain\n  [@0]: dpo-load-balance: [proto:ip4 index:25 buckets:1 uRPF:29 to:[0:0]]\n    [0] [@0]: dpo-drop ip4\n10.2.0.119/32\n  unicast-ip4-chain\n  [@0]: dpo-load-balance: [proto:ip4 index:33 buckets:1 uRPF:44 to:[355815790:527194427975] via:[76606744:114269329998]]\n    [0] [@5]: ipv4 via 10.2.0.119 dpdk-n3: mtu:9000 next:5 flags:[] 444988065660c2febf4f91a80800\n10.2.0.230/32\n  unicast-ip4-chain\n  [@0]: dpo-load-balance: [proto:ip4 index:22 buckets:1 uRPF:42 to:[66294769:97585706370]]\n    [0] [@5]: ipv4 via 0.0.0.0 memif2/0: mtu:9000 next:4 flags:[]\n10.2.0.0/20\n  unicast-ip4-chain\n  [@0]: dpo-load-balance: [proto:ip4 index:26 buckets:1 uRPF:30 to:[1:128]]\n    [0] [@4]: ipv4-glean: [src:10.2.0.0/20] dpdk-n3: mtu:9000 next:1 flags:[] ffffffffffffc2febf4f91a80806\n10.2.0.231/32\n  unicast-ip4-chain\n  [@0]: dpo-load-balance: [proto:ip4 index:24 buckets:1 uRPF:31 to:[0:0]]\n    [0] [@12]: dpo-receive: 10.2.0.231 on dpdk-n3\n10.2.7.254/32\n  unicast-ip4-chain\n  [@0]: dpo-load-balance: [proto:ip4 index:18 buckets:1 uRPF:19 to:[0:0]]\n    [0] [@5]: ipv4 via 10.2.7.254 dpdk-n3: mtu:9000 next:5 flags:[] 6ce2d30a0841c2febf4f91a80800\n10.2.15.255/32\n  unicast-ip4-chain\n  [@0]: dpo-load-balance: [proto:ip4 index:23 buckets:1 uRPF:27 to:[63959:12341039]]\n    [0] [@0]: dpo-drop ip4\n224.0.0.0/4\n  unicast-ip4-chain\n  [@0]: dpo-load-balance: [proto:ip4 index:16 buckets:1 uRPF:16 to:[0:0]]\n    [0] [@0]: dpo-drop ip4\n240.0.0.0/4\n  unicast-ip4-chain\n  [@0]: dpo-load-balance: [proto:ip4 index:15 buckets:1 uRPF:15 to:[0:0]]\n    [0] [@0]: dpo-drop ip4\n255.255.255.255/32\n  unicast-ip4-chain\n  [@0]: dpo-load-balance: [proto:ip4 index:17 buckets:1 uRPF:17 to:[11766:2980279]]\n    [0] [@0]: dpo-drop ip4\n",
+  "core_fib": "ipv4-VRF:0, fib_index:0, flow hash:[src dst sport dport proto flowlabel ] epoch:0 flags:none locks:[adjacency:1, default-route:1, ]\n0.0.0.0/0\n  unicast-ip4-chain\n  [@0]: dpo-load-balance: [proto:ip4 index:1 buckets:1 uRPF:35 to:[5668:1545648]]\n    [0] [@5]: ipv4 via 10.2.7.254 dpdk-n6: mtu:9000 next:6 flags:[] 6ce2d30a084166c3c673a6e20800\n0.0.0.0/32\n  unicast-ip4-chain\n  [@0]: dpo-load-balance: [proto:ip4 index:2 buckets:1 uRPF:1 to:[0:0]]\n    [0] [@0]: dpo-drop ip4\n10.2.0.0/32\n  unicast-ip4-chain\n  [@0]: dpo-load-balance: [proto:ip4 index:21 buckets:1 uRPF:22 to:[0:0]]\n    [0] [@0]: dpo-drop ip4\n10.2.0.0/20\n  unicast-ip4-chain\n  [@0]: dpo-load-balance: [proto:ip4 index:19 buckets:1 uRPF:23 to:[0:0]]\n    [0] [@4]: ipv4-glean: [src:10.2.0.0/20] dpdk-n6: mtu:9000 next:2 flags:[] ffffffffffff66c3c673a6e20806\n10.2.0.232/32\n  unicast-ip4-chain\n  [@0]: dpo-load-balance: [proto:ip4 index:28 buckets:1 uRPF:32 to:[0:0]]\n    [0] [@12]: dpo-receive: 10.2.0.232 on dpdk-n6\n10.2.7.254/32\n  unicast-ip4-chain\n  [@0]: dpo-load-balance: [proto:ip4 index:27 buckets:1 uRPF:41 to:[0:0]]\n    [0] [@5]: ipv4 via 10.2.7.254 dpdk-n6: mtu:9000 next:6 flags:[] 6ce2d30a084166c3c673a6e20800\n10.2.15.255/32\n  unicast-ip4-chain\n  [@0]: dpo-load-balance: [proto:ip4 index:20 buckets:1 uRPF:18 to:[63954:12339742]]\n    [0] [@0]: dpo-drop ip4\n10.45.0.0/32\n  unicast-ip4-chain\n  [@0]: dpo-load-balance: [proto:ip4 index:11 buckets:1 uRPF:10 to:[0:0]]\n    [0] [@0]: dpo-drop ip4\n10.45.0.0/16\n  unicast-ip4-chain\n  [@0]: dpo-load-balance: [proto:ip4 index:10 buckets:1 uRPF:24 to:[1195073387:1727318724461] via:[15:1260]]\n    [0] [@5]: ipv4 via 0.0.0.0 memif1/0: mtu:9000 next:3 flags:[]\n10.45.0.1/32\n  unicast-ip4-chain\n  [@0]: dpo-load-balance: [proto:ip4 index:9 buckets:1 uRPF:8 to:[15:1260]]\n    [0] [@12]: dpo-receive: 10.45.0.1 on memif1/0\n10.45.255.255/32\n  unicast-ip4-chain\n  [@0]: dpo-load-balance: [proto:ip4 index:12 buckets:1 uRPF:12 to:[0:0]]\n    [0] [@0]: dpo-drop ip4\n224.0.0.0/4\n  unicast-ip4-chain\n  [@0]: dpo-load-balance: [proto:ip4 index:4 buckets:1 uRPF:3 to:[0:0]]\n    [0] [@0]: dpo-drop ip4\n240.0.0.0/4\n  unicast-ip4-chain\n  [@0]: dpo-load-balance: [proto:ip4 index:3 buckets:1 uRPF:2 to:[0:0]]\n    [0] [@0]: dpo-drop ip4\n255.255.255.255/32\n  unicast-ip4-chain\n  [@0]: dpo-load-balance: [proto:ip4 index:5 buckets:1 uRPF:4 to:[11766:2980279]]\n    [0] [@0]: dpo-drop ip4\nipv4-VRF:10, fib_index:1, flow hash:[src dst sport dport proto flowlabel ] epoch:0 flags:none locks:[interface:2, CLI:1, adjacency:1, ]\n0.0.0.0/0\n  unicast-ip4-chain\n  [@0]: dpo-load-balance: [proto:ip4 index:13 buckets:1 uRPF:33 to:[5668:1545648]]\n    [0] [@5]: ipv4 via 10.2.7.254 dpdk-n3: mtu:9000 next:5 flags:[] 6ce2d30a0841c2febf4f91a80800\n0.0.0.0/32\n  unicast-ip4-chain\n  [@0]: dpo-load-balance: [proto:ip4 index:14 buckets:1 uRPF:14 to:[0:0]]\n    [0] [@0]: dpo-drop ip4\n10.2.0.0/32\n  unicast-ip4-chain\n  [@0]: dpo-load-balance: [proto:ip4 index:25 buckets:1 uRPF:29 to:[0:0]]\n    [0] [@0]: dpo-drop ip4\n10.2.0.119/32\n  unicast-ip4-chain\n  [@0]: dpo-load-balance: [proto:ip4 index:33 buckets:1 uRPF:44 to:[355815790:527194427975] via:[76606744:114269329998]]\n    [0] [@5]: ipv4 via 10.2.0.119 dpdk-n3: mtu:9000 next:5 flags:[] 444988065660c2febf4f91a80800\n10.2.0.230/32\n  unicast-ip4-chain\n  [@0]: dpo-load-balance: [proto:ip4 index:22 buckets:1 uRPF:42 to:[66294769:97585706370]]\n    [0] [@5]: ipv4 via 0.0.0.0 memif2/0: mtu:9000 next:4 flags:[]\n10.2.0.0/20\n  unicast-ip4-chain\n  [@0]: dpo-load-balance: [proto:ip4 index:26 buckets:1 uRPF:30 to:[1:128]]\n    [0] [@4]: ipv4-glean: [src:10.2.0.0/20] dpdk-n3: mtu:9000 next:1 flags:[] ffffffffffffc2febf4f91a80806\n10.2.0.231/32\n  unicast-ip4-chain\n  [@0]: dpo-load-balance: [proto:ip4 index:24 buckets:1 uRPF:31 to:[0:0]]\n    [0] [@12]: dpo-receive: 10.2.0.231 on dpdk-n3\n10.2.7.254/32\n  unicast-ip4-chain\n  [@0]: dpo-load-balance: [proto:ip4 index:18 buckets:1 uRPF:19 to:[0:0]]\n    [0] [@5]: ipv4 via 10.2.7.254 dpdk-n3: mtu:9000 next:5 flags:[] 6ce2d30a0841c2febf4f91a80800\n10.2.15.255/32\n  unicast-ip4-chain\n  [@0]: dpo-load-balance: [proto:ip4 index:23 buckets:1 uRPF:27 to:[63959:12341039]]\n    [0] [@0]: dpo-drop ip4\n224.0.0.0/4\n  unicast-ip4-chain\n  [@0]: dpo-load-balance: [proto:ip4 index:16 buckets:1 uRPF:16 to:[0:0]]\n    [0] [@0]: dpo-drop ip4\n240.0.0.0/4\n  unicast-ip4-chain\n  [@0]: dpo-load-balance: [proto:ip4 index:15 buckets:1 uRPF:15 to:[0:0]]\n    [0] [@0]: dpo-drop ip4\n255.255.255.255/32\n  unicast-ip4-chain\n  [@0]: dpo-load-balance: [proto:ip4 index:17 buckets:1 uRPF:17 to:[11766:2980279]]\n    [0] [@0]: dpo-drop ip4\n",
+  "remaining_test_containers": "",
+  "affinity": {
+    "upf": {
+      "1653243": "45-46,117-118",
+      "1653405": "45",
+      "1653406": "46",
+      "1653407": "117",
+      "1653409": "118",
+      "1653410": "118",
+      "1653411": "118"
+    },
+    "vpp": {
+      "1653704": "47",
+      "1654088": "47,119",
+      "1654124": "47,119",
+      "1654204": "119"
+    }
+  },
+  "ue_ping": [
+    {
+      "pod": "nrue-101-oai-nr-ue-6c7b9867c6-v64d5",
+      "ue_ip": "10.45.0.101",
+      "interface": "oaitun_ue1",
+      "warmup": {
+        "returncode": 0,
+        "stdout": "PING 10.45.0.1 (10.45.0.1) from 10.45.0.101 oaitun_ue1: 56(84) bytes of data.\n64 bytes from 10.45.0.1: icmp_seq=1 ttl=64 time=20.0 ms\n\n--- 10.45.0.1 ping statistics ---\n1 packets transmitted, 1 received, 0% packet loss, time 0ms\nrtt min/avg/max/mdev = 20.045/20.045/20.045/0.000 ms\n",
+        "stderr": ""
+      },
+      "verification": {
+        "returncode": 0,
+        "stdout": "PING 10.45.0.1 (10.45.0.1) from 10.45.0.101 oaitun_ue1: 56(84) bytes of data.\n64 bytes from 10.45.0.1: icmp_seq=1 ttl=64 time=18.7 ms\n64 bytes from 10.45.0.1: icmp_seq=2 ttl=64 time=19.4 ms\n64 bytes from 10.45.0.1: icmp_seq=3 ttl=64 time=11.9 ms\n64 bytes from 10.45.0.1: icmp_seq=4 ttl=64 time=18.1 ms\n64 bytes from 10.45.0.1: icmp_seq=5 ttl=64 time=17.4 ms\n\n--- 10.45.0.1 ping statistics ---\n5 packets transmitted, 5 received, 0% packet loss, time 4006ms\nrtt min/avg/max/mdev = 11.913/17.099/19.396/2.672 ms\n",
+        "stderr": ""
+      }
+    },
+    {
+      "pod": "nrue-102-oai-nr-ue-86795bbd76-b42nf",
+      "ue_ip": "10.45.0.102",
+      "interface": "oaitun_ue1",
+      "warmup": {
+        "returncode": 0,
+        "stdout": "PING 10.45.0.1 (10.45.0.1) from 10.45.0.102 oaitun_ue1: 56(84) bytes of data.\n64 bytes from 10.45.0.1: icmp_seq=1 ttl=64 time=23.8 ms\n\n--- 10.45.0.1 ping statistics ---\n1 packets transmitted, 1 received, 0% packet loss, time 0ms\nrtt min/avg/max/mdev = 23.753/23.753/23.753/0.000 ms\n",
+        "stderr": ""
+      },
+      "verification": {
+        "returncode": 0,
+        "stdout": "PING 10.45.0.1 (10.45.0.1) from 10.45.0.102 oaitun_ue1: 56(84) bytes of data.\n64 bytes from 10.45.0.1: icmp_seq=1 ttl=64 time=19.8 ms\n64 bytes from 10.45.0.1: icmp_seq=2 ttl=64 time=18.6 ms\n64 bytes from 10.45.0.1: icmp_seq=3 ttl=64 time=18.4 ms\n64 bytes from 10.45.0.1: icmp_seq=4 ttl=64 time=18.2 ms\n64 bytes from 10.45.0.1: icmp_seq=5 ttl=64 time=20.1 ms\n\n--- 10.45.0.1 ping statistics ---\n5 packets transmitted, 5 received, 0% packet loss, time 4006ms\nrtt min/avg/max/mdev = 18.165/19.021/20.145/0.781 ms\n",
+        "stderr": ""
+      }
+    },
+    {
+      "pod": "nrue-103-oai-nr-ue-794488c444-qzjt9",
+      "ue_ip": "10.45.0.103",
+      "interface": "oaitun_ue1",
+      "warmup": {
+        "returncode": 0,
+        "stdout": "PING 10.45.0.1 (10.45.0.1) from 10.45.0.103 oaitun_ue1: 56(84) bytes of data.\n64 bytes from 10.45.0.1: icmp_seq=1 ttl=64 time=14.0 ms\n\n--- 10.45.0.1 ping statistics ---\n1 packets transmitted, 1 received, 0% packet loss, time 0ms\nrtt min/avg/max/mdev = 14.033/14.033/14.033/0.000 ms\n",
+        "stderr": ""
+      },
+      "verification": {
+        "returncode": 0,
+        "stdout": "PING 10.45.0.1 (10.45.0.1) from 10.45.0.103 oaitun_ue1: 56(84) bytes of data.\n64 bytes from 10.45.0.1: icmp_seq=1 ttl=64 time=18.7 ms\n64 bytes from 10.45.0.1: icmp_seq=2 ttl=64 time=20.4 ms\n64 bytes from 10.45.0.1: icmp_seq=3 ttl=64 time=18.1 ms\n64 bytes from 10.45.0.1: icmp_seq=4 ttl=64 time=19.0 ms\n64 bytes from 10.45.0.1: icmp_seq=5 ttl=64 time=20.0 ms\n\n--- 10.45.0.1 ping statistics ---\n5 packets transmitted, 5 received, 0% packet loss, time 4006ms\nrtt min/avg/max/mdev = 18.116/19.261/20.444/0.856 ms\n",
+        "stderr": ""
+      }
+    },
+    {
+      "pod": "nrue-oai-nr-ue-79c98c9db7-dxh5g",
+      "ue_ip": "10.45.0.3",
+      "interface": "oaitun_ue1",
+      "warmup": {
+        "returncode": 0,
+        "stdout": "PING 10.45.0.1 (10.45.0.1) from 10.45.0.3 oaitun_ue1: 56(84) bytes of data.\n64 bytes from 10.45.0.1: icmp_seq=1 ttl=64 time=18.7 ms\n\n--- 10.45.0.1 ping statistics ---\n1 packets transmitted, 1 received, 0% packet loss, time 0ms\nrtt min/avg/max/mdev = 18.742/18.742/18.742/0.000 ms\n",
+        "stderr": ""
+      },
+      "verification": {
+        "returncode": 0,
+        "stdout": "PING 10.45.0.1 (10.45.0.1) from 10.45.0.3 oaitun_ue1: 56(84) bytes of data.\n64 bytes from 10.45.0.1: icmp_seq=1 ttl=64 time=18.2 ms\n64 bytes from 10.45.0.1: icmp_seq=2 ttl=64 time=15.0 ms\n64 bytes from 10.45.0.1: icmp_seq=3 ttl=64 time=19.5 ms\n64 bytes from 10.45.0.1: icmp_seq=4 ttl=64 time=18.0 ms\n64 bytes from 10.45.0.1: icmp_seq=5 ttl=64 time=19.8 ms\n\n--- 10.45.0.1 ping statistics ---\n5 packets transmitted, 5 received, 0% packet loss, time 4005ms\nrtt min/avg/max/mdev = 14.993/18.082/19.794/1.696 ms\n",
+        "stderr": ""
+      }
+    }
+  ]
+}

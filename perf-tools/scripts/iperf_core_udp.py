@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Measure UDP using the VCL endpoints created by iperf_core.py setup.
 
-Single UE / PDU session; multiple iperf processes/flows are permitted. Rates
+One PDU session per UE; multiple iperf processes/flows are permitted. Rates
 are application payload rates, and -b is divided across processes and streams.
 VCL must choose its source address from the sending app namespace: explicitly
 binding a UDP client is incompatible with this VCL release. The returned
@@ -10,33 +10,36 @@ addresses are checked against the real PDU and DN addresses before accepting dat
 
 import argparse
 import json
-import pathlib
 import subprocess
 import time
 
-from iperf_core import Bench, DN_IP, RAN, run, write_json
+from iperf_core import Bench, DN_IP, run, write_json
 
 
 def measure(b):
     b.session()
+    if b.args.processes < len(b.test_sessions()):
+        raise RuntimeError("At least one iperf process per user is required")
     label = b.args.label
     if (b.path / f"{label}-summary.json").exists():
         raise RuntimeError("Choose a new label")
     # Initiate from the actual sender in both directions. A UDP server's
     # bound/listening socket has substantially higher VCL overhead with -R.
     source, destination = (("ue", "dn") if b.args.direction == "ul" else ("dn", "ue"))
-    address = {"ue": b.state["pdu"]["ipv4"], "dn": DN_IP}
+    def address(role, index):
+        return b.process_session(index)["pdu"]["ipv4"] if role == "ue" else DN_IP
+
+    def app(role, index):
+        return b.ue_role(index) if role == "ue" else role
     first_cpu = {"ue": b.args.ue_cpu, "dn": b.args.dn_cpu}
     width = b.state.get("args", {}).get("endpoint_cpu_count", 1)
     # The fixture owns these endpoints; remove idle servers on the sending
     # CPUs before starting receivers. Idle VCL select loops consume a core.
-    for name in {"iperf3", pathlib.Path(b.args.client_binary).name,
-                 pathlib.Path(b.args.server_binary).name}:
-        b.docker(RAN, "pkill", "-x", name, check=False)
+    b.stop_endpoints(b.args.client_binary, b.args.server_binary)
     time.sleep(0.5)
     for i in range(b.args.processes):
-        cmd = b.endpoint(destination, first_cpu[destination] + i * width,
-                         b.args.server_binary, "-s", "-1", "-B", address[destination],
+        cmd = b.endpoint(app(destination, i), first_cpu[destination] + i * width,
+                         b.args.server_binary, "-s", "-1", "-B", address(destination, i),
                          "-p", str(5201 + i), "-J", "--logfile",
                          f"/config/{label}-server-{i}.json")
         cmd.insert(2, "-d")
@@ -44,8 +47,8 @@ def measure(b):
     before = b.snapshot(label + "-before")
     jobs = []
     for i in range(b.args.processes):
-        cmd = b.endpoint(source, first_cpu[source] + i * width, b.args.client_binary,
-                         "-c", address[destination],
+        cmd = b.endpoint(app(source, i), first_cpu[source] + i * width, b.args.client_binary,
+                         "-c", address(destination, i),
                          "-p", str(5201 + i), "-u",
                          "-b", str(int(b.args.mbps * 1000000 /
                                        b.args.processes / b.args.streams)),
@@ -78,7 +81,7 @@ def measure(b):
                 raise ValueError("Unexpected transport")
             if len(value["start"]["connected"]) != b.args.streams:
                 raise ValueError("Unexpected number of connected UDP streams")
-            if any(c["local_host"] != address[source] or c["remote_host"] != address[destination]
+            if any(c["local_host"] != address(source, i) or c["remote_host"] != address(destination, i)
                    for c in value["start"]["connected"]):
                 raise ValueError("Source address does not match the PDU")
             values.append(value)
@@ -103,6 +106,7 @@ def measure(b):
               "receiver_mbps": sum(v["bits_per_second"] for v in rx) / 1000000,
               "lost_packets": lost, "packets": packets,
               "lost_percent": lost * 100 / packets,
+              "per_user": b.per_user(rx, tx),
               "jitter_ms_per_process": [v["jitter_ms"] for v in rx],
               "iperf_cpu": [v["end"]["cpu_utilization_percent"] for v in values],
               "session_before": before["rates"], "session_after": after["rates"]}
