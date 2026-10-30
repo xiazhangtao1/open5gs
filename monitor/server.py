@@ -14,7 +14,7 @@ from collector import Collector
 from common import config, wait_for_cpu
 from memory import MemoryPressure, UPF_BODY_LIMIT, MIB
 
-ENDPOINTS = {"overview", "ues", "gnbs", "sessions", "rates", "events", "trends", "health", "system", "signal"}
+ENDPOINTS = {"overview", "ues", "gnbs", "sessions", "rates", "events", "trends", "trends-batch", "health", "system", "signal"}
 
 
 def validate_snapshot(doc):
@@ -81,20 +81,20 @@ def application(token=None, collecting=True):
         endpoint = request.match_info["endpoint"]
         if endpoint not in ENDPOINTS:
             raise web.HTTPNotFound()
-        if len(request.query_string) > 1024 or len(request.query) > 16:
+        if len(request.query_string) > (4096 if endpoint == "trends-batch" else 1024) or len(request.query) > 16:
             raise web.HTTPBadRequest(text="query budget exceeded")
         query = dict(request.query)
-        if any(len(k) > 32 or len(v) > 128 for k, v in query.items()):
+        if any(len(k) > 32 or len(v) > (4096 if endpoint == "trends-batch" and k == "curves" else 128) for k, v in query.items()):
             raise web.HTTPBadRequest(text="query too long")
         try:
             if endpoint == "signal":
                 doc = signals.query(query.get("id", ""), query.get("view", "decoded"))
                 return web.json_response(doc, headers={"Cache-Control": "no-store"})
-            body, etag = cache.response(endpoint, query)
+            body, etag = cache.trends_batch(query) if endpoint == "trends-batch" else cache.response(endpoint, query)
         except (MemoryPressure, MemoryError):
             cache.relieve_memory()
             raise web.HTTPServiceUnavailable(text="内存保护已暂停此查询，请稍后重试")
-        except (ValueError, TypeError, OverflowError):
+        except (ValueError, TypeError, OverflowError, RecursionError):
             raise web.HTTPBadRequest(text="invalid query")
         headers = {"ETag": etag, "Cache-Control": "private, no-cache"}
         if request.headers.get("If-None-Match") == etag:
@@ -151,7 +151,7 @@ def application(token=None, collecting=True):
                 if source.get("identity") and source["identity"][0] != identity[0]:
                     source["reset_count"] = source.get("reset_count", 0) + 1
                     for key in list(cache.curves):
-                        if key.startswith(("session:", "bearer:")):
+                        if key.startswith(("session:", "bearer:", "rule:")):
                             del cache.curves[key]
                 cache.replace("upf_rates", doc["sessions"], config()["rates_interval"])
                 cache.record_rates(stamp, boot_id=identity[0], interval=config()['rates_interval'])

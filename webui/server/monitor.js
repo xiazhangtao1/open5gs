@@ -5,7 +5,7 @@ const https = require('https');
 const jwt = require('jsonwebtoken');
 const dns = require('dns');
 const net = require('net');
-const ENDPOINTS = new Set(['overview', 'ues', 'gnbs', 'sessions', 'rates', 'events', 'trends', 'health', 'system', 'signal']);
+const ENDPOINTS = new Set(['overview', 'ues', 'gnbs', 'sessions', 'rates', 'events', 'trends', 'trends-batch', 'health', 'system', 'signal']);
 
 module.exports = function monitorRouter(options = {}) {
   const router = express.Router();
@@ -118,7 +118,7 @@ module.exports = function monitorRouter(options = {}) {
   router.get('/:endpoint', async (req, res) => {
     if (!ENDPOINTS.has(req.params.endpoint)) return res.status(404).end();
     if (!base || !internalToken) return res.status(503).json({error: '监控采集服务尚未启用'});
-    if (req.originalUrl.length > 1200 || Object.values(req.query).some(v => typeof v !== 'string')) {
+    if (req.originalUrl.length > (req.params.endpoint === 'trends-batch' ? 4096 : 1200) || Object.values(req.query).some(v => typeof v !== 'string')) {
       return res.status(400).json({error: '查询参数无效'});
     }
     const query = new URLSearchParams(Object.keys(req.query).sort().map(k => [k, req.query[k]])).toString();

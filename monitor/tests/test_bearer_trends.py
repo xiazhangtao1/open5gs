@@ -89,7 +89,7 @@ class BearerHistoryTests(unittest.TestCase):
         sample(c, list(reversed(sessions)), 122)
         self.assertEqual(admitted, {k: v.epoch for k, v in c.curves.items() if k.startswith('bearer:')})
         self.assertLessEqual(c.bearer_bytes(), 16 * MIB)
-        self.assertLessEqual(c.trend_bytes(), 64 * MIB)
+        self.assertLessEqual(c.trend_bytes(), 128 * MIB)
         sample(c, sessions[1:], 124)  # release oldest bearer, then admit 129
         self.assertIn('bearer:129:1', c.curves)
         self.assertNotIn('bearer:1:1', c.curves)

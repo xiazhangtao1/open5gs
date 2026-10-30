@@ -74,12 +74,14 @@ def normalize_location(ue):
 
 class Cache:
     trend_retention = 86400
-    max_trend_bytes = 64 * MIB
+    max_trend_bytes = 128 * MIB
     max_events = 20000
     max_event_bytes = 16 * 1024 * 1024
-    max_curves = 512
+    max_curves = 1024
     max_bearer_curves = 128
     max_bearer_bytes = 16 * MIB
+    max_rule_curves = 256
+    max_rule_bytes = 32 * MIB
 
     def __init__(self, memory=None):
         self.started_at = time.time()
@@ -94,6 +96,7 @@ class Cache:
         self.curve_evictions = 0
         self.curve_rejections = 0
         self.bearer_rejections = 0
+        self.rule_rejections = 0
         self.trend_epoch = uuid.uuid4().hex
         self.trend_stamp = 0
         self.trend_boot = None
@@ -109,23 +112,30 @@ class Cache:
         self.last_reclaim = 0
         self.signals = None
 
-    def relieve_memory(self):
-        if self.memory.sample(force=True) < self.memory.high or time.monotonic() - self.last_reclaim < 5:
+    def relieve_memory(self, reserve=0):
+        if self.memory.sample(force=True) + reserve < self.memory.high or time.monotonic() - self.last_reclaim < 5:
             return
         self.last_reclaim = time.monotonic()
-        if self.signals:
-            self.signals.trim(pressure=True)
-        # Preserve latest NF/session state; history is expendable under pressure.
-        self.evict_events(1000, self.max_event_bytes)
-        for key in list(self.curves):
-            if key.startswith('bearer:'):
-                del self.curves[key]
-                self.curve_evictions += 1
         self.memo.clear()
         self.memo_bytes = 0
         self.memory.reclaims += 1
+        # Latest state survives. Reclaim low-priority histories before signals
+        # or the higher-priority user/session histories, including for reserves.
+        for prefixes in (('rule:',), ('bearer:',)):
+            for key in list(self.curves):
+                if key.startswith(prefixes):
+                    del self.curves[key]
+                    self.curve_evictions += 1
+            self.memory.trim_allocator()
+            used = self.memory.sample(force=True)
+            if used + reserve < self.memory.high and not self.memory.paused:
+                self.changed()
+                return
+        if self.signals:
+            self.signals.trim(pressure=True)
+        self.evict_events(1000, self.max_event_bytes)
         self.memory.trim_allocator()
-        if self.memory.sample(force=True) >= self.memory.high:
+        if self.memory.sample(force=True) + reserve >= self.memory.high or self.memory.paused:
             for key in list(self.curves):
                 if key != 'global':
                     del self.curves[key]
@@ -138,7 +148,7 @@ class Cache:
         try:
             self.memory.check(reserve, operation)
         except MemoryPressure:
-            self.relieve_memory()
+            self.relieve_memory(reserve)
             raise
 
     def event_coverage(self):
@@ -246,8 +256,11 @@ class Cache:
                     bearer_curves=sum(k.startswith('bearer:') for k in self.curves),
                     bearer_bytes=self.bearer_bytes(), bearer_curve_limit=self.max_bearer_curves,
                     bearer_byte_limit=self.max_bearer_bytes, bearer_rejections=self.bearer_rejections,
+                    rule_curves=sum(k.startswith('rule:') for k in self.curves),
+                    rule_bytes=self.rule_bytes(), rule_curve_limit=self.max_rule_curves,
+                    rule_byte_limit=self.max_rule_bytes, rule_rejections=self.rule_rejections,
                     requests=self.request_count, affinity=self.affinity,
-                    coverage="信令按容量保留；速率保留最近 30 分钟原始采样及 24 小时分钟汇总，最多 512 条曲线、64 MiB；缓存不持久化，内存压力下可能提前淘汰")
+                    coverage="信令按容量保留；速率保留最近 30 分钟原始采样及 24 小时分钟汇总，最多 1024 条曲线、128 MiB；缓存不持久化，内存压力下可能提前淘汰")
 
     def rebuild(self):
         ues = copy.deepcopy(self.source("amf_ues")["data"])
@@ -394,29 +407,92 @@ class Cache:
         return hashlib.sha256(encode([boot, session.get('supi'), session.get('dnn'),
                                       session.get('ue_ip'), sorted(rows)])).digest()
 
-    def bearer_history(self, session, bearer):
-        key = f"bearer:{session['seid']}:{bearer['qfi']}"
+    def rule_bytes(self):
+        return sum(c.budget_bytes(k) + 256 for k, c in self.curves.items() if k.startswith('rule:'))
+
+    @staticmethod
+    def rule_identity(session, rule, boot):
+        if not boot or rule.get('rule_kind') != 'business' or rule.get('direction') not in ('UL', 'DL'):
+            return None
+        if any(type(rule.get(k)) is not int or not 0 <= rule[k] < limit for k, limit in
+               (('pdr_id', 1 << 16), ('qer_id', 1 << 32), ('generation', 1 << 32), ('qfi', 64))):
+            return None
+        if rule['pdr_id'] == 0:
+            return None
+        return hashlib.sha256(encode([boot, session.get('supi'), session.get('dnn'), session.get('ue_ip'),
+            rule['pdr_id'], rule['qer_id'], rule['generation'], rule['qfi'], rule['direction']])).digest()
+
+    @staticmethod
+    def summary(session, item=None):
+        fields = ('seid', 'supi', 'psi', 'dnn', 'ue_ip', 'ipv4', 'ipv6', 'cm_state',
+                  'uptime_seconds', 'ul_bps', 'dl_bps', 'session_count')
+        result = {k: session[k] for k in fields if k in session}
+        if item:
+            result.update({k: item[k] for k in ('qfi', '5qi', 'pdr_id', 'qer_id', 'direction',
+                           'bps', 'ul_bps', 'dl_bps', 'rule_kind') if k in item})
+        return result
+
+    def locate_trend(self, key):
+        kind, _, ident = key.partition(':')
+        if kind == 'user':
+            sessions = [s for s in self.sessions if s.get('supi') == ident]
+            if not sessions:
+                return None, None, None, None
+            row = dict(supi=ident, session_count=len(sessions), cm_state=sessions[0].get('cm_state'),
+                       dnn=', '.join(sorted({s.get('dnn', '') for s in sessions}))[:256],
+                       ul_bps=str(sum(int(s['ul_bps']) for s in sessions)),
+                       dl_bps=str(sum(int(s['dl_bps']) for s in sessions)))
+            return row, None, None, None
+        parts = ident.split(':')
+        session = next((s for s in self.sessions if str(s['seid']) == parts[0]), None)
+        if not session:
+            return None, None, None, None
+        uptime = session.get('uptime_seconds')
+        if kind == 'session':
+            return self.summary(session), (self.trend_boot, session.get('supi'), session.get('dnn'), session.get('ue_ip')), uptime, None
+        if len(parts) != 2:
+            return None, None, None, None
+        field, name = ('bearers', 'qfi') if kind == 'bearer' else ('rules', 'pdr_id')
+        item = next((r for r in session.get(field, []) if str(r.get(name)) == parts[1]), None)
+        if not item:
+            return None, None, None, None
+        reason = None
+        if kind == 'rule' and item.get('rule_kind') != 'business':
+            reason = 'internal' if item.get('rule_kind') == 'internal' else 'unclassified'
+        identity = (self.bearer_identity(session, item['qfi'], self.trend_boot) if kind == 'bearer'
+                    else self.rule_identity(session, item, self.trend_boot))
+        return self.summary(session, item), identity, uptime, reason
+
+    def trend_metadata(self, key):
+        row, identity, uptime, reason = self.locate_trend(key)
         curve = self.curves.get(key)
-        identity = self.bearer_identity(session, bearer['qfi'], self.trend_boot)
-        valid = curve and curve.active and curve.identity == identity
+        valid = bool(row is not None and curve and curve.active and not reason and
+                     (key.startswith('user:') or (identity is not None and curve.identity == identity)) and
+                     not (isinstance(uptime, (int, float)) and isinstance(curve.uptime, (int, float)) and uptime < curve.uptime))
         return dict(trend_key=key, trend_epoch=curve.epoch if valid else None,
-                    history_state='recording' if valid else 'unavailable',
-                    history_reason=None if valid else 'identity' if identity is None else
-                    'memory' if self.memory.paused else 'capacity')
+                    history_state='recording' if valid else 'released' if row is None and curve else 'unavailable',
+                    history_reason=None if valid or row is None and curve else reason or
+                    ('absent' if row is None else 'identity' if not key.startswith('user:') and identity is None else
+                     'memory' if self.memory.paused else 'capacity'))
+
+    def bearer_history(self, session, bearer):
+        return self.trend_metadata(f"bearer:{session['seid']}:{bearer['qfi']}")
 
     def bearer_status(self, key):
-        if not key.startswith('bearer:'):
-            return {}
-        parts = key.split(':')
-        if len(parts) != 3:
-            return {}
-        session = next((s for s in self.sessions if str(s['seid']) == parts[1]), None)
-        bearer = next((b for b in (session or {}).get('bearers', []) if str(b['qfi']) == parts[2]), None)
-        if bearer:
-            return self.bearer_history(session, bearer)
-        curve = self.curves.get(key)
-        return dict(history_state='released' if curve else 'unavailable',
-                    history_reason=None if curve else 'absent')
+        # Keep existing API/ETag for global, user and session histories compatible.
+        return self.trend_metadata(key) if key.startswith(('bearer:', 'rule:')) else {}
+
+    @staticmethod
+    def validate_trend_key(key):
+        if not isinstance(key, str) or len(key) > 128:
+            raise ValueError('invalid trend key')
+        if key.startswith(('bearer:', 'rule:')):
+            kind, *parts = key.split(':')
+            maximum = 63 if kind == 'bearer' else 65535
+            if (len(parts) != 2 or not parts[0].isdigit() or len(parts[0]) > 20 or
+                    not 0 <= int(parts[0]) < 1 << 64 or not parts[1].isdigit() or
+                    not 1 <= int(parts[1]) <= maximum):
+                raise ValueError('invalid rule/bearer trend key')
 
     def record_rates(self, stamp, boot_id=None, interval=2):
         self.admit(16 * MIB, "记录有界速率曲线")
@@ -429,48 +505,65 @@ class Cache:
             self.curves.clear()
             self.trend_epoch = uuid.uuid4().hex
         self.trend_stamp, self.trend_boot, self.trend_interval = stamp, boot_id, interval
-        points = {"global": [0, 0]}
-        identities = {}
-        for s in self.sessions:
-            ul, dl = float(s["ul_bps"]), float(s["dl_bps"])
-            points[f"session:{s['seid']}"] = [ul, dl]
-            identities[f"session:{s['seid']}"] = (
-                (boot_id, s.get('supi'), s.get('dnn'), s.get('ue_ip')), s.get('uptime_seconds'))
-            u = points.setdefault(f"user:{s.get('supi', '')}", [0, 0])
-            u[0] += ul
-            u[1] += dl
-            points["global"][0] += ul
-            points["global"][1] += dl
-        # Only bounded existing curves need a presence set, not all possible
-        # rejected bearer identities (which could otherwise grow with UE churn).
-        present = {f"bearer:{s['seid']}:{b['qfi']}" for s in self.sessions for b in s.get('bearers', [])
-                   if f"bearer:{s['seid']}:{b['qfi']}" in self.curves}
+        points, identities = {"global": [0, 0]}, {}
+        present = set()
+        for session in self.sessions:
+            ul, dl = float(session['ul_bps']), float(session['dl_bps'])
+            key = f"session:{session['seid']}"
+            points[key] = [ul, dl]
+            identities[key] = ((boot_id, session.get('supi'), session.get('dnn'), session.get('ue_ip')), session.get('uptime_seconds'))
+            user = points.setdefault(f"user:{session.get('supi', '')}", [0, 0])
+            user[0] += ul; user[1] += dl
+            points['global'][0] += ul; points['global'][1] += dl
+            for prefix, field, name in [('bearer', 'bearers', 'qfi'), ('rule', 'rules', 'pdr_id')]:
+                for item in session.get(field, []):
+                    key = f"{prefix}:{session['seid']}:{item.get(name)}"
+                    if key in self.curves and (prefix != 'rule' or item.get('rule_kind') == 'business'):
+                        present.add(key)
+                    elif key in self.curves:
+                        del self.curves[key]
         for key in list(self.curves):
-            if self.curves[key].last < stamp - self.trend_retention:
+            curve = self.curves[key]
+            if curve.last < stamp - self.trend_retention:
                 del self.curves[key]
             elif key not in points and key not in present:
-                self.curves[key].active = False
+                curve.active = False
 
-        def record(key, ul, dl, identity=None, uptime=None, bearer=False):
+        def oldest(prefix, inactive=True):
+            candidates = (k for k, c in self.curves.items() if k.startswith(prefix) and (not inactive or not c.active))
+            return min(candidates, key=lambda k: self.curves[k].last, default=None)
+
+        def record(key, ul, dl, identity=None, uptime=None, tier=0):
             old = self.curves.get(key)
-            if old and (bearer or key.startswith('session:')) and (not old.active or old.identity != identity or
+            if old and (tier or key.startswith('session:')) and (not old.active or old.identity != identity or
                     (isinstance(uptime, (int, float)) and isinstance(old.uptime, (int, float)) and uptime < old.uptime)):
                 del self.curves[key]
             if key not in self.curves:
-                def fits():
-                    return (len(self.curves) < self.max_curves and
-                            self.trend_bytes() + Curve.allocation_bytes + max(1024, sys.getsizeof(self.curves)) <= self.max_trend_bytes and
-                            (not bearer or (sum(k.startswith('bearer:') for k in self.curves) < self.max_bearer_curves and
-                             self.bearer_bytes() + Curve.allocation_bytes + 256 <= self.max_bearer_bytes)))
-                while not fits():
-                    # Base histories have priority even over active bearers.
-                    victim = next((k for k, c in self.curves.items()
-                                   if k.startswith('bearer:') and (not bearer or not c.active)), None)
-                    if victim is None and not bearer:
-                        victim = next((k for k in self.curves if k != 'global' and k not in points), None)
+                prefix = 'rule:' if tier == 2 else 'bearer:'
+                def sub_fits():
+                    if not tier: return True
+                    count = sum(k.startswith(prefix) for k in self.curves)
+                    used = self.rule_bytes() if tier == 2 else self.bearer_bytes()
+                    return count < (self.max_rule_curves if tier == 2 else self.max_bearer_curves) and used + Curve.allocation_bytes + 256 <= (self.max_rule_bytes if tier == 2 else self.max_bearer_bytes)
+                def total_fits():
+                    return len(self.curves) < self.max_curves and self.trend_bytes() + Curve.allocation_bytes + max(1024, sys.getsizeof(self.curves)) <= self.max_trend_bytes
+                while not sub_fits() or not total_fits():
+                    victim = None
+                    if not sub_fits():
+                        victim = oldest(prefix)
+                    else:
+                        candidates = [('rule:', tier < 2), ('bearer:', tier < 1)] if tier < 2 else [('rule:', False)]
+                        for target, allow_active in candidates:
+                            victim = oldest(target)
+                            if victim is None and allow_active:
+                                victim = oldest(target, inactive=False)
+                            if victim is not None: break
+                        if victim is None and tier == 0:
+                            victim = min((k for k in self.curves if k != 'global' and k not in points), key=lambda k: self.curves[k].last, default=None)
                     if victim is None:
                         self.curve_rejections += 1
-                        self.bearer_rejections += int(bearer)
+                        self.bearer_rejections += int(tier == 1)
+                        self.rule_rejections += int(tier == 2)
                         return
                     del self.curves[victim]
                     self.curve_evictions += 1
@@ -479,21 +572,73 @@ class Cache:
             curve = self.curves[key]
             curve.append(stamp, ul, dl, discontinuity=restarted or not curve.active, interval=interval)
             curve.active, curve.identity, curve.uptime = True, identity, uptime
-            self.curves.move_to_end(key)
 
         for key, (ul, dl) in points.items():
             record(key, ul, dl, *identities.get(key, (None, None)))
-        for s in self.sessions:
-            for b in s.get('bearers', []):
-                key = f"bearer:{s['seid']}:{b['qfi']}"
-                identity = self.bearer_identity(s, b['qfi'], boot_id)
-                if identity is None:
-                    # Do not expose old history as belonging to an unidentifiable instance.
-                    if key in self.curves:
-                        del self.curves[key]
-                    continue
-                record(key, float(b['ul_bps']), float(b['dl_bps']), identity, s.get('uptime_seconds'), True)
+        for tier in (1, 2):
+            for session in self.sessions:
+                field = 'bearers' if tier == 1 else 'rules'
+                for item in session.get(field, []):
+                    if tier == 2 and item.get('rule_kind') != 'business': continue
+                    key = (f"bearer:{session['seid']}:{item['qfi']}" if tier == 1 else f"rule:{session['seid']}:{item.get('pdr_id')}")
+                    identity = self.bearer_identity(session, item['qfi'], boot_id) if tier == 1 else self.rule_identity(session, item, boot_id)
+                    if identity is None:
+                        if key in self.curves: del self.curves[key]
+                        continue
+                    record(key, float(item['ul_bps']) if tier == 1 else float(item['bps']) if item['direction'] == 'UL' else 0,
+                           float(item['dl_bps']) if tier == 1 else float(item['bps']) if item['direction'] == 'DL' else 0,
+                           identity, session.get('uptime_seconds'), tier)
         self.changed()
+
+    def trends_batch(self, query):
+        self.admit(32 * MIB, '生成批量历史响应')
+        entries = json.loads(query.get('curves', '[]'))
+        if not isinstance(entries, list) or not 1 <= len(entries) <= 8:
+            raise ValueError('select 1 to 8 curves')
+        kinds, seen = set(), set()
+        for entry in entries:
+            if not isinstance(entry, dict) or set(entry) - {'key', 'cursor', 'supi', 'status_only'}:
+                raise ValueError('invalid batch entry')
+            key = entry.get('key')
+            self.validate_trend_key(key)
+            kind, _, ident = key.partition(':')
+            if kind not in ('user', 'session', 'bearer', 'rule') or not ident or key in seen:
+                raise ValueError('invalid or duplicate batch key')
+            if any(k in entry and (not isinstance(entry[k], str) or len(entry[k]) > 128) for k in ('supi', 'cursor')):
+                raise ValueError('invalid batch identity/cursor')
+            if 'status_only' in entry and type(entry['status_only']) is not bool:
+                raise ValueError('invalid status flag')
+            kinds.add(kind); seen.add(key)
+        if len(kinds) != 1: raise ValueError('mixed trend levels')
+        seconds = str(min(86400, max(60, int(query.get('seconds', 1800)))))
+        self._batch_now = time.time()
+        try:
+            chunks, size = [], 16
+            for entry in entries:
+                key = entry['key']
+                row, _, _, _ = self.locate_trend(key)
+                metadata = self.trend_metadata(key)
+                if row and entry.get('supi') and entry['supi'] != row.get('supi'):
+                    doc = dict(key=key, points=[], reset=True, epoch='replaced', **metadata)
+                    doc.update(history_state='unavailable', history_reason='instance', object=None)
+                    body = encode(doc)
+                elif entry.get('status_only'):
+                    body = encode(dict(key=key, object=row, **metadata))
+                else:
+                    params = dict(key=key, seconds=seconds)
+                    if entry.get('cursor'): params['cursor'] = entry['cursor']
+                    body, _ = self.response('trends', params)
+                    extra = dict(object=row)
+                    if not key.startswith(('bearer:', 'rule:')):
+                        extra.update(metadata)
+                    body = body[:-1] + b',' + encode(extra)[1:]
+                size += len(body) + 1
+                if size > 4 * MIB: raise ValueError('batch response exceeds budget')
+                chunks.append(body)
+            body = b'{"items":[' + b','.join(chunks) + b']}'
+            return body, '"' + hashlib.sha256(body).hexdigest()[:24] + '"'
+        finally:
+            self._batch_now = None
 
     def add_events(self, nf, payload):
         self.admit(max(8 * MIB, container_bytes(payload) * 3), "新增事件批次")
@@ -540,7 +685,7 @@ class Cache:
             key = ('trend', tuple(sorted(history.items())), curve.epoch if curve else self.trend_epoch,
                    (curve.minute_version if minute else curve.last) if curve else 0,
                    curve.active if curve else None, self.memory.paused,
-                   int(time.time() / (60 if minute else 2)), tuple(sorted(query.items())))
+                   int((getattr(self, "_batch_now", None) or time.time()) / (60 if minute else 2)), tuple(sorted(query.items())))
         if key in self.memo:
             self.memo.move_to_end(key)
             return self.memo[key]
@@ -562,14 +707,10 @@ class Cache:
 
     def query_trends(self, query):
         key = query.get('key', 'global')
-        if key.startswith('bearer:'):
-            parts = key.split(':')
-            if (len(parts) != 3 or not parts[1].isdigit() or len(parts[1]) > 20 or
-                    not 0 <= int(parts[1]) < 1 << 64 or not parts[2].isdigit() or not 1 <= int(parts[2]) <= 63):
-                raise ValueError('invalid bearer trend key')
+        self.validate_trend_key(key)
         window = min(86400, max(60, int(query.get('seconds', 1800))))
         minute = window > 1800
-        now = time.time()
+        now = getattr(self, "_batch_now", None) or time.time()
         end = math.floor(now / (60 if minute else 2)) * (60 if minute else 2)
         # Raw samples newer than the aligned clock bucket must remain visible.
         if not minute:
@@ -631,8 +772,8 @@ class Cache:
         rates = self.sessions
         if endpoint == "rates" and query.get("level") in ("bearer", "rule"):
             field = "bearers" if query["level"] == "bearer" else "rules"
-            rates = [{**{k: v for k, v in s.items() if k not in ("bearers", "rules")}, **r,
-                      **(self.bearer_history(s, r) if field == "bearers" else {})}
+            rates = [{**{k: v for k, v in s.items() if k not in ("bearers", "rules", "qos_flows")}, **r,
+                      **(self.bearer_history(s, r) if field == "bearers" else self.trend_metadata(f"rule:{s['seid']}:{r.get('pdr_id')}"))}
                      for s in self.sessions for r in s.get(field, [])]
             if field == "rules":
                 scope = query.get("rule_scope", "all")
@@ -684,6 +825,13 @@ class Cache:
         if endpoint == "sessions":
             result['items'] = [dict(s, bearers=[dict(b, **self.bearer_history(s, b))
                               for b in s.get('bearers', [])]) for s in result['items']]
+        if endpoint == 'rates' and query.get('level', 'session') in ('user', 'session'):
+            kind = query.get('level', 'session')
+            result['items'] = [dict(row, **self.trend_metadata(f"{kind}:{row['supi'] if kind == 'user' else row['seid']}")) for row in result['items']]
+        if endpoint == 'rates' and query.get('purpose') == 'selection':
+            result['items'] = [{k: v for k, v in row.items() if k in ('supi', 'seid', 'psi', 'dnn', 'ue_ip',
+                'qfi', '5qi', 'pdr_id', 'qer_id', 'direction', 'rule_kind', 'trend_key', 'trend_epoch',
+                'history_state', 'history_reason')} for row in result['items']]
         if endpoint == "events":
             result["coverage"] = self.event_coverage()
             result["protocols"] = protocols

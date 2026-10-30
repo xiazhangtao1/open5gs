@@ -13,7 +13,7 @@ from memory import MemoryBudget, MIB
 from server import validate_snapshot
 
 c = Cache(MemoryBudget(limit=512 * MIB, usage=lambda: 32 * MIB))
-count = checked = positive = simultaneous = resets = 0
+count = checked = positive = simultaneous = resets = rule_checked = 0
 qfis = set()
 epochs = {}
 for line in Path(sys.argv[1]).read_text().splitlines():
@@ -43,8 +43,19 @@ for line in Path(sys.argv[1]).read_text().splitlines():
         epochs[key] = result['epoch']
         checked += 1
         positive += int(any(pair))
+    for session in c.sessions:
+        for rule in session['rules']:
+            if rule['rule_kind'] != 'business':
+                continue
+            key = f"rule:{session['seid']}:{rule['pdr_id']}"
+            pair = [int(rule['bps']), 0] if rule['direction'] == 'UL' else [0, int(rule['bps'])]
+            with patch('cache.time.time', return_value=stamp):
+                result = c.query('trends', dict(key=key, seconds='1800'))
+            assert result['history_state'] == 'recording', result
+            assert result['points'][-1] == [stamp, *pair], (key, pair, result['points'][-1])
+            rule_checked += 1
     count += 1
 assert count >= 30 and checked >= 50 and positive >= 20 and len(qfis) >= 3 and simultaneous >= 2
 print(json.dumps(dict(snapshots=count, bearer_samples=checked, positive_samples=positive,
-                     distinct_qfis=sorted(qfis), max_simultaneous=simultaneous, epoch_resets=resets,
+                     business_rule_samples=rule_checked, distinct_qfis=sorted(qfis), max_simultaneous=simultaneous, epoch_resets=resets,
                      trend_bytes=c.trend_bytes(), bearer_bytes=c.bearer_bytes())))

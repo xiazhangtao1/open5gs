@@ -16,7 +16,7 @@ export async function get(endpoint, params = {}, cancelToken) {
   const key = url + '?' + JSON.stringify(params);
   // Trend consumers retain only their active views and cursor, not every
   // distinct incremental URL in this general response cache.
-  const cacheable = endpoint !== 'signal' && endpoint !== 'trends';
+  const cacheable = endpoint !== 'signal' && endpoint !== 'trends' && endpoint !== 'trends-batch';
   const old = cacheable ? previous.get(key) : null;
   const access = await auth();
   try {

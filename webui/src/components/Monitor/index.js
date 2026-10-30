@@ -1,6 +1,8 @@
 import {Component} from 'react';
 import axios from 'axios';
 import Chart from './Chart';
+import ComparisonPicker from './ComparisonPicker';
+import {keyOf, compact, eligible, toggle, label as comparisonLabel, remember} from '../../../lib/comparison';
 import SignalDetails from './SignalDetails';
 import {SessionControls, SessionPolicyStatus, UserRelease, BulkRelease} from './Controls';
 import Rules, {Purpose, ruleIdentifier} from './Rules';
@@ -103,7 +105,7 @@ export default class Monitor extends Component {
   trendViews = new Map();
   state = {data: null, trend: null, error: null, loading: true, page: 0, q: '', search: '',
     cm_state: '', protocol: 'NGAP', level: 'session', rule_scope: 'business', seconds: 1800, trendSeid: null, trendSupi: null, trendBearer: null, detailQfi: null,
-    selected: null, detail: null, identityFilters: {}};
+    selected: null, detail: null, identityFilters: {}, comparisonRows: {}, comparisonData: [], comparisonPicker: false, comparisonError: null};
   componentDidMount() {
     this.active = true;
     document.addEventListener('visibilitychange', this.visibility);
@@ -116,7 +118,7 @@ export default class Monitor extends Component {
       const filters = this.navigateFilters || {};
       this.navigateFilters = null;
       this.setState({data: null, trend: null, error: null, page: 0, q: '', search: '', cm_state: '', protocol: 'NGAP',
-        trendSeid: null, trendSupi: null, trendBearer: null, detailQfi: null, selected: null, detail: null, identityFilters: {}, ...filters}, () => this.schedule(0));
+        trendSeid: null, trendSupi: null, trendBearer: null, detailQfi: null, selected: null, detail: null, comparisonData: [], comparisonPicker: false, identityFilters: {}, ...filters}, () => this.schedule(0));
     }
   }
   componentWillUnmount() {
@@ -148,20 +150,18 @@ export default class Monitor extends Component {
       const data = await get('trends', {key, seconds, ...(old && old.data.cursor ? {cursor: old.data.cursor} : {})}, token);
       const merged = mergeTrend(old && old.data, data);
       if (generation === this.generation) {
-        if (!this.trendViews.has(name) && this.trendViews.size >= 2) this.trendViews.delete(this.trendViews.keys().next().value);
         const currentInstance = !bearer || !bearer.trend_epoch || data.epoch === bearer.trend_epoch;
         // The shared HTTP proxy can return a response up to one second older
         // than the list. Retry promptly instead of caching that old instance.
         if (!currentInstance) return {points: [], error: '承载实例已变化，正在读取新历史'};
-        this.trendViews.set(name, {data: merged, signature, nextAt: seconds > 1800 ? Date.now() + 60000 : 0});
+        remember(this.trendViews, name, {data: merged, signature, nextAt: seconds > 1800 ? Date.now() + 60000 : 0});
       }
       return merged;
     } catch (error) {
       if (axios.isCancel(error)) throw error;
       const data = {...(old && old.data || {}), error: '速率历史暂时不可用，等待恢复'};
       if (generation === this.generation) {
-        if (!this.trendViews.has(name) && this.trendViews.size >= 2) this.trendViews.delete(this.trendViews.keys().next().value);
-        this.trendViews.set(name, {data, signature, nextAt: Date.now() + (seconds > 1800 ? 60000 : 2000)});
+        remember(this.trendViews, name, {data, signature, nextAt: Date.now() + (seconds > 1800 ? 60000 : 2000)});
       }
       return data;
     }
@@ -206,23 +206,21 @@ export default class Monitor extends Component {
       if (view === 'sessions' && level === 'rule') params.rule_scope = this.state.rule_scope;
       const data = await get(endpoint, params, token);
       if (!this.active || generation !== this.generation) return;
-      const session = view === 'sessions' && level === 'session' ? rowForTrend(data.items, 'seid', trendSeid) : null;
-      const user = view === 'sessions' && level === 'user' ? rowForTrend(data.items, 'supi', trendSupi) : null;
-      const previous = ((this.state.data || {}).items || []).find(s => session && String(s.seid) === String(session.seid));
-      this.resetSessionTrend(session, previous);
-      const bearer = view === 'sessions' && level === 'bearer' ?
-        (trendBearer ? data.items.find(b => b.trend_key === trendBearer.trend_key) : data.items[0]) : null;
-      const bearerSelection = bearer || trendBearer;
-      const trendKey = view === 'sessions' && level === 'bearer' ? bearerSelection && bearerSelection.trend_key : view === 'overview' ? 'global' : user ? 'user:' + user.supi : session ? 'session:' + session.seid : null;
+      let rows = this.state.comparisonRows[level];
+      if (view === 'sessions' && rows === undefined) {
+        const first = data.items.find(r => eligible(r, level));
+        if (first) rows = toggle([], first, level);
+      }
       const needsDetail = selected && selected.row.supi && selected.type !== 'events';
-      const calls = [trendKey ? this.loadTrend(trendKey, seconds, token, bearer) : Promise.resolve(null),
+      const calls = [!selected && view === 'overview' ? this.loadTrend('global', seconds, token) :
+        !selected && view === 'sessions' && rows && rows.length ? this.loadComparison(rows, seconds, token) : Promise.resolve(null),
         needsDetail ? this.loadDetail(selected, seconds, token) : Promise.resolve(null)];
       const results = await Promise.all(calls);
       if (!this.active || generation !== this.generation) return;
-      this.setState({data, trend: results[0], detail: results[1],
-        trendBearer: bearerSelection,
-        trendSeid: session ? String(session.seid) : trendSeid,
-        trendSupi: user ? user.supi : trendSupi,
+      const comparisonData = view === 'sessions' && !selected ? results[0] || [] : this.state.comparisonData;
+      if (view === 'sessions' && comparisonData.length && !selected) rows = comparisonData.map(item => item.row);
+      this.setState({data, trend: view === 'overview' ? results[0] : null, detail: results[1], comparisonData,
+        comparisonRows: rows === undefined ? this.state.comparisonRows : {...this.state.comparisonRows, [level]: rows},
         error: null, loading: false, updated: Date.now()});
     } catch (e) {
       if (!this.active || generation !== this.generation || axios.isCancel(e)) return;
@@ -233,19 +231,62 @@ export default class Monitor extends Component {
   };
   change = change => {
     this.stop();
-    if ('seconds' in change || 'selected' in change) this.trendViews.clear();
-    this.setState({...change, ...('seconds' in change ? {trend: null, detail: null} : {}),
-      ...('level' in change ? {data: null, trend: null} : {}), loading: true}, () => this.schedule(0));
+    if ('seconds' in change) this.trendViews.clear();
+    this.setState({...change, ...('seconds' in change ? {trend: null, detail: null, comparisonData: []} : {}),
+      ...('level' in change ? {data: null, trend: null, comparisonData: [], comparisonPicker: false, comparisonError: null} : {}), loading: true}, () => this.schedule(0));
   };
   search = e => { e.preventDefault(); this.change({q: this.state.search.trim(), page: 0}); };
-  select = (row, type) => this.change({selected: {row, type}, detail: null, detailQfi: type === 'sessions' && row.qfi ? row.qfi : null,
-    ...(this.props.view === 'sessions' && type === 'sessions' && ['user', 'session', 'bearer'].includes(this.state.level) ?
-      this.trendSelection(row) : {})});
-  trendSelection = row => this.state.level === 'bearer' ? {trendBearer: row, trend: null} : ({[this.state.level === 'user' ? 'trendSupi' : 'trendSeid']:
-    this.state.level === 'user' ? row.supi : String(row.seid), trend: null});
-  isTrendSelected = row => this.state.level === 'bearer' ? !!this.state.trendBearer && row.trend_key === this.state.trendBearer.trend_key : this.state.level === 'user' ? row.supi === this.state.trendSupi : String(row.seid) === this.state.trendSeid;
+  loadComparison = async (rows, seconds, token) => {
+    const generation = this.generation;
+    const name = row => row.trend_key + '/' + seconds;
+    const entries = rows.map(row => {
+      const old = this.trendViews.get(name(row));
+      return {key: row.trend_key, supi: row.supi || '',
+        ...(old && old.data.cursor ? {cursor: old.data.cursor} : {}),
+        status_only: !!(old && old.nextAt > Date.now())};
+    }).sort((a, b) => a.key.localeCompare(b.key));
+    try {
+      let items = (await get('trends-batch', {seconds, curves: JSON.stringify(entries)}, token)).items;
+      const refresh = items.filter(item => !('points' in item) && (() => {
+        const old = this.trendViews.get(item.key + '/' + seconds);
+        return !old || item.history_state !== old.data.history_state || item.history_reason !== old.data.history_reason ||
+          (item.history_state === 'recording' && item.trend_epoch !== old.data.epoch);
+      })());
+      if (refresh.length) {
+        const fresh = (await get('trends-batch', {seconds, curves: JSON.stringify(refresh.map(item => ({key: item.key,
+          supi: (rows.find(r => r.trend_key === item.key) || {}).supi || ''})))}, token)).items;
+        items = items.map(item => fresh.find(f => f.key === item.key) || item);
+      }
+      return rows.map(row => {
+        const old = this.trendViews.get(name(row));
+        const item = items.find(i => i.key === row.trend_key);
+        const own = !item.object || item.object.supi === row.supi;
+        const trend = 'points' in item ? mergeTrend(old && old.data, item) : {...(old && old.data || {}), ...item};
+        const current = own && item.object ? {...row, ...compact(item.object, this.state.level)} : row;
+        if (generation === this.generation) remember(this.trendViews, name(row), {data: trend,
+          nextAt: !('points' in item) && old ? old.nextAt : seconds > 1800 ? Date.now() + 60000 : 0});
+        return {row: current, trend};
+      });
+    } catch (e) {
+      if (axios.isCancel(e)) throw e;
+      return rows.map(row => ({row, trend: {...((this.trendViews.get(name(row)) || {}).data || {}),
+        error: '速率历史暂时不可用，等待恢复'}}));
+    }
+  };
+  select = (row, type) => this.change({selected: {row, type}, detail: null,
+    detailQfi: type === 'sessions' && row.qfi ? row.qfi : null});
+  isTrendSelected = row => (this.state.comparisonRows[this.state.level] || []).some(r => r.trend_key === keyOf(row, this.state.level));
   selectTrend = row => {
-    if (!this.isTrendSelected(row)) this.change(this.trendSelection(row));
+    try {
+      const rows = toggle(this.state.comparisonRows[this.state.level] || [], row, this.state.level);
+      this.applyComparison(rows);
+    } catch (e) {this.setState({comparisonError: e.message});}
+  };
+  applyComparison = rows => {
+    const keys = new Set(rows.map(r => r.trend_key));
+    this.change({comparisonRows: {...this.state.comparisonRows, [this.state.level]: rows},
+      comparisonData: this.state.comparisonData.filter(item => keys.has(item.row.trend_key)),
+      comparisonPicker: false, comparisonError: null});
   };
   close = () => this.change({selected: null, detail: null});
   navigate = (view, filters = {}) => {
@@ -309,10 +350,10 @@ export default class Monitor extends Component {
     const base = [['终端 SUPI', r => <button className="xcn-link xcn-mono xcn-nowrap" type="button"
       onClick={e => { e.stopPropagation(); this.select(r, 'sessions'); }}>{value(r.supi)}</button>],
       ['连接状态', r => <Status state={r.cm_state}/>]];
-    if (['user', 'session', 'bearer'].includes(this.state.level)) base.unshift(['走势', r => <label className="xcn-trend-choice"
-      title={'查看此' + (this.state.level === 'user' ? '用户' : this.state.level === 'bearer' ? '承载' : '会话') + '的流量走势'}
-      onClick={e => e.stopPropagation()}><input type="radio" name={'trend-' + this.state.level}
-        aria-label={'查看 ' + r.supi + (this.state.level === 'user' ? '' : ' PSI ' + value(r.psi) + (this.state.level === 'bearer' ? ' QFI ' + r.qfi : '')) + ' 的流量走势'}
+    if (['user', 'session', 'bearer', 'rule'].includes(this.state.level)) base.unshift(['走势', r => <label className="xcn-trend-choice"
+      title={'查看此' + (this.state.level === 'user' ? '用户' : this.state.level === 'bearer' ? '承载' : this.state.level === 'rule' ? '业务规则' : '会话') + '的流量走势'}
+      onClick={e => e.stopPropagation()}><input type="checkbox" disabled={!eligible(r, this.state.level)} name={'trend-' + this.state.level}
+        aria-label={'查看 ' + r.supi + (this.state.level === 'user' ? '' : ' PSI ' + value(r.psi) + (this.state.level === 'bearer' ? ' QFI ' + r.qfi : this.state.level === 'rule' ? ' PDR ' + r.pdr_id : '')) + ' 的流量走势'}
         checked={this.isTrendSelected(r)} onChange={() => this.selectTrend(r)}/></label>]);
     if (this.state.level !== 'user') base.push(['PSI / SEID', r => <span className="xcn-mono xcn-nowrap">{value(r.psi)} / {value(r.seid)}</span>]);
     else base.push(['会话数', r => value(r.session_count)]);
@@ -325,12 +366,12 @@ export default class Monitor extends Component {
   }
   table(view, data) {
     const columns = this.columns(view);
-    const selectable = view === 'sessions' && ['user', 'session', 'bearer'].includes(this.state.level);
+    const selectable = view === 'sessions' && ['user', 'session', 'bearer', 'rule'].includes(this.state.level);
     if (!data.items || !data.items.length) return <Empty/>;
     return <div className="xcn-table-scroll"><table className={'xcn-table' + (view === 'sessions' ? ' xcn-session-table' : '')}><thead><tr>{columns.map(([title]) => <th key={title} scope="col">{title}</th>)}</tr></thead>
       <tbody>{data.items.map((row, i) => <tr key={row.event_id || [row.supi, row.seid, row.qfi, row.pdr_id, row.gnb_id, i].join('/')}
         className={selectable ? 'xcn-trend-row' + (this.isTrendSelected(row) ? ' selected' : '') : undefined}
-        onClick={selectable ? () => this.selectTrend(row) : undefined}>
+        onClick={selectable && eligible(row, this.state.level) ? () => this.selectTrend(row) : undefined}>
         {columns.map(([title, render]) => <td key={title}>{render(row)}</td>)}</tr>)}</tbody></table></div>;
   }
   filters() {
@@ -379,26 +420,19 @@ export default class Monitor extends Component {
     return (((this.props.session || {}).user || {}).roles || []).indexOf('admin') >= 0;
   }
   trafficTrend(data) {
-    const user = this.state.level === 'user', bearer = this.state.level === 'bearer';
-    const label = user ? '用户' : bearer ? '承载' : '会话';
-    const s = bearer ? this.state.trendBearer : rowForTrend(data.items, user ? 'supi' : 'seid', user ? this.state.trendSupi : this.state.trendSeid);
-    const current = !bearer || data.items.some(b => s && b.trend_key === s.trend_key);
-    return <section className="xcn-panel xcn-session-trend" aria-label={label + '流量走势'}
-      data-qfi={bearer && s ? s.qfi : ''} data-seid={s && !user ? s.seid : ''} data-supi={s ? s.supi : ''}>
-      <div className="xcn-panel-heading"><div><h2>{label}流量走势</h2>
-        <p>{user ? '按 SUPI 汇总该用户全部 PDU 会话的上行与下行历史' : bearer ? '所选 QoS 流的上行与下行历史' : '所选 PDU 会话的上行与下行历史'}</p></div>
-        {this.windowPicker()}</div>
-      {s ? <div>
-        <div className="xcn-trend-context"><div className="xcn-trend-identity">
-          <button type="button" className="xcn-link xcn-mono" onClick={() => this.select(s, 'sessions')}>{value(s.supi)}</button>
-          {user ? <span>当前 {value(s.session_count)} 条会话<span>DNN {value(s.dnn)}</span></span> :
-            <span>PSI {value(s.psi)}<span>SEID {value(s.seid)}</span><span>{value(s.dnn)}</span>{bearer && <span>QFI {value(s.qfi)} / 5QI {value(s['5qi'])}</span>}</span>}
-        </div>{!user && <SessionIP session={s}/>}
-          <div className="xcn-trend-rates"><div><span><i className="xcn-flow-dot ul"/>当前上行</span><strong>{current ? rate(s.ul_bps) : '—'}</strong></div>
-            <div><span><i className="xcn-flow-dot dl"/>当前下行</span><strong>{current ? rate(s.dl_bps) : '—'}</strong></div></div>
-        </div>
-        <Chart theme={this.props.theme} trend={this.state.trend}/>
-      </div> : <Empty>暂无匹配的{label}，可调整筛选条件。</Empty>}
+    const level = this.state.level, title = {user: '用户', session: '会话', bearer: '承载', rule: '业务规则'}[level];
+    const rows = this.state.comparisonRows[level] || [];
+    return <section className="xcn-panel xcn-session-trend" aria-label={title + '流量走势'}>
+      <div className="xcn-panel-heading"><div><h2>{title}流量走势</h2><p>已选 {rows.length} / 8 · 实线下行，虚线上行</p></div>{this.windowPicker()}</div>
+      <div className="xcn-comparison-toolbar"><Button onClick={() => this.setState({comparisonPicker: true})}>选择对比</Button>
+        <Button disabled={!rows.length} onClick={() => this.applyComparison([])}>清空选择</Button>
+        {this.state.selected && <span>详情打开时暂停后台走势刷新</span>}</div>
+      {this.state.comparisonError && <p role="alert" className="xcn-chart-warning xcn-comparison-note">{this.state.comparisonError}</p>}
+      <div className="xcn-comparison-chips">{rows.map(row => <span className="xcn-comparison-chip" key={row.trend_key}>
+        <span title={comparisonLabel(row, level, true)}>{comparisonLabel(row, level)}</span>
+        <button type="button" aria-label={'移除 ' + comparisonLabel(row, level, true)} onClick={() => this.selectTrend(row)}>×</button></span>)}</div>
+      {rows.length ? <Chart theme={this.props.theme} comparisons={this.state.comparisonData} level={level}/> :
+        <Empty>选择一个或多个对象查看流量走势。</Empty>}
     </section>;
   }
   sessionRules(s, trend) {
@@ -509,9 +543,9 @@ export default class Monitor extends Component {
       {data && view === 'overview' && this.overview(data)}
       {data && view === 'system' && this.system(data)}
       {data && ['ues', 'gnbs', 'sessions', 'events'].indexOf(view) >= 0 && <section className="xcn-panel">
-        {view === 'sessions' && ['user', 'session', 'bearer'].includes(this.state.level) && <div className="xcn-panel-heading xcn-session-list-heading">
-          <h2>{this.state.level === 'user' ? '用户' : this.state.level === 'bearer' ? '承载' : '会话'}列表</h2>
-          <span>点击{this.state.level === 'user' ? '用户' : this.state.level === 'bearer' ? '承载' : '会话'}行切换走势，点击 SUPI 查看详情</span></div>}
+        {view === 'sessions' && ['user', 'session', 'bearer', 'rule'].includes(this.state.level) && <div className="xcn-panel-heading xcn-session-list-heading">
+          <h2>{this.state.level === 'user' ? '用户' : this.state.level === 'bearer' ? '承载' : this.state.level === 'rule' ? '业务规则' : '会话'}列表</h2>
+          <span>勾选或点击行增减对比对象，点击 SUPI 查看详情</span></div>}
         {view === 'events' && data.coverage && <div className="xcn-event-range"><span>信令覆盖</span>
           <span>{data.coverage.oldest_at ? dateTime(data.coverage.oldest_at) + ' — ' + dateTime(data.coverage.newest_at) : '暂无信令'}</span></div>}
         {view === 'events' ? <Events items={data.items} onSelect={e => this.select(e, 'events')}/> : this.table(view, data)}
@@ -519,8 +553,10 @@ export default class Monitor extends Component {
           <Button disabled={page === 0} onClick={() => this.change({page: page - 1})}>上一页</Button>
           <Button disabled={(page + 1) * 50 >= data.total} onClick={() => this.change({page: page + 1})}>下一页</Button></div></div>
       </section>}
-      {data && view === 'sessions' && ['user', 'session', 'bearer'].includes(this.state.level) && this.trafficTrend(data)}
+      {data && view === 'sessions' && ['user', 'session', 'bearer', 'rule'].includes(this.state.level) && this.trafficTrend(data)}
       {this.detail()}
+      {this.state.comparisonPicker && <ComparisonPicker level={this.state.level} rows={this.state.comparisonRows[this.state.level] || []}
+        onClose={() => this.setState({comparisonPicker: false})} onApply={this.applyComparison}/>}
     </main>;
   }
 }

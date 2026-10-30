@@ -136,9 +136,9 @@ class HistoryTests(unittest.TestCase):
 
     def test_capacity_and_no_active_churn(self):
         c = cache()
-        c.sessions = [session(str(i), 'imsi-' + str(i)) for i in range(300)]
+        c.sessions = [session(str(i), 'imsi-' + str(i)) for i in range(600)]
         c.record_rates(120)
-        self.assertEqual(len(c.curves), 512)
+        self.assertEqual(len(c.curves), 1024)
         self.assertLess(c.trend_bytes(), c.max_trend_bytes)
         epochs = {k: v.epoch for k, v in c.curves.items()}
         c.record_rates(122)
