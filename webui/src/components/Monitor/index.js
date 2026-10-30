@@ -102,7 +102,7 @@ class Drawer extends Component {
 export default class Monitor extends Component {
   trendViews = new Map();
   state = {data: null, trend: null, error: null, loading: true, page: 0, q: '', search: '',
-    cm_state: '', protocol: 'NGAP', level: 'session', rule_scope: 'business', seconds: 1800, trendSeid: null, trendSupi: null,
+    cm_state: '', protocol: 'NGAP', level: 'session', rule_scope: 'business', seconds: 1800, trendSeid: null, trendSupi: null, trendBearer: null, detailQfi: null,
     selected: null, detail: null, identityFilters: {}};
   componentDidMount() {
     this.active = true;
@@ -116,7 +116,7 @@ export default class Monitor extends Component {
       const filters = this.navigateFilters || {};
       this.navigateFilters = null;
       this.setState({data: null, trend: null, error: null, page: 0, q: '', search: '', cm_state: '', protocol: 'NGAP',
-        trendSeid: null, trendSupi: null, selected: null, detail: null, identityFilters: {}, ...filters}, () => this.schedule(0));
+        trendSeid: null, trendSupi: null, trendBearer: null, detailQfi: null, selected: null, detail: null, identityFilters: {}, ...filters}, () => this.schedule(0));
     }
   }
   componentWillUnmount() {
@@ -134,9 +134,14 @@ export default class Monitor extends Component {
     clearTimeout(this.timer);
     if (this.active && !document.hidden) this.timer = setTimeout(this.poll, delay);
   };
-  loadTrend = async (key, seconds, token) => {
+  loadTrend = async (key, seconds, token, bearer) => {
     const name = key + '/' + seconds;
-    const old = this.trendViews.get(name);
+    // A minute response may be reused for 60 seconds, but never across a
+    // bearer instance change, release or admission/eviction transition.
+    const signature = key.startsWith('bearer:') ?
+      (bearer ? [bearer.trend_epoch, bearer.history_state, bearer.history_reason].join('/') : 'absent') : '';
+    const cached = this.trendViews.get(name);
+    const old = cached && cached.signature === signature ? cached : null;
     if (old && old.nextAt > Date.now()) return old.data;
     const generation = this.generation;
     try {
@@ -144,7 +149,11 @@ export default class Monitor extends Component {
       const merged = mergeTrend(old && old.data, data);
       if (generation === this.generation) {
         if (!this.trendViews.has(name) && this.trendViews.size >= 2) this.trendViews.delete(this.trendViews.keys().next().value);
-        this.trendViews.set(name, {data: merged, nextAt: seconds > 1800 ? Date.now() + 60000 : 0});
+        const currentInstance = !bearer || !bearer.trend_epoch || data.epoch === bearer.trend_epoch;
+        // The shared HTTP proxy can return a response up to one second older
+        // than the list. Retry promptly instead of caching that old instance.
+        if (!currentInstance) return {points: [], error: '承载实例已变化，正在读取新历史'};
+        this.trendViews.set(name, {data: merged, signature, nextAt: seconds > 1800 ? Date.now() + 60000 : 0});
       }
       return merged;
     } catch (error) {
@@ -152,7 +161,7 @@ export default class Monitor extends Component {
       const data = {...(old && old.data || {}), error: '速率历史暂时不可用，等待恢复'};
       if (generation === this.generation) {
         if (!this.trendViews.has(name) && this.trendViews.size >= 2) this.trendViews.delete(this.trendViews.keys().next().value);
-        this.trendViews.set(name, {data, nextAt: Date.now() + (seconds > 1800 ? 60000 : 2000)});
+        this.trendViews.set(name, {data, signature, nextAt: Date.now() + (seconds > 1800 ? 60000 : 2000)});
       }
       return data;
     }
@@ -175,15 +184,18 @@ export default class Monitor extends Component {
         String(s.seid) === String(selected.row.seid) && s.supi === supi) || selected.row;
       this.resetSessionTrend(session, previous);
     }
-    const trend = sessionScope && !session ? null : await this.loadTrend(
-      sessionScope ? 'session:' + session.seid : 'user:' + supi, seconds, token);
+    const qfi = this.state.detailQfi;
+    const bearer = session && (session.bearers || []).find(b => b.qfi === qfi);
+    const trend = sessionScope && !session && qfi === null ? null : await this.loadTrend(
+      sessionScope ? qfi !== null ? 'bearer:' + selected.row.seid + ':' + qfi : 'session:' + session.seid :
+        'user:' + supi, seconds, token, bearer);
     return [sessions, events, trend, ues];
   };
   poll = async () => {
     if (!this.active || document.hidden) return;
     const generation = this.generation;
     const {view} = this.props;
-    const {q, page, cm_state, protocol, level, seconds, selected, trendSeid, trendSupi} = this.state;
+    const {q, page, cm_state, protocol, level, seconds, selected, trendSeid, trendSupi, trendBearer} = this.state;
     this.cancel = axios.CancelToken.source();
     const token = this.cancel.token;
     try {
@@ -198,13 +210,17 @@ export default class Monitor extends Component {
       const user = view === 'sessions' && level === 'user' ? rowForTrend(data.items, 'supi', trendSupi) : null;
       const previous = ((this.state.data || {}).items || []).find(s => session && String(s.seid) === String(session.seid));
       this.resetSessionTrend(session, previous);
-      const trendKey = view === 'overview' ? 'global' : user ? 'user:' + user.supi : session ? 'session:' + session.seid : null;
+      const bearer = view === 'sessions' && level === 'bearer' ?
+        (trendBearer ? data.items.find(b => b.trend_key === trendBearer.trend_key) : data.items[0]) : null;
+      const bearerSelection = bearer || trendBearer;
+      const trendKey = view === 'sessions' && level === 'bearer' ? bearerSelection && bearerSelection.trend_key : view === 'overview' ? 'global' : user ? 'user:' + user.supi : session ? 'session:' + session.seid : null;
       const needsDetail = selected && selected.row.supi && selected.type !== 'events';
-      const calls = [trendKey ? this.loadTrend(trendKey, seconds, token) : Promise.resolve(null),
+      const calls = [trendKey ? this.loadTrend(trendKey, seconds, token, bearer) : Promise.resolve(null),
         needsDetail ? this.loadDetail(selected, seconds, token) : Promise.resolve(null)];
       const results = await Promise.all(calls);
       if (!this.active || generation !== this.generation) return;
       this.setState({data, trend: results[0], detail: results[1],
+        trendBearer: bearerSelection,
         trendSeid: session ? String(session.seid) : trendSeid,
         trendSupi: user ? user.supi : trendSupi,
         error: null, loading: false, updated: Date.now()});
@@ -222,12 +238,12 @@ export default class Monitor extends Component {
       ...('level' in change ? {data: null, trend: null} : {}), loading: true}, () => this.schedule(0));
   };
   search = e => { e.preventDefault(); this.change({q: this.state.search.trim(), page: 0}); };
-  select = (row, type) => this.change({selected: {row, type}, detail: null,
-    ...(this.props.view === 'sessions' && type === 'sessions' && ['user', 'session'].includes(this.state.level) ?
+  select = (row, type) => this.change({selected: {row, type}, detail: null, detailQfi: type === 'sessions' && row.qfi ? row.qfi : null,
+    ...(this.props.view === 'sessions' && type === 'sessions' && ['user', 'session', 'bearer'].includes(this.state.level) ?
       this.trendSelection(row) : {})});
-  trendSelection = row => ({[this.state.level === 'user' ? 'trendSupi' : 'trendSeid']:
+  trendSelection = row => this.state.level === 'bearer' ? {trendBearer: row, trend: null} : ({[this.state.level === 'user' ? 'trendSupi' : 'trendSeid']:
     this.state.level === 'user' ? row.supi : String(row.seid), trend: null});
-  isTrendSelected = row => this.state.level === 'user' ? row.supi === this.state.trendSupi : String(row.seid) === this.state.trendSeid;
+  isTrendSelected = row => this.state.level === 'bearer' ? !!this.state.trendBearer && row.trend_key === this.state.trendBearer.trend_key : this.state.level === 'user' ? row.supi === this.state.trendSupi : String(row.seid) === this.state.trendSeid;
   selectTrend = row => {
     if (!this.isTrendSelected(row)) this.change(this.trendSelection(row));
   };
@@ -293,10 +309,10 @@ export default class Monitor extends Component {
     const base = [['终端 SUPI', r => <button className="xcn-link xcn-mono xcn-nowrap" type="button"
       onClick={e => { e.stopPropagation(); this.select(r, 'sessions'); }}>{value(r.supi)}</button>],
       ['连接状态', r => <Status state={r.cm_state}/>]];
-    if (['user', 'session'].includes(this.state.level)) base.unshift(['走势', r => <label className="xcn-trend-choice"
-      title={'查看此' + (this.state.level === 'user' ? '用户' : '会话') + '的流量走势'}
+    if (['user', 'session', 'bearer'].includes(this.state.level)) base.unshift(['走势', r => <label className="xcn-trend-choice"
+      title={'查看此' + (this.state.level === 'user' ? '用户' : this.state.level === 'bearer' ? '承载' : '会话') + '的流量走势'}
       onClick={e => e.stopPropagation()}><input type="radio" name={'trend-' + this.state.level}
-        aria-label={'查看 ' + r.supi + (this.state.level === 'user' ? '' : ' PSI ' + value(r.psi)) + ' 的流量走势'}
+        aria-label={'查看 ' + r.supi + (this.state.level === 'user' ? '' : ' PSI ' + value(r.psi) + (this.state.level === 'bearer' ? ' QFI ' + r.qfi : '')) + ' 的流量走势'}
         checked={this.isTrendSelected(r)} onChange={() => this.selectTrend(r)}/></label>]);
     if (this.state.level !== 'user') base.push(['PSI / SEID', r => <span className="xcn-mono xcn-nowrap">{value(r.psi)} / {value(r.seid)}</span>]);
     else base.push(['会话数', r => value(r.session_count)]);
@@ -309,7 +325,7 @@ export default class Monitor extends Component {
   }
   table(view, data) {
     const columns = this.columns(view);
-    const selectable = view === 'sessions' && ['user', 'session'].includes(this.state.level);
+    const selectable = view === 'sessions' && ['user', 'session', 'bearer'].includes(this.state.level);
     if (!data.items || !data.items.length) return <Empty/>;
     return <div className="xcn-table-scroll"><table className={'xcn-table' + (view === 'sessions' ? ' xcn-session-table' : '')}><thead><tr>{columns.map(([title]) => <th key={title} scope="col">{title}</th>)}</tr></thead>
       <tbody>{data.items.map((row, i) => <tr key={row.event_id || [row.supi, row.seid, row.qfi, row.pdr_id, row.gnb_id, i].join('/')}
@@ -363,27 +379,30 @@ export default class Monitor extends Component {
     return (((this.props.session || {}).user || {}).roles || []).indexOf('admin') >= 0;
   }
   trafficTrend(data) {
-    const user = this.state.level === 'user', label = user ? '用户' : '会话';
-    const s = rowForTrend(data.items, user ? 'supi' : 'seid', user ? this.state.trendSupi : this.state.trendSeid);
+    const user = this.state.level === 'user', bearer = this.state.level === 'bearer';
+    const label = user ? '用户' : bearer ? '承载' : '会话';
+    const s = bearer ? this.state.trendBearer : rowForTrend(data.items, user ? 'supi' : 'seid', user ? this.state.trendSupi : this.state.trendSeid);
+    const current = !bearer || data.items.some(b => s && b.trend_key === s.trend_key);
     return <section className="xcn-panel xcn-session-trend" aria-label={label + '流量走势'}
-      data-seid={s && !user ? s.seid : ''} data-supi={s ? s.supi : ''}>
+      data-qfi={bearer && s ? s.qfi : ''} data-seid={s && !user ? s.seid : ''} data-supi={s ? s.supi : ''}>
       <div className="xcn-panel-heading"><div><h2>{label}流量走势</h2>
-        <p>{user ? '按 SUPI 汇总该用户全部 PDU 会话的上行与下行历史' : '所选 PDU 会话的上行与下行历史'}</p></div>
+        <p>{user ? '按 SUPI 汇总该用户全部 PDU 会话的上行与下行历史' : bearer ? '所选 QoS 流的上行与下行历史' : '所选 PDU 会话的上行与下行历史'}</p></div>
         {this.windowPicker()}</div>
       {s ? <div>
         <div className="xcn-trend-context"><div className="xcn-trend-identity">
           <button type="button" className="xcn-link xcn-mono" onClick={() => this.select(s, 'sessions')}>{value(s.supi)}</button>
           {user ? <span>当前 {value(s.session_count)} 条会话<span>DNN {value(s.dnn)}</span></span> :
-            <span>PSI {value(s.psi)}<span>SEID {value(s.seid)}</span><span>{value(s.dnn)}</span></span>}
+            <span>PSI {value(s.psi)}<span>SEID {value(s.seid)}</span><span>{value(s.dnn)}</span>{bearer && <span>QFI {value(s.qfi)} / 5QI {value(s['5qi'])}</span>}</span>}
         </div>{!user && <SessionIP session={s}/>}
-          <div className="xcn-trend-rates"><div><span><i className="xcn-flow-dot ul"/>当前上行</span><strong>{rate(s.ul_bps)}</strong></div>
-            <div><span><i className="xcn-flow-dot dl"/>当前下行</span><strong>{rate(s.dl_bps)}</strong></div></div>
+          <div className="xcn-trend-rates"><div><span><i className="xcn-flow-dot ul"/>当前上行</span><strong>{current ? rate(s.ul_bps) : '—'}</strong></div>
+            <div><span><i className="xcn-flow-dot dl"/>当前下行</span><strong>{current ? rate(s.dl_bps) : '—'}</strong></div></div>
         </div>
         <Chart theme={this.props.theme} trend={this.state.trend}/>
       </div> : <Empty>暂无匹配的{label}，可调整筛选条件。</Empty>}
     </section>;
   }
   sessionRules(s, trend) {
+    const qfi = this.state.detailQfi;
     return <section className="xcn-session-detail" key={s.seid} aria-label={'PSI ' + value(s.psi) + ' 会话信息'}>
       <div className="xcn-session-heading"><h3>会话信息</h3><span>PSI {value(s.psi)}</span><span className="xcn-dnn">{value(s.dnn)}</span>
         <span className="xcn-mono">SEID {value(s.seid)}</span></div>
@@ -391,17 +410,26 @@ export default class Monitor extends Component {
         <div><dt><i className="xcn-flow-dot ul"/>当前上行</dt><dd>{rate(s.ul_bps)}</dd></div>
         <div><dt><i className="xcn-flow-dot dl"/>当前下行</dt><dd>{rate(s.dl_bps)}</dd></div></dl>
       {trend !== undefined && <section className="xcn-detail-trend" aria-label="会话速率走势">
-        <div className="xcn-panel-heading"><h3>会话速率走势</h3>{this.windowPicker()}</div>
+        <div className="xcn-panel-heading"><h3>{qfi === null ? '会话速率走势' : '承载速率走势 · QFI ' + qfi}</h3>
+          <select aria-label="详情走势对象" value={qfi === null ? 'session' : String(qfi)}
+            onChange={e => this.change({detailQfi: e.target.value === 'session' ? null : Number(e.target.value), detail: null})}>
+            <option value="session">整个会话</option>
+            {(s.bearers || []).map(b => <option key={b.qfi} value={String(b.qfi)}>QFI {b.qfi}</option>)}
+            {qfi !== null && !(s.bearers || []).some(b => b.qfi === qfi) && <option value={String(qfi)}>QFI {qfi} · 已释放</option>}
+          </select>{this.windowPicker()}</div>
         <Chart theme={this.props.theme} trend={trend}/></section>}
       <SessionPolicyStatus session={s}/>
       <section className="xcn-session-forwarding" aria-label="承载与规则">
       <h3>承载与规则</h3><h4>QoS 流</h4>{(s.bearers || []).length ? <div className="xcn-table-scroll"><table className="xcn-table" aria-label="会话 QoS 流">
-        <thead><tr><th>QFI</th><th>类型</th><th>5QI</th><th>上行</th><th>下行</th></tr></thead>
+        <thead><tr><th>QFI</th><th>类型</th><th>5QI</th><th>上行</th><th>下行</th><th>走势</th></tr></thead>
         <tbody>{s.bearers.map(b => <tr key={b.qfi}><td>{value(b.qfi)}</td><td>{(() => {
           const q = (s.qos_flows || []).find(q => q.qfi === b.qfi);
           return q && typeof q.is_default === 'boolean' ? q.is_default ? '默认流' : '专载' : '—';
         })()}</td><td>{value(b['5qi'])}</td>
-          <td>{rate(b.ul_bps)}</td><td>{rate(b.dl_bps)}</td></tr>)}</tbody></table></div> : <Empty>暂无承载数据。</Empty>}
+          <td>{rate(b.ul_bps)}</td><td>{rate(b.dl_bps)}</td><td>
+            <button type="button" className="xcn-link" aria-label={'查看 QFI ' + b.qfi + ' 的流量走势'}
+              onClick={() => trend === undefined ? this.select({...s, qfi: b.qfi}, 'sessions') :
+                this.change({detailQfi: b.qfi, detail: null})}>查看走势</button></td></tr>)}</tbody></table></div> : <Empty>暂无承载数据。</Empty>}
       <Rules rules={s.rules} formatRate={rate}/>
       </section>
       {this.canControl() && <SessionControls key={s.supi + "/" + s.psi + "/" + s.seid} session={s}/>}
@@ -441,7 +469,8 @@ export default class Monitor extends Component {
         <Button onClick={() => this.navigate('ues', {identityFilters: {gnb_id: String(r.gnb_id), plmn: r.plmn, gnb_id_bits: String(r.gnb_id_bits)}})}>查看此基站的终端</Button></div>}
       {type === 'sessions' && <div>
         {!detail ? <Empty>正在读取会话详情…</Empty> : !userScope && !session ?
-          <Empty>该会话已释放或不在当前采集结果中，请在列表中选择当前会话。</Empty> :
+          <div><Empty>该会话已释放或不在当前采集结果中，请在列表中选择当前会话。</Empty>
+            {this.state.detailQfi !== null && <Chart theme={this.props.theme} trend={detail[2]}/>}</div> :
           (userScope ? sessions : [session]).map(s => this.sessionRules(s, userScope ? undefined : detail[2]))}
         {detail && userScope && !sessions.length && <Empty>暂无匹配的会话。</Empty>}</div>}
       {type === 'events' && <div><dl className="xcn-fields xcn-event-fields">
@@ -480,9 +509,9 @@ export default class Monitor extends Component {
       {data && view === 'overview' && this.overview(data)}
       {data && view === 'system' && this.system(data)}
       {data && ['ues', 'gnbs', 'sessions', 'events'].indexOf(view) >= 0 && <section className="xcn-panel">
-        {view === 'sessions' && ['user', 'session'].includes(this.state.level) && <div className="xcn-panel-heading xcn-session-list-heading">
-          <h2>{this.state.level === 'user' ? '用户' : '会话'}列表</h2>
-          <span>点击{this.state.level === 'user' ? '用户' : '会话'}行切换走势，点击 SUPI 查看详情</span></div>}
+        {view === 'sessions' && ['user', 'session', 'bearer'].includes(this.state.level) && <div className="xcn-panel-heading xcn-session-list-heading">
+          <h2>{this.state.level === 'user' ? '用户' : this.state.level === 'bearer' ? '承载' : '会话'}列表</h2>
+          <span>点击{this.state.level === 'user' ? '用户' : this.state.level === 'bearer' ? '承载' : '会话'}行切换走势，点击 SUPI 查看详情</span></div>}
         {view === 'events' && data.coverage && <div className="xcn-event-range"><span>信令覆盖</span>
           <span>{data.coverage.oldest_at ? dateTime(data.coverage.oldest_at) + ' — ' + dateTime(data.coverage.newest_at) : '暂无信令'}</span></div>}
         {view === 'events' ? <Events items={data.items} onSelect={e => this.select(e, 'events')}/> : this.table(view, data)}
@@ -490,7 +519,7 @@ export default class Monitor extends Component {
           <Button disabled={page === 0} onClick={() => this.change({page: page - 1})}>上一页</Button>
           <Button disabled={(page + 1) * 50 >= data.total} onClick={() => this.change({page: page + 1})}>下一页</Button></div></div>
       </section>}
-      {data && view === 'sessions' && ['user', 'session'].includes(this.state.level) && this.trafficTrend(data)}
+      {data && view === 'sessions' && ['user', 'session', 'bearer'].includes(this.state.level) && this.trafficTrend(data)}
       {this.detail()}
     </main>;
   }

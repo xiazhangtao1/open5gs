@@ -176,6 +176,7 @@
 .xcn-session-overview dd {margin:6px 0 0; font-size:18px; font-variant-numeric:tabular-nums;}
 .xcn-session-overview .xcn-session-ips {min-width:0; font-size:13px;}
 .xcn-session-detail>.xcn-detail-trend {border-top:1px solid var(--line); padding:0 20px 16px;}
+.xcn-detail-trend>.xcn-panel-heading {flex-wrap:wrap;}
 .xcn-detail-trend .xcn-chart-wrap {padding:0 0 8px;}
 .xcn-session-forwarding {padding:20px 0 0; border-top:1px solid var(--line);}
 .xcn-session-forwarding>h3 {margin:0 20px 16px;}

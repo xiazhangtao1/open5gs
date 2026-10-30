@@ -81,6 +81,10 @@ export default class Chart extends Component {
   render() {
     const trend = this.props.trend || {};
     const empty = !(trend.points || this.props.points || []).some(p => p[1] !== null);
+    const historyMessage = trend.history_state === 'released' ? '承载已释放，显示保留的历史' :
+      trend.history_state === 'unavailable' ? ({capacity: '承载历史容量已满，实时速率仍可查看',
+        memory: '内存保护已暂停承载历史，实时速率仍可查看', identity: '缺少可靠的承载实例标识，暂不记录历史',
+        absent: '承载不存在或历史已淘汰'}[trend.history_reason] || '承载历史暂不可用') : null;
     const failed = this.state && this.state.error;
     const date = t => new Date(t * 1000).toLocaleString('zh-CN', {hour12: false});
     return <div className="xcn-chart-wrap">
@@ -93,11 +97,12 @@ export default class Chart extends Component {
         </select>
       </div>
       <div ref={e => { this.element = e; }} className="xcn-chart" role="img" aria-label="上行与下行速率走势图"/>
-      {(empty || failed) && <div className="xcn-chart-empty">{failed ? '图表资源加载失败，请刷新重试' : '等待流量采样，暂时没有历史数据'}</div>}
+      {(empty || failed) && <div className="xcn-chart-empty">{failed ? '图表资源加载失败，请刷新重试' : historyMessage || '等待流量采样，暂时没有历史数据'}</div>}
       <div className="xcn-chart-caption" role="status">
         <span>{trend.aggregation === 'minute' ? '分钟汇总 · 每分钟更新' : '原始采样'}</span>
         {trend.available_from !== undefined && trend.available_from !== null &&
           <span>已有历史 {date(trend.available_from)} — {date(trend.available_to)}</span>}
+        {historyMessage && <span className="xcn-chart-warning">{historyMessage}</span>}
         {trend.error && <span className="xcn-chart-warning">{trend.error}</span>}
       </div>
     </div>;

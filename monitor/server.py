@@ -151,7 +151,7 @@ def application(token=None, collecting=True):
                 if source.get("identity") and source["identity"][0] != identity[0]:
                     source["reset_count"] = source.get("reset_count", 0) + 1
                     for key in list(cache.curves):
-                        if key.startswith("session:"):
+                        if key.startswith(("session:", "bearer:")):
                             del cache.curves[key]
                 cache.replace("upf_rates", doc["sessions"], config()["rates_interval"])
                 cache.record_rates(stamp, boot_id=identity[0], interval=config()['rates_interval'])
