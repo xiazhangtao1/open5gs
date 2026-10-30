@@ -423,7 +423,7 @@ export default class Monitor extends Component {
     const level = this.state.level, title = {user: '用户', session: '会话', bearer: '承载', rule: '业务规则'}[level];
     const rows = this.state.comparisonRows[level] || [];
     return <section className="xcn-panel xcn-session-trend" aria-label={title + '流量走势'}>
-      <div className="xcn-panel-heading"><div><h2>{title}流量走势</h2><p>已选 {rows.length} / 8 · 实线下行，虚线上行</p></div>{this.windowPicker()}</div>
+      <div className="xcn-panel-heading"><div><h2>{title}流量走势</h2><p>已选 {rows.length} / 8{rows.length ? rows.length === 1 ? ' · 蓝色上行，绿色下行' : ' · 实线下行，点线上行' : ''}</p></div>{this.windowPicker()}</div>
       <div className="xcn-comparison-toolbar"><Button onClick={() => this.setState({comparisonPicker: true})}>选择对比</Button>
         <Button disabled={!rows.length} onClick={() => this.applyComparison([])}>清空选择</Button>
         {this.state.selected && <span>详情打开时暂停后台走势刷新</span>}</div>

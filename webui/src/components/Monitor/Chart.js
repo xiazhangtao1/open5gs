@@ -51,13 +51,14 @@ export default class Chart extends Component {
     const colors = dark ? ['#74a7ff','#4bc8a2','#f5bf66','#c7a0ff','#f59bc0','#67d0e4','#ffad87','#c3cedd'] :
       ['#2563eb','#16805d','#b45309','#9333ea','#be185d','#0e7490','#c2410c','#475569'];
     const items = this.props.comparisons || [{trend: {...trend, points}, row: {}, single: true}];
+    const multiple = items.length > 1;
     const lines = [];
     items.forEach(item => ['UL', 'DL'].forEach((direction, i) => {
       if (this.props.level === 'rule' && item.row.direction !== direction) return;
       if (this.state.direction !== 'all' && this.state.direction !== direction) return;
       lines.push({item, direction, i, name: (item.single ? '' : label(item.row, this.props.level) + ' ') + (i ? '下行' : '上行'),
         id: (item.row.trend_key || 'single') + ':' + direction,
-        color: item.single ? (i ? dark ? '#4bc8a2' : '#16805d' : '#2563eb') : colors[item.row.color % 8]});
+        color: !multiple ? (i ? dark ? '#4bc8a2' : '#16805d' : '#2563eb') : colors[item.row.color % 8]});
     }));
     const previousLegend = ((this.chart.getOption() || {}).legend || [])[0] || {};
     const selected = {};
@@ -96,7 +97,7 @@ export default class Chart extends Component {
         const data = line.item.trend.points || [];
         const buckets = new Map((line.item.trend.buckets || []).map(b => [b[0], b]));
         return {name: line.id, type: 'line', showSymbol: minute || data.length < 2,
-          itemStyle: {color: line.color}, lineStyle: {width: 2, color: line.color, type: line.direction === 'UL' ? 'dashed' : 'solid'},
+          itemStyle: {color: line.color}, lineStyle: {width: 2, color: line.color, type: multiple && line.direction === 'UL' ? 'dotted' : 'solid'},
           symbolSize: minute ? value => {const b = buckets.get(value[0] / 1000);return b && b[3] < 59.999 ? 5 : 0;} : 6,
           connectNulls: false, smooth: this.state.smooth ? 0.25 : false, smoothMonotone: 'x',
           data: data.map(p => [p[0] * 1000, p[line.i + 1] === null ? null : p[line.i + 1] / 1e6])};
