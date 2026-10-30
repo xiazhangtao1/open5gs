@@ -8,6 +8,7 @@ import {SessionControls, SessionPolicyStatus, UserRelease, BulkRelease} from './
 import Rules, {Purpose, ruleIdentifier} from './Rules';
 import {get} from './client';
 import {mergeTrend} from '../../../lib/trends';
+import {sctpPeer, currentGnb, gnbFilters, gnbKey} from '../../../lib/access';
 
 const titles = {overview: '概览', ues: '终端', gnbs: '基站', sessions: '会话', events: '信令', system: '状态'};
 const sourceNames = {amf_ues: '终端', smf_pdus: '会话', amf_gnbs: '基站', upf_rates: '用户面速率',
@@ -105,7 +106,7 @@ export default class Monitor extends Component {
   trendViews = new Map();
   state = {data: null, trend: null, error: null, loading: true, page: 0, q: '', search: '',
     cm_state: '', protocol: 'NGAP', level: 'session', rule_scope: 'business', seconds: 1800, trendSeid: null, trendSupi: null, trendBearer: null, detailQfi: null,
-    selected: null, detail: null, identityFilters: {}, comparisonRows: {}, comparisonData: [], comparisonPicker: false, comparisonError: null};
+    selected: null, detail: null, gnbDetail: null, identityFilters: {}, comparisonRows: {}, comparisonData: [], comparisonPicker: false, comparisonError: null};
   componentDidMount() {
     this.active = true;
     document.addEventListener('visibilitychange', this.visibility);
@@ -118,7 +119,7 @@ export default class Monitor extends Component {
       const filters = this.navigateFilters || {};
       this.navigateFilters = null;
       this.setState({data: null, trend: null, error: null, page: 0, q: '', search: '', cm_state: '', protocol: 'NGAP',
-        trendSeid: null, trendSupi: null, trendBearer: null, detailQfi: null, selected: null, detail: null, comparisonData: [], comparisonPicker: false, identityFilters: {}, ...filters}, () => this.schedule(0));
+        trendSeid: null, trendSupi: null, trendBearer: null, detailQfi: null, selected: null, detail: null, gnbDetail: null, comparisonData: [], comparisonPicker: false, identityFilters: {}, ...filters}, () => this.schedule(0));
     }
   }
   componentWillUnmount() {
@@ -212,14 +213,16 @@ export default class Monitor extends Component {
         if (first) rows = toggle([], first, level);
       }
       const needsDetail = selected && selected.row.supi && selected.type !== 'events';
+      const gnbQuery = selected && selected.type === 'gnbs' && gnbFilters(selected.row);
       const calls = [!selected && view === 'overview' ? this.loadTrend('global', seconds, token) :
         !selected && view === 'sessions' && rows && rows.length ? this.loadComparison(rows, seconds, token) : Promise.resolve(null),
-        needsDetail ? this.loadDetail(selected, seconds, token) : Promise.resolve(null)];
+        needsDetail ? this.loadDetail(selected, seconds, token) : Promise.resolve(null),
+        gnbQuery ? get('gnbs', {...gnbQuery, limit: 2}, token) : Promise.resolve(null)];
       const results = await Promise.all(calls);
       if (!this.active || generation !== this.generation) return;
       const comparisonData = view === 'sessions' && !selected ? results[0] || [] : this.state.comparisonData;
       if (view === 'sessions' && comparisonData.length && !selected) rows = comparisonData.map(item => item.row);
-      this.setState({data, trend: view === 'overview' ? results[0] : null, detail: results[1], comparisonData,
+      this.setState({data, trend: view === 'overview' ? results[0] : null, detail: results[1], gnbDetail: results[2], comparisonData,
         comparisonRows: rows === undefined ? this.state.comparisonRows : {...this.state.comparisonRows, [level]: rows},
         error: null, loading: false, updated: Date.now()});
     } catch (e) {
@@ -273,7 +276,7 @@ export default class Monitor extends Component {
         error: '速率历史暂时不可用，等待恢复'}}));
     }
   };
-  select = (row, type) => this.change({selected: {row, type}, detail: null,
+  select = (row, type) => this.change({selected: {row, type}, detail: null, gnbDetail: null,
     detailQfi: type === 'sessions' && row.qfi ? row.qfi : null});
   isTrendSelected = row => (this.state.comparisonRows[this.state.level] || []).some(r => r.trend_key === keyOf(row, this.state.level));
   selectTrend = row => {
@@ -288,7 +291,7 @@ export default class Monitor extends Component {
       comparisonData: this.state.comparisonData.filter(item => keys.has(item.row.trend_key)),
       comparisonPicker: false, comparisonError: null});
   };
-  close = () => this.change({selected: null, detail: null});
+  close = () => this.change({selected: null, detail: null, gnbDetail: null});
   navigate = (view, filters = {}) => {
     if (view === this.props.view) this.change({...filters, selected: null, page: 0});
     else { this.navigateFilters = filters; this.props.onNavigate(view); }
@@ -337,15 +340,16 @@ export default class Monitor extends Component {
   columns(view) {
     if (view === 'ues') return [['终端 SUPI', r => <button className="xcn-link xcn-mono" type="button" onClick={() => this.select(r, view)}>{value(r.supi)}</button>],
       ['连接状态', r => <Status state={r.cm_state}/>], ['接入基站', r => {
-        const g = r.gnb && r.gnb.gnb_id !== null ? r.gnb : (r.location || {}).gnb || {};
-        return <button type="button" className="xcn-link xcn-mono" disabled={g.gnb_id === undefined || g.gnb_id === null}
-          onClick={() => this.navigate('gnbs', {identityFilters: {gnb_id: String(g.gnb_id), plmn: g.plmn, gnb_id_bits: String(g.gnb_id_bits)}})}>{value(g.gnb_id)}</button>;
-      }], ['PDU 会话', r => (r.pdu_sessions || []).length], ['上行 / 下行', r => <span className="xcn-nowrap">{rate(r.ul_bps)} / {rate(r.dl_bps)}</span>],
+        const g = currentGnb(r), filters = gnbFilters(g);
+        return <button type="button" className="xcn-link xcn-mono" disabled={!filters}
+          onClick={() => this.navigate('gnbs', {identityFilters: filters})}>{value(g && g.gnb_id)}</button>;
+      }], ['SCTP 对端', r => <span className="xcn-mono xcn-nowrap">{value(sctpPeer(currentGnb(r)))}</span>],
+      ['PDU 会话', r => (r.pdu_sessions || []).length], ['上行 / 下行', r => <span className="xcn-nowrap">{rate(r.ul_bps)} / {rate(r.dl_bps)}</span>],
       ['小区 NCI', r => <span className="xcn-mono">{value(((r.location || {}).nr_cgi || {}).nci_hex)}</span>]];
-    if (view === 'gnbs') return [['gNB ID', r => <button type="button" className="xcn-link xcn-mono" onClick={() => this.select(r, view)}>{value(r.gnb_id)}</button>],
+    if (view === 'gnbs') return [['gNB ID', r => <button type="button" className="xcn-link xcn-mono" disabled={!gnbFilters(r)} onClick={() => this.select(r, view)}>{value(r.gnb_id)}</button>],
       ['PLMN', r => value(r.plmn)], ['ID 位数', r => value(r.gnb_id_bits)],
       ['NG 接口', r => <Status state={(r.ng || {}).setup_success ? 'ready' : '未建立'}/>],
-      ['SCTP 对端', r => <span className="xcn-mono">{value((((r.ng || {}).sctp || {}).peer))}</span>],
+      ['SCTP 对端', r => <span className="xcn-mono xcn-nowrap">{value(sctpPeer(r))}</span>],
       ['关联终端', r => (r.associated_ues || []).length], ['观测小区', r => (r.observed_cells || []).length]];
     const base = [['终端 SUPI', r => <button className="xcn-link xcn-mono xcn-nowrap" type="button"
       onClick={e => { e.stopPropagation(); this.select(r, 'sessions'); }}>{value(r.supi)}</button>],
@@ -369,7 +373,7 @@ export default class Monitor extends Component {
     const selectable = view === 'sessions' && ['user', 'session', 'bearer', 'rule'].includes(this.state.level);
     if (!data.items || !data.items.length) return <Empty/>;
     return <div className="xcn-table-scroll"><table className={'xcn-table' + (view === 'sessions' ? ' xcn-session-table' : '')}><thead><tr>{columns.map(([title]) => <th key={title} scope="col">{title}</th>)}</tr></thead>
-      <tbody>{data.items.map((row, i) => <tr key={row.event_id || [row.supi, row.seid, row.qfi, row.pdr_id, row.gnb_id, i].join('/')}
+      <tbody>{data.items.map((row, i) => <tr key={row.event_id || (view === 'gnbs' && gnbKey(row)) || [row.supi, row.seid, row.qfi, row.pdr_id, row.gnb_id, i].join('/')}
         className={selectable ? 'xcn-trend-row' + (this.isTrendSelected(row) ? ' selected' : '') : undefined}
         onClick={selectable && eligible(row, this.state.level) ? () => this.selectTrend(row) : undefined}>
         {columns.map(([title, render]) => <td key={title}>{render(row)}</td>)}</tr>)}</tbody></table></div>;
@@ -470,7 +474,7 @@ export default class Monitor extends Component {
     </section>;
   }
   detail() {
-    const {selected, detail} = this.state;
+    const {selected, detail, gnbDetail} = this.state;
     if (!selected) return null;
     const type = selected.type;
     const sessions = detail ? detail[0].items : [], events = detail ? detail[1].items : [];
@@ -478,10 +482,11 @@ export default class Monitor extends Component {
     let r = selected.row;
     const rows = (this.state.data || {}).items || [];
     const session = sessions.find(s => String(s.seid) === String(r.seid) && s.supi === r.supi);
-    if (type === 'ues' && detail) r = detail[3].items[0] || r;
+    if (type === 'ues' && detail) r = detail[3].items.find(u => u.supi === r.supi) || {...r, cm_state: 'unknown', gnb: null, pdu_sessions: []};
     else if (type === 'sessions' && !userScope) r = session || r;
     else if (type === 'sessions' && this.props.view === type) r = rows.find(s => s.supi === r.supi && !s.seid) || r;
-    else if (type === 'gnbs' && this.props.view === type) r = rows.find(s => s.gnb_id === r.gnb_id && s.plmn === r.plmn && s.gnb_id_bits === r.gnb_id_bits) || r;
+    else if (type === 'gnbs' && gnbDetail) r = gnbDetail.items.length === 1 && gnbKey(gnbDetail.items[0]) === gnbKey(r) ? gnbDetail.items[0] : r;
+    const gnbReady = type === 'gnbs' && gnbDetail && gnbDetail.items.length === 1 && gnbKey(gnbDetail.items[0]) === gnbKey(selected.row);
     // Event identity is event_id, never SUPI: one terminal has many events.
     const id = type === 'events' ? r.name : r.supi || (r.gnb_id !== undefined ? r.gnb_id : r.name);
     const raw = userScope ? {...r, sessions} : r;
@@ -494,13 +499,16 @@ export default class Monitor extends Component {
       {type === 'ues' && r.supi && this.canControl() && <UserRelease key={r.supi} supi={r.supi}/>}
       {type === 'ues' && <div><h3>接入与位置</h3><dl className="xcn-fields"><dt>位置状态</dt><dd>{value((r.location || {}).status)}</dd>
         <dt>gNB / PLMN</dt><dd className="xcn-mono">{value((r.gnb || (r.location || {}).gnb || {}).gnb_id)} / {value((r.gnb || (r.location || {}).gnb || {}).plmn)}</dd>
+        <dt>SCTP 对端</dt><dd className="xcn-mono">{value(sctpPeer(currentGnb(r)))}</dd>
         <dt>小区 NCI</dt><dd className="xcn-mono">{value(((r.location || {}).nr_cgi || {}).nci_hex)}</dd></dl>
         <h3>AMF 当前 PDU 会话</h3>{(r.pdu_sessions || []).map((p, i) => <div className="xcn-detail-session" key={i}>
           <b>PSI {p.psi} / {p.dnn}</b><p className="xcn-mono">IPv4 {value(p.ipv4)}　IPv6 {value(p.ipv6)}</p><Raw data={p}/></div>)}</div>}
-      {type === 'gnbs' && <div><h3>关联终端</h3>{(r.associated_ues || []).map((u, i) => <div className="xcn-detail-session" key={i}>
+      {type === 'gnbs' && <div><dl className="xcn-fields"><dt>SCTP 对端</dt><dd className="xcn-mono">{value(sctpPeer(selected.row))}</dd></dl>
+        {!gnbReady ? <Empty>{!gnbDetail ? '正在读取基站详情…' : '当前缓存中无法唯一定位此连接，关联信息暂不可用。'}</Empty> : <div>
+        <h3>关联终端</h3>{(r.associated_ues || []).map((u, i) => <div className="xcn-detail-session" key={i}>
         <button type="button" className="xcn-link xcn-mono" onClick={() => this.select(u, 'ues')}>{u.supi}</button> <Status state={u.cm_state}/></div>)}
         <h3>观测到的小区</h3><Raw data={r.observed_cells}/>
-        <Button onClick={() => this.navigate('ues', {identityFilters: {gnb_id: String(r.gnb_id), plmn: r.plmn, gnb_id_bits: String(r.gnb_id_bits)}})}>查看此基站的终端</Button></div>}
+        <Button onClick={() => this.navigate('ues', {identityFilters: gnbFilters(r)})}>查看此基站的终端</Button></div>}</div>}
       {type === 'sessions' && <div>
         {!detail ? <Empty>正在读取会话详情…</Empty> : !userScope && !session ?
           <div><Empty>该会话已释放或不在当前采集结果中，请在列表中选择当前会话。</Empty>
@@ -517,7 +525,7 @@ export default class Monitor extends Component {
       {r.supi && type === 'ues' && <div><h3>UPF 会话</h3>{sessions.length ? sessions.map(s => <div className="xcn-detail-session" key={s.seid}>
         <button type="button" className="xcn-link" onClick={() => this.select(s, 'sessions')}>PSI {value(s.psi)} / {s.dnn}</button>
         <p className="xcn-mono">SEID {s.seid}　{value(s.ue_ip)}</p><p>{rate(s.ul_bps)} ↑　{rate(s.dl_bps)} ↓</p></div>) : <Empty>{detail ? '暂无匹配的 UPF 会话。' : '正在读取会话…'}</Empty>}</div>}
-      <Raw data={raw} label={type === 'events' ? '查看信令记录（JSON）' : undefined}/>
+      {(type !== 'gnbs' || gnbReady) && <Raw data={raw} label={type === 'events' ? '查看信令记录（JSON）' : undefined}/>}
       {r.supi && type !== 'events' && <div><h3>终端近期信令</h3>
         <Events compact items={events} onSelect={e => this.select(e, 'events')}/></div>}
     </Drawer>;

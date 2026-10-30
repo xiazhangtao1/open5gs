@@ -42,6 +42,23 @@ def gnb_key(gnb):
     return (plmn, *identity) if identity and isinstance(plmn, str) and plmn not in ("", "-") else None
 
 
+def sctp_peer(gnb):
+    if not isinstance(gnb, dict):
+        return None
+    peer = gnb.get("peer") if "peer" in gnb else ((gnb.get("ng") or {}).get("sctp") or {}).get("peer")
+    return peer if isinstance(peer, str) and 0 < len(peer) <= 128 and peer.strip() and peer not in ("-", "unknown") else None
+
+
+def gnb_connection_key(gnb):
+    identity, peer = gnb_key(gnb), sctp_peer(gnb)
+    return (*identity, peer) if identity and peer else None
+
+
+def current_gnb(ue):
+    gnb = ue.get("gnb") or {}
+    return gnb if isinstance(gnb, dict) and ue.get("cm_state") == "connected" and gnb.get("status") == "associated" else None
+
+
 def normalize_location(ue):
     """Mirror xcnctl's 36-bit NCI split; never assume a 22-bit gNB ID."""
     loc = ue.get("location") or {}
@@ -348,18 +365,16 @@ class Cache:
             g["associated_ues"], cells = [], {}
             g["ue_info_available"] = self.source("amf_ues")["updated_at"] is not None
             g["observed_cells_source"] = "ue-location-reports"
-            peer = ((g.get("ng") or {}).get("sctp") or {}).get("peer")
+            connection = gnb_connection_key(g)
             for u in ues:
                 loc = u.get("location") or {}
-                current = u.get("gnb") or {}
-                if gnb_key(g) is None:
+                current = current_gnb(u)
+                if connection is None:
                     continue
-                if (u.get("cm_state") == "connected" and gnb_key(g) == gnb_key(current)
-                        and (not peer or not current.get("peer") or peer == current["peer"])
-                        and current.get("status", "associated") == "associated"):
+                if connection == gnb_connection_key(current):
                     g["associated_ues"].append(dict(supi=u.get("supi"), cm_state=u.get("cm_state"), gnb=current,
                         pdu_sessions=u.get("pdu_sessions"), pdu_sessions_count=len(u.get("pdu_sessions", [])), location=loc))
-                if gnb_key(g) != gnb_key(loc.get("gnb")):
+                if connection != gnb_connection_key(loc.get("gnb")):
                     continue
                 cgi = loc.get("nr_cgi") or {}
                 if cgi.get("nci") is not None and cgi.get("plmn") and loc.get("timestamp"):
@@ -813,6 +828,8 @@ class Cache:
             if value:
                 rows = [r for r in rows if str(r.get(name, (r.get("gnb") or
                             (r.get("location") or {}).get("gnb") or {}).get(name, ""))) == value]
+        if query.get("sctp_peer") and endpoint in ("ues", "gnbs"):
+            rows = [r for r in rows if sctp_peer(current_gnb(r) if endpoint == "ues" else r) == query["sctp_peer"]]
         if query.get("active_only") == "1":
             rows = [r for r in rows if r.get("active_in_amf")]
         if query.get("q"):

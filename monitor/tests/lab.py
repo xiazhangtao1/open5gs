@@ -27,7 +27,7 @@ for i in range(100):
     supi = f"imsi-0010100{i:08d}"
     gnb = dict(gnb_id=100 + i % 3, gnb_id_bits=28, plmn="00101", peer=f"192.0.2.{10 + i % 3}:38412")
     u = dict(supi=supi, cm_state="connected" if i < 75 else "idle", identity=dict(suci="suci-lab", pei="imei-lab"),
-             security=dict(valid=True, enc="nea0", int="nia2"), gnb=gnb if i < 75 else None,
+             security=dict(valid=True, enc="nea0", int="nia2"), gnb=dict(gnb, status="associated") if i < 75 else None,
              location=dict(timestamp=int(started * 1e6), gnb=gnb, nr_cgi=dict(plmn="00101", nci=(gnb["gnb_id"] << 8) | 3),
                            nr_tai=dict(plmn="00101", tac=1)), pdu_sessions=[])
     pd = dict(supi=supi, pdu=[])
