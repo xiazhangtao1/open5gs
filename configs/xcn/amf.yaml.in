@@ -19,6 +19,8 @@ amf:
       scp:
         - uri: http://127.0.0.200:7777
   ngap:
+    node_profile:
+      enabled: true
     server:
       - address: 127.0.0.5
   metrics:

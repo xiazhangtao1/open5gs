@@ -19,6 +19,7 @@
 
 #include "ue-events.h"
 #include "ngap-path.h"
+#include "node-profile.h"
 
 static amf_context_t self;
 
@@ -49,6 +50,8 @@ void amf_context_init(void)
 
     /* Initialize AMF context */
     memset(&self, 0, sizeof(amf_context_t));
+    self.node_profile_enabled = true;
+    amf_node_profile_init();
 
     ogs_log_install_domain(&__ogs_sctp_domain, "sctp", ogs_core()->log.level);
     ogs_log_install_domain(&__ogs_ngap_domain, "ngap", ogs_core()->log.level);
@@ -112,6 +115,7 @@ void amf_context_final(void)
     ogs_pool_final(&amf_ue_pool);
     ogs_pool_final(&ran_ue_pool);
     ogs_pool_final(&amf_gnb_pool);
+    amf_node_profile_init();
 
     context_initialized = 0;
 }
@@ -123,6 +127,7 @@ amf_context_t *amf_self(void)
 
 static int amf_context_prepare(void)
 {
+    self.node_profile_enabled = true;
     self.relative_capacity = 0xff;
 
     self.ngap_port = OGS_NGAP_SCTP_PORT;
@@ -235,7 +240,31 @@ int amf_context_parse_config(void)
                     while (ogs_yaml_iter_next(&ngap_iter)) {
                         const char *ngap_key = ogs_yaml_iter_key(&ngap_iter);
                         ogs_assert(ngap_key);
-                        if (!strcmp(ngap_key, "server")) {
+                        if (!strcmp(ngap_key, "node_profile")) {
+                            ogs_yaml_iter_t profile_iter;
+                            ogs_yaml_iter_recurse(&ngap_iter, &profile_iter);
+                            if (ogs_yaml_iter_type(&profile_iter) != YAML_MAPPING_NODE) {
+                                ogs_error("amf.ngap.node_profile must be a mapping");
+                                return OGS_ERROR;
+                            }
+                            while (ogs_yaml_iter_next(&profile_iter)) {
+                                const char *key = ogs_yaml_iter_key(&profile_iter);
+                                const char *value = NULL;
+                                ogs_yaml_iter_t value_iter;
+                                ogs_yaml_iter_recurse(&profile_iter, &value_iter);
+                                if (strcmp(key, "enabled") ||
+                                        ogs_yaml_iter_type(&value_iter) != YAML_SCALAR_NODE) {
+                                    ogs_error("Invalid amf.ngap.node_profile setting");
+                                    return OGS_ERROR;
+                                }
+                                value = ogs_yaml_iter_value(&value_iter);
+                                if (!value || (strcmp(value, "true") && strcmp(value, "false"))) {
+                                    ogs_error("amf.ngap.node_profile.enabled must be true or false");
+                                    return OGS_ERROR;
+                                }
+                                self.node_profile_enabled = !strcmp(value, "true");
+                            }
+                        } else if (!strcmp(ngap_key, "server")) {
                             ogs_yaml_iter_t server_iter, server_array;
                             ogs_yaml_iter_recurse(&ngap_iter, &server_array);
                             do {

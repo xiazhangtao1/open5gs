@@ -53,6 +53,24 @@ amf_location_test = executable('amf-location-test',
     dependencies : libamf_dep)
 test('amf-location', amf_location_test, suite: 'unit')
 
+node_profile_test = executable('node-profile-test',
+    sources : files('node-profile-test.c', '../../src/amf/node-profile.c'),
+    dependencies : [node_profile_amf_dep, node_profile_gnb_dep])
+test('node-profile', node_profile_test, suite : 'unit')
+
+ngap_node_profile_test = executable('ngap-node-profile-test',
+    sources : files('ngap-node-profile-test.c'),
+    link_args : ['-Wl,--wrap=time',
+                 '-Wl,--wrap=ngap_send_ng_setup_response',
+                 '-Wl,--wrap=ngap_send_ng_setup_failure'],
+    dependencies : [libamf_dep, node_profile_gnb_dep])
+test('ngap-node-profile', ngap_node_profile_test, suite : 'unit')
+
+executable('ngap-node-profile-probe',
+    sources : files('ngap-node-profile-probe.c'),
+    dependencies : [libngap_dep, libsctp_dep, node_profile_gnb_dep],
+    install : false)
+
 smf_events_test = executable('smf-events-test',
     sources : files('smf-events-test.c'),
     include_directories : include_directories('../../src/smf'),

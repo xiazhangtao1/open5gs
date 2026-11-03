@@ -298,6 +298,8 @@ networking:
   amf:
     ngap:
       serverAddress: 0.0.0.0
+      nodeProfile:
+        enabled: true
   upf:
     # Recommended deployment selector: "tun" or "memif". Empty retains
     # legacy backend/vpp/sessionWorkers overrides; their defaults resolve to

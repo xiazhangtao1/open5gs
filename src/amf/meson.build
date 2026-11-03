@@ -50,6 +50,7 @@ libamf_sources = files('''
     ngap-handler.c
     ngap-path.c
     ngap-sm.c
+    node-profile.c
 
     nas-security.c
 
@@ -71,7 +72,7 @@ libamf_sources = files('''
 
 libamf = static_library('amf',
     sources : libamf_sources,
-    dependencies : [libmetrics_dep,
+    dependencies : [node_profile_amf_dep, libmetrics_dep,
                     libsctp_dep,
                     libngap_dep,
                     libnas_5gs_dep,
@@ -80,7 +81,7 @@ libamf = static_library('amf',
 
 libamf_dep = declare_dependency(
     link_with : libamf,
-    dependencies : [libmetrics_dep,
+    dependencies : [node_profile_amf_dep, libmetrics_dep,
                     libsctp_dep,
                     libngap_dep,
                     libnas_5gs_dep,

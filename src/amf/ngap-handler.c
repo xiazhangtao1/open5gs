@@ -22,6 +22,8 @@
 #include "ngap-path.h"
 #include "sbi-path.h"
 #include "nas-path.h"
+#include "node-profile.h"
+#include <time.h>
 
 bool amf_gnb_decode_global_id(NGAP_GlobalGNB_ID_t *global,
         uint32_t *id, uint8_t *bits)
@@ -46,13 +48,13 @@ bool amf_gnb_decode_global_id(NGAP_GlobalGNB_ID_t *global,
     return true;
 }
 
-static bool maximum_number_of_gnbs_is_reached(void)
+static bool maximum_number_of_gnbs_is_reached(const amf_gnb_t *current)
 {
     amf_gnb_t *gnb = NULL, *next_gnb = NULL;
     int number_of_gnbs_online = 0;
 
     ogs_list_for_each_safe(&amf_self()->gnb_list, next_gnb, gnb) {
-        if (gnb->state.ng_setup_success) {
+        if (gnb != current && gnb->state.ng_setup_success) {
             number_of_gnbs_online++;
         }
     }
@@ -152,6 +154,8 @@ void ngap_handle_ng_setup_request(amf_gnb_t *gnb, ogs_ngap_message_t *message)
     NGAP_GlobalGNB_ID_t *globalGNB_ID = NULL;
     NGAP_SupportedTAList_t *SupportedTAList = NULL;
     NGAP_PagingDRX_t *PagingDRX = NULL;
+    NGAP_RANNodeName_t *RANNodeName = NULL;
+    int ran_node_name_count = 0;
 
     NGAP_Cause_PR group = NGAP_Cause_PR_NOTHING;
     long cause = 0;
@@ -173,6 +177,11 @@ void ngap_handle_ng_setup_request(amf_gnb_t *gnb, ogs_ngap_message_t *message)
     for (i = 0; i < NGSetupRequest->protocolIEs.list.count; i++) {
         ie = NGSetupRequest->protocolIEs.list.array[i];
         switch (ie->id) {
+        case NGAP_ProtocolIE_ID_id_RANNodeName:
+            ran_node_name_count++;
+            if (ie->value.present == NGAP_NGSetupRequestIEs__value_PR_RANNodeName)
+                RANNodeName = &ie->value.choice.RANNodeName;
+            break;
         case NGAP_ProtocolIE_ID_id_GlobalRANNodeID:
             GlobalRANNodeID = &ie->value.choice.GlobalRANNodeID;
             break;
@@ -184,6 +193,27 @@ void ngap_handle_ng_setup_request(amf_gnb_t *gnb, ogs_ngap_message_t *message)
             break;
         default:
             break;
+        }
+    }
+
+    if (amf_self()->node_profile_enabled) {
+        time_t now = time(NULL);
+        r = XCN_AUTH_ERR_FORMAT;
+        if (ran_node_name_count == 1 && RANNodeName && RANNodeName->buf) {
+            if (now == (time_t)-1 || now < 0)
+                r = XCN_AUTH_ERR_TIME;
+            else
+                r = amf_node_profile_check((const char *)RANNodeName->buf,
+                        RANNodeName->size, (uint64_t)now);
+        }
+        if (r != XCN_AUTH_OK) {
+            gnb->state.ng_setup_success = false;
+            ogs_warn("NG-Setup node profile rejected [reason:%d peer:%s id:%u]",
+                    r, OGS_ADDR(gnb->sctp.addr, buf), gnb->id);
+            r = ngap_send_ng_setup_failure(gnb,
+                    NGAP_Cause_PR_misc, NGAP_CauseMisc_unspecified);
+            ogs_expect(r == OGS_OK);
+            return;
         }
     }
 
@@ -390,7 +420,7 @@ void ngap_handle_ng_setup_request(amf_gnb_t *gnb, ogs_ngap_message_t *message)
         gnb->num_of_supported_ta_list++;
     }
 
-    if (maximum_number_of_gnbs_is_reached()) {
+    if (maximum_number_of_gnbs_is_reached(gnb)) {
         ogs_warn("NG-Setup failure:");
         ogs_warn("    Maximum number of gNBs reached");
         group = NGAP_Cause_PR_misc;

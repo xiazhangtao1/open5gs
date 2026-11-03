@@ -106,6 +106,7 @@ typedef struct amf_context_s {
 
     /* NGSetupResponse */
     uint8_t         relative_capacity;
+    bool            node_profile_enabled;
 
     /* Generator for unique identification */
     uint64_t        amf_ue_ngap_id; /* amf_ue_ngap_id generator */

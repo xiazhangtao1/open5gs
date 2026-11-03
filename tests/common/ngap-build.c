@@ -18,6 +18,7 @@
  */
 
 #include "test-common.h"
+#include "xcn_auth.h"
 
 static ogs_pkbuf_t *testngap_build_pdu_session_resource_setup_response_trasfer(
         test_sess_t *sess);
@@ -39,7 +40,7 @@ ogs_pkbuf_t *testngap_build_ng_setup_request(uint32_t gnb_id, uint8_t bitsize)
     ogs_pkbuf_t *pkbuf = NULL;
     int i, j, k, num = 0;
     ogs_plmn_id_t *plmn_id = NULL;
-    const char *ran_node_name = "5G gNB-CU";
+    char ran_node_name[XCN_AUTH_RAN_NAME_LEN + 1];
 
     NGAP_NGAP_PDU_t pdu;
     NGAP_InitiatingMessage_t *initiatingMessage = NULL;
@@ -56,6 +57,8 @@ ogs_pkbuf_t *testngap_build_ng_setup_request(uint32_t gnb_id, uint8_t bitsize)
     NGAP_PLMNIdentity_t *pLMNIdentity = NULL;
     NGAP_PagingDRX_t *PagingDRX = NULL;
 
+    ogs_assert(gnb_build_ran_node_name(ran_node_name,
+                sizeof(ran_node_name)) == XCN_AUTH_OK);
     memset(&pdu, 0, sizeof (NGAP_NGAP_PDU_t));
     pdu.present = NGAP_NGAP_PDU_PR_initiatingMessage;
     pdu.choice.initiatingMessage = CALLOC(1, sizeof(NGAP_InitiatingMessage_t));

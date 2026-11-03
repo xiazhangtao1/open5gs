@@ -6,6 +6,10 @@
 {{- $upfN3MemifLocalAddress := include "xcn.upfN3MemifLocalAddress" . }}
 {{- $upfSessionWorkersEnabled := eq (include "xcn.upfSessionWorkersEnabled" .) "true" }}
 {{- $ip4NeighborAgeSeconds := int (dig "neighbor" "ip4AgeSeconds" 30 .Values.vpp) }}
+{{- $nodeProfileEnabled := dig "nodeProfile" "enabled" true .Values.networking.amf.ngap }}
+{{- if not (kindIs "bool" $nodeProfileEnabled) }}
+{{- fail "networking.amf.ngap.nodeProfile.enabled must be a boolean" }}
+{{- end }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -73,6 +77,8 @@ data:
           scp:
             - uri: {{ printf "http://%s:7777" (include "xcn.componentName" (dict "root" . "component" "scp")) | quote }}
       ngap:
+        node_profile:
+          enabled: {{ $nodeProfileEnabled }}
         server:
           - address: __AMF_NGAP_SERVER_ADDRESS__
       metrics:
