@@ -47,7 +47,8 @@ void ngap_close(void)
     ogs_socknode_remove_all(&amf_self()->ngap_list6);
 }
 
-int ngap_send_to_gnb(amf_gnb_t *gnb, ogs_pkbuf_t *pkbuf, uint16_t stream_no)
+static int send_to_gnb(amf_gnb_t *gnb, ogs_pkbuf_t *pkbuf, uint16_t stream_no,
+        amf_ue_t *event_ue)
 {
     char buf[OGS_ADDRSTRLEN];
 
@@ -81,11 +82,16 @@ int ngap_send_to_gnb(amf_gnb_t *gnb, ogs_pkbuf_t *pkbuf, uint16_t stream_no)
     } else {
         result = ogs_sctp_senddata(gnb->sctp.sock, pkbuf, gnb->sctp.addr);
     }
-    if (decoded) trace_seq = amf_ue_event_ngap(gnb, &event_message, "AMF->gNB",
-            result == OGS_OK ? "queued" : "send-failed");
+    if (decoded) trace_seq = amf_ue_event_ngap_for_ue(gnb, &event_message, "AMF->gNB",
+            result == OGS_OK ? "queued" : "send-failed", event_ue);
     ogs_ue_trace_commit(trace, trace_seq);
     if (tracing) ogs_ngap_free(&event_message);
     return result;
+}
+
+int ngap_send_to_gnb(amf_gnb_t *gnb, ogs_pkbuf_t *pkbuf, uint16_t stream_no)
+{
+    return send_to_gnb(gnb, pkbuf, stream_no, NULL);
 }
 
 int ngap_send_to_ran_ue(ran_ue_t *ran_ue, ogs_pkbuf_t *pkbuf)
@@ -512,7 +518,7 @@ int ngap_send_paging(amf_ue_t *amf_ue)
 
                     amf_metrics_inst_global_inc(AMF_METR_GLOB_CTR_MM_PAGING_5G_REQ);
 
-                    rv = ngap_send_to_gnb(gnb, ngapbuf, NGAP_NON_UE_SIGNALLING);
+                    rv = send_to_gnb(gnb, ngapbuf, NGAP_NON_UE_SIGNALLING, amf_ue);
                     amf_ue_event(NULL, amf_ue, "ACTION", "AMF->gNB", "Paging",
                             rv == OGS_OK ? "queued" : "send-failed", NULL,
                             ogs_sockaddr_to_string_static(gnb->sctp.addr), true);

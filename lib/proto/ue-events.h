@@ -6,6 +6,11 @@
 #include "ue-trace.h"
 
 /* Value snapshots only. No packet, UE, session or ASN.1 pointers survive a hook. */
+enum {
+    OGS_EVENT_SCOPE_UNKNOWN,
+    OGS_EVENT_SCOPE_UE,
+    OGS_EVENT_SCOPE_GNB
+};
 typedef struct {
     uint64_t seq, trace_id, parent_seq, flow_id;
     int64_t timestamp, monotonic;
@@ -14,6 +19,9 @@ typedef struct {
     uint8_t gnb_bits, psi, pti, qfi;
     uint8_t psis[16], psi_count;
     uint16_t fiveqi;
+    uint64_t association_id;
+    uint16_t procedure_code;
+    uint8_t ngap_pdu_type, scope;
     bool action, has_gnb, has_location, has_ngap;
     char supi[64], protocol[12], direction[24], name[64], result[24];
     char cause[96], info[256], plmn[8], cell_plmn[8], peer[80], dnn[101];

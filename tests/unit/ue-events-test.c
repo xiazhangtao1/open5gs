@@ -105,13 +105,17 @@ static void test_errors_restart_and_u64(void)
     ogs_assert(ogs_ue_events_init("AMF", 16, 8));
     root = query(NULL, 200); char boot[64]; snprintf(boot, sizeof(boot), "%s", field(root, "boot_id")->valuestring); cJSON_Delete(root);
     ogs_assert(ogs_ue_events_init("AMF", 16, 8));
-    ogs_ue_event_t e = {.trace_id = ogs_ue_events_new_trace(), .action = true, .upf_seid = UINT64_MAX};
+    ogs_ue_event_t e = {.trace_id = ogs_ue_events_new_trace(), .action = true, .upf_seid = UINT64_MAX,
+        .association_id = UINT64_MAX, .ngap_pdu_type = 1, .scope = OGS_EVENT_SCOPE_GNB, .procedure_code = 0};
     memset(e.info, 'x', sizeof(e.info));
     ogs_ue_events_record(&e);
     arg_t args[] = {{"boot_id", boot}, {"after", "100"}, {NULL, NULL}};
     root = query(args, 200); ogs_assert(count(root) == 1 && cJSON_IsTrue(field(root, "reset")));
     const cJSON *event = cJSON_GetArrayItem(field(root, "items"), 0);
     ogs_assert(!strcmp(field(event, "upf_seid")->valuestring, "18446744073709551615"));
+    ogs_assert(!strcmp(field(event, "association_id")->valuestring, "18446744073709551615"));
+    ogs_assert(cJSON_IsNumber(field(event, "procedure_code")) && field(event, "procedure_code")->valueint == 0);
+    ogs_assert(!strcmp(field(event, "scope")->valuestring, "gnb"));
     ogs_assert(strlen(field(event, "info")->valuestring) == sizeof(e.info)-1); cJSON_Delete(root);
     args[0].key = "trace_boot_id"; args[1].key = "trace_id"; args[1].value = "1";
     root = query(args, 200); ogs_assert(count(root) == 0); cJSON_Delete(root);

@@ -1278,6 +1278,7 @@ amf_gnb_t *amf_gnb_add(ogs_sock_t *sock, ogs_sockaddr_t *addr)
 
     /* Defaut RAT-Type */
     gnb->rat_type = OpenAPI_rat_type_NR;
+    gnb->event_association_id = ogs_ue_events_new_trace();
 
     gnb->sctp.sock = sock;
     gnb->sctp.addr = addr;

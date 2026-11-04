@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: AGPL-3.0-or-later */
-/* Typed extraction for the UE procedures handled by this AMF. */
+/* Typed summaries; other decoded messages use the generated CHOICE name. */
 static ngap_meta_t ngap_metadata(ogs_ngap_message_t *pdu)
 {
     ngap_meta_t m = {0};
@@ -8,6 +8,42 @@ static ngap_meta_t ngap_metadata(ogs_ngap_message_t *pdu)
         NGAP_InitiatingMessage_t *p = pdu->choice.initiatingMessage;
         if (!p) break;
         switch (p->value.present) {
+        case NGAP_InitiatingMessage__value_PR_NGSetupRequest:
+            m.name = "NGSetupRequest"; m.scope = OGS_EVENT_SCOPE_GNB;
+            for (int i = 0; i < p->value.choice.NGSetupRequest.protocolIEs.list.count; i++) {
+                NGAP_NGSetupRequestIEs_t *ie = p->value.choice.NGSetupRequest.protocolIEs.list.array[i];
+                if (ie && ie->value.present == NGAP_NGSetupRequestIEs__value_PR_GlobalRANNodeID)
+                    m.global = &ie->value.choice.GlobalRANNodeID;
+            }
+            break;
+        case NGAP_InitiatingMessage__value_PR_NGReset:
+            m.name = "NGReset"; m.scope = OGS_EVENT_SCOPE_GNB;
+            for (int i = 0; i < p->value.choice.NGReset.protocolIEs.list.count; i++) {
+                NGAP_NGResetIEs_t *ie = p->value.choice.NGReset.protocolIEs.list.array[i];
+                if (ie && ie->value.present == NGAP_NGResetIEs__value_PR_Cause)
+                    m.cause = &ie->value.choice.Cause;
+            }
+            break;
+        case NGAP_InitiatingMessage__value_PR_RANConfigurationUpdate:
+            m.name = "RANConfigurationUpdate"; m.scope = OGS_EVENT_SCOPE_GNB;
+            for (int i = 0; i < p->value.choice.RANConfigurationUpdate.protocolIEs.list.count; i++) {
+                NGAP_RANConfigurationUpdateIEs_t *ie = p->value.choice.RANConfigurationUpdate.protocolIEs.list.array[i];
+                if (ie && ie->value.present == NGAP_RANConfigurationUpdateIEs__value_PR_GlobalRANNodeID)
+                    m.global = &ie->value.choice.GlobalRANNodeID;
+            }
+            break;
+        case NGAP_InitiatingMessage__value_PR_AMFConfigurationUpdate:
+            m.name = "AMFConfigurationUpdate"; m.scope = OGS_EVENT_SCOPE_GNB;
+            break;
+        case NGAP_InitiatingMessage__value_PR_Paging:
+            m.name = "Paging"; m.scope = OGS_EVENT_SCOPE_GNB;
+            break;
+        case NGAP_InitiatingMessage__value_PR_UplinkRANConfigurationTransfer:
+            m.name = "UplinkRANConfigurationTransfer"; m.scope = OGS_EVENT_SCOPE_GNB;
+            break;
+        case NGAP_InitiatingMessage__value_PR_DownlinkRANConfigurationTransfer:
+            m.name = "DownlinkRANConfigurationTransfer"; m.scope = OGS_EVENT_SCOPE_GNB;
+            break;
         case NGAP_InitiatingMessage__value_PR_HandoverCancel:
             m.name = "HandoverCancel";
             for (int i = 0; i < p->value.choice.HandoverCancel.protocolIEs.list.count; i++) {
@@ -322,6 +358,18 @@ static ngap_meta_t ngap_metadata(ogs_ngap_message_t *pdu)
         NGAP_SuccessfulOutcome_t *p = pdu->choice.successfulOutcome;
         if (!p) break;
         switch (p->value.present) {
+        case NGAP_SuccessfulOutcome__value_PR_NGSetupResponse:
+            m.name = "NGSetupResponse"; m.scope = OGS_EVENT_SCOPE_GNB;
+            break;
+        case NGAP_SuccessfulOutcome__value_PR_NGResetAcknowledge:
+            m.name = "NGResetAcknowledge"; m.scope = OGS_EVENT_SCOPE_GNB;
+            break;
+        case NGAP_SuccessfulOutcome__value_PR_RANConfigurationUpdateAcknowledge:
+            m.name = "RANConfigurationUpdateAcknowledge"; m.scope = OGS_EVENT_SCOPE_GNB;
+            break;
+        case NGAP_SuccessfulOutcome__value_PR_AMFConfigurationUpdateAcknowledge:
+            m.name = "AMFConfigurationUpdateAcknowledge"; m.scope = OGS_EVENT_SCOPE_GNB;
+            break;
         case NGAP_SuccessfulOutcome__value_PR_HandoverCancelAcknowledge:
             m.name = "HandoverCancelAcknowledge";
             for (int i = 0; i < p->value.choice.HandoverCancelAcknowledge.protocolIEs.list.count; i++) {
@@ -538,6 +586,30 @@ static ngap_meta_t ngap_metadata(ogs_ngap_message_t *pdu)
         NGAP_UnsuccessfulOutcome_t *p = pdu->choice.unsuccessfulOutcome;
         if (!p) break;
         switch (p->value.present) {
+        case NGAP_UnsuccessfulOutcome__value_PR_NGSetupFailure:
+            m.name = "NGSetupFailure"; m.scope = OGS_EVENT_SCOPE_GNB;
+            for (int i = 0; i < p->value.choice.NGSetupFailure.protocolIEs.list.count; i++) {
+                NGAP_NGSetupFailureIEs_t *ie = p->value.choice.NGSetupFailure.protocolIEs.list.array[i];
+                if (ie && ie->value.present == NGAP_NGSetupFailureIEs__value_PR_Cause)
+                    m.cause = &ie->value.choice.Cause;
+            }
+            break;
+        case NGAP_UnsuccessfulOutcome__value_PR_RANConfigurationUpdateFailure:
+            m.name = "RANConfigurationUpdateFailure"; m.scope = OGS_EVENT_SCOPE_GNB;
+            for (int i = 0; i < p->value.choice.RANConfigurationUpdateFailure.protocolIEs.list.count; i++) {
+                NGAP_RANConfigurationUpdateFailureIEs_t *ie = p->value.choice.RANConfigurationUpdateFailure.protocolIEs.list.array[i];
+                if (ie && ie->value.present == NGAP_RANConfigurationUpdateFailureIEs__value_PR_Cause)
+                    m.cause = &ie->value.choice.Cause;
+            }
+            break;
+        case NGAP_UnsuccessfulOutcome__value_PR_AMFConfigurationUpdateFailure:
+            m.name = "AMFConfigurationUpdateFailure"; m.scope = OGS_EVENT_SCOPE_GNB;
+            for (int i = 0; i < p->value.choice.AMFConfigurationUpdateFailure.protocolIEs.list.count; i++) {
+                NGAP_AMFConfigurationUpdateFailureIEs_t *ie = p->value.choice.AMFConfigurationUpdateFailure.protocolIEs.list.array[i];
+                if (ie && ie->value.present == NGAP_AMFConfigurationUpdateFailureIEs__value_PR_Cause)
+                    m.cause = &ie->value.choice.Cause;
+            }
+            break;
         case NGAP_UnsuccessfulOutcome__value_PR_HandoverPreparationFailure:
             m.name = "HandoverPreparationFailure";
             for (int i = 0; i < p->value.choice.HandoverPreparationFailure.protocolIEs.list.count; i++) {

@@ -8,6 +8,8 @@ uint64_t amf_ue_event(ran_ue_t *ran, amf_ue_t *ue, const char *protocol,
         const char *cause, const char *info, bool action);
 uint64_t amf_ue_event_ngap(amf_gnb_t *gnb, ogs_ngap_message_t *message,
         const char *direction, const char *result);
+uint64_t amf_ue_event_ngap_for_ue(amf_gnb_t *gnb, ogs_ngap_message_t *message,
+        const char *direction, const char *result, amf_ue_t *ue);
 uint64_t amf_ue_event_nas(ran_ue_t *ran, amf_ue_t *ue,
         ogs_nas_5gs_message_t *message, bool received);
 ogs_pkbuf_t *amf_ue_event_nas_encode(amf_ue_t *ue, ogs_nas_5gs_message_t *message);

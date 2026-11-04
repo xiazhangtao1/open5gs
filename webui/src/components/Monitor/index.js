@@ -9,6 +9,7 @@ import Rules, {Purpose, ruleIdentifier} from './Rules';
 import {get} from './client';
 import {mergeTrend} from '../../../lib/trends';
 import {sctpPeer, currentGnb, gnbFilters, gnbKey} from '../../../lib/access';
+import {signalIdentity, signalPeer, signalAssociation} from '../../../lib/signals';
 
 const titles = {overview: '概览', ues: '终端', gnbs: '基站', sessions: '会话', events: '信令', system: '状态'};
 const sourceNames = {amf_ues: '终端', smf_pdus: '会话', amf_gnbs: '基站', upf_rates: '用户面速率',
@@ -61,7 +62,7 @@ function Events({items, onSelect, compact}) {
       <time title={dateTime(Number(e.timestamp_us) / 1e6)}>{eventClock(e.timestamp_us)}</time>
       <span className="xcn-protocol" title={value(e.direction)}>{value(e.protocol)}<small>{String(e.nf || '').toUpperCase()}</small></span>
       <button type="button" className="xcn-link xcn-event-name" title={e.name} onClick={() => onSelect(e)}>{value(e.name)}</button>
-      <span className="xcn-mono xcn-event-supi" title={e.supi}>{e.supi || '身份解析中'}</span>
+      <span className="xcn-mono xcn-event-supi" title={e.supi || signalPeer(e) || ''}>{signalIdentity(e)}</span>
       <span className="xcn-event-info" title={e.info || e.cause}>{e.info || e.cause || value(e.direction)}</span>
       <Status state={e.result}/>
     </li>)}</ol>
@@ -519,7 +520,11 @@ export default class Monitor extends Component {
         <dt>时间</dt><dd>{dateTime(Number(r.timestamp_us) / 1e6)}.{eventClock(r.timestamp_us).split('.')[1]}</dd>
         <dt>协议 / 网元</dt><dd>{value(r.protocol)} / {String(r.nf || '').toUpperCase()}</dd>
         <dt>方向</dt><dd>{value(r.direction)}</dd><dt>结果</dt><dd><Status state={r.result}/></dd>
-        <dt>终端</dt><dd><button className="xcn-link xcn-mono" type="button" disabled={!r.supi} onClick={() => this.select({supi: r.supi}, 'ues')}>{value(r.supi)}</button></dd>
+        <dt>终端 / 范围</dt><dd>{r.supi ? <button className="xcn-link xcn-mono" type="button" onClick={() => this.select({supi: r.supi}, 'ues')}>{r.supi}</button> : signalIdentity(r)}</dd>
+        {signalPeer(r) && <dt>SCTP 对端</dt>}{signalPeer(r) && <dd className="xcn-mono">{signalPeer(r)}</dd>}
+        {signalAssociation(r) && <dt>连接实例</dt>}{signalAssociation(r) && <dd className="xcn-mono xcn-wrap">{signalAssociation(r)}</dd>}
+        {Number.isInteger(r.procedure_code) && <dt>NGAP 过程码</dt>}{Number.isInteger(r.procedure_code) && <dd>{r.procedure_code}</dd>}
+        {r.pdu_type && <dt>消息类别</dt>}{r.pdu_type && <dd>{({initiatingMessage: '发起消息', successfulOutcome: '成功响应', unsuccessfulOutcome: '失败响应'})[r.pdu_type] || r.pdu_type}</dd>}
         <dt>详情</dt><dd>{value(r.info)}</dd>{r.cause && <dt>原因</dt>}{r.cause && <dd>{r.cause}</dd>}
       </dl><SignalDetails key={r.event_id} event={r}/></div>}
       {r.supi && type === 'ues' && <div><h3>UPF 会话</h3>{sessions.length ? sessions.map(s => <div className="xcn-detail-session" key={s.seid}>

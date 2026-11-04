@@ -137,6 +137,7 @@ typedef struct amf_gnb_s {
     ogs_lnode_t     lnode;
 
     ogs_pool_id_t   id;
+    uint64_t       event_association_id; /* Lifetime, independent of configured ID/peer reuse. */
 
     ogs_fsm_t       sm;         /* A state machine */
 

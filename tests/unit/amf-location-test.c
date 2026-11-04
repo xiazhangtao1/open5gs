@@ -438,6 +438,8 @@ static void test_nas_trace(void)
     unsetenv("XCN_UE_EVENTS_CAPACITY"); unsetenv("XCN_UE_EVENTS_PER_UE");
 }
 
+#include "ngap-events-cases.inc"
+
 int main(void)
 {
     unsigned i;
@@ -466,6 +468,7 @@ int main(void)
     ogs_list_add(&amf_self()->ngap_list, &node);
     for (i = 0; i < OGS_ARRAY_SIZE(widths); i++) test_width(&sock, widths[i]);
     test_event_metadata(&sock);
+    test_base_station_events(&sock);
     test_nas_trace();
     ogs_list_remove(&amf_self()->ngap_list, &node);
     amf_context_final();

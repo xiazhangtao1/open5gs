@@ -2,6 +2,12 @@
 
 “信令”页面及详情支持 NGAP ASN.1 协议树、5GMM / 5GSM 明文、NGAP 内嵌 Transfer、字段搜索、字段对应字节以及复制。导航、概览、终端详情、状态及记录入口统一使用“信令”名称；内部 `events` 接口与 `event_id` 字段保持兼容。“展开全部”显示所有已解析层级及 PER 编码辅助字段，“收起全部”回到协议树顶层；这两个操作清除搜索条件，节点仍可单独展开。协议树与码流使用同一条记录的 `NF / boot_id / seq` 关联，不根据 IMSI 或相邻时间猜测配对。原有信令摘要和采样路径继续工作。
 
+NGAP 采集还覆盖 NG Setup 请求/响应/失败、NG Reset/确认、RAN Configuration Update 请求/确认/失败、AMF Configuration Update、Paging 及上下行 RAN Configuration Transfer。已经成功解码、未专门提取摘要的其他消息，使用生成的 ASN.1 CHOICE 描述取得名称并保留码流；不为展示而新增协议处理、重试或状态迁移。AMF Configuration Update 的确认/失败响应可记录和解码，核心网原有处理行为保持不变。
+
+NGAP 记录新增可选字段 `scope`（`ue` / `gnb` / `unknown`）、`procedure_code`（零为有效过程码）、`pdu_type`（`initiatingMessage` / `successfulOutcome` / `unsuccessfulOutcome`）及十进制字符串 `association_id`。连接实例由 `boot_id + association_id` 区分，SCTP 地址重用或配置相同的多个基站不会合并观测身份。NG Setup 接纳前的身份只从报文提取为 `reported-gNB` 摘要，不写入基站运行状态，也不伪造已接纳的 gNB 0。Paging 使用发送时已知 SUPI；其他基站消息不绑定终端。网页对基站消息显示 `GNB <gnbId>`，没有已确认 ID 时显示 `GNB`，未知范围显示“未关联终端”。缺少 scope 的旧格式 NG Setup 等已知基站消息同样显示 `GNB`，不显示“身份解析中”；这个占位文字用于尚未关联 SUPI 的终端消息，没有固定倒计时。
+
+补齐采集不增加缓存或资源上限；环满、超长、限速或内存保护时摘要与详情可能分别淘汰。已有历史没有采集的码流不能补回。实现、测试与现场记录见 [NGAP 信令补齐验证](ngap-signaling-validation-20261104.md)。
+
 会话、承载和规则表显示对应会话的 IPv4 / IPv6，双栈地址分行呈现，未分配地址显示 `—`。速率图只提供“折线 / 曲线”下拉框，默认“曲线”，不再提供 2 / 5 / 10 秒平均或独立平滑按钮。两种模式均直接显示相同的原始采样数值，不计算移动平均。
 
 “曲线”使用 ECharts `smooth: 0.25` / `smoothMonotone: 'x'`，仅改变相邻点之间的绘制形状，保留采样点和峰值，不向数据添加虚构的中间采样。连线控制点的纵坐标取各自端点值，曲线不超出相邻点的取值范围；选择“折线”可恢复直线连接。断点不补线，悬浮提示始终显示原始采样数值。线型切换在浏览器执行，不改变采集频率，不触发额外采集或解码。

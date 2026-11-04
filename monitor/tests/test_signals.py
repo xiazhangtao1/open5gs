@@ -15,8 +15,36 @@ from common import trace_redact_keys
 from memory import MemoryPressure
 from aiohttp import ClientSession, web
 from server import application
+from cache import Cache
 
 BOOT = b"00000000-0000-0000-0000-000000000001"
+
+
+class NgapMetadataTest(unittest.TestCase):
+    def test_gnb_metadata_survives_cache_without_ue_binding(self):
+        cache = Cache()
+        stamp = str(int(time.time() * 1e6))
+        def event(seq, trace, **fields):
+            return dict(seq=str(seq), trace_id=str(trace), timestamp_us=stamp,
+                        name="AMFConfigurationUpdate", supi="", protocol="NGAP", nf="amf", **fields)
+        a = event(1, 11, scope="gnb", procedure_code=0, pdu_type="initiatingMessage", association_id="11", peer="[2001:db8::1]:38412")
+        b = event(2, 12, scope="gnb", procedure_code=0, pdu_type="initiatingMessage", association_id="12", peer=a['peer'])
+        identity = event(3, 13); identity.update(name="IdentityResolved", supi="imsi-001010000000001", protocol="IDENTITY")
+        cache.add_events("amf", dict(boot_id=BOOT.decode(), items=[a, b, identity]))
+        rows = cache.query("events", dict(protocol="NGAP", limit="100"))['items']
+        self.assertEqual(len(rows), 2)
+        self.assertEqual({e['association_id'] for e in rows}, {'11', '12'})
+        for row in rows:
+            self.assertEqual(row['supi'], '')
+            self.assertEqual(row['scope'], 'gnb')
+            self.assertEqual(row['procedure_code'], 0)
+            self.assertEqual(row['peer'], a['peer'])
+            self.assertEqual(row['pdu_type'], 'initiatingMessage')
+        # New metadata consumes the existing encoded-byte budget.
+        cache.max_event_bytes = 1
+        cache.add_events("amf", dict(boot_id=BOOT.decode(), items=[event(4, 14, scope="unknown")]))
+        self.assertEqual(cache.event_bytes, 0)
+        self.assertEqual(len(cache.events), 0)
 
 
 class Budget:

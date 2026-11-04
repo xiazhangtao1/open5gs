@@ -22,11 +22,16 @@ def main():
     boot = b'00000000-0000-0000-0000-000000000001'
     while time.monotonic() - start < args.seconds:
         batch = bytearray()
+        events = []
         for _ in range(100):
             seq += 1
             pdu = b'\x7e\x00\x43' + seq.to_bytes(8, 'big') + b'x' * 2037
             batch += HEADER.pack(b'XTR1', 2, 1, 0, seq, int(time.time() * 1e6), len(pdu), boot, b'AMF\0') + pdu
+            events.append(dict(seq=str(seq), trace_id="1", timestamp_us=str(int(time.time() * 1e6)),
+                protocol="NGAP", name="AMFConfigurationUpdate", supi="", scope="gnb",
+                procedure_code=0, pdu_type="initiatingMessage", association_id="1", peer="[2001:db8::1]:38412"))
         try:
+            cache.add_events("amf", dict(boot_id=boot.decode(), items=events))
             signals.admit(bytes(batch))
             ident = f'AMF/{boot.decode()}/{seq}'
             signals.remember(ident, dict(state='ready', tree=[dict(name='soak', value='v' * (256 * 1024))]))
@@ -37,6 +42,7 @@ def main():
         peak = max(peak, used)
         assert len(signals.raw) <= 20000 and signals.raw_bytes <= 64 * MIB
         assert len(signals.decoded) <= 256 and signals.decoded_bytes <= 32 * MIB
+        assert len(cache.events) <= 20000 and cache.event_bytes <= 16 * MIB
         if not samples or time.monotonic() - start - samples[-1]['elapsed'] >= 60:
             row = dict(elapsed=round(time.monotonic() - start, 2), used_bytes=used, **signals.status())
             samples.append(row)

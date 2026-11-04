@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: AGPL-3.0-or-later */
 #include "ue-events.h"
+#include "gnb-info.h"
 #include <inttypes.h>
 
 typedef struct {
@@ -8,7 +9,10 @@ typedef struct {
     bool has_amf, has_ran;
     NGAP_Cause_t *cause;
     NGAP_UserLocationInformation_t *location;
+    NGAP_GlobalRANNodeID_t *global;
     uint8_t psis[16], psi_count;
+    uint8_t scope, pdu_type;
+    uint16_t procedure_code;
 } ngap_meta_t;
 
 static void ngap_psi(ngap_meta_t *m, long psi)
@@ -25,7 +29,8 @@ static uint64_t record_event(ran_ue_t *ran, amf_ue_t *ue, const char *protocol,
 {
     ogs_ue_event_t e = {0};
     if (!ogs_ue_events_enabled()) return 0;
-    if (!ran && ue) ran = ran_ue_find_by_id(ue->ran_ue_id);
+    if (!ran && ue && (!wire || wire->scope != OGS_EVENT_SCOPE_GNB))
+        ran = ran_ue_find_by_id(ue->ran_ue_id);
     if (!ue && ran) ue = amf_ue_find_by_id(ran->amf_ue_id);
     if (ran) {
         e.trace_id = ran->event_trace_id;
@@ -35,16 +40,20 @@ static uint64_t record_event(ran_ue_t *ran, amf_ue_t *ue, const char *protocol,
         e.ran_ngap_id = ran->ran_ue_ngap_id;
         amf_gnb_t *gnb = amf_gnb_find_by_id(ran->gnb_id);
         if (gnb) {
+            e.association_id = gnb->event_association_id;
             e.has_gnb = gnb->gnb_id_presence;
             e.gnb_id = gnb->gnb_id; e.gnb_bits = gnb->gnb_id_bits;
             ogs_plmn_id_to_string(&gnb->plmn_id, e.plmn);
             snprintf(e.peer, sizeof(e.peer), "%s", ogs_sockaddr_to_string_static(gnb->sctp.addr));
         }
     } else if (ue) e.trace_id = ue->event_trace_id;
+    if (!e.trace_id && reported) e.trace_id = reported->event_association_id;
     if (!e.trace_id) e.trace_id = ogs_ue_events_new_trace();
     if (reported) {
         e.gnb_id = reported->gnb_id; e.gnb_bits = reported->gnb_id_bits;
-        ogs_plmn_id_to_string(&reported->plmn_id, e.plmn);
+        e.association_id = reported->event_association_id;
+        if (reported->gnb_id_presence)
+            ogs_plmn_id_to_string(&reported->plmn_id, e.plmn);
         snprintf(e.peer, sizeof(e.peer), "%s", ogs_sockaddr_to_string_static(reported->sctp.addr));
         e.has_gnb = reported->gnb_id_presence;
     }
@@ -62,6 +71,9 @@ static uint64_t record_event(ran_ue_t *ran, amf_ue_t *ue, const char *protocol,
     }
     NGAP_UserLocationInformation_t *location = wire ? wire->location : NULL;
     if (wire) {
+        e.scope = wire->scope;
+        e.procedure_code = wire->procedure_code;
+        e.ngap_pdu_type = wire->pdu_type;
         if (wire->has_amf) { e.amf_ngap_id = wire->amf_id; e.has_ngap = true; }
         if (wire->has_ran) { e.ran_ngap_id = wire->ran_id; e.has_ngap = true; }
         e.psi_count = wire->psi_count;
@@ -141,12 +153,75 @@ void amf_ue_event_session(amf_ue_t *ue, ran_ue_t *ran, amf_sess_t *sess,
 /* Every case uses its generated ASN.1 type and checks the CHOICE discriminator. */
 #include "ue-events-ngap.inc"
 
+/* Use generated CHOICE metadata, without walking or formatting an ASN.1 tree. */
+static const char *ngap_choice_name(const asn_TYPE_descriptor_t *type, unsigned present)
+{
+    if (!type || !type->elements || !present) return NULL;
+    for (unsigned i = 0; i < type->elements_count; i++) {
+        const asn_TYPE_member_t *member = &type->elements[i];
+        if (!member->name || strcmp(member->name, "value")) continue;
+        const asn_TYPE_descriptor_t *choice = member->type;
+        if (!choice || !choice->elements || present > choice->elements_count) return NULL;
+        return choice->elements[present - 1].name;
+    }
+    return NULL;
+}
+
+static bool ngap_envelope(ogs_ngap_message_t *message, ngap_meta_t *header)
+{
+    long procedure;
+    const char *name;
+    switch (message->present) {
+    case NGAP_NGAP_PDU_PR_initiatingMessage: {
+        NGAP_InitiatingMessage_t *p = message->choice.initiatingMessage;
+        if (!p) return false;
+        procedure = p->procedureCode;
+        name = ngap_choice_name(&asn_DEF_NGAP_InitiatingMessage, p->value.present);
+        break;
+    }
+    case NGAP_NGAP_PDU_PR_successfulOutcome: {
+        NGAP_SuccessfulOutcome_t *p = message->choice.successfulOutcome;
+        if (!p) return false;
+        procedure = p->procedureCode;
+        name = ngap_choice_name(&asn_DEF_NGAP_SuccessfulOutcome, p->value.present);
+        break;
+    }
+    case NGAP_NGAP_PDU_PR_unsuccessfulOutcome: {
+        NGAP_UnsuccessfulOutcome_t *p = message->choice.unsuccessfulOutcome;
+        if (!p) return false;
+        procedure = p->procedureCode;
+        name = ngap_choice_name(&asn_DEF_NGAP_UnsuccessfulOutcome, p->value.present);
+        break;
+    }
+    default: return false;
+    }
+    if (!name || procedure < 0 || procedure > 255) return false;
+    header->name = name;
+    header->procedure_code = (uint16_t)procedure;
+    header->pdu_type = (uint8_t)message->present;
+    return true;
+}
+
 uint64_t amf_ue_event_ngap(amf_gnb_t *gnb, ogs_ngap_message_t *message,
         const char *direction, const char *result)
 {
+    return amf_ue_event_ngap_for_ue(gnb, message, direction, result, NULL);
+}
+
+uint64_t amf_ue_event_ngap_for_ue(amf_gnb_t *gnb, ogs_ngap_message_t *message,
+        const char *direction, const char *result, amf_ue_t *event_ue)
+{
     if (!ogs_ue_events_enabled() || !gnb || !message) return 0;
+    ngap_meta_t header = {0};
+    if (!ngap_envelope(message, &header)) return 0;
     ngap_meta_t m = ngap_metadata(message);
-    if (!m.name) return 0;
+    if (m.name && !m.scope)
+        m.scope = !strcmp(m.name, "ErrorIndication") && !m.has_amf && !m.has_ran ?
+            OGS_EVENT_SCOPE_GNB : OGS_EVENT_SCOPE_UE;
+    if (!m.name) m.name = header.name;
+    m.procedure_code = header.procedure_code;
+    m.pdu_type = header.pdu_type;
+    if (!gnb->event_association_id) gnb->event_association_id = ogs_ue_events_new_trace();
     ran_ue_t *ran = NULL;
     if (m.has_amf) {
         /* The implementation's pool index is 32-bit; never truncate a wire ID. */
@@ -171,13 +246,30 @@ uint64_t amf_ue_event_ngap(amf_gnb_t *gnb, ogs_ngap_message_t *message,
         snprintf(cause, sizeof(cause), "NGAP group=%d value=%ld", m.cause->present, value);
     }
     char info[256];
-    char *p = ogs_slprintf(info, info + sizeof(info), "gNB=%u/%u peer=%s",
-            gnb->gnb_id, gnb->gnb_id_bits, ogs_sockaddr_to_string_static(gnb->sctp.addr));
+    char *p = ogs_slprintf(info, info + sizeof(info), "peer=%s",
+            ogs_sockaddr_to_string_static(gnb->sctp.addr));
+    if (gnb->gnb_id_presence)
+        p = ogs_slprintf(p, info + sizeof(info), " gNB=%u/%u", gnb->gnb_id, gnb->gnb_id_bits);
+    if (m.global && m.global->present == NGAP_GlobalRANNodeID_PR_globalGNB_ID &&
+            m.global->choice.globalGNB_ID) {
+        uint32_t id;
+        uint8_t bits;
+        NGAP_GlobalGNB_ID_t *global = m.global->choice.globalGNB_ID;
+        if (amf_gnb_decode_global_id(global, &id, &bits)) {
+            ogs_plmn_id_t plmn;
+            char text[8];
+            memcpy(&plmn, global->pLMNIdentity.buf, OGS_PLMN_ID_LEN);
+            ogs_plmn_id_to_string(&plmn, text);
+            p = ogs_slprintf(p, info + sizeof(info), " reported-gNB=%u/%u PLMN=%s", id, bits, text);
+        }
+    }
     if (m.has_amf)
         p = ogs_slprintf(p, info + sizeof(info), " AMF-UE-ID=%" PRIu64, m.amf_id);
     if (m.has_ran)
         ogs_slprintf(p, info + sizeof(info), " RAN-UE-ID=%" PRIu64, m.ran_id);
-    uint64_t seq = record_event(ran, NULL, "NGAP", direction, m.name, result, cause, info, false, gnb, &m);
+    /* Only Paging supplies its explicit sending UE; never resolve a UE from a gNB identity. */
+    amf_ue_t *paging_ue = !strcmp(m.name, "Paging") ? event_ue : NULL;
+    uint64_t seq = record_event(ran, paging_ue, "NGAP", direction, m.name, result, cause, info, false, gnb, &m);
     if (ran && !strcmp(direction, "gNB->AMF")) ran->event_ngap_seq = seq;
     if (ran && strstr(m.name, "Handover") && strstr(m.name, "Failure"))
         amf_ue_event(ran, NULL, "ACTION", direction, "Handover",

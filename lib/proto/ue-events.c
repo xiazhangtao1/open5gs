@@ -363,6 +363,14 @@ char *ogs_ue_events_query(ogs_query_arg_t arg, void *request, int *status)
         STR(supi); STR(protocol); STR(direction); STR(name); STR(result); STR(cause); STR(info);
         STR(plmn); STR(cell_plmn); STR(peer); STR(dnn);
 #undef STR
+        if (e->ngap_pdu_type >= 1 && e->ngap_pdu_type <= 3) {
+            static const char *types[] = {"", "initiatingMessage", "successfulOutcome", "unsuccessfulOutcome"};
+            static const char *scopes[] = {"unknown", "ue", "gnb"};
+            cJSON_AddNumberToObject(o, "procedure_code", e->procedure_code);
+            cJSON_AddStringToObject(o, "pdu_type", types[e->ngap_pdu_type]);
+            cJSON_AddStringToObject(o, "scope", scopes[e->scope <= OGS_EVENT_SCOPE_GNB ? e->scope : 0]);
+            json_u64(o, "association_id", e->association_id);
+        }
 #define NUM(k) (e->k ? cJSON_AddNumberToObject(o, #k, e->k) : cJSON_AddNullToObject(o, #k))
         NUM(psi); NUM(pti); NUM(qfi); NUM(fiveqi);
 #undef NUM
