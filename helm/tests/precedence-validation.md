@@ -35,7 +35,7 @@ Use an online, idle test PDU session without existing dedicated applications.
 The script creates and deletes its own test application IDs.
 
 ```bash
-python3 helm/xcn/tests/verify_dedicated_precedence.py \
+python3 helm/tests/verify_dedicated_precedence.py \
   --url http://10.2.0.119:30777 \
   --supi imsi-460110000000100 --psi 2
 ```

@@ -50,7 +50,7 @@ Helm lint、启动脚本 `sh -n` 通过。Python unittest 共 16 项通过，其
 ```bash
 helm lint helm/xcn
 PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover \
-  -s helm/xcn/tests -p 'test_*.py' -v
+  -s helm/tests -p 'test_*.py' -v
 sh -n docker/runtime/setup.sh
 ```
 

@@ -266,10 +266,10 @@ networking:
     # static IPv4 addresses outside these ranges to prevent collisions.
     ipv4PoolRanges: []
     userIntent:
-      enabled: false
-      mcc: ""
-      mnc: ""
-      notifyUri: http://10.2.0.102:8000/api/v1/intent/notify
+      enabled: true
+      mcc: "460"
+      mnc: "00"
+      notifyUri: http://192.168.9.181:8000/api/v1/intent/notify
       # Initial QoS and 1..15 flowDescriptions for creation and model switches.
       # Same-model requests decrement priorityLevel (minimum 1), preserving
       # the active bandwidth and filters. Omitted filters use the defaults below.

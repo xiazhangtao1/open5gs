@@ -18,7 +18,7 @@ This chart deploys the same 5GC-focused lab topology as `k8s/`:
 Default bases: `192.168.10.35/xnet/ubuntu:22.04` and
 `192.168.10.35/xcn/vpp:26.06`. Images are automatically pushed to
 `192.168.10.35/xcn`; push failures are reported without failing successful builds.
-See the [offline build guide](../../docker/offline-build.md) for base-image overrides,
+See the [offline build guide](../docker/offline-build.md) for base-image overrides,
 CPU limits, dependency archives and the intranet APT source.
 
 The monitoring image includes the collector, both agents, and the TShark decoder;
@@ -34,14 +34,14 @@ each container's own resource quantities. Configure collector, agents, decoder,
 and WebUI independently through their respective `resources` fields; defaults
 request 650m CPU in total. Startup waits up to `monitor.cpuSetWaitSeconds` (120)
 for the actual cpuset, including delayed integer-CPU assignments. Both monitor
-and WebUI need matching new images. See [CPU isolation](../../docs/webui-monitoring.md#upf-与-cpu-隔离).
+and WebUI need matching new images. See [CPU isolation](../docs/webui-monitoring.md#upf-与-cpu-隔离).
 
 Runtime and WebUI use multi-stage builds. Runtime retains unstripped debugging
 symbols and operational tools including tcpdump, iperf, iperf3, iproute2,
 iptables, procps, and binutils. Build tools and caches stay in build stages.
 On a live host, set `BUILD_CPUSET` to verified spare CPUs and limit builder
 CPU/memory as well; `BUILD_JOBS` defaults to 2 for the native builds. See the
-[image consolidation validation](../../docs/image-consolidation-validation.md).
+[image consolidation validation](../docs/image-consolidation-validation.md).
 
 ## Install and Uninstall
 
@@ -60,15 +60,15 @@ helm template xcn helm/xcn -f /path/to/site-values.yaml
 ```
 
 For the selected lightweight approach, see the Chinese
-[RANNodeName HMAC admission design](../../docs/gnb-ran-node-name-hmac-admission-design.md).
+[RANNodeName HMAC admission design](../docs/gnb-ran-node-name-hmac-admission-design.md).
 It specifies per-device keys, timestamps, nonces, HMAC verification, and replay
 protection. The earlier
-[fixed-name design](../../docs/gnb-ran-node-name-admission-design.md) is retained
+[fixed-name design](../docs/gnb-ran-node-name-admission-design.md) is retained
 for comparison. The proposed gNB/AMF checks and Chart options are not implemented yet.
 
 For device certificates, IPsec admission, device authorization, and the proposed
 AMF/Helm integration, see the Chinese
-[gNB access control design](../../docs/gnb-access-control-design.md). The design
+[gNB access control design](../docs/gnb-access-control-design.md). The design
 includes Ubuntu lab commands and distinguishes existing chart behavior from
 features that still need implementation.
 
@@ -489,11 +489,11 @@ must use a runtime image containing the updated `docker/runtime/setup.sh`.
 That script replaces the IPv4 address on its managed `ogstun` interface and
 removes the previous subnet's matching masquerade rule when the subnet changes.
 Actual TUN and two-VF memif results are recorded in
-[the UE IPv4 validation record](../../docs/ue-ipv4-validation.md).
+[the UE IPv4 validation record](../docs/ue-ipv4-validation.md).
 
 Overlapping static and dynamic allocations can replace a UE's downlink address
 lookup. Check N3/N6 addresses for ARP conflicts before enabling VPP/memif. See
-[the QoS validation record](../../docs/qos-priority-validation.md) for the actual
+[the QoS validation record](../docs/qos-priority-validation.md) for the actual
 two-VF, two-Worker memif deployment and dedicated-bearer tests.
 When switching from UDP/TUN to memif, remove the old host N3 alias so local
 routing does not intercept packets intended for VPP. VF reassignment can also
@@ -716,7 +716,7 @@ workaround, not a general replacement for diagnosing thread load or sizing.
 Setting it back to `false` and completing the Helm rollout recreates the
 container with its normal Kubernetes quota. Check `cpu.stat` for new throttles
 after resource changes; an ancestor quota can still throttle the workload.
-See [the measured site A/B](../../docs/vpp-cfs-latency-validation.md).
+See [the measured site A/B](../docs/vpp-cfs-latency-validation.md).
 
 With one Worker, `vpp.n6.nat44.workers` stays empty because VPP rejects the
 `set nat workers` command unless at least two Workers exist. When allocating
@@ -842,7 +842,7 @@ contain both Ethernet and raw-IP packets. `intfc any` also records the same
 packet at multiple points. Keep captures short and bounded; `pcap trace` adds
 significant overhead and should not run during throughput measurements. More
 capture and traffic-generation examples are available in
-[`perf-tools/README.md`](../../perf-tools/README.md#抓包命令).
+[`perf-tools/README.md`](../perf-tools/README.md#抓包命令).
 
 The current implementation is IPv4-first. IPv6 UE routing/NAT is not enabled
 by this VPP template. Restore the original path with
@@ -922,7 +922,7 @@ Invalid values, including fractions, strings and `null`, return HTTP 400.
 PATCH replaces the complete QoS configuration: omitting `qos.priorityLevel`
 clears an existing override and restores use of the 5QI default. Keep sending the
 required `qos.5qi` and `flowDescriptions`, including when only changing priority.
-See [the implementation validation record](../../docs/qos-priority-validation.md)
+See [the implementation validation record](../docs/qos-priority-validation.md)
 for protocol, concurrency and regression test results.
 
 The target session can be selected by `ueIp`, `ngapId` + `pduSessionId`, or the legacy `supi` + `pduSessionId` pair. If multiple selectors are present, PCF uses only the highest priority selector: `ueIp` first, then NGAP ID + `pduSessionId`, then `supi` + `pduSessionId`. An NGAP ID identifies the UE connection, not a PDU session, so `pduSessionId` is required with `ngapId`, `amfUeNgapId`, or `ranUeNgapId`. `ngapId` matches AMF UE NGAP ID first and then RAN UE NGAP ID.

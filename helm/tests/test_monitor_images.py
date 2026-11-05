@@ -8,7 +8,7 @@ from pathlib import Path
 import yaml
 
 
-CHART = Path(__file__).resolve().parents[1]
+CHART = Path(__file__).resolve().parents[1] / "xcn"
 
 
 def render(values):

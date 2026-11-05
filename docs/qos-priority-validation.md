@@ -19,7 +19,7 @@
 }
 ```
 
-完整 curl 示例见 [Helm README](../helm/xcn/README.md)。
+完整 curl 示例见 [Helm README](../helm/README.md)。
 
 - 创建时省略新参数：不覆盖 5QI 默认调度优先级。
 - PATCH 仍要求完整的 `flowDescriptions` 和 `qos`；仅改变新参数也触发

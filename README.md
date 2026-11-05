@@ -1,6 +1,6 @@
 # xcn
 
-xcn 提供 5G Core / EPC 核心网及 VPP/memif UPF 集成。部署见 [Helm 文档](helm/xcn/README.md)，源码构建见 [构建指南](docs/_docs/guide/02-building-xcn-from-sources.md)，名称和数据迁移见 [迁移说明](docs/xcn-migration.md)。
+xcn 提供 5G Core / EPC 核心网及 VPP/memif UPF 集成。部署见 [Helm 文档](helm/README.md)，源码构建见 [构建指南](docs/_docs/guide/02-building-xcn-from-sources.md)，名称和数据迁移见 [迁移说明](docs/xcn-migration.md)。
 
 ## 本分支 UPF 性能优化状态
 
@@ -39,7 +39,7 @@ VPP sidecar另行申请2个逻辑CPU，默认
 queue、VPP开关和默认CPU不再需要逐项`--set`。
 
 两种模式的完整安装、切换、检查命令和地址要求见
-[helm/xcn/README.md](helm/xcn/README.md#upf-dataplane-deployment-modes)。
+[helm/README.md](helm/README.md#upf-dataplane-deployment-modes)。
 Linux/VPP抓包以及TUN、VPP packet-generator、真实DN下行灌包命令见
 [perf-tools/README.md](perf-tools/README.md#抓包命令)。
 当前不支持UDP/TUN与memif混合组合；从一种模式切换到另一种模式后需要让UE

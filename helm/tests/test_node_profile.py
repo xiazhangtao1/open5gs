@@ -7,7 +7,7 @@ from pathlib import Path
 
 import yaml
 
-CHART = Path(__file__).resolve().parents[1]
+CHART = Path(__file__).resolve().parents[1] / "xcn"
 
 
 def render(profile=None):
@@ -19,7 +19,7 @@ def render(profile=None):
         filename.write_text(yaml.safe_dump(values))
         return subprocess.run(
             ["helm", "template", "xcn", str(CHART), "-f",
-             str(CHART / "tests/site-values.yaml"), "-f", str(filename)],
+             str(Path(__file__).with_name("site-values.yaml")), "-f", str(filename)],
             capture_output=True, text=True, check=False)
 
 

@@ -8,7 +8,7 @@ from pathlib import Path
 from unittest import mock
 
 
-MODULE_PATH = Path(__file__).parents[1] / "files" / "vpp-entrypoint-dual.py"
+MODULE_PATH = Path(__file__).parents[1] / "xcn" / "files" / "vpp-entrypoint-dual.py"
 SPEC = importlib.util.spec_from_file_location("vpp_entrypoint_dual", MODULE_PATH)
 VPP = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(VPP)

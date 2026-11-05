@@ -7,7 +7,7 @@ from pathlib import Path
 from unittest import mock
 
 
-MODULE_PATH = Path(__file__).parents[1] / "files" / "cpuset-admission-guard.py"
+MODULE_PATH = Path(__file__).parents[1] / "xcn" / "files" / "cpuset-admission-guard.py"
 SPEC = importlib.util.spec_from_file_location("cpuset_admission_guard", MODULE_PATH)
 GUARD = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(GUARD)
