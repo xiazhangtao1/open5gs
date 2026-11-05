@@ -43,7 +43,7 @@ On a live host, set `BUILD_CPUSET` to verified spare CPUs and limit builder
 CPU/memory as well; `BUILD_JOBS` defaults to 2 for the native builds. See the
 [image consolidation validation](../docs/image-consolidation-validation.md).
 
-## Build an Offline Release
+## Build a Release
 
 From the repository root, build all three application images, export them, and
 package the chart with explicit chart and application versions:
@@ -51,7 +51,10 @@ package the chart with explicit chart and application versions:
 ```bash
 # Requires Bash, Docker, Helm, Python 3 and PyYAML.
 sudo apt-get install python3-yaml
+# Online build (default).
 ./helm/build-release.sh 0.2.0 26.11.05
+# Offline build using the intranet APT mirror.
+./helm/build-release.sh 0.2.0 26.11.05 --offline
 ```
 
 The two positional arguments are `chartVersion` (SemVer) and `appVersion` (a
@@ -59,10 +62,22 @@ Docker tag). The script can be called from any directory; it always writes
 `xcn-runtime.tar`, `xcn-webui.tar`, `xcn-monitor.tar`, and
 `xcn-<chartVersion>.tgz` into this `helm/` directory.
 
-It invokes `docker/build-images.sh --image all --offline --tag <appVersion>`,
-including its automatic registry push and existing build resource limits.
+It invokes `docker/build-images.sh --image all --tag <appVersion>` and forwards
+`--offline` only when requested. Online mode retains the base image's APT
+sources and forwards proxy environment variables; offline mode uses the
+intranet APT mirror and clears build proxies. The optional flag can appear
+before or after the version arguments. Both modes include the existing
+automatic registry push and build resource limits.
 Push failures remain nonfatal when all three local image builds succeed.
 Each image archive contains `192.168.10.35/xcn/xcn-<component>:<appVersion>`.
+Base image selection remains configurable through `UBUNTU_IMAGE` and
+`VPP_IMAGE`. For example, with a preloaded local VPP image:
+
+```bash
+UBUNTU_IMAGE=ubuntu:22.04 VPP_IMAGE=vpp:26.06 \
+  ./helm/build-release.sh 0.2.0 26.11.05
+```
+
 MongoDB and VPP images must be provided separately as described in the
 [offline build guide](../docker/offline-build.md).
 

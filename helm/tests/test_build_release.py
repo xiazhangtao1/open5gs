@@ -45,6 +45,12 @@ sys.exit(int(os.environ.get('BUILD_FAILURE', '0')))
             binary / 'docker': log + """
 if args == ['info']:
     sys.exit(int(os.environ.get('DOCKER_FAILURE', '0')))
+if args[:2] == ['image', 'inspect']:
+    if '--format' in args:
+        print('linux/amd64')
+    sys.exit(0)
+if args[0] in ('build', 'push'):
+    sys.exit(0)
 if args[0] != 'save':
     sys.exit('Unexpected Docker operation')
 Path(args[args.index('-o') + 1]).write_text(args[-1])
@@ -91,7 +97,7 @@ os.execv(os.environ['REAL_HELM'], [os.environ['REAL_HELM'], *args])
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual([name for name, _ in self.calls()],
                          ['docker', 'build-images.sh', 'docker', 'docker', 'docker', 'helm'])
-        self.assertEqual(self.calls()[1][1], ['--image', 'all', '--offline', '--tag', tag])
+        self.assertEqual(self.calls()[1][1], ['--image', 'all', '--tag', tag])
         for index, name in enumerate(('runtime', 'webui', 'monitor'), 2):
             path = self.helm / f'xcn-{name}.tar'
             image = f'192.168.10.35/xcn/xcn-{name}:{tag}'
@@ -128,6 +134,37 @@ os.execv(os.environ['REAL_HELM'], [os.environ['REAL_HELM'], *args])
         self.assertEqual(webui_env['XCN_APP_VERSION'], tag)
         self.check_clean()
 
+    def test_offline_option_is_forwarded_in_any_position(self):
+        for args in (['--offline', '0.2.0', 'test'], ['0.2.0', '--offline', 'test'],
+                     ['0.2.0', 'test', '--offline']):
+            with self.subTest(args=args):
+                (self.root / 'calls.jsonl').unlink(missing_ok=True)
+                result = self.run_release(*args)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(self.calls()[1][1],
+                                 ['--image', 'all', '--offline', '--tag', 'test'])
+                self.assertTrue(all(path.is_file() for path in self.artifacts()))
+                self.check_clean()
+
+    def test_both_modes_reach_real_builder_with_correct_proxy_behavior(self):
+        shutil.copy2(HELM.parent / 'docker/build-images.sh', self.root / 'docker/build-images.sh')
+        (self.root / 'docker/vendor.py').write_text('import sys\nsys.exit(0)\n')
+        for options, offline in (([], '0'), (['--offline'], '1')):
+            with self.subTest(options=options):
+                (self.root / 'calls.jsonl').unlink(missing_ok=True)
+                result = self.run_release('0.2.0', 'test', *options,
+                                          HTTP_PROXY='http://proxy.invalid:8080')
+                self.assertEqual(result.returncode, 0, result.stderr)
+                builds = [args for name, args in self.calls()
+                          if name == 'docker' and args[0] == 'build']
+                self.assertEqual(len(builds), 3)
+                for args in builds:
+                    self.assertIn('OFFLINE=' + offline, args)
+                    self.assertIn('HTTP_PROXY=' if options else 'HTTP_PROXY', args)
+                    self.assertNotIn('HTTP_PROXY' if options else 'HTTP_PROXY=', args)
+                self.assertTrue(all(path.is_file() for path in self.artifacts()))
+                self.check_clean()
+
     def test_success_overwrites_existing_artifacts_and_preserves_numeric_tag_as_string(self):
         for path in self.artifacts():
             path.write_bytes(b'previous release')
@@ -148,7 +185,8 @@ os.execv(os.environ['REAL_HELM'], [os.environ['REAL_HELM'], *args])
         for args in ([], ['0.2.0'], ['0.2.0', 'test', 'extra'], ['', 'test'],
                      ['0.2', 'test'], ['01.2.3', 'test'], ['0.2.0-01', 'test'],
                      ['0.2.0', ''], ['0.2.0', 'bad/tag'], ['0.2.0', 'bad+tag'],
-                     ['0.2.0', 'x' * 129]):
+                     ['0.2.0', 'x' * 129], ['--offline'], ['0.2.0', '--offline'],
+                     ['0.2.0', 'test', '--unknown'], ['0.2.0', 'test', '--offline', 'extra']):
             with self.subTest(args=args):
                 result = self.run_release(*args)
                 self.assertNotEqual(result.returncode, 0)

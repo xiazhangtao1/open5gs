@@ -1,23 +1,30 @@
 #!/usr/bin/env bash
-# Build the three application images and package an offline Helm release.
+# Build the three application images and package a Helm release.
 set -euo pipefail
 
 HELM_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 REPO_ROOT=$(cd -- "$HELM_DIR/.." && pwd)
 
 usage() {
-    printf '%s\n' 'Usage: helm/build-release.sh <chartVersion> <appVersion>' \
+    printf '%s\n' 'Usage: helm/build-release.sh <chartVersion> <appVersion> [--offline]' \
         'chartVersion: SemVer, e.g. 0.2.0; appVersion: Docker tag, e.g. 26.11.05.' \
+        'Default: online build. --offline uses the intranet APT mirror and clears build proxies.' \
         'Outputs in helm/: xcn-runtime.tar, xcn-webui.tar, xcn-monitor.tar, xcn-<chartVersion>.tgz.'
 }
 
-if (($# == 1)) && [[ $1 == -h || $1 == --help ]]; then
-    usage
-    exit 0
-fi
-(($# == 2)) || { usage >&2; exit 2; }
-CHART_VERSION=$1
-APP_VERSION=$2
+BUILD_OPTIONS=()
+VERSIONS=()
+for argument in "$@"; do
+    case "$argument" in
+        --offline) BUILD_OPTIONS=(--offline) ;;
+        -h|--help) usage; exit 0 ;;
+        -*) printf 'Unknown option: %s\n' "$argument" >&2; usage >&2; exit 2 ;;
+        *) VERSIONS+=("$argument") ;;
+    esac
+done
+((${#VERSIONS[@]} == 2)) || { usage >&2; exit 2; }
+CHART_VERSION=${VERSIONS[0]}
+APP_VERSION=${VERSIONS[1]}
 
 for command in docker helm python3; do
     command -v "$command" >/dev/null || { printf 'Missing command: %s\n' "$command" >&2; exit 1; }
@@ -61,7 +68,7 @@ values['monitor']['image']['tag'] = sys.argv[2]
 path.write_text(yaml.safe_dump(values, sort_keys=False))
 PY
 
-"$REPO_ROOT/docker/build-images.sh" --image all --offline --tag "$APP_VERSION"
+"$REPO_ROOT/docker/build-images.sh" --image all "${BUILD_OPTIONS[@]}" --tag "$APP_VERSION"
 
 ARTIFACTS=()
 for name in runtime webui monitor; do
