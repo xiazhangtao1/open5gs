@@ -24,3 +24,8 @@ output
 **/__pycache__
 docker/vendor/archives/*.partial
 xcn-runtime-260831.tar
+helm/xcn-runtime.tar
+helm/xcn-webui.tar
+helm/xcn-monitor.tar
+helm/xcn-*.tgz
+helm/.build-release.*/

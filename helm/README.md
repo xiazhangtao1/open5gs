@@ -43,6 +43,39 @@ On a live host, set `BUILD_CPUSET` to verified spare CPUs and limit builder
 CPU/memory as well; `BUILD_JOBS` defaults to 2 for the native builds. See the
 [image consolidation validation](../docs/image-consolidation-validation.md).
 
+## Build an Offline Release
+
+From the repository root, build all three application images, export them, and
+package the chart with explicit chart and application versions:
+
+```bash
+# Requires Bash, Docker, Helm, Python 3 and PyYAML.
+sudo apt-get install python3-yaml
+./helm/build-release.sh 0.2.0 26.11.05
+```
+
+The two positional arguments are `chartVersion` (SemVer) and `appVersion` (a
+Docker tag). The script can be called from any directory; it always writes
+`xcn-runtime.tar`, `xcn-webui.tar`, `xcn-monitor.tar`, and
+`xcn-<chartVersion>.tgz` into this `helm/` directory.
+
+It invokes `docker/build-images.sh --image all --offline --tag <appVersion>`,
+including its automatic registry push and existing build resource limits.
+Push failures remain nonfatal when all three local image builds succeed.
+Each image archive contains `192.168.10.35/xcn/xcn-<component>:<appVersion>`.
+MongoDB and VPP images must be provided separately as described in the
+[offline build guide](../docker/offline-build.md).
+
+The packaged chart has `version=<chartVersion>`, `appVersion=<appVersion>`,
+and matching default tags for runtime, WebUI and monitor. Empty collector,
+agent and decoder image overrides inherit the monitor tag. Packaging uses a
+temporary chart copy; source `xcn/Chart.yaml` and `xcn/values.yaml` stay intact.
+
+Successful runs replace files with the same names. Build, export or packaging
+failures exit nonzero, clean the temporary directory, and leave existing
+release files intact. The archives and temporary directory are excluded from
+Git and the Docker build context.
+
 ## Install and Uninstall
 
 ```bash
