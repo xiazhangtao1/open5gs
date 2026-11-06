@@ -2,6 +2,8 @@
 
 “信令”页面及详情支持 NGAP ASN.1 协议树、5GMM / 5GSM 明文、NGAP 内嵌 Transfer、字段搜索、字段对应字节以及复制。导航、概览、终端详情、状态及记录入口统一使用“信令”名称；内部 `events` 接口与 `event_id` 字段保持兼容。“展开全部”显示所有已解析层级及 PER 编码辅助字段，“收起全部”回到协议树顶层；这两个操作清除搜索条件，节点仍可单独展开。协议树与码流使用同一条记录的 `NF / boot_id / seq` 关联，不根据 IMSI 或相邻时间猜测配对。原有信令摘要和采样路径继续工作。
 
+信令页、概览近期信令及详情抽屉中的信令列表，均按当前页从早到晚显示，较早的在上、较新的在下。首页仍取最近一批信令，下一页查看更早的一批；自动刷新时新信令位于当前最新页底部。显示顺序只在浏览器反转当前页副本，不修改接口数据、采集频率或缓存容量。
+
 NGAP 采集还覆盖 NG Setup 请求/响应/失败、NG Reset/确认、RAN Configuration Update 请求/确认/失败、AMF Configuration Update、Paging 及上下行 RAN Configuration Transfer。已经成功解码、未专门提取摘要的其他消息，使用生成的 ASN.1 CHOICE 描述取得名称并保留码流；不为展示而新增协议处理、重试或状态迁移。AMF Configuration Update 的确认/失败响应可记录和解码，核心网原有处理行为保持不变。
 
 NGAP 记录新增可选字段 `scope`（`ue` / `gnb` / `unknown`）、`procedure_code`（零为有效过程码）、`pdu_type`（`initiatingMessage` / `successfulOutcome` / `unsuccessfulOutcome`）及十进制字符串 `association_id`。连接实例由 `boot_id + association_id` 区分，SCTP 地址重用或配置相同的多个基站不会合并观测身份。NG Setup 接纳前的身份只从报文提取为 `reported-gNB` 摘要，不写入基站运行状态，也不伪造已接纳的 gNB 0。Paging 使用发送时已知 SUPI；其他基站消息不绑定终端。网页对基站消息显示 `GNB <gnbId>`，没有已确认 ID 时显示 `GNB`，未知范围显示“未关联终端”。缺少 scope 的旧格式 NG Setup 等已知基站消息同样显示 `GNB`，不显示“身份解析中”；这个占位文字用于尚未关联 SUPI 的终端消息，没有固定倒计时。

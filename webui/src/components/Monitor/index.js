@@ -58,7 +58,7 @@ const Button = ({children, onClick, ...rest}) => <button type="button" className
 function Events({items, onSelect, compact}) {
   if (!items || !items.length) return <Empty>暂无匹配信令，可切换协议或调整搜索条件。</Empty>;
   return <div className={'xcn-events-scroll' + (compact ? ' compact' : '')}>
-    <ol className="xcn-events">{items.map((e, i) => <li key={e.event_id || i} className={bad(e.result) ? 'problem' : ''}>
+    <ol className="xcn-events">{items.slice().reverse().map((e, i) => <li key={e.event_id || i} className={bad(e.result) ? 'problem' : ''}>
       <time title={dateTime(Number(e.timestamp_us) / 1e6)}>{eventClock(e.timestamp_us)}</time>
       <span className="xcn-protocol" title={value(e.direction)}>{value(e.protocol)}<small>{String(e.nf || '').toUpperCase()}</small></span>
       <button type="button" className="xcn-link xcn-event-name" title={e.name} onClick={() => onSelect(e)}>{value(e.name)}</button>
