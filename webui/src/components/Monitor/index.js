@@ -105,7 +105,7 @@ class Drawer extends Component {
 
 export default class Monitor extends Component {
   trendViews = new Map();
-  state = {data: null, trend: null, error: null, loading: true, page: 0, q: '', search: '',
+  state = {data: null, trend: null, error: null, loading: true, page: 0, pageInput: '', pageError: '', q: '', search: '',
     cm_state: '', protocol: 'NGAP', level: 'session', rule_scope: 'business', seconds: 1800, trendSeid: null, trendSupi: null, trendBearer: null, detailQfi: null,
     selected: null, detail: null, gnbDetail: null, identityFilters: {}, comparisonRows: {}, comparisonData: [], comparisonPicker: false, comparisonError: null};
   componentDidMount() {
@@ -119,7 +119,7 @@ export default class Monitor extends Component {
       this.trendViews.clear();
       const filters = this.navigateFilters || {};
       this.navigateFilters = null;
-      this.setState({data: null, trend: null, error: null, page: 0, q: '', search: '', cm_state: '', protocol: 'NGAP',
+      this.setState({data: null, trend: null, error: null, page: 0, pageInput: '', pageError: '', q: '', search: '', cm_state: '', protocol: 'NGAP',
         trendSeid: null, trendSupi: null, trendBearer: null, detailQfi: null, selected: null, detail: null, gnbDetail: null, comparisonData: [], comparisonPicker: false, identityFilters: {}, ...filters}, () => this.schedule(0));
     }
   }
@@ -208,6 +208,10 @@ export default class Monitor extends Component {
       if (view === 'sessions' && level === 'rule') params.rule_scope = this.state.rule_scope;
       const data = await get(endpoint, params, token);
       if (!this.active || generation !== this.generation) return;
+      if (['ues', 'gnbs', 'sessions', 'events'].includes(view)) {
+        const lastPage = Math.max(0, Math.ceil(data.total / (data.limit || 50)) - 1);
+        if (page > lastPage) { this.change({page: lastPage}); return; }
+      }
       let rows = this.state.comparisonRows[level];
       if (view === 'sessions' && rows === undefined) {
         const first = data.items.find(r => eligible(r, level));
@@ -225,6 +229,7 @@ export default class Monitor extends Component {
       if (view === 'sessions' && comparisonData.length && !selected) rows = comparisonData.map(item => item.row);
       this.setState({data, trend: view === 'overview' ? results[0] : null, detail: results[1], gnbDetail: results[2], comparisonData,
         comparisonRows: rows === undefined ? this.state.comparisonRows : {...this.state.comparisonRows, [level]: rows},
+        pageError: !this.state.data || this.state.data.total === data.total ? this.state.pageError : '',
         error: null, loading: false, updated: Date.now()});
     } catch (e) {
       if (!this.active || generation !== this.generation || axios.isCancel(e)) return;
@@ -236,10 +241,24 @@ export default class Monitor extends Component {
   change = change => {
     this.stop();
     if ('seconds' in change) this.trendViews.clear();
-    this.setState({...change, ...('seconds' in change ? {trend: null, detail: null, comparisonData: []} : {}),
+    this.setState({...change, ...('page' in change ? {pageInput: '', pageError: ''} : {}),
+      ...('seconds' in change ? {trend: null, detail: null, comparisonData: []} : {}),
       ...('level' in change ? {data: null, trend: null, comparisonData: [], comparisonPicker: false, comparisonError: null} : {}), loading: true}, () => this.schedule(0));
   };
   search = e => { e.preventDefault(); this.change({q: this.state.search.trim(), page: 0}); };
+  jumpPage = e => {
+    e.preventDefault();
+    const {data, loading, pageInput, page} = this.state;
+    if (!data || !data.total || loading) return;
+    const pages = Math.ceil(data.total / (data.limit || 50));
+    const input = pageInput.trim(), target = Number(input);
+    if (!/^\d+$/.test(input) || !Number.isSafeInteger(target) || target < 1 || target > pages) {
+      this.setState({pageError: '请输入 1 到 ' + pages + ' 之间的整数页码。'});
+      return;
+    }
+    if (target - 1 === page) this.setState({pageInput: '', pageError: ''});
+    else this.change({page: target - 1});
+  };
   loadComparison = async (rows, seconds, token) => {
     const generation = this.generation;
     const name = row => row.trend_key + '/' + seconds;
@@ -537,7 +556,8 @@ export default class Monitor extends Component {
   }
   render() {
     const {view} = this.props;
-    const {data, error, loading, updated, page} = this.state;
+    const {data, error, loading, updated, page, pageInput, pageError} = this.state;
+    const pages = data && data.total ? Math.ceil(data.total / (data.limit || 50)) : 0;
     return <main className="xcn-monitor">
       <div className="xcn-page-heading"><h1>{titles[view]}</h1>
         <div className="xcn-refresh"><span className={'xcn-live-dot ' + (error ? 'warn' : '')}/>
@@ -562,9 +582,19 @@ export default class Monitor extends Component {
         {view === 'events' && data.coverage && <div className="xcn-event-range"><span>信令覆盖</span>
           <span>{data.coverage.oldest_at ? dateTime(data.coverage.oldest_at) + ' — ' + dateTime(data.coverage.newest_at) : '暂无信令'}</span></div>}
         {view === 'events' ? <Events items={data.items} onSelect={e => this.select(e, 'events')}/> : this.table(view, data)}
-        <div className="xcn-pagination"><span>共 {data.total} 条 · 第 {page + 1} 页</span><div>
-          <Button disabled={page === 0} onClick={() => this.change({page: page - 1})}>上一页</Button>
-          <Button disabled={(page + 1) * 50 >= data.total} onClick={() => this.change({page: page + 1})}>下一页</Button></div></div>
+        <div className="xcn-pagination"><span>共 {data.total} 条 · 第 {pages ? page + 1 : 0} 页 / 共 {pages} 页</span><div>
+          <Button disabled={loading || page === 0} onClick={() => this.change({page: page - 1})}>上一页</Button>
+          <Button disabled={loading || page + 1 >= pages} onClick={() => this.change({page: page + 1})}>下一页</Button>
+          <form className="xcn-page-jump" aria-label="跳转页面" noValidate onSubmit={this.jumpPage}>
+            <label htmlFor="monitor-page-input">跳至</label>
+            <input id="monitor-page-input" type="text" inputMode="numeric" maxLength={8} aria-label="跳转页码"
+              aria-invalid={!!pageError} aria-describedby={pageError ? 'monitor-page-error' : undefined}
+              disabled={loading || !pages} placeholder={String(pages ? page + 1 : 0)} value={pageInput}
+              onChange={e => this.setState({pageInput: e.target.value, pageError: ''})}/><span>页</span>
+            <Button type="submit" disabled={loading || !pages}>跳转</Button>
+          </form></div>
+          {pageError && <span id="monitor-page-error" className="xcn-page-error" role="alert">{pageError}</span>}
+        </div>
       </section>}
       {data && view === 'sessions' && ['user', 'session', 'bearer', 'rule'].includes(this.state.level) && this.trafficTrend(data)}
       {this.detail()}

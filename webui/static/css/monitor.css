@@ -116,8 +116,12 @@
 .xcn-status {display:inline-block; font-size:11px; color:var(--muted); white-space:nowrap;}
 .xcn-status:before {content:''; width:5px; height:5px; border-radius:50%; display:inline-block; margin-right:6px; background:currentColor; vertical-align:middle;}
 .xcn-status.good {color:var(--success);} .xcn-status.warn {color:var(--warning);} .xcn-status.bad {color:var(--error);}
-.xcn-pagination {padding:15px 22px; border-top:1px solid var(--line); display:flex; align-items:center; justify-content:space-between; color:var(--muted); font-size:12px; gap:12px;}
-.xcn-pagination>div {display:flex; gap:8px;}
+.xcn-pagination {padding:15px 22px; border-top:1px solid var(--line); display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; color:var(--muted); font-size:12px; gap:12px;}
+.xcn-pagination>div {display:flex; flex-wrap:wrap; align-items:center; gap:8px;}
+.xcn-page-jump {display:flex; align-items:center; gap:6px; margin:0;}
+.xcn-page-jump label {margin:0; font-weight:normal; white-space:nowrap;}
+.xcn-page-jump input {width:64px; min-width:0; padding:6px 8px; border:1px solid var(--line); border-radius:6px; color:var(--ink); background:var(--surface); text-align:center;}
+.xcn-page-error {flex-basis:100%; color:var(--error);}
 .xcn-chart-wrap {position:relative; padding:0 12px 10px;}
 .xcn-chart-mode {position:absolute; top:0; right:18px; z-index:1;}
 .xcn-chart-mode select {border:1px solid var(--line); border-radius:5px; padding:4px 8px; color:var(--muted); background:var(--surface); font-size:11px; min-height:30px;}
